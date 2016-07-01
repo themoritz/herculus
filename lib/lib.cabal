@@ -3,8 +3,6 @@ version:             0.0.1
 synopsis:            Shared by server and client
 description:         Please see README.md
 homepage:            https://github.com/githubuser/lib#readme
-license:             BSD3
-license-file:        LICENSE
 author:              Moritz Drexl
 maintainer:          mdrexl@fastmail.fm
 copyright:           2016 Moritz Drexl

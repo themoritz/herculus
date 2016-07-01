@@ -21,7 +21,7 @@ api :: Proxy Api
 api = Proxy
 
 server :: Server Api
-server = pure $ CommandNew "Hallo"
+server = pure $ CommandNew "Hello"
 
 main :: IO ()
 main = do

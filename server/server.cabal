@@ -3,7 +3,6 @@ version:             0.0.1
 synopsis:            Hexl server
 description:         Please see README.md
 homepage:            https://gitlab.mdrexl.net/mdrexl/hexl
-license:             AllRightsReserved
 author:              Moritz Drexl
 maintainer:          mdrexl@fastmail.fm
 copyright:           2016 Moritz Drexl
