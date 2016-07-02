@@ -26,6 +26,7 @@ executable server-exe
                      , aeson
                      , bytestring
                      , lib
+                     , mongoDB
                      , servant
                      , servant-server
                      , server
