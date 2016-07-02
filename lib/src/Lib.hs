@@ -7,10 +7,16 @@ import Data.Text
 
 import GHC.Generics
 
-data Command
-  = CommandNew Text
-  | CommandDel Int
+data WsUpMessage
+  = WsUpGreet Text
   deriving (Generic, Show)
 
-instance ToJSON Command
-instance FromJSON Command
+instance ToJSON WsUpMessage
+instance FromJSON WsUpMessage
+
+data WsDownMessage
+  = WsDownGreet Text
+  deriving (Generic, Show)
+
+instance ToJSON WsDownMessage
+instance FromJSON WsDownMessage

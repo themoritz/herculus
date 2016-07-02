@@ -16,6 +16,8 @@ executable client
   other-extensions:    TemplateHaskell
                      , OverloadedStrings
   build-depends:       base
+                     , aeson
+                     , bytestring
                      , containers
                      , ghcjs-dom
                      , mtl
