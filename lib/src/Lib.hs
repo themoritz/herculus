@@ -22,6 +22,7 @@ data WsUpMessage
   | WsUpAddRow (Id Table) [(Id Column, Text)]
   -- Retrieve
   | WsUpListTables (Id Project)
+  | WsUpListProjects
   deriving (Generic, Show)
 
 instance ToJSON WsUpMessage
@@ -33,6 +34,7 @@ data WsDownMessage
   | WsDownList [Text]
   -- Provide
   | WsDownTables (Id Project) [(Id Table, Text)]
+  | WsDownProjects [(Id Project, Text)]
   deriving (Generic, Show)
 
 instance ToJSON WsDownMessage
@@ -42,11 +44,13 @@ instance FromJSON WsDownMessage
 
 newtype Id a = Id Int
   deriving (Eq, Ord, Show, Generic)
+
 instance ToJSON (Id a)
 instance FromJSON (Id a)
 
 newtype Ref a = Ref Text
   deriving (Show, Generic)
+
 instance ToJSON (Ref a)
 instance FromJSON (Ref a)
 
