@@ -1,10 +1,15 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Lib where
 
-import           Data.Aeson
+import           Data.Aeson   (FromJSON, ToJSON, parseJSON, toJSON)
+import           Data.Bson    (Document, UUID (..), Value (..), (=:))
 import           Data.Map     (Map)
 import           Data.Text
+
+import           Lib.Base64
+import           Data.Aeson.Bson
 
 import           GHC.Generics
 
@@ -42,17 +47,39 @@ instance FromJSON WsDownMessage
 
 --
 
-newtype Id a = Id Int
+newtype Id a = Id UUID
   deriving (Eq, Ord, Show, Generic)
 
-instance ToJSON (Id a)
-instance FromJSON (Id a)
+uuId :: Id a -> UUID
+uuId (Id x) = x
+
+instance ToJSON (Id a) where
+  toJSON (Id (UUID uuid)) = toJSON $ Base64 uuid
+
+instance FromJSON (Id a) where
+  parseJSON json = do
+    (Base64 base64) <- parseJSON json
+    pure $ Id $ UUID base64
+
+--
 
 newtype Ref a = Ref Text
   deriving (Show, Generic)
 
 instance ToJSON (Ref a)
 instance FromJSON (Ref a)
+
+--
+
+class ToJSON a => ToDocument a where
+  toDocument :: a -> Document
+  toDocument = toBson . toJSON
+
+class FromJSON a => FromDocument a where
+  fromDocument :: Document -> Either String a
+  fromDocument = parseJSON . toJSON
+
+--
 
 data Project = Project
   { projectName   :: Text
