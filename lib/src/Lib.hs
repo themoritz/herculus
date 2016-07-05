@@ -71,16 +71,6 @@ instance FromJSON (Ref a)
 
 --
 
-class ToJSON a => ToDocument a where
-  toDocument :: a -> Document
-  toDocument = toBson . toJSON
-
-class FromJSON a => FromDocument a where
-  fromDocument :: Document -> Either String a
-  fromDocument = parseJSON . toJSON
-
---
-
 data Project = Project
   { projectName   :: Text
   , projectTables :: [Table]
@@ -103,6 +93,9 @@ data ColumnType
 
 instance ToJSON ColumnType
 instance FromJSON ColumnType
+
+instance ToValue ColumnType
+instance FromValue ColumnType
 
 data DataType
   = DataBoolean

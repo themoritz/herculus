@@ -3,11 +3,12 @@
 
 module Data.Aeson.Bson (
   toAeson, aesonifyValue,
-  toBson, bsonifyValue
+  toBson, bsonifyValue,
+  ToValue(..), FromValue(..)
 ) where
 
+import           Data.Monoid ((<>))
 import           Data.Aeson.Types       as AESON
-import           Data.Attoparsec.Number as Atto
 import           Data.Bson              as BSON
 import           Data.HashMap.Strict    as Map (fromList, toList)
 import           Data.Scientific
@@ -23,9 +24,18 @@ instance ToJSON BSON.Value where
 instance ToJSON Document where
   toJSON = Object . toAeson
 
+class ToJSON a => ToValue a where
+  toValue :: a -> BSON.Value
+  toValue = bsonifyValue . toJSON
+
+class FromJSON a => FromValue a where
+  fromValue :: BSON.Value -> Parser a
+  fromValue = parseJSON . aesonifyValue
+
 bsonifyValue :: AESON.Value -> BSON.Value
 bsonifyValue (Object obj) = Doc $ toBson obj
-bsonifyValue (AESON.Array array) = BSON.Array . map bsonifyValue . Vector.toList $ array
+bsonifyValue (AESON.Array array) = BSON.Array $
+  map bsonifyValue $ Vector.toList array
 bsonifyValue (AESON.String str) = BSON.String str
 bsonifyValue (Number n) = case floatingOrInteger n of
   Left f -> Float f
@@ -48,17 +58,19 @@ aesonifyValue (BSON.Bool bool) = toJSON bool
 aesonifyValue (UTC utc) = toJSON utc
 aesonifyValue BSON.Null = AESON.Null
 aesonifyValue (RegEx (Regex p mods)) = toJSON $
-                                           '/' : T.unpack p ++
-                                           '/' : T.unpack mods
-aesonifyValue (JavaScr (Javascript env code)) = toJSON . Map.fromList $
-                                              [ (T.pack "environment", toJSON env)
-                                              , (T.pack "code", toJSON code)]
+  "/" <> T.unpack p <> "/" <> T.unpack mods
+aesonifyValue (JavaScr (Javascript env code)) =
+  toJSON . Map.fromList $
+    [ (T.pack "environment", toJSON env)
+    , (T.pack "code", toJSON code)
+    ]
 aesonifyValue (Sym (Symbol sym)) = toJSON sym
 aesonifyValue (Int32 int32) = toJSON int32
 aesonifyValue (Int64 int64) = toJSON int64
 aesonifyValue (Stamp (MongoStamp int64)) = toJSON int64
-aesonifyValue (MinMax mm) = case mm of { MinKey -> toJSON (-1 :: Int)
-                                       ; MaxKey -> toJSON (1 :: Int)}
+aesonifyValue (MinMax mm) = case mm of
+  MinKey -> toJSON (-1 :: Int)
+  MaxKey -> toJSON (1 :: Int)
 
 
 toBson :: AESON.Object -> BSON.Document

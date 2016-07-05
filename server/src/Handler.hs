@@ -10,6 +10,7 @@ import qualified Database.MongoDB     as Mongo
 
 import Lib
 import Monads
+import Data.Aeson.Bson
 
 handleClientMessage :: MonadHexl m => WsUpMessage -> m ()
 handleClientMessage wsUp = case wsUp of
@@ -33,9 +34,9 @@ handleClientMessage wsUp = case wsUp of
       [ "name" =: name
       , "projectId" =: uuId prjId
       ]
-  WsUpCreateColumn tblId name columnType ->
+  WsUpCreateColumn tblId name ct ->
     void $ runMongo $ Mongo.insert "columns"
       [ "name" =: name
       , "tableId" =: uuId tblId
-      , "columnType"
+      , "columnType" =: toValue ct
       ]
