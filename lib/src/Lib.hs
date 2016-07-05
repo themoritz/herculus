@@ -4,7 +4,7 @@
 module Lib where
 
 import           Data.Aeson   (FromJSON, ToJSON, parseJSON, toJSON)
-import           Data.Bson    (Document, UUID (..), Value (..), (=:))
+import           Data.Bson    (Document, ObjectId (..), Value (..), (=:))
 import           Data.Map     (Map)
 import           Data.Text
 
@@ -24,10 +24,10 @@ data WsUpMessage
   | WsUpCreateProject Text
   | WsUpCreateTable (Id Project) Text
   | WsUpCreateColumn (Id Table) Text ColumnType
-  | WsUpAddRow (Id Table) [(Id Column, Text)]
+  | WsUpAddRecord (Id Table) [(Id Column, Text)]
   -- Retrieve
-  | WsUpListTables (Id Project)
   | WsUpListProjects
+  | WsUpListTables (Id Project)
   deriving (Generic, Show)
 
 instance ToJSON WsUpMessage
@@ -47,19 +47,22 @@ instance FromJSON WsDownMessage
 
 --
 
-newtype Id a = Id UUID
+newtype Id a = Id ObjectId
   deriving (Eq, Ord, Show, Generic)
 
-uuId :: Id a -> UUID
-uuId (Id x) = x
+toObjectId :: Id a -> ObjectId
+toObjectId (Id x) = x
+
+fromObjectId :: ObjectId -> Id a
+fromObjectId = Id
 
 instance ToJSON (Id a) where
-  toJSON (Id (UUID uuid)) = toJSON $ Base64 uuid
+  toJSON (Id (Oid w1 w2)) = toJSON (w1, w2)
 
 instance FromJSON (Id a) where
   parseJSON json = do
-    (Base64 base64) <- parseJSON json
-    pure $ Id $ UUID base64
+    (w1, w2) <- parseJSON json
+    pure $ Id $ Oid w1 w2
 
 --
 
