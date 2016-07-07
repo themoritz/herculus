@@ -4,7 +4,8 @@
 module Data.Aeson.Bson (
   toAeson, aesonifyValue,
   toBson, bsonifyValue,
-  ToValue(..), FromValue(..)
+  ToValue(..), FromValue(..),
+  decodeValue, eitherDecodeValue
 ) where
 
 import           Data.Monoid ((<>))
@@ -29,8 +30,16 @@ class ToJSON a => ToValue a where
   toValue = bsonifyValue . toJSON
 
 class FromJSON a => FromValue a where
-  fromValue :: BSON.Value -> Parser a
-  fromValue = parseJSON . aesonifyValue
+  fromValue :: BSON.Value -> AESON.Result a
+  fromValue = fromJSON . aesonifyValue
+
+eitherDecodeValue :: FromValue a => BSON.Value -> Either String a
+eitherDecodeValue v = case fromValue v of
+  Error   e -> Left e
+  Success a -> Right a
+
+decodeValue :: FromValue a => BSON.Value -> Maybe a
+decodeValue = either (const Nothing) Just . eitherDecodeValue
 
 bsonifyValue :: AESON.Value -> BSON.Value
 bsonifyValue (Object obj) = Doc $ toBson obj

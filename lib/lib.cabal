@@ -15,6 +15,8 @@ library
   hs-source-dirs:      src
   exposed-modules:     Lib
                      , Lib.Base64
+                     , Lib.Api.Rest
+                     , Lib.Api.WebSocket
                      , Data.Aeson.Bson
   build-depends:       base >= 4.7 && < 5
                      , aeson
@@ -23,6 +25,7 @@ library
                      , bytestring
                      , base64-bytestring
                      , containers
+                     , servant
                      , scientific
                      , text
                      , unordered-containers

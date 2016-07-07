@@ -1,51 +1,19 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Lib where
 
 import           Data.Aeson   (FromJSON, ToJSON, parseJSON, toJSON)
-import           Data.Bson    (Document, ObjectId (..), Value (..), (=:))
+import           Data.Bson    (Document, ObjectId (..), (=:))
 import           Data.Map     (Map)
 import           Data.Text
+import Data.String
 
 import           Lib.Base64
 import           Data.Aeson.Bson
 
 import           GHC.Generics
-
--- WebSocket protocol
-
-data WsUpMessage
-  -- Play
-  = WsUpGreet Text
-  | WsUpStore Text
-  | WsUpList
-  -- Modify
-  | WsUpCreateProject Text
-  | WsUpCreateTable (Id Project) Text
-  | WsUpCreateColumn (Id Table) Text ColumnType
-  | WsUpAddRecord (Id Table) [(Id Column, Text)]
-  -- Retrieve
-  | WsUpListProjects
-  | WsUpListTables (Id Project)
-  deriving (Generic, Show)
-
-instance ToJSON WsUpMessage
-instance FromJSON WsUpMessage
-
-data WsDownMessage
-  -- Play
-  = WsDownGreet Text
-  | WsDownList [Text]
-  -- Provide
-  | WsDownTables (Id Project) [(Id Table, Text)]
-  | WsDownProjects [(Id Project, Text)]
-  deriving (Generic, Show)
-
-instance ToJSON WsDownMessage
-instance FromJSON WsDownMessage
-
---
 
 newtype Id a = Id ObjectId
   deriving (Eq, Ord, Show, Generic)
@@ -73,6 +41,12 @@ instance ToJSON (Ref a)
 instance FromJSON (Ref a)
 
 --
+
+newtype Value = Value Text
+  deriving (Show, IsString, Generic)
+
+instance ToJSON Value
+instance FromJSON Value
 
 data Project = Project
   { projectName   :: Text
@@ -121,3 +95,5 @@ instance FromJSON Expression
 data Record = Record
   { recordData :: Map (Id Column) Text
   }
+
+data Cell

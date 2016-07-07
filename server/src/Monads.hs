@@ -23,7 +23,7 @@ import qualified Database.MongoDB     as Mongo
 
 import           Network.WebSockets
 
-import           Lib
+import           Lib.Api.WebSocket
 
 class Monad m => MonadHexl m where
   sendWS :: WsDownMessage -> m ()

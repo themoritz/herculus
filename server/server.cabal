@@ -17,6 +17,8 @@ library
                      , Handler
   build-depends:       base >= 4.7 && < 5
                      , aeson
+                     , containers
+                     , lens
                      , lib
                      , monad-control
                      , mongoDB
