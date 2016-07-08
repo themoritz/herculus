@@ -25,6 +25,7 @@ library
                      , bytestring
                      , base64-bytestring
                      , containers
+                     , http-api-data
                      , servant
                      , scientific
                      , text

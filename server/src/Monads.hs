@@ -1,25 +1,27 @@
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE UndecidableInstances       #-}
 -- {-# LANGUAGE StandaloneDeriving #-}
 
 module Monads
   ( MonadHexl(..)
   , HexlEnv(..)
+  , HexlT
   , runHexl
   ) where
 
+import           Control.Concurrent.STM
 import           Control.Monad.Reader
-import Control.Monad.Trans.Control
+import           Control.Monad.Trans.Control
 -- import Control.Monad.Base
 
 import           Data.Aeson
 import           Data.Text
 
-import qualified Database.MongoDB     as Mongo
+import qualified Database.MongoDB            as Mongo
 
 import           Network.WebSockets
 
@@ -30,9 +32,9 @@ class Monad m => MonadHexl m where
   runMongo :: Mongo.Action IO a -> m a
 
 data HexlEnv = HexlEnv
-  { envPipe       :: Mongo.Pipe
-  , envDatabase   :: Text
-  , envConnection :: Connection
+  { envPipe        :: Mongo.Pipe
+  , envDatabase    :: Text
+  , envConnections :: TVar [Connection]
   }
 
 newtype HexlT m a = HexlT
@@ -61,8 +63,10 @@ newtype HexlT m a = HexlT
 
 instance (MonadBaseControl IO m, MonadIO m) => MonadHexl (HexlT m) where
   sendWS msg = do
-    connection <- asks envConnection
-    liftIO $ sendTextData connection $ encode msg
+    connectionsRef <- asks envConnections
+    connections <- liftIO $ atomically $ readTVar connectionsRef
+    forM_ connections $ \connection ->
+      liftIO $ sendTextData connection $ encode msg
   runMongo action = do
     pipe <- asks envPipe
     database <- asks envDatabase

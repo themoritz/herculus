@@ -5,7 +5,7 @@
 module Lib where
 
 import           Data.Aeson   (FromJSON, ToJSON, parseJSON, toJSON)
-import           Data.Bson    (Document, ObjectId (..), (=:))
+import           Data.Bson    (Val, Document, ObjectId (..), (=:))
 import           Data.Map     (Map)
 import           Data.Text
 import Data.String
@@ -14,6 +14,8 @@ import           Lib.Base64
 import           Data.Aeson.Bson
 
 import           GHC.Generics
+
+import           Web.HttpApiData
 
 newtype Id a = Id ObjectId
   deriving (Eq, Ord, Show, Generic)
@@ -32,6 +34,9 @@ instance FromJSON (Id a) where
     (w1, w2) <- parseJSON json
     pure $ Id $ Oid w1 w2
 
+instance FromHttpApiData (Id a) where
+  parseUrlPiece piece = parsec?
+
 --
 
 newtype Ref a = Ref Text
@@ -43,7 +48,7 @@ instance FromJSON (Ref a)
 --
 
 newtype Value = Value Text
-  deriving (Show, IsString, Generic)
+  deriving (Show, Eq, IsString, Generic, Val)
 
 instance ToJSON Value
 instance FromJSON Value

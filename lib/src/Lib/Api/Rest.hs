@@ -24,8 +24,16 @@ type ProjectRoutes =
       "create" :> ReqBody '[JSON] Text :> Post '[JSON] (Id Project)
  :<|> "list" :> Get '[JSON] [(Id Project, Text)]
 
+data TableCreate = TableCreate
+  { tableCreateProjectId :: Id Project
+  , tableCreateName :: Text
+  } deriving (Generic)
+
+instance ToJSON TableCreate
+instance FromJSON TableCreate
+
 type TableRoutes =
-      "create" :> ReqBody '[JSON] Text :> Post '[JSON] (Id Table)
+      "create" :> ReqBody '[JSON] TableCreate :> Post '[JSON] (Id Table)
  :<|> "list" :> Capture "projectId" (Id Project) :> Get '[JSON] [(Id Table, Text)]
  :<|> "data" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Record, [(Id Column, Text)])]
 
@@ -63,4 +71,4 @@ instance ToJSON CellSet
 instance FromJSON CellSet
 
 type CellRoutes =
-      "create" :> ReqBody '[JSON] CellSet :> Post '[JSON] (Id Cell)
+      "set" :> ReqBody '[JSON] CellSet :> Post '[JSON] ()

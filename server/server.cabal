@@ -14,7 +14,8 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Monads
-                     , Handler
+                     , Handler.WebSocket
+                     , Handler.Rest
   build-depends:       base >= 4.7 && < 5
                      , aeson
                      , containers
@@ -23,6 +24,8 @@ library
                      , monad-control
                      , mongoDB
                      , mtl
+                     , servant-server
+                     , stm
                      , text
                      , transformers
                      , transformers-base
@@ -36,12 +39,14 @@ executable server-exe
   build-depends:       base
                      , aeson
                      , bytestring
+                     , either
                      , lib
                      , mongoDB
                      , mtl
                      , servant
                      , servant-server
                      , server
+                     , stm
                      , text
                      , wai-websockets
                      , warp
