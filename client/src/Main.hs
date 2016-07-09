@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
 module Main where
@@ -21,12 +20,15 @@ import Lib
 import Lib.Api.WebSocket
 import Lib.Api.Rest
 
-type TriggerAndResult t m a = Event t () -> m (Event t (ReqResult a))
+type Arg t a = Behavior t (Either String a)
+type Res t m a = Event t () -> m (Event t (ReqResult a))
 
 data RestApi t m = MonadWidget t m => RestApi
-  { projectCreate :: Behavior t (Either String Text)
-                  -> TriggerAndResult t m (Id Project)
-  , projectList   :: TriggerAndResult t m [(Id Project, Text)]
+  { projectCreate :: Arg t Text -> Res t m (Id Project)
+  , projectList   :: Res t m [(Id Project, Text)]
+  , tableCreate   :: Arg t TableCreate -> Res t m (Id Table)
+  , tableList     :: Arg t (Id Project) -> Res t m [(Id Table, Text)]
+  , tableData     :: Arg t (Id Table) -> Res t m [(Id Record, [(Id Column, Text)])]
   }
 
 api :: forall t m. MonadWidget t m => RestApi t m
@@ -36,9 +38,13 @@ api =
                    (Proxy :: Proxy m)
                    (constDyn (BasePath "/"))
       (projectC :<|> projectL) = project
+      (tableC :<|> tableL :<|> tableD) = table
   in RestApi
        { projectCreate = projectC
-       , projectList = projectL
+       , projectList   = projectL
+       , tableCreate   = tableC
+       , tableList     = tableL
+       , tableData     = tableD
        }
 
 main :: IO ()
