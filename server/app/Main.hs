@@ -5,13 +5,11 @@
 module Main where
 
 import           Control.Concurrent.STM
-import           Control.Monad                  (forever)
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Except
+import           Control.Monad.Except
 
 import           Data.Aeson
 import           Data.Proxy
-import           Data.Text
 
 import qualified Database.MongoDB               as Mongo
 

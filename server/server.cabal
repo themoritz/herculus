@@ -48,6 +48,7 @@ executable server-exe
                      , server
                      , stm
                      , text
+                     , transformers
                      , wai-websockets
                      , warp
                      , websockets

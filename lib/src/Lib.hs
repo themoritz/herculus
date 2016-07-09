@@ -9,6 +9,7 @@ import           Data.Bson    (Val, Document, ObjectId (..), (=:))
 import           Data.Map     (Map)
 import           Data.Text
 import Data.String
+import Text.Read (readMaybe)
 
 import           Lib.Base64
 import           Data.Aeson.Bson
@@ -18,7 +19,7 @@ import           GHC.Generics
 import           Web.HttpApiData
 
 newtype Id a = Id ObjectId
-  deriving (Eq, Ord, Show, Generic)
+  deriving (Eq, Ord, Show, Read, Generic)
 
 toObjectId :: Id a -> ObjectId
 toObjectId (Id x) = x
@@ -27,15 +28,18 @@ fromObjectId :: ObjectId -> Id a
 fromObjectId = Id
 
 instance ToJSON (Id a) where
-  toJSON (Id (Oid w1 w2)) = toJSON (w1, w2)
+  toJSON (Id objId) = toJSON $ show objId
 
 instance FromJSON (Id a) where
   parseJSON json = do
-    (w1, w2) <- parseJSON json
-    pure $ Id $ Oid w1 w2
+    str <- parseJSON json
+    maybe (fail "expected 12 byte hex string") pure $ readMaybe str
 
 instance FromHttpApiData (Id a) where
-  parseUrlPiece piece = parsec?
+  parseUrlPiece = maybe (Left "expected 12 byte hex string") Right . readMaybe . unpack
+
+instance ToHttpApiData (Id a) where
+  toUrlPiece = pack . show
 
 --
 
