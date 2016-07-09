@@ -25,11 +25,17 @@ import           Handler.WebSocket
 import           Lib.Api.Rest
 import           Monads
 
-routes :: Proxy Routes
+type AllRoutes =
+       Routes
+  :<|> Raw
+
+routes :: Proxy AllRoutes
 routes = Proxy
 
-rest :: HexlEnv -> Server Routes
-rest env = enter hexlToEither handle
+rest :: HexlEnv -> Server AllRoutes
+rest env =
+         enter hexlToEither handle
+    :<|> serveDirectory "../client/.stack-work/install/x86_64-linux/lts-6.0/ghcjs-0.2.0_ghc-7.10.3/bin/client.jsexe/"
   where
     hexlToEither :: HexlT IO :~> ExceptT ServantErr IO
     hexlToEither = Nat $ \hexlAction -> do

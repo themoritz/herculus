@@ -8,6 +8,7 @@ import           Data.Aeson   (FromJSON, ToJSON, parseJSON, toJSON)
 import           Data.Bson    (Val, Document, ObjectId (..), (=:))
 import           Data.Map     (Map)
 import           Data.Text
+import Data.Monoid ((<>))
 import Data.String
 import Text.Read (readMaybe)
 
@@ -28,15 +29,17 @@ fromObjectId :: ObjectId -> Id a
 fromObjectId = Id
 
 instance ToJSON (Id a) where
-  toJSON (Id objId) = toJSON $ show objId
+  toJSON (Id (Oid a b)) = toJSON (a, b)
 
 instance FromJSON (Id a) where
   parseJSON json = do
-    str <- parseJSON json
-    maybe (fail "expected 12 byte hex string") pure $ readMaybe str
+    (a, b) <- parseJSON json
+    pure $ Id $ Oid a b
 
 instance FromHttpApiData (Id a) where
-  parseUrlPiece = maybe (Left "expected 12 byte hex string") Right . readMaybe . unpack
+  parseUrlPiece piece = case readMaybe $ unpack piece of
+    Nothing -> Left $ "Expected 12 byte hex string, found " <> piece
+    Just a  -> Right a
 
 instance ToHttpApiData (Id a) where
   toUrlPiece = pack . show

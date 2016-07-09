@@ -25,6 +25,8 @@ executable client
                      , reflex
                      , reflex-dom
                      , semigroups
+                     , servant
+                     , servant-reflex
                      , text
   hs-source-dirs:      src
   ghcjs-options:       -Wall

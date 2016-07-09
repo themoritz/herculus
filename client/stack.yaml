@@ -23,6 +23,11 @@ packages:
     commit: e8b7d31fd2b6a8173e51096b7591ec346e33ad85
   extra-dep: true
 
+- location:
+    git: git@github.com:imalsogreg/servant-reflex.git
+    commit: master
+  extra-dep: true
+
 - location: ../lib
   extra-dep: true
 
