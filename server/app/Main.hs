@@ -35,7 +35,7 @@ routes = Proxy
 rest :: HexlEnv -> Server AllRoutes
 rest env =
          enter hexlToEither handle
-    :<|> serveDirectory "../client/.stack-work/install/x86_64-linux/lts-6.0/ghcjs-0.2.0_ghc-7.10.3/bin/client.jsexe/"
+    :<|> serveDirectory "../assets/public/"
   where
     hexlToEither :: HexlT IO :~> ExceptT ServantErr IO
     hexlToEither = Nat $ \hexlAction -> do
@@ -61,4 +61,5 @@ main = do
   let env = HexlEnv pipe "test" connections
       webSocketApp = wsApp env
       restApp = serve routes $ rest env
+  putStrLn "Listening on port 3000..."
   Warp.run 3000 $ websocketsOr defaultConnectionOptions webSocketApp restApp

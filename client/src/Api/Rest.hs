@@ -5,6 +5,7 @@ module Api.Rest where
 
 import Data.Proxy
 import Data.Text
+import Data.Monoid
 
 import Reflex.Dom
 
@@ -51,3 +52,21 @@ api =
        , recordCreate  = recordC
        , cellSet       = cellS
        }
+
+loader :: MonadWidget t m => Res t m a -> Event t () -> m (Event t a)
+loader call trigger = el "div" $ do
+  result <- call trigger
+  spin <- holdDyn False $ leftmost
+    [ False <$ result
+    , True <$ trigger
+    ]
+  spinAttrs <- flip mapDyn spin $ \v ->
+    "class" =: "spinner"
+    <> "style" =: (if v then "display:inherit" else "display:none")
+  elDynAttr "div" spinAttrs $ pure ()
+  let success = fmapMaybe reqSuccess result
+  dynText =<< holdDyn "" (leftmost
+                [ fmapMaybe reqFailure result
+                , "" <$ success
+                ])
+  pure success

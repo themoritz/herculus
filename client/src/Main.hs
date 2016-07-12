@@ -10,9 +10,7 @@ import Data.ByteString.Lazy (toStrict)
 
 import Reflex.Dom
 
-import Api.Rest (api, RestApi (..))
-
-import Servant.Reflex
+import Api.Rest
 
 import Lib
 import Lib.Api.WebSocket
@@ -40,11 +38,10 @@ widget = el "div" $ do
 projects :: MonadWidget t m => m ()
 projects = el "div" $ do
   inp <- textInput def
-  let projectName = (Right . pack) <$> current (_textInput_value inp)
+  let name = (Right . pack) <$> current (_textInput_value inp)
   create <- button "Create"
-  newProj <- projectCreate api projectName create
-  dynText =<< holdDyn "" (fmap show $ fmapMaybe reqSuccess newProj)
-  dynText =<< holdDyn "" (fmapMaybe reqFailure newProj)
+  newProj <- loader (projectCreate api name) create
+  dynText =<< holdDyn "" (fmap show newProj)
 
 ws :: MonadWidget t m => Event t [WsUpMessage] -> m (Event t WsDownMessage)
 ws messages = do
