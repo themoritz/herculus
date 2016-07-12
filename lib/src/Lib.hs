@@ -29,6 +29,8 @@ fromObjectId :: ObjectId -> Id a
 fromObjectId = Id
 
 instance ToJSON (Id a) where
+  -- Ideally use show instance of ObjectId, but Read
+  -- instance does not work :/
   toJSON (Id (Oid a b)) = toJSON (a, b)
 
 instance FromJSON (Id a) where

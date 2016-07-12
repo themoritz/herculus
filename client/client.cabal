@@ -13,6 +13,7 @@ cabal-version:       >=1.10
 executable client
   main-is:             Main.hs
   other-modules:       Widgets
+                     , Api.Rest
   other-extensions:    TemplateHaskell
                      , OverloadedStrings
   build-depends:       base
