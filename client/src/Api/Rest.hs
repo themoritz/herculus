@@ -20,9 +20,9 @@ type Res t m a = Event t () -> m (Event t (ReqResult a))
 
 data RestApi t m = MonadWidget t m => RestApi
   { projectCreate :: Arg t Text -> Res t m (Id Project)
-  , projectList   :: Res t m [(Id Project, Text)]
+  , projectList   :: Res t m [Project]
   , tableCreate   :: Arg t TableCreate -> Res t m (Id Table)
-  , tableList     :: Arg t (Id Project) -> Res t m [(Id Table, Text)]
+  , tableList     :: Arg t (Id Project) -> Res t m [Table]
   , tableData     :: Arg t (Id Table) -> Res t m [(Id Record, [(Id Column, Text)])]
   , columnCreate  :: Arg t ColumnCreate -> Res t m (Id Column)
   , columnList    :: Arg t (Id Table) -> Res t m [(Id Column, Text, ColumnType)]

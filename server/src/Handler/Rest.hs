@@ -1,16 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Handler.Rest where
 
-import Control.Monad
-import Control.Lens
+import           Control.Lens
+import           Control.Monad
 
-import Data.Aeson.Bson
+import           Data.Aeson.Bson
+import           Data.Map         (Map)
+import qualified Data.Map         as Map
 import           Data.Maybe
-import           Data.Text (Text)
-import  Data.Map (Map)
-import qualified Data.Map as Map
+import           Data.Text        (Text)
 
 import           Servant
 
@@ -43,13 +43,13 @@ handleProjectCreate name = do
     ]
   pure $ fromObjectId i
 
-handleProjectList :: MonadHexl m => m [(Id Project, Text)]
+handleProjectList :: MonadHexl m => m [Project]
 handleProjectList = do
   projects <- runMongo $ Mongo.find (Mongo.select [] "projects") >>= Mongo.rest
   let go project = do
         i <- Mongo.lookup "_id" project
         n <- Mongo.lookup "name" project
-        pure (fromObjectId i, n)
+        pure $ Project (fromObjectId i) n
   pure $ mapMaybe go projects
 
 --
@@ -68,14 +68,14 @@ handleTableCreate (TableCreate projectId name)= do
     ]
   pure $ fromObjectId i
 
-handleTableList :: MonadHexl m => Id Project -> m [(Id Table, Text)]
+handleTableList :: MonadHexl m => Id Project -> m [Table]
 handleTableList projectId = do
   let query = [ "projectId" =: toObjectId projectId ]
   tables <- runMongo $ Mongo.find (Mongo.select query "tables") >>= Mongo.rest
   let go table = do
         i <- Mongo.lookup "_id" table
         n <- Mongo.lookup "name" table
-        pure (fromObjectId i, n)
+        pure $ Table (fromObjectId i) projectId n
   pure $ mapMaybe go tables
 
 handleTableData :: MonadHexl m => Id Table -> m [(Id Record, [(Id Column, Text)])]

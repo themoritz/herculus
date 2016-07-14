@@ -1,19 +1,19 @@
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings          #-}
 
 module Lib where
 
-import           Data.Aeson   (FromJSON, ToJSON, parseJSON, toJSON)
-import           Data.Bson    (Val, Document, ObjectId (..), (=:))
-import           Data.Map     (Map)
+import           Data.Aeson      (FromJSON, ToJSON, parseJSON, toJSON)
+import           Data.Bson       (Document, ObjectId (..), Val, (=:))
+import           Data.Map        (Map)
+import           Data.Monoid     ((<>))
+import           Data.String
 import           Data.Text
-import Data.Monoid ((<>))
-import Data.String
-import Text.Read (readMaybe)
+import           Text.Read       (readMaybe)
 
-import           Lib.Base64
 import           Data.Aeson.Bson
+import           Lib.Base64
 
 import           GHC.Generics
 
@@ -41,10 +41,10 @@ instance FromJSON (Id a) where
 instance FromHttpApiData (Id a) where
   parseUrlPiece piece = case readMaybe $ unpack piece of
     Nothing -> Left $ "Expected 12 byte hex string, found " <> piece
-    Just a  -> Right a
+    Just i  -> Right $ Id i
 
 instance ToHttpApiData (Id a) where
-  toUrlPiece = pack . show
+  toUrlPiece (Id i)= pack $ show i
 
 --
 
@@ -63,17 +63,25 @@ instance ToJSON Value
 instance FromJSON Value
 
 data Project = Project
-  { projectName   :: Text
-  , projectTables :: [Table]
-  }
+  { projectId   :: Id Project
+  , projectName :: Text
+  } deriving (Generic)
+
+instance ToJSON Project
+instance FromJSON Project
 
 data Table = Table
-  { tableName    :: Text
-  , tableColumns :: [Column]
-  }
+  { tableId        :: Id Table
+  , tableProjectId :: Id Project
+  , tableName      :: Text
+  } deriving (Generic)
+
+instance ToJSON Table
+instance FromJSON Table
 
 data Column = Column
-  { columnName :: Text
+  { columnId   :: Id Column
+  , columnName :: Text
   , columnType :: ColumnType
   }
 

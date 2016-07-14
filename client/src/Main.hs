@@ -2,6 +2,8 @@
 
 module Main where
 
+import Control.Lens
+
 import Data.Aeson
 import Data.List.NonEmpty (toList)
 import Data.Text (pack)
@@ -10,13 +12,25 @@ import Data.ByteString.Lazy (toStrict)
 
 import Reflex.Dom
 
-import Api.Rest
-
 import Lib
 import Lib.Api.WebSocket
 
+import Widgets.ProjectList
+import Widgets.TableList
+import Widgets.Table
+
 main :: IO ()
-main = mainWidget widget
+main = mainWidget $ do
+  elClass "div" "container" $ do
+    elClass "div" "row" $ do
+      elClass "div" "two columns" $ do
+        elClass "div" "container" $ do
+          pList <- elClass "div" "row" $
+            elClass "div" "twelve columns" $ projectList def
+          elClass "div" "row" $
+            elClass "div" "twelve columns" $
+              tableList $ def & tableListConfig_loadProject .~ (pList ^. projectList_selectProject)
+      elClass "div" "ten columns" table
 
 widget :: MonadWidget t m => m ()
 widget = el "div" $ do
@@ -33,15 +47,6 @@ widget = el "div" $ do
   messagesDyn <- holdDyn (WsDownGreet "") messages
   messagesDynStr <- mapDyn show messagesDyn
   dynText messagesDynStr
-  projects
-
-projects :: MonadWidget t m => m ()
-projects = el "div" $ do
-  inp <- textInput def
-  let name = (Right . pack) <$> current (_textInput_value inp)
-  create <- button "Create"
-  newProj <- loader (projectCreate api name) create
-  dynText =<< holdDyn "" (fmap show newProj)
 
 ws :: MonadWidget t m => Event t [WsUpMessage] -> m (Event t WsDownMessage)
 ws messages = do

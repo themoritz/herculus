@@ -19,3 +19,19 @@
     -webkit-transform: rotate(360deg);
   }
 }
+
+body {
+    font-family: "Open Sans";
+}
+
+button {
+    line-height: 26px;
+    height: 26px;
+    margin-bottom: 0.5rem;
+}
+
+input[type="text"] {
+    height: 26px;
+    padding: 0px 10px;
+    margin-bottom: 0.5rem;
+}

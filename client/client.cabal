@@ -12,7 +12,9 @@ cabal-version:       >=1.10
 
 executable client
   main-is:             Main.hs
-  other-modules:       Widgets
+  other-modules:       Widgets.ProjectList
+                     , Widgets.TableList
+                     , Widgets.Table
                      , Api.Rest
   other-extensions:    TemplateHaskell
                      , OverloadedStrings
@@ -20,7 +22,9 @@ executable client
                      , aeson
                      , bytestring
                      , containers
+                     , data-default
                      , ghcjs-dom
+                     , lens
                      , lib
                      , mtl
                      , reflex

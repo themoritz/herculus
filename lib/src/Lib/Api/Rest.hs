@@ -22,7 +22,7 @@ type Routes =
 
 type ProjectRoutes =
       "create" :> ReqBody '[JSON] Text :> Post '[JSON] (Id Project)
- :<|> "list" :> Get '[JSON] [(Id Project, Text)]
+ :<|> "list" :> Get '[JSON] [Project]
 
 data TableCreate = TableCreate
   { tableCreateProjectId :: Id Project
@@ -34,7 +34,7 @@ instance FromJSON TableCreate
 
 type TableRoutes =
       "create" :> ReqBody '[JSON] TableCreate :> Post '[JSON] (Id Table)
- :<|> "list" :> Capture "projectId" (Id Project) :> Get '[JSON] [(Id Table, Text)]
+ :<|> "list" :> Capture "projectId" (Id Project) :> Get '[JSON] [Table]
  :<|> "data" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Record, [(Id Column, Text)])]
 
 data ColumnCreate = ColumnCreate
