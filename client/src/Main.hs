@@ -23,14 +23,14 @@ main :: IO ()
 main = mainWidget $ do
   elClass "div" "container" $ do
     elClass "div" "row" $ do
-      elClass "div" "two columns" $ do
+      elClass "div" "three columns" $ do
         elClass "div" "container" $ do
           pList <- elClass "div" "row" $
             elClass "div" "twelve columns" $ projectList def
           elClass "div" "row" $
             elClass "div" "twelve columns" $
               tableList $ def & tableListConfig_loadProject .~ (pList ^. projectList_selectProject)
-      elClass "div" "ten columns" table
+      elClass "div" "nine columns" table
 
 widget :: MonadWidget t m => m ()
 widget = el "div" $ do

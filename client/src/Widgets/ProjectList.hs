@@ -51,7 +51,7 @@ update (Set ps) _ = Map.fromList $ map (\(Project i name) -> (i, name)) ps
 
 projectList :: MonadWidget t m => ProjectListConfig t -> m (ProjectList t)
 projectList (ProjectListConfig newProject) = elClass "div" "container" $ do
-  el "h4" $ text "Projects"
+  el "h5" $ text "Projects"
   createdProject <- elClass "div" "row" $ do
     name <- (fmap pack . current . _textInput_value) <$> textInput def
     create <- button "Create"
@@ -65,8 +65,8 @@ projectList (ProjectListConfig newProject) = elClass "div" "container" $ do
     , Set <$> listResult
     ]
   projectSelect <- elClass "div" "row" $
-    el "table" $ el "tbody" $ list projects $ \name ->
-      el "tr" $ el "td" $ do
+    el "ul" $ list projects $ \name ->
+      el "li" $ do
         (proj, _) <- elAttr' "a" ("href" =: "#") $
           dynText =<< mapDyn unpack name
         pure $ domEvent Click proj

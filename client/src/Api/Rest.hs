@@ -55,10 +55,11 @@ api =
 
 loader :: MonadWidget t m => Res t m a -> Event t () -> m (Event t a)
 loader call trigger = el "div" $ do
-  result <- call trigger
+  trigger' <- delay 0.001 trigger
+  result <- call trigger'
   spin <- holdDyn False $ leftmost
     [ False <$ result
-    , True <$ trigger
+    , True <$ trigger'
     ]
   spinAttrs <- flip mapDyn spin $ \v ->
     "class" =: "spinner"

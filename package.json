@@ -1,0 +1,20 @@
+{
+  "name": "hexl",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "ssh://git@gitlab.mdrexl.net:10022/mdrexl/hexl.git"
+  },
+  "author": "Moritz Drexl",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "browser-sync": "^2.13.0",
+    "gulp": "^3.9.1",
+    "gulp-sass": "^2.3.2"
+  }
+}

@@ -69,7 +69,7 @@ update actions state = foldl (flip go) state actions
 
 tableList :: MonadWidget t m => TableListConfig t -> m (TableList t)
 tableList (TableListConfig newTable loadProject) = elClass "div" "container" $ mdo
-  el "h4" $ text "Tables"
+  el "h5" $ text "Tables"
   createTable <- elClass "div" "row" $ do
     name <- (fmap pack . current . _textInput_value) <$> textInput def
     create <- button "Create"
@@ -92,8 +92,8 @@ tableList (TableListConfig newTable loadProject) = elClass "div" "container" $ m
     ]
   tbls <- mapDyn tables state
   tableSelect <- elClass "div" "row" $
-    el "table" $ el "tbody" $ list tbls $ \name ->
-      el "tr" $ el "td" $ do
+    el "ul" $ list tbls $ \name ->
+      el "li" $ do
         (tbl, _) <- elAttr' "a" ("href" =: "#") $
           dynText =<< mapDyn unpack name
         pure $ domEvent Click tbl
