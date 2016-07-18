@@ -24,7 +24,9 @@ data RestApi t m = MonadWidget t m => RestApi
   , tableCreate   :: Arg t TableCreate -> Res t m (Id Table)
   , tableList     :: Arg t (Id Project) -> Res t m [Table]
   , tableData     :: Arg t (Id Table) -> Res t m [(Id Record, [(Id Column, Text)])]
-  , columnCreate  :: Arg t ColumnCreate -> Res t m (Id Column)
+  , columnCreate  :: Arg t (Id Table) -> Res t m (Id Column)
+  , columnSetName :: Arg t (Id Column) -> Arg t Text -> Res t m ()
+  , columnSetType :: Arg t (Id Column) -> Arg t ColumnType -> Res t m ()
   , columnList    :: Arg t (Id Table) -> Res t m [(Id Column, Text, ColumnType)]
   , recordCreate  :: Arg t RecordCreate -> Res t m (Id Record)
   , cellSet       :: Arg t CellSet -> Res t m ()
@@ -38,7 +40,7 @@ api =
                    (constDyn (BasePath "/"))
       (projectC :<|> projectL) = project
       (tableC :<|> tableL :<|> tableD) = table
-      (columnC :<|> columnL) = column
+      (columnC :<|> columnSN :<|> columnST :<|> columnL) = column
       recordC = record
       cellS = cell
   in RestApi
@@ -48,6 +50,8 @@ api =
        , tableList     = tableL
        , tableData     = tableD
        , columnCreate  = columnC
+       , columnSetName = columnSN
+       , columnSetType = columnST
        , columnList    = columnL
        , recordCreate  = recordC
        , cellSet       = cellS

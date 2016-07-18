@@ -47,7 +47,9 @@ instance ToJSON ColumnCreate
 instance FromJSON ColumnCreate
 
 type ColumnRoutes =
-      "create" :> ReqBody '[JSON] ColumnCreate :> Post '[JSON] (Id Column)
+      "create" :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Id Column)
+ :<|> "setName" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] Text :> Post '[JSON] ()
+ :<|> "setType" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] ColumnType :> Post '[JSON] ()
  :<|> "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Column, Text, ColumnType)]
 
 data RecordCreate = RecordCreate

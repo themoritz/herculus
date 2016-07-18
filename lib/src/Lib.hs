@@ -87,7 +87,7 @@ data Column = Column
 
 data ColumnType
   = ColumnInput DataType
-  | ColumnDerived Expression
+  | ColumnDerived Text
   deriving (Show, Generic)
 
 instance ToJSON ColumnType
@@ -100,9 +100,8 @@ data DataType
   = DataBoolean
   | DataString
   | DataNumber
-  | DataList DataType
   | DataRecord
-  deriving (Show, Generic)
+  deriving (Eq, Ord, Show, Read, Generic)
 
 instance ToJSON DataType
 instance FromJSON DataType

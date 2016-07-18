@@ -99,21 +99,35 @@ handleTableData tableId = do
 handleColumn :: MonadHexl m => ServerT ColumnRoutes m
 handleColumn =
        handleColumnCreate
+  :<|> handleColumnSetName
+  :<|> handleColumnSetType
   :<|> handleColumnList
 
-handleColumnCreate :: MonadHexl m => ColumnCreate -> m (Id Column)
-handleColumnCreate (ColumnCreate tableId name ct)= do
+handleColumnCreate :: MonadHexl m => Id Table -> m (Id Column)
+handleColumnCreate tblId = do
   Mongo.ObjId i <- runMongo $ Mongo.insert "columns"
-      [ "name" =: name
-      , "tableId" =: toObjectId tableId
-      , "columnType" =: toValue ct
+      [ "name" =: ("" :: Text)
+      , "tableId" =: toObjectId tblId
+      , "columnType" =: toValue (ColumnInput DataString)
       ]
   pure $ fromObjectId i
 
+handleColumnSetName :: MonadHexl m => Id Column -> Text -> m ()
+handleColumnSetName colId name = do
+  let query = Mongo.select [ "_id" =: toObjectId colId ] "columns"
+  void $ runMongo $ Mongo.fetch query >>=
+    Mongo.save "columns" . Mongo.merge [ "name" =: name ]
+
+handleColumnSetType :: MonadHexl m => Id Column -> ColumnType -> m ()
+handleColumnSetType colId cType = do
+  let query = Mongo.select [ "_id" =: toObjectId colId ] "columns"
+  void $ runMongo $ Mongo.fetch query >>=
+    Mongo.save "columns" . Mongo.merge [ "columnType" =: toValue cType ]
+
 handleColumnList :: MonadHexl m => Id Table -> m [(Id Column, Text, ColumnType)]
-handleColumnList tableId = do
+handleColumnList tblId = do
   columns <- runMongo $ Mongo.find
-    (Mongo.select ["tableId" =: toObjectId tableId] "columns") >>= Mongo.rest
+    (Mongo.select ["tableId" =: toObjectId tblId] "columns") >>= Mongo.rest
   let go column = do
         i <- Mongo.lookup "_id" column
         n <- Mongo.lookup "name" column
@@ -128,9 +142,9 @@ handleRecord =
        handleRecordCreate
 
 handleRecordCreate :: MonadHexl m => RecordCreate -> m (Id Record)
-handleRecordCreate (RecordCreate tableId) = do
+handleRecordCreate (RecordCreate tblId) = do
   recordId@(Mongo.ObjId i) <- runMongo $ Mongo.insert "records"
-    [ "tableId" =: toObjectId tableId
+    [ "tableId" =: toObjectId tblId
     ]
   pure $ fromObjectId i
   -- let go (colId, val) =

@@ -18,19 +18,25 @@ import Lib.Api.WebSocket
 import Widgets.ProjectList
 import Widgets.TableList
 import Widgets.Table
+import Widgets.Column
 
 main :: IO ()
 main = mainWidget $ do
-  elClass "div" "container" $ do
-    elClass "div" "row" $ do
-      elClass "div" "three columns" $ do
-        elClass "div" "container" $ do
-          pList <- elClass "div" "row" $
-            elClass "div" "twelve columns" $ projectList def
-          elClass "div" "row" $
-            elClass "div" "twelve columns" $
-              tableList $ def & tableListConfig_loadProject .~ (pList ^. projectList_selectProject)
-      elClass "div" "nine columns" table
+  divClass "container" $ do
+    divClass "row" $ do
+      tList <- divClass "three columns" $ do
+        divClass "container" $ do
+          pList <- divClass "row" $
+            divClass "twelve columns" $ projectList def
+          divClass "row" $
+            divClass "twelve columns" $
+              tableList $ def { _tableListConfig_loadProject =
+                                  _projectList_selectProject pList
+                              }
+      divClass "nine columns" $ do
+        table TableConfig { _tableConfig_loadTable =
+                              _tableList_selectTable tList
+                          }
 
 widget :: MonadWidget t m => m ()
 widget = el "div" $ do

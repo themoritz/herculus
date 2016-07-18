@@ -1,10 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Widgets.ProjectList
-  ( ProjectListConfig
-  , projectListConfig_newProject
-  , ProjectList
-  , projectList_selectProject
+  ( ProjectListConfig (..)
+  , ProjectList (..)
   , projectList
   ) where
 
@@ -50,21 +48,21 @@ update (New (Project i name)) ps = Map.insert i name ps
 update (Set ps) _ = Map.fromList $ map (\(Project i name) -> (i, name)) ps
 
 projectList :: MonadWidget t m => ProjectListConfig t -> m (ProjectList t)
-projectList (ProjectListConfig newProject) = elClass "div" "container" $ do
+projectList (ProjectListConfig newProject) = divClass "container" $ do
   el "h5" $ text "Projects"
-  createdProject <- elClass "div" "row" $ do
+  createdProject <- divClass "row" $ do
     name <- (fmap pack . current . _textInput_value) <$> textInput def
     create <- button "Create"
     newProj <- loader (Api.projectCreate api (Right <$> name)) create
     pure $ attachWith (flip Project) name newProj
-  listProjects <- elClass "div" "row" $ button "List"
+  listProjects <- getPostBuild
   listResult <- loader (Api.projectList api) listProjects
   projects <- foldDyn update Map.empty $ leftmost
     [ New <$> newProject
     , New <$> createdProject
     , Set <$> listResult
     ]
-  projectSelect <- elClass "div" "row" $
+  projectSelect <- divClass "row" $
     el "ul" $ list projects $ \name ->
       el "li" $ do
         (proj, _) <- elAttr' "a" ("href" =: "#") $

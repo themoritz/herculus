@@ -2,11 +2,8 @@
 {-# LANGUAGE RecursiveDo #-}
 
 module Widgets.TableList
-  ( TableListConfig
-  , tableListConfig_newTable
-  , tableListConfig_loadProject
-  , TableList
-  , tableList_selectTable
+  ( TableListConfig (..)
+  , TableList (..)
   , tableList
   ) where
 
@@ -68,9 +65,9 @@ update actions state = foldl (flip go) state actions
         filter (\t -> Just (tableProjectId t) == prjId) tbls) prjId
 
 tableList :: MonadWidget t m => TableListConfig t -> m (TableList t)
-tableList (TableListConfig newTable loadProject) = elClass "div" "container" $ mdo
+tableList (TableListConfig newTable loadProject) = divClass "container" $ mdo
   el "h5" $ text "Tables"
-  createTable <- elClass "div" "row" $ do
+  createTable <- divClass "row" $ do
     name <- (fmap pack . current . _textInput_value) <$> textInput def
     create <- button "Create"
     let tableArg = do
@@ -91,7 +88,7 @@ tableList (TableListConfig newTable loadProject) = elClass "div" "container" $ m
     , Set <$> listResult
     ]
   tbls <- mapDyn tables state
-  tableSelect <- elClass "div" "row" $
+  tableSelect <- divClass "row" $
     el "ul" $ list tbls $ \name ->
       el "li" $ do
         (tbl, _) <- elAttr' "a" ("href" =: "#") $
