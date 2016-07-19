@@ -75,18 +75,21 @@ column columnId (ColumnConfig setType setName initialType initialName) = el "div
                 }
   nameTrigger <- button "Set Name"
   _ <- loader (Api.columnSetName api (constant $ Right columnId) (Right <$> name)) nameTrigger
-  selectCellType <- dropdown (toCellType initialType)
-                             (constDyn cellTypeEntries) $
-                             (def :: DropdownConfig t CellType)
-                               { _dropdownConfig_setValue =
-                                     (toCellType <$> setType)
-                               }
-  selectDataType <- dropdown (fromMaybe DataString $ toDataType initialType)
-                             (constDyn dataTypeEntries)
-                             (def :: DropdownConfig t DataType)
-                               { _dropdownConfig_setValue =
-                                   fmapMaybe toDataType setType
-                               }
+  (selectCellType, selectDataType) <-
+    divClass "row" $ do
+      ct <- dropdown (toCellType initialType)
+                     (constDyn cellTypeEntries) $
+                     (def :: DropdownConfig t CellType)
+                       { _dropdownConfig_setValue =
+                             (toCellType <$> setType)
+                       }
+      dt <- dropdown (fromMaybe DataString $ toDataType initialType)
+                     (constDyn dataTypeEntries)
+                     (def :: DropdownConfig t DataType)
+                       { _dropdownConfig_setValue =
+                           fmapMaybe toDataType setType
+                       }
+      pure (ct, dt)
   expr <- (fmap pack . current . _textInput_value) <$> textInput
             def { _textInputConfig_setValue = fmapMaybe toExpr setType
                 , _textInputConfig_initialValue = fromMaybe "" $ toExpr initialType

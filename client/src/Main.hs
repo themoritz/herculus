@@ -24,7 +24,7 @@ main :: IO ()
 main = mainWidget $ do
   divClass "container" $ do
     divClass "row" $ do
-      tList <- divClass "three columns" $ do
+      tList <- divClass "two columns" $ do
         divClass "container" $ do
           pList <- divClass "row" $
             divClass "twelve columns" $ projectList def
@@ -33,7 +33,7 @@ main = mainWidget $ do
               tableList $ def { _tableListConfig_loadProject =
                                   _projectList_selectProject pList
                               }
-      divClass "nine columns" $ do
+      divClass "ten columns" $ do
         table TableConfig { _tableConfig_loadTable =
                               _tableList_selectTable tList
                           }

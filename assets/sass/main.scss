@@ -1,7 +1,7 @@
 .spinner {
   position: fixed;
   top: 0px;
-  left: 0px;
+  right: 0px;
   width: 8px;
   height: 8px;
   border: 3px solid #aaa;
@@ -41,4 +41,19 @@ select {
     height: 26px;
     padding: 0px 5px;
     margin-bottom: 0.5rem;
+}
+
+input[type="text"] {
+    width: 120px;
+}
+
+.container {
+    margin: 0px 0px;
+    width: 100%;
+    max-width: inherit;
+}
+
+.columns {
+    padding: 3px;
+    margin-left: 0px;
 }
