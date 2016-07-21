@@ -3,13 +3,11 @@
 
 module Handler.Rest where
 
-import           Control.Lens
 import           Control.Monad
 
 import           Data.Aeson.Bson
-import           Data.Map         (Map)
-import qualified Data.Map         as Map
 import           Data.Maybe
+import           Data.Monoid
 import           Data.Text        (Text)
 
 import           Servant
@@ -78,21 +76,17 @@ handleTableList projectId = do
         pure $ Table (fromObjectId i) projectId n
   pure $ mapMaybe go tables
 
-handleTableData :: MonadHexl m => Id Table -> m [(Id Record, [(Id Column, Text)])]
+handleTableData :: MonadHexl m => Id Table -> m [(Id Column, Id Record, Value)]
 handleTableData tableId = do
   cells <- runMongo $ Mongo.find
     (Mongo.select ["aspects.tableId" =: toObjectId tableId] "cells") >>= Mongo.rest
-  let go cell m = let mrc = do
-                        aspects <- Mongo.lookup "aspects" cell
-                        r <- Mongo.lookup "recordId" aspects
-                        c <- Mongo.lookup "columnId" aspects
-                        v <- Mongo.lookup "value" cell
-                        pure (fromObjectId r, fromObjectId c, v)
-        in case mrc of
-             Nothing -> m
-             Just (r, c, v) -> m & at r . non Map.empty . at c .~ v
-      maps = foldr go Map.empty cells
-  pure $ Map.toList $ fmap Map.toList maps
+  let go cell = do
+        aspects <- Mongo.lookup "aspects" cell
+        r <- Mongo.lookup "recordId" aspects
+        c <- Mongo.lookup "columnId" aspects
+        v <- Mongo.lookup "value" cell
+        pure (fromObjectId c, fromObjectId r, v)
+  pure $ mapMaybe go cells
 
 --
 
@@ -124,7 +118,7 @@ handleColumnSetType colId cType = do
   void $ runMongo $ Mongo.fetch query >>=
     Mongo.save "columns" . Mongo.merge [ "columnType" =: toValue cType ]
 
-handleColumnList :: MonadHexl m => Id Table -> m [(Id Column, Text, ColumnType)]
+handleColumnList :: MonadHexl m => Id Table -> m [Column]
 handleColumnList tblId = do
   columns <- runMongo $ Mongo.find
     (Mongo.select ["tableId" =: toObjectId tblId] "columns") >>= Mongo.rest
@@ -132,7 +126,7 @@ handleColumnList tblId = do
         i <- Mongo.lookup "_id" column
         n <- Mongo.lookup "name" column
         ct <- Mongo.lookup "columnType" column >>= decodeValue
-        pure (fromObjectId i, n, ct)
+        pure $ Column (fromObjectId i) n ct
   pure $ mapMaybe go columns
 
 --
@@ -140,9 +134,10 @@ handleColumnList tblId = do
 handleRecord :: MonadHexl m => ServerT RecordRoutes m
 handleRecord =
        handleRecordCreate
+  :<|> handleRecordList
 
-handleRecordCreate :: MonadHexl m => RecordCreate -> m (Id Record)
-handleRecordCreate (RecordCreate tblId) = do
+handleRecordCreate :: MonadHexl m => Id Table -> m (Id Record)
+handleRecordCreate tblId = do
   recordId@(Mongo.ObjId i) <- runMongo $ Mongo.insert "records"
     [ "tableId" =: toObjectId tblId
     ]
@@ -157,6 +152,13 @@ handleRecordCreate (RecordCreate tblId) = do
   --       ]
   -- void $ runMongo $ Mongo.insertMany "cells" $ map go entries
 
+handleRecordList :: MonadHexl m => Id Table -> m [Record]
+handleRecordList tblId = do
+  records <- runMongo $ Mongo.find
+    (Mongo.select ["tableId" =: toObjectId tblId] "records") >>= Mongo.rest
+  let go record = (Record . fromObjectId) <$> Mongo.lookup "_id" record
+  pure $ mapMaybe go records
+
 --
 
 handleCell :: MonadHexl m => ServerT CellRoutes m
@@ -166,8 +168,11 @@ handleCell =
 handleCellSet :: MonadHexl m => CellSet -> m ()
 handleCellSet (CellSet tableId columnId recordId value) = do
   let query =
-        [ "aspects.columnId" =: toObjectId columnId
-        , "aspects.recordId" =: toObjectId recordId
-        , "aspects.tableId"  =: toObjectId tableId
+        [ "aspects" =:
+          [ "columnId" =: toObjectId columnId
+          , "recordId" =: toObjectId recordId
+          , "tableId"  =: toObjectId tableId
+          ]
         ]
-  void $ runMongo $ Mongo.upsert (Mongo.select query "cells") ["value" =: value ]
+  void $ runMongo $ Mongo.upsert (Mongo.select query "cells") $
+    [ "value" =: value ] <> query

@@ -27,16 +27,12 @@ main = mainWidget $ do
       tList <- divClass "two columns" $ do
         divClass "container" $ do
           pList <- divClass "row" $
-            divClass "twelve columns" $ projectList def
+            divClass "twelve columns" $ projectList never
           divClass "row" $
             divClass "twelve columns" $
-              tableList $ def { _tableListConfig_loadProject =
-                                  _projectList_selectProject pList
-                              }
+              tableList never $ _projectList_selectProject pList
       divClass "ten columns" $ do
-        table TableConfig { _tableConfig_loadTable =
-                              _tableList_selectTable tList
-                          }
+        table $ _tableList_selectTable tList
 
 widget :: MonadWidget t m => m ()
 widget = el "div" $ do

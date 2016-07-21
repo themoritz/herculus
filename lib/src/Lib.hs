@@ -56,7 +56,7 @@ instance FromJSON (Ref a)
 
 --
 
-newtype Value = Value Text
+newtype Value = Value { unValue :: Text }
   deriving (Show, Eq, IsString, Generic, Val)
 
 instance ToJSON Value
@@ -83,7 +83,10 @@ data Column = Column
   { columnId   :: Id Column
   , columnName :: Text
   , columnType :: ColumnType
-  }
+  } deriving (Generic)
+
+instance ToJSON Column
+instance FromJSON Column
 
 data ColumnType
   = ColumnInput DataType
@@ -114,7 +117,13 @@ instance ToJSON Expression
 instance FromJSON Expression
 
 data Record = Record
-  { recordData :: Map (Id Column) Text
-  }
+  { recordId :: Id Record
+  } deriving (Generic)
 
-data Cell
+instance ToJSON Record
+instance FromJSON Record
+
+data Cell = Cell
+  { cellId    :: Id Cell
+  , cellValue :: Value
+  }

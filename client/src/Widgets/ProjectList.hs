@@ -1,14 +1,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Widgets.ProjectList
-  ( ProjectListConfig (..)
-  , ProjectList (..)
+  ( ProjectList (..)
   , projectList
   ) where
 
-import Control.Lens
-
-import Data.Default
 import Data.Text (Text, pack, unpack)
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -20,23 +16,6 @@ import Lib
 import Api.Rest (loader, api)
 import qualified Api.Rest as Api
 
-data ProjectListConfig t = ProjectListConfig
-  { _projectListConfig_newProject :: Event t Project
-  }
-
-makeLenses ''ProjectListConfig
-
-instance Reflex t => Default (ProjectListConfig t) where
-  def = ProjectListConfig
-    { _projectListConfig_newProject = never
-    }
-
-data ProjectList t = ProjectList
-  { _projectList_selectProject :: Event t (Id Project)
-  }
-
-makeLenses ''ProjectList
-
 type State = Map (Id Project) Text
 
 data Action
@@ -47,8 +26,14 @@ update :: Action -> State -> State
 update (New (Project i name)) ps = Map.insert i name ps
 update (Set ps) _ = Map.fromList $ map (\(Project i name) -> (i, name)) ps
 
-projectList :: MonadWidget t m => ProjectListConfig t -> m (ProjectList t)
-projectList (ProjectListConfig newProject) = divClass "container" $ do
+data ProjectList t = ProjectList
+  { _projectList_selectProject :: Event t (Id Project)
+  }
+
+projectList :: MonadWidget t m
+            => Event t Project
+            -> m (ProjectList t)
+projectList newProject = divClass "container" $ do
   el "h5" $ text "Projects"
   createdProject <- divClass "row" $ do
     name <- (fmap pack . current . _textInput_value) <$> textInput def

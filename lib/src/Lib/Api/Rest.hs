@@ -35,7 +35,7 @@ instance FromJSON TableCreate
 type TableRoutes =
       "create" :> ReqBody '[JSON] TableCreate :> Post '[JSON] (Id Table)
  :<|> "list" :> Capture "projectId" (Id Project) :> Get '[JSON] [Table]
- :<|> "data" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Record, [(Id Column, Text)])]
+ :<|> "data" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Column, Id Record, Value)]
 
 data ColumnCreate = ColumnCreate
   { columnCreateTableId    :: Id Table
@@ -50,17 +50,11 @@ type ColumnRoutes =
       "create" :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Id Column)
  :<|> "setName" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] Text :> Post '[JSON] ()
  :<|> "setType" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] ColumnType :> Post '[JSON] ()
- :<|> "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Column, Text, ColumnType)]
-
-data RecordCreate = RecordCreate
-  { recordCreateTableId :: Id Table
-  } deriving (Generic)
-
-instance ToJSON RecordCreate
-instance FromJSON RecordCreate
+ :<|> "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [Column]
 
 type RecordRoutes =
-      "create" :> ReqBody '[JSON] RecordCreate :> Post '[JSON] (Id Record)
+      "create" :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Id Record)
+ :<|> "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [Record]
 
 data CellSet = CellSet
   { cellSetTableId  :: Id Table

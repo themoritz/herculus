@@ -2,14 +2,10 @@
 {-# LANGUAGE RecursiveDo #-}
 
 module Widgets.TableList
-  ( TableListConfig (..)
-  , TableList (..)
+  ( TableList (..)
   , tableList
   ) where
 
-import Control.Lens
-
-import Data.Default
 import Data.Text (Text, pack, unpack)
 import Data.Map (Map)
 import Data.List.NonEmpty (NonEmpty)
@@ -22,26 +18,6 @@ import Lib.Api.Rest
 
 import Api.Rest (loader, api)
 import qualified Api.Rest as Api
-
-
-data TableListConfig t = TableListConfig
-  { _tableListConfig_newTable :: Event t Table
-  , _tableListConfig_loadProject :: Event t (Id Project)
-  }
-
-makeLenses ''TableListConfig
-
-instance Reflex t => Default (TableListConfig t) where
-  def = TableListConfig
-    { _tableListConfig_newTable = never
-    , _tableListConfig_loadProject = never
-    }
-
-data TableList t = TableList
-  { _tableList_selectTable :: Event t (Id Table)
-  }
-
-makeLenses ''TableList
 
 data State = State
   { tables :: Map (Id Table) Text
@@ -64,8 +40,14 @@ update actions state = foldl (flip go) state actions
         map (\(Table i _ name) -> (i, name)) $
         filter (\t -> Just (tableProjectId t) == prjId) tbls) prjId
 
-tableList :: MonadWidget t m => TableListConfig t -> m (TableList t)
-tableList (TableListConfig newTable loadProject) = divClass "container" $ mdo
+data TableList t = TableList
+  { _tableList_selectTable :: Event t (Id Table)
+  }
+
+tableList :: MonadWidget t m
+          => Event t Table -> Event t (Id Project)
+          -> m (TableList t)
+tableList newTable loadProject = divClass "container" $ mdo
   el "h5" $ text "Tables"
   createTable <- divClass "row" $ do
     name <- (fmap pack . current . _textInput_value) <$> textInput def
@@ -78,7 +60,7 @@ tableList (TableListConfig newTable loadProject) = divClass "container" $ mdo
     newTbl <- loader (Api.tableCreate api tableArg) create
     pure $ fmapMaybe id $ attachWith (\crTbl i -> case crTbl of
                Left _ -> Nothing
-               Right (TableCreate pri name) -> Just (Table i pri name)) tableArg newTbl
+               Right (TableCreate pri n) -> Just (Table i pri n)) tableArg newTbl
   projectArg <- hold (Left "") (Right <$> loadProject)
   listResult <- loader (Api.tableList api projectArg) (() <$ loadProject)
   state <- foldDyn update (State Map.empty Nothing) $ mergeList

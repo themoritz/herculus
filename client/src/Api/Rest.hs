@@ -12,7 +12,7 @@ import Reflex.Dom
 import Servant.API
 import Servant.Reflex
 
-import Lib
+import Lib as Lib
 import Lib.Api.Rest
 
 type Arg t a = Behavior t (Either String a)
@@ -23,12 +23,13 @@ data RestApi t m = MonadWidget t m => RestApi
   , projectList   :: Res t m [Project]
   , tableCreate   :: Arg t TableCreate -> Res t m (Id Table)
   , tableList     :: Arg t (Id Project) -> Res t m [Table]
-  , tableData     :: Arg t (Id Table) -> Res t m [(Id Record, [(Id Column, Text)])]
+  , tableData     :: Arg t (Id Table) -> Res t m [(Id Column, Id Record, Lib.Value)]
   , columnCreate  :: Arg t (Id Table) -> Res t m (Id Column)
   , columnSetName :: Arg t (Id Column) -> Arg t Text -> Res t m ()
   , columnSetType :: Arg t (Id Column) -> Arg t ColumnType -> Res t m ()
-  , columnList    :: Arg t (Id Table) -> Res t m [(Id Column, Text, ColumnType)]
-  , recordCreate  :: Arg t RecordCreate -> Res t m (Id Record)
+  , columnList    :: Arg t (Id Table) -> Res t m [Column]
+  , recordCreate  :: Arg t (Id Table) -> Res t m (Id Record)
+  , recordList    :: Arg t (Id Table) -> Res t m [Record]
   , cellSet       :: Arg t CellSet -> Res t m ()
   }
 
@@ -41,7 +42,7 @@ api =
       (projectC :<|> projectL) = project
       (tableC :<|> tableL :<|> tableD) = table
       (columnC :<|> columnSN :<|> columnST :<|> columnL) = column
-      recordC = record
+      (recordC :<|> recordL) = record
       cellS = cell
   in RestApi
        { projectCreate = projectC
@@ -54,6 +55,7 @@ api =
        , columnSetType = columnST
        , columnList    = columnL
        , recordCreate  = recordC
+       , recordList    = recordL
        , cellSet       = cellS
        }
 

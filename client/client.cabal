@@ -16,6 +16,9 @@ executable client
                      , Widgets.ProjectList
                      , Widgets.TableList
                      , Widgets.Table
+                     , Widgets.Cell
+                     , Widgets.Record
+                     , Widgets.Canvas
                      , Widgets.Column
                      , Api.Rest
   other-extensions:    TemplateHaskell
