@@ -14,6 +14,7 @@ import           Text.Read       (readMaybe)
 
 import           Data.Aeson.Bson
 import           Lib.Base64
+import           Lib.NamedMap
 
 import           GHC.Generics
 
@@ -44,7 +45,13 @@ instance FromHttpApiData (Id a) where
     Just i  -> Right $ Id i
 
 instance ToHttpApiData (Id a) where
-  toUrlPiece (Id i)= pack $ show i
+  toUrlPiece (Id i) = pack $ show i
+
+instance ToName (Id a) where
+  toName (Id obj) = pack $ show obj
+
+instance FromName (Id a) where
+  fromName txt = Id $ read $ unpack txt
 
 --
 
@@ -108,13 +115,6 @@ data DataType
 
 instance ToJSON DataType
 instance FromJSON DataType
-
-data Expression
-  = ExprColumnRef (Ref Table) (Ref Column)
-  deriving (Show, Generic)
-
-instance ToJSON Expression
-instance FromJSON Expression
 
 data Record = Record
   { recordId :: Id Record
