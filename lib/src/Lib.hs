@@ -21,7 +21,7 @@ import           GHC.Generics
 import           Web.HttpApiData
 
 newtype Id a = Id ObjectId
-  deriving (Eq, Ord, Show, Read, Generic)
+  deriving (Eq, Ord, Val, Show, Read, Generic)
 
 toObjectId :: Id a -> ObjectId
 toObjectId (Id x) = x
@@ -56,7 +56,7 @@ instance FromName (Id a) where
 --
 
 newtype Ref a = Ref Text
-  deriving (Show, Generic)
+  deriving (Show, Generic, Eq, Val)
 
 instance ToJSON (Ref a)
 instance FromJSON (Ref a)
@@ -64,7 +64,7 @@ instance FromJSON (Ref a)
 --
 
 newtype Value = Value { unValue :: Text }
-  deriving (Show, Eq, IsString, Generic, Val)
+  deriving (Show, Eq, IsString, Monoid, Generic, Val)
 
 instance ToJSON Value
 instance FromJSON Value

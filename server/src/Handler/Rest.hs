@@ -59,7 +59,7 @@ handleTable =
   :<|> handleTableData
 
 handleTableCreate :: MonadHexl m => TableCreate -> m (Id Table)
-handleTableCreate (TableCreate projectId name)= do
+handleTableCreate (TableCreate projectId name) = do
   Mongo.ObjId i <- runMongo $ Mongo.insert "tables"
     [ "name" =: name
     , "projectId" =: toObjectId projectId

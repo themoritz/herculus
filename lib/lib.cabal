@@ -30,6 +30,7 @@ library
                      , http-api-data
                      , lens
                      , mtl
+                     , parsec
                      , servant
                      , scientific
                      , text
