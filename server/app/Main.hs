@@ -7,6 +7,7 @@ module Main where
 import           Control.Concurrent.STM
 import           Control.Monad.IO.Class
 import           Control.Monad.Except
+import           Control.Exception              (finally)
 
 import           Data.Aeson
 import           Data.Proxy
@@ -24,6 +25,7 @@ import           Handler.Rest
 import           Handler.WebSocket
 import           Lib.Api.Rest
 import           Monads
+import           ConnectionManager
 
 type AllRoutes =
        Routes
@@ -46,18 +48,29 @@ wsApp :: HexlEnv -> ServerApp
 wsApp env pending = if requestPath (pendingRequest pending) == "/websocket"
   then do
     connection <- acceptRequest pending
-    forever $ do
-      message <- receiveData connection
-      case eitherDecode message of
-        Left err  -> putStrLn err
-        Right wsUp -> runHexl env $ handleClientMessage wsUp
+    let connections = envConnections env
+    connectionId <- atomically $ do
+      mgr <- readTVar connections
+      let (i, mgr') = addConnection connection mgr
+      writeTVar connections mgr'
+      pure i
+    -- To keep connection alive in some browsers
+    forkPingThread connection 30
+    let disconnect = atomically $ modifyTVar connections $
+          removeConnection connectionId
+    flip finally disconnect $ do
+      forever $ do
+        message <- receiveData connection
+        case eitherDecode message of
+          Left err  -> putStrLn err
+          Right wsUp -> runHexl env $ handleClientMessage wsUp
 
   else rejectRequest pending "Wrong path"
 
 main :: IO ()
 main = do
   pipe <- Mongo.connect $ Mongo.host "127.0.0.1"
-  connections <- atomically $ newTVar []
+  connections <- atomically $ newTVar newConnectionManager
   let env = HexlEnv pipe "test" connections
       webSocketApp = wsApp env
       restApp = serve routes $ rest env

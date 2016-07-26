@@ -1,14 +1,17 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 
-module Eval where
+module Eval
+  ( runEval
+  , collectDependencies
+  ) where
 
-import           Control.Monad
 import           Control.Monad.Except
 
+import           Data.Maybe
+import           Data.Monoid
 import           Data.Text
-import Data.Maybe
-import Data.Monoid
 
 import           Database.MongoDB     ((=:))
 import qualified Database.MongoDB     as Mongo
@@ -16,14 +19,15 @@ import qualified Database.MongoDB     as Mongo
 import           Lib
 import           Lib.Expression
 
+import           CellCache
+import           Dependencies
 import           Monads
 
 import           Control.Monad.Reader
 
 data EvalEnv = EvalEnv
-  { evalTableId  :: Id Table
-  , evalColumnId :: Id Column
-  , evalRecordId :: Id Record
+  { evalRecordId  :: Id Record
+  , evalCellCache :: CellCache
   }
 
 newtype EvalT m a = EvalT
@@ -38,10 +42,10 @@ newtype EvalT m a = EvalT
 instance MonadTrans EvalT where
   lift = EvalT . lift . lift
 
-runEval :: MonadHexl m => Id Table -> Id Column -> Id Record
+runEval :: MonadHexl m => CellCache -> Id Record
         -> Expr -> m (Either Text Value)
-runEval t c r expr =
-  let env = EvalEnv t c r
+runEval cache r expr =
+  let env = EvalEnv r cache
       action = unEvalT $ eval expr
   in runExceptT $ runReaderT action env
 
@@ -49,22 +53,37 @@ eval :: MonadHexl m => Expr -> EvalT m Value
 eval (ExprBinOp Append l r) = (<>) <$> eval l <*> eval r
 eval (ExprStringLit txt) = pure $ Value txt
 eval (ExprColumnRef colName) = do
-  ownTblId <- asks evalTableId
-  let colQuery =
-        [ "name" =: colName
-        , "tableId" =: toObjectId ownTblId
-        ]
-  mColumn <- lift $ runMongo $ Mongo.findOne (Mongo.select colQuery "columns")
   ownRecId <- asks evalRecordId
-  case mColumn >>= Mongo.lookup "_id" of
+  lift (resolveColumnRef colName) >>= \case
     Nothing -> throwError "Column not found on same table"
     Just colId -> do
-      let cellQuery =
-            [ "aspects" =:
-              [ "columnId" =: (colId :: Mongo.ObjectId)
-              , "recordId" =: toObjectId ownRecId
-              , "tableId"  =: toObjectId ownTblId
-              ]
-            ]
-      mCell <- lift $ runMongo $ Mongo.findOne (Mongo.select cellQuery "cells")
-      pure $ fromMaybe "" $ mCell >>= Mongo.lookup "value"
+      cellCache <- asks evalCellCache
+      case retrieve colId ownRecId cellCache of
+        Just val -> pure val
+        Nothing -> do
+          let cellQuery =
+                  [ "aspects" =:
+                  [ "columnId" =: toObjectId colId
+                  , "recordId" =: toObjectId ownRecId
+                  ]
+                  ]
+          mCell <- lift $ runMongo $ Mongo.findOne (Mongo.select cellQuery "cells")
+          pure $ fromMaybe "" $ mCell >>= Mongo.lookup "value"
+
+collectDependencies :: MonadHexl m => Expr -> m [(Id Column, DependencyType)]
+collectDependencies (ExprBinOp _ l r) =
+  (<>) <$> collectDependencies l
+       <*> collectDependencies r
+collectDependencies (ExprStringLit _) = pure []
+collectDependencies (ExprColumnRef colName) = do
+  mCol <- resolveColumnRef colName
+  pure $ maybe [] (\col -> [(col, OneToOne)]) mCol
+
+
+resolveColumnRef :: MonadHexl m => Ref Column -> m (Maybe (Id Column))
+resolveColumnRef colName = do
+  let colQuery =
+        [ "name" =: colName
+        ]
+  mColumn <- runMongo $ Mongo.findOne (Mongo.select colQuery "columns")
+  pure $ mColumn >>= Mongo.lookup "_id"

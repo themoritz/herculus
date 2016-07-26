@@ -2,7 +2,7 @@
 
 module Lib.Api.WebSocket where
 
-import Data.Aeson
+import Data.Aeson (ToJSON, FromJSON)
 import Data.Text (Text)
 
 import GHC.Generics
@@ -23,6 +23,8 @@ data WsDownMessage
   -- Play
   = WsDownGreet Text
   | WsDownList [Text]
+  -- Cell updates
+  | WsDownCellsChanged [(Id Column, Id Record, Value)]
   deriving (Generic, Show)
 
 instance ToJSON WsDownMessage

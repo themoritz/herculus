@@ -26,6 +26,7 @@ import qualified Database.MongoDB            as Mongo
 import           Network.WebSockets
 
 import           Lib.Api.WebSocket
+import           ConnectionManager
 
 class Monad m => MonadHexl m where
   sendWS :: WsDownMessage -> m ()
@@ -34,7 +35,7 @@ class Monad m => MonadHexl m where
 data HexlEnv = HexlEnv
   { envPipe        :: Mongo.Pipe
   , envDatabase    :: Text
-  , envConnections :: TVar [Connection]
+  , envConnections :: TVar ConnectionManager
   }
 
 newtype HexlT m a = HexlT
@@ -64,7 +65,7 @@ newtype HexlT m a = HexlT
 instance (MonadBaseControl IO m, MonadIO m) => MonadHexl (HexlT m) where
   sendWS msg = do
     connectionsRef <- asks envConnections
-    connections <- liftIO $ atomically $ readTVar connectionsRef
+    connections <- allConnections <$> (liftIO $ atomically $ readTVar connectionsRef)
     forM_ connections $ \connection ->
       liftIO $ sendTextData connection $ encode msg
   runMongo action = do

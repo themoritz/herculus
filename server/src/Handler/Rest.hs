@@ -18,6 +18,9 @@ import qualified Database.MongoDB as Mongo
 import           Lib
 import           Lib.Api.Rest
 import           Monads
+import           Dependencies
+import           Lib.Expression
+import           Eval
 
 handle :: MonadHexl m => ServerT Routes m
 handle =
@@ -59,27 +62,27 @@ handleTable =
   :<|> handleTableData
 
 handleTableCreate :: MonadHexl m => TableCreate -> m (Id Table)
-handleTableCreate (TableCreate projectId name) = do
+handleTableCreate (TableCreate projId name) = do
   Mongo.ObjId i <- runMongo $ Mongo.insert "tables"
     [ "name" =: name
-    , "projectId" =: toObjectId projectId
+    , "projectId" =: toObjectId projId
     ]
   pure $ fromObjectId i
 
 handleTableList :: MonadHexl m => Id Project -> m [Table]
-handleTableList projectId = do
-  let query = [ "projectId" =: toObjectId projectId ]
+handleTableList projId = do
+  let query = [ "projectId" =: toObjectId projId ]
   tables <- runMongo $ Mongo.find (Mongo.select query "tables") >>= Mongo.rest
   let go table = do
         i <- Mongo.lookup "_id" table
         n <- Mongo.lookup "name" table
-        pure $ Table (fromObjectId i) projectId n
+        pure $ Table (fromObjectId i) projId n
   pure $ mapMaybe go tables
 
 handleTableData :: MonadHexl m => Id Table -> m [(Id Column, Id Record, Value)]
-handleTableData tableId = do
+handleTableData tblId = do
   cells <- runMongo $ Mongo.find
-    (Mongo.select ["aspects.tableId" =: toObjectId tableId] "cells") >>= Mongo.rest
+    (Mongo.select ["aspects.tableId" =: toObjectId tblId] "cells") >>= Mongo.rest
   let go cell = do
         aspects <- Mongo.lookup "aspects" cell
         r <- Mongo.lookup "recordId" aspects
@@ -115,8 +118,29 @@ handleColumnSetName colId name = do
 handleColumnSetType :: MonadHexl m => Id Column -> ColumnType -> m ()
 handleColumnSetType colId cType = do
   let query = Mongo.select [ "_id" =: toObjectId colId ] "columns"
-  void $ runMongo $ Mongo.fetch query >>=
+  runMongo $ Mongo.fetch query >>=
     Mongo.save "columns" . Mongo.merge [ "columnType" =: toValue cType ]
+  -- Get old dependencies
+  mDep <- runMongo $ Mongo.findOne (Mongo.select [] "dependencies")
+  let graph = fromMaybe emptyDependencyGraph $ mDep >>=
+                                               Mongo.lookup "graph" >>=
+                                               decodeValue
+  graph' <- case cType of
+    ColumnInput _ -> pure $ setDependencies colId [] graph
+    ColumnDerived formula -> case parseExpression formula of
+      Left _ -> pure $ setDependencies colId [] graph
+      Right expr -> do
+        deps <- collectDependencies expr
+        let graph' = setDependencies colId deps graph
+            topoResult = getDependentTopological colId graph'
+        case topoResult of
+          Nothing -> pure $ setDependencies colId [] graph
+          Just order -> do
+            -- Propagate
+            pure graph'
+  runMongo $ Mongo.save "dependencies" $
+          Mongo.merge [ "graph" =: toValue graph' ] $
+          fromMaybe [] mDep
 
 handleColumnList :: MonadHexl m => Id Table -> m [Column]
 handleColumnList tblId = do
@@ -138,19 +162,10 @@ handleRecord =
 
 handleRecordCreate :: MonadHexl m => Id Table -> m (Id Record)
 handleRecordCreate tblId = do
-  recordId@(Mongo.ObjId i) <- runMongo $ Mongo.insert "records"
+  (Mongo.ObjId i) <- runMongo $ Mongo.insert "records"
     [ "tableId" =: toObjectId tblId
     ]
   pure $ fromObjectId i
-  -- let go (colId, val) =
-  --       [ "value" =: val
-  --       , "aspects" =:
-  --         [ "columnId" =: toObjectId colId -- "concept"
-  --         , "recordId" =: recordId
-  --         , "tableId" =: toObjectId tableId
-  --         ]
-  --       ]
-  -- void $ runMongo $ Mongo.insertMany "cells" $ map go entries
 
 handleRecordList :: MonadHexl m => Id Table -> m [Record]
 handleRecordList tblId = do
@@ -166,12 +181,12 @@ handleCell =
        handleCellSet
 
 handleCellSet :: MonadHexl m => CellSet -> m ()
-handleCellSet (CellSet tableId columnId recordId value) = do
+handleCellSet (CellSet tblId colId recId value) = do
   let query =
         [ "aspects" =:
-          [ "columnId" =: toObjectId columnId
-          , "recordId" =: toObjectId recordId
-          , "tableId"  =: toObjectId tableId
+          [ "columnId" =: toObjectId colId -- "concept"
+          , "recordId" =: toObjectId recId
+          , "tableId"  =: toObjectId tblId
           ]
         ]
   void $ runMongo $ Mongo.upsert (Mongo.select query "cells") $
