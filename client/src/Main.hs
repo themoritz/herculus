@@ -22,6 +22,10 @@ import Widgets.Column
 
 main :: IO ()
 main = mainWidget $ do
+  wsDown <- ws never
+  let cellChanges msg = case msg of
+        WsDownCellsChanged entries -> Just entries
+        _                          -> Nothing
   divClass "container" $ do
     divClass "row" $ do
       tList <- divClass "two columns" $ do
@@ -32,7 +36,8 @@ main = mainWidget $ do
             divClass "twelve columns" $
               tableList never $ _projectList_selectProject pList
       divClass "ten columns" $ do
-        table $ _tableList_selectTable tList
+        table (_tableList_selectTable tList)
+              (fmapMaybe cellChanges wsDown)
 
 widget :: MonadWidget t m => m ()
 widget = el "div" $ do

@@ -53,23 +53,25 @@ data Action
   = SetColumns [Column]
   | SetRecords [Record]
   | SetCells [(Id Column, Id Record, Value)]
+  | UpdateCells [(Id Column, Id Record, Value)]
   | AddColumn Column
   | AddRecord Record
   | SetTableId (Id Table)
 
 update :: Action -> State -> State
 update action st = case action of
-  SetColumns cols -> st & stateColumns .~
-    (Map.fromList $ map (\c@(Column i _ _) -> (i, c)) cols)
-  SetRecords recs -> st & stateRecords .~
-    (Map.fromList $ map (\r@(Record i) -> (i, r)) recs)
-  SetCells entries -> st & stateCells .~
-    (Map.fromList $
-      map (\(colId, recId, val) -> ((Coords colId recId), val))
-          entries)
-  AddColumn col@(Column i _ _) -> st & stateColumns %~ Map.insert i col
-  AddRecord reco@(Record i) -> st & stateRecords %~ Map.insert i reco
-  SetTableId tblId -> st & stateTableId .~ Just tblId
+    SetColumns cols -> st & stateColumns .~
+      (Map.fromList $ map (\c@(Column i _ _) -> (i, c)) cols)
+    SetRecords recs -> st & stateRecords .~
+      (Map.fromList $ map (\r@(Record i) -> (i, r)) recs)
+    SetCells entries -> st & stateCells .~ fillEntries entries Map.empty
+    UpdateCells entries -> st & stateCells %~ fillEntries entries
+    AddColumn col@(Column i _ _) -> st & stateColumns %~ Map.insert i col
+    AddRecord reco@(Record i) -> st & stateRecords %~ Map.insert i reco
+    SetTableId tblId -> st & stateTableId .~ Just tblId
+  where
+    fillEntries entries m = foldr (\(c, v) -> Map.insert c v) m $
+        map (\(colId, recId, val) -> ((Coords colId recId), val)) entries
 
 toCellGrid :: State -> Map (Position, Coords, Maybe (Id Table)) Value
 toCellGrid (State tblId cells columns records) =
@@ -97,8 +99,9 @@ toRecords (State _ _ _ records) =
   let indexedRecs = zip (Map.toList records) [0..]
   in Map.fromList $ map (\((recId, reco), i) -> ((i, recId), reco)) indexedRecs
 
-table :: MonadWidget t m => Event t (Id Table) -> m ()
-table loadTable = el "div" $ mdo
+table :: MonadWidget t m
+      => Event t (Id Table) -> Event t [(Id Column, Id Record, Value)]-> m ()
+table loadTable updateCells = el "div" $ mdo
   tableIdArg <- hold (Left "") (Right <$> loadTable)
   columnsRes <- loader (Api.columnList api tableIdArg) $
                        () <$ loadTable
@@ -110,6 +113,7 @@ table loadTable = el "div" $ mdo
     [ SetColumns <$> columnsRes
     , SetRecords <$> recordsRes
     , SetCells <$> dataRes
+    , UpdateCells <$> updateCells
     , (\i -> AddColumn (Column i "" (ColumnInput DataString))) <$> newColId
     , (\i -> AddRecord (Record i)) <$> newRecId
     , SetTableId <$> loadTable

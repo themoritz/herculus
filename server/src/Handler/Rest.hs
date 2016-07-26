@@ -19,6 +19,7 @@ import           Lib
 import           Lib.Api.Rest
 import           Monads
 import           Dependencies
+import           Propagate
 import           Lib.Expression
 import           Eval
 
@@ -136,7 +137,7 @@ handleColumnSetType colId cType = do
         case topoResult of
           Nothing -> pure $ setDependencies colId [] graph
           Just order -> do
-            -- Propagate
+            -- TODO: Propagate
             pure graph'
   runMongo $ Mongo.save "dependencies" $
           Mongo.merge [ "graph" =: toValue graph' ] $
@@ -191,3 +192,11 @@ handleCellSet (CellSet tblId colId recId value) = do
         ]
   void $ runMongo $ Mongo.upsert (Mongo.select query "cells") $
     [ "value" =: value ] <> query
+  mDep <- runMongo $ Mongo.findOne (Mongo.select [] "dependencies")
+  let graph = fromMaybe emptyDependencyGraph $ mDep >>=
+                                               Mongo.lookup "graph" >>=
+                                               decodeValue
+      mOrder = getDependentTopological colId graph
+  case mOrder of
+    Just order -> runPropagate recId order
+    Nothing -> pure ()

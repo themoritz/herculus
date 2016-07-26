@@ -11,6 +11,8 @@ import           Control.Exception              (finally)
 
 import           Data.Aeson
 import           Data.Proxy
+import Data.ByteString.Lazy (fromStrict)
+import Data.Text.Encoding (encodeUtf8)
 
 import qualified Database.MongoDB               as Mongo
 
@@ -42,7 +44,15 @@ rest env =
     hexlToEither :: HexlT IO :~> ExceptT ServantErr IO
     hexlToEither = Nat $ \hexlAction -> do
       result <- liftIO $ runHexl env hexlAction
-      pure result
+      case result of
+        Left err -> throwError (appErrToServantErr err)
+        Right a  -> pure a
+
+appErrToServantErr :: AppError -> ServantErr
+appErrToServantErr err = case err of
+    (ErrUser msg) -> err400 { errBody = toBS msg }
+    (ErrBug msg)  -> err500 { errBody = toBS msg }
+  where toBS = fromStrict . encodeUtf8
 
 wsApp :: HexlEnv -> ServerApp
 wsApp env pending = if requestPath (pendingRequest pending) == "/websocket"
@@ -63,7 +73,11 @@ wsApp env pending = if requestPath (pendingRequest pending) == "/websocket"
         message <- receiveData connection
         case eitherDecode message of
           Left err  -> putStrLn err
-          Right wsUp -> runHexl env $ handleClientMessage wsUp
+          Right wsUp -> do
+            res <- runHexl env $ handleClientMessage wsUp
+            case res of
+              Left err -> putStrLn $ show err
+              Right a  -> pure a
 
   else rejectRequest pending "Wrong path"
 
