@@ -4,6 +4,10 @@
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE OverloadedStrings       #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE LambdaCase       #-}
+{-# LANGUAGE InstanceSigs           #-}
 -- {-# LANGUAGE StandaloneDeriving #-}
 
 module Monads
@@ -22,8 +26,10 @@ import           Control.Monad.Logger
 import           Control.Monad.Trans.Control
 -- import Control.Monad.Base
 
+import           Data.Proxy
 import           Data.Aeson
 import           Data.Text
+import           Database.MongoDB ((=:))
 import qualified Data.ByteString.Char8 as B8
 
 import qualified Database.MongoDB            as Mongo
@@ -32,6 +38,7 @@ import           System.Log.FastLogger
 
 import           Network.WebSockets
 
+import           Lib
 import           Lib.Api.WebSocket
 import           ConnectionManager
 
@@ -43,10 +50,19 @@ data AppError
 -- DB layer: Typed queries
 
 class (Monad m, MonadLogger m, MonadError AppError m) => MonadDB m where
+  getById :: Model a => Id a -> m (Either Text a)
+  -- Throws `ErrBug` in Left case
+  getById' :: Model a => Id a -> m a
+  getOneByQuery :: Model a => Mongo.Selector -> m (Either Text (Entity a))
+  -- Throws `ErrBug` in Left case
+  getOneByQuery' :: Model a => Mongo.Selector -> m (Entity a)
+  listByQuery :: Model a => Mongo.Selector -> m [Entity a]
+  listAll :: Model a => m [Entity a]
+  create :: Model a => a -> m (Id a)
 
 -- Hexl layer: Business logic
 
-class (Monad m, MonadLogger m, MonadError AppError m) => MonadHexl m where
+class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m where
   sendWS :: WsDownMessage -> m ()
 
 data HexlEnv = HexlEnv
@@ -72,6 +88,51 @@ instance MonadIO m => MonadLogger (HexlT m) where
 --
 
 instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
+  getById :: forall a. Model a => Id a -> HexlT m (Either Text a)
+  getById i = do
+    let query = [ "_id" =: toObjectId i ]
+        collection = collectionName (Proxy :: Proxy a)
+    res <- runMongo $ Mongo.findOne (Mongo.select query collection)
+    case res of
+      Nothing -> pure $ Left "Not found"
+      Just doc -> pure $ parseDocument doc
+
+  -- -- Throws `ErrBug` in Left case
+  getById' :: Model a => Id a -> HexlT m a
+  getById' i = getById i >>= \case
+    Left msg -> throwError $ ErrBug msg
+    Right x -> pure x
+
+  getOneByQuery :: forall a. Model a => Mongo.Selector -> HexlT m (Either Text (Entity a))
+  getOneByQuery query = do
+    let collection = collectionName (Proxy :: Proxy a)
+    res <- runMongo $ Mongo.findOne (Mongo.select query collection)
+    case res of
+      Nothing -> pure $ Left "Not found"
+      Just doc -> pure $ parseDocument doc
+
+  -- -- Throws `ErrBug` in Left case
+  getOneByQuery' :: Model a => Mongo.Selector -> HexlT m (Entity a)
+  getOneByQuery' query = getOneByQuery query >>= \case
+    Left msg -> throwError $ ErrBug msg
+    Right x -> pure x
+
+  listByQuery :: forall a. Model a => Mongo.Selector -> HexlT m [Entity a]
+  listByQuery query = do
+    let collection = collectionName (Proxy :: Proxy a)
+    res <- runMongo $ Mongo.find (Mongo.select query collection) >>= Mongo.rest
+    case traverse parseDocument res of
+      Left msg -> throwError $ ErrBug msg
+      Right xs -> pure xs
+
+  listAll :: Model a => HexlT m [Entity a]
+  listAll = listByQuery []
+
+  create :: forall a. Model a => a -> HexlT m (Id a)
+  create x = do
+    let collection = collectionName (Proxy :: Proxy a)
+    Mongo.ObjId i <- runMongo $ Mongo.insert collection $ toDocument x
+    pure $ fromObjectId i
 
 --
 
