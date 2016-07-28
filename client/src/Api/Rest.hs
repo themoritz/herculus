@@ -12,25 +12,27 @@ import Reflex.Dom
 import Servant.API
 import Servant.Reflex
 
-import Lib as Lib
+import Lib.Types as Lib
+import Lib.Model
+import Lib.Model.Types
 import Lib.Api.Rest
 
 type Arg t a = Behavior t (Either String a)
 type Res t m a = Event t () -> m (Event t (ReqResult a))
 
 data RestApi t m = MonadWidget t m => RestApi
-  { projectCreate :: Arg t Text -> Res t m (Id Project)
-  , projectList   :: Res t m [Project]
-  , tableCreate   :: Arg t TableCreate -> Res t m (Id Table)
-  , tableList     :: Arg t (Id Project) -> Res t m [Table]
+  { projectCreate :: Arg t Project -> Res t m (Id Project)
+  , projectList   :: Res t m [Entity Project]
+  , tableCreate   :: Arg t Table -> Res t m (Id Table)
+  , tableList     :: Arg t (Id Project) -> Res t m [Entity Table]
   , tableData     :: Arg t (Id Table) -> Res t m [(Id Column, Id Record, Lib.Value)]
   , columnCreate  :: Arg t (Id Table) -> Res t m (Id Column)
   , columnSetName :: Arg t (Id Column) -> Arg t Text -> Res t m ()
   , columnSetType :: Arg t (Id Column) -> Arg t ColumnType -> Res t m ()
-  , columnList    :: Arg t (Id Table) -> Res t m [Column]
+  , columnList    :: Arg t (Id Table) -> Res t m [Entity Column]
   , recordCreate  :: Arg t (Id Table) -> Res t m (Id Record)
-  , recordList    :: Arg t (Id Table) -> Res t m [Record]
-  , cellSet       :: Arg t CellSet -> Res t m ()
+  , recordList    :: Arg t (Id Table) -> Res t m [Entity Record]
+  , cellSet       :: Arg t Cell -> Res t m ()
   }
 
 api :: forall t m. MonadWidget t m => RestApi t m

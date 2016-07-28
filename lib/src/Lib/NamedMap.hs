@@ -16,7 +16,7 @@ class FromName a where
   fromName :: Text -> a
 
 newtype NamedMap k v = NamedMap { unNamedMap :: Map k v }
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 namedMap :: Lens' (NamedMap k v) (Map k v)
 namedMap = lens unNamedMap (const NamedMap)

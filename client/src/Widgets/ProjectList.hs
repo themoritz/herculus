@@ -11,7 +11,9 @@ import qualified Data.Map as Map
 
 import Reflex.Dom
 
-import Lib
+import Lib.Types
+import Lib.Model
+import Lib.Model.Types
 
 import Api.Rest (loader, api)
 import qualified Api.Rest as Api
@@ -19,27 +21,27 @@ import qualified Api.Rest as Api
 type State = Map (Id Project) Text
 
 data Action
-  = New Project
-  | Set [Project]
+  = New (Entity Project)
+  | Set [Entity Project]
 
 update :: Action -> State -> State
-update (New (Project i name)) ps = Map.insert i name ps
-update (Set ps) _ = Map.fromList $ map (\(Project i name) -> (i, name)) ps
+update (New (Entity i (Project name))) ps = Map.insert i name ps
+update (Set ps) _ = Map.fromList $ map (\(Entity i (Project name)) -> (i, name)) ps
 
 data ProjectList t = ProjectList
   { _projectList_selectProject :: Event t (Id Project)
   }
 
 projectList :: MonadWidget t m
-            => Event t Project
+            => Event t (Entity Project)
             -> m (ProjectList t)
 projectList newProject = divClass "container" $ do
   el "h5" $ text "Projects"
   createdProject <- divClass "row" $ do
     name <- (fmap pack . current . _textInput_value) <$> textInput def
     create <- button "Create"
-    newProj <- loader (Api.projectCreate api (Right <$> name)) create
-    pure $ attachWith (flip Project) name newProj
+    newProj <- loader (Api.projectCreate api (Right . Project <$> name)) create
+    pure $ attachWith (\n i -> Entity i (Project n)) name newProj
   listProjects <- getPostBuild
   listResult <- loader (Api.projectList api) listProjects
   projects <- foldDyn update Map.empty $ leftmost

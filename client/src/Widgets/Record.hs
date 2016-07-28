@@ -3,9 +3,9 @@ module Widgets.Record
   ) where
 
 import Reflex.Dom
-import Lib
+import Lib.Types
+import Lib.Model.Types
 
 record :: MonadWidget t m
        => Id Record -> m ()
-record recId = el "div" $
-  text $ take 5 $ show recId
+record recId = pure ()

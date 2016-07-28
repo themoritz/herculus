@@ -24,7 +24,7 @@ type Routes =
 
 type ProjectRoutes =
       "create" :> ReqBody '[JSON] Project :> Post '[JSON] (Id Project)
- :<|> "list" :> Get '[JSON] [Project]
+ :<|> "list" :> Get '[JSON] [Entity Project]
 
 type TableRoutes =
       "create" :> ReqBody '[JSON] Table :> Post '[JSON] (Id Table)

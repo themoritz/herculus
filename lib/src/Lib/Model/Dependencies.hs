@@ -34,7 +34,7 @@ import           Lib.Types
 data DependencyType
   = OneToOne
   | OneToAll
-  deriving (Generic, Eq, Ord)
+  deriving (Generic, Eq, Ord, Show)
 
 instance ToJSON DependencyType
 instance FromJSON DependencyType
@@ -44,7 +44,7 @@ type Connections = NamedMap (Id Column) DependencyType
 data DependencyGraph = DependencyGraph
   { _dependsOnColumns  :: NamedMap (Id Column) Connections
   , _influencesColumns :: NamedMap (Id Column) Connections
-  } deriving (Generic)
+  } deriving (Show, Generic)
 
 makeLenses ''DependencyGraph
 
@@ -105,6 +105,7 @@ getDependentTopological root graph =
     in if root `elem` ordering then Nothing else Just ordering
   where
     bfs :: [Id Column] -> [Id Column]
+    bfs [] = []
     bfs cols = cols <> bfs (concatMap getChildren cols)
 
     getChildren :: Id Column -> [Id Column]

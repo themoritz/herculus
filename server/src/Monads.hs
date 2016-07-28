@@ -39,6 +39,7 @@ import           System.Log.FastLogger
 import           Network.WebSockets
 
 import           Lib.Model
+import           Lib.Model.Types
 import           Lib.Model.Dependencies
 import           Lib.Model.Class
 import           Lib.Types
@@ -72,6 +73,8 @@ class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m 
 
   getDependencyGraph :: m DependencyGraph
   storeDependencyGraph :: DependencyGraph -> m ()
+
+  upsertCell :: Cell -> m ()
 
 data HexlEnv = HexlEnv
   { envPipe        :: Mongo.Pipe
@@ -171,6 +174,14 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
     Right e -> update (entityId e) (const (Dependencies graph))
     Left "Not found" -> void $ create (Dependencies graph)
     Left _ -> throwError $ ErrBug "Dependency graph corrupt"
+
+  upsertCell cell@(Cell _ (Aspects t c r)) = do
+    let query =
+            [ "aspects.columnId" =: toObjectId c
+            , "aspects.recordId" =: toObjectId r
+            , "aspects.tableId"  =: toObjectId t
+            ]
+    upsert query cell
 
 --
 

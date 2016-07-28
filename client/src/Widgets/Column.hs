@@ -19,7 +19,8 @@ import qualified Api.Rest as Api
 import           Data.Map        (Map)
 import qualified Data.Map as Map
 
-import Lib
+import Lib.Types
+import Lib.Model.Types
 
 data ColumnConfig t = ColumnConfig
   { _columnConfig_setType :: Event t ColumnType
@@ -91,10 +92,12 @@ column columnId (ColumnConfig setType setName initialType initialName) = el "div
                        }
       pure (ct, dt)
   expr <- (fmap pack . current . _textInput_value) <$> textInput
-            def { _textInputConfig_setValue = fmapMaybe toExpr setType
+            (def :: TextInputConfig t)
+                { _textInputConfig_setValue = fmapMaybe toExpr setType
                 , _textInputConfig_initialValue = fromMaybe "" $ toExpr initialType
+                , _textInputConfig_attributes = constDyn ("style" =: "width: 160px")
                 }
-  typeTrigger <- button "Set Type"
+  typeTrigger <- button "Set"
   let columnType = do
         cellType <- current $ _dropdown_value selectCellType
         case cellType of

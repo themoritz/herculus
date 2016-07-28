@@ -10,6 +10,8 @@ import           Control.Monad.Reader
 import           Control.Monad.State
 import           Control.Monad.Except
 
+import           Data.Monoid
+
 import           CellCache
 import           Eval
 import           Lib.Types
@@ -48,9 +50,10 @@ propagate (colId:cols) = do
   cache <- get
   recId <- asks propRecordId
   lift (runEval cache recId expr) >>= \case
-    Left _ -> propagate cols
+    Left msg -> lift $ throwError $ ErrBug $ "error during eval: " <> msg
     Right val -> do
       modify $ store colId recId val
+      lift $ setCellByCoords colId recId val
       propagate cols
 
 getExpression :: MonadHexl m => Id Column -> m Expr
@@ -60,4 +63,9 @@ getExpression colId = do
     ColumnDerived formula -> case parseExpression formula of
       Right expr -> pure expr
       Left _ -> throwError $ ErrBug "cannot parse stored expression"
-    _ -> pure (ExprStringLit "")
+    _ -> throwError $ ErrBug "column is not derived"
+
+setCellByCoords :: MonadHexl m => Id Column -> Id Record -> Value -> m ()
+setCellByCoords c r v = do
+  (Column t _ _) <- getById' c
+  upsertCell (Cell v (Aspects t c r))

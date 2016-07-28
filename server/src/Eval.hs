@@ -62,10 +62,8 @@ eval (ExprColumnRef colName) = do
         Just val -> pure val
         Nothing -> do
           let cellQuery =
-                [ "aspects" =:
-                  [ "columnId" =: toObjectId colId
-                  , "recordId" =: toObjectId ownRecId
-                  ]
+                [ "aspects.columnId" =: toObjectId colId
+                , "aspects.recordId" =: toObjectId ownRecId
                 ]
           cellRes <- lift $ getOneByQuery cellQuery
           pure $ either (const "") id $ (cellValue . entityVal) <$> cellRes

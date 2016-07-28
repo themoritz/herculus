@@ -3,8 +3,11 @@
 
 module Handler.Rest where
 
+import           Control.Monad.Logger
 
-import           Data.Text        (Text)
+import           Data.Text        (Text, pack)
+
+import           Text.Show.Pretty (ppShow)
 
 import           Servant
 
@@ -38,8 +41,8 @@ handleProject =
 handleProjectCreate :: MonadHexl m => Project -> m (Id Project)
 handleProjectCreate = create
 
-handleProjectList :: MonadHexl m => m [Project]
-handleProjectList = map entityVal <$> listAll
+handleProjectList :: MonadHexl m => m [Entity Project]
+handleProjectList = listAll
 
 --
 
@@ -120,15 +123,8 @@ handleCell =
        handleCellSet
 
 handleCellSet :: MonadHexl m => Cell -> m ()
-handleCellSet cell@(Cell _ (Aspects tblId colId recId)) = do
-  let query =
-        [ "aspects" =:
-          [ "columnId" =: toObjectId colId -- "concept"
-          , "recordId" =: toObjectId recId
-          , "tableId"  =: toObjectId tblId
-          ]
-        ]
-  upsert query cell
+handleCellSet cell@(Cell _ (Aspects _ colId recId)) = do
+  upsertCell cell
   graph <- getDependencyGraph
   let mOrder = getDependentTopological colId graph
   case mOrder of
