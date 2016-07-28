@@ -11,7 +11,8 @@ import Control.Monad.Identity
 import Data.Aeson
 import Data.Text (Text, pack, unpack)
 
-import Lib
+import Lib.Types
+import Lib.Model.Types
 
 import GHC.Generics hiding (Infix)
 

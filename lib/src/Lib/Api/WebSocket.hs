@@ -7,7 +7,8 @@ import Data.Text (Text)
 
 import GHC.Generics
 
-import Lib
+import Lib.Types
+import Lib.Model.Types
 
 data WsUpMessage
   -- Play

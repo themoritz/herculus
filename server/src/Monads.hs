@@ -38,7 +38,10 @@ import           System.Log.FastLogger
 
 import           Network.WebSockets
 
-import           Lib
+import           Lib.Model
+import           Lib.Model.Dependencies
+import           Lib.Model.Class
+import           Lib.Types
 import           Lib.Api.WebSocket
 import           ConnectionManager
 
@@ -59,11 +62,16 @@ class (Monad m, MonadLogger m, MonadError AppError m) => MonadDB m where
   listByQuery :: Model a => Mongo.Selector -> m [Entity a]
   listAll :: Model a => m [Entity a]
   create :: Model a => a -> m (Id a)
+  update :: Model a => Id a -> (a -> a) -> m ()
+  upsert :: Model a => Mongo.Selector -> a -> m ()
 
 -- Hexl layer: Business logic
 
 class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m where
   sendWS :: WsDownMessage -> m ()
+
+  getDependencyGraph :: m DependencyGraph
+  storeDependencyGraph :: DependencyGraph -> m ()
 
 data HexlEnv = HexlEnv
   { envPipe        :: Mongo.Pipe
@@ -134,6 +142,17 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
     Mongo.ObjId i <- runMongo $ Mongo.insert collection $ toDocument x
     pure $ fromObjectId i
 
+  update :: forall a. Model a => Id a -> (a -> a) -> HexlT m ()
+  update i f = do
+    let collection = collectionName (Proxy :: Proxy a)
+    x <- getById' i
+    runMongo $ Mongo.save collection $ toDocument $ Entity i (f x)
+
+  upsert :: forall a. Model a => Mongo.Selector -> a -> HexlT m ()
+  upsert query new = do
+    let collection = collectionName (Proxy :: Proxy a)
+    runMongo $ Mongo.upsert (Mongo.select query collection) $ toDocument new
+
 --
 
 instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
@@ -142,6 +161,16 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
     connections <- allConnections <$> (liftIO $ atomically $ readTVar connectionsRef)
     forM_ connections $ \connection ->
       liftIO $ sendTextData connection $ encode msg
+
+  getDependencyGraph = getOneByQuery [] >>= \case
+    Right e -> pure $ dependenciesGraph $ entityVal e
+    Left "Not found" -> pure emptyDependencyGraph
+    Left _ -> throwError $ ErrBug "Dependency graph corrupt"
+
+  storeDependencyGraph graph = getOneByQuery [] >>= \case
+    Right e -> update (entityId e) (const (Dependencies graph))
+    Left "Not found" -> void $ create (Dependencies graph)
+    Left _ -> throwError $ ErrBug "Dependency graph corrupt"
 
 --
 

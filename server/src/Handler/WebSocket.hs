@@ -14,14 +14,4 @@ import           Lib.Api.WebSocket
 import           Monads
 
 handleClientMessage :: MonadHexl m => WsUpMessage -> m ()
-handleClientMessage wsUp = case wsUp of
-
-  WsUpGreet msg ->
-    sendWS $ WsDownGreet msg
-  WsUpStore x ->
-    void $ runMongo $ Mongo.insert "messages"
-      [ "text" =: x
-      ]
-  WsUpList -> do
-    docs <- runMongo $ Mongo.find (Mongo.select [] "messages") >>= Mongo.rest
-    sendWS $ WsDownList $ mapMaybe (Mongo.lookup "text") docs
+handleClientMessage wsUp = pure ()

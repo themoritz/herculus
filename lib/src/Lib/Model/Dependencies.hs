@@ -1,9 +1,11 @@
-{-# LANGUAGE DeriveGeneric   #-}
-{-# LANGUAGE RankNTypes      #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
-module Dependencies
+module Lib.Model.Dependencies
   ( DependencyGraph
+  , Dependencies (..)
   , emptyDependencyGraph
   , setDependency
   , setDependencies
@@ -16,13 +18,18 @@ import           Control.Lens
 
 import           Data.Aeson
 import           Data.Aeson.Bson
+import           Data.Bson       ((=:))
+import qualified Data.Bson       as Bson
 import qualified Data.Map        as Map
 import           Data.Monoid
+import           Data.Text       (pack)
 
 import           GHC.Generics
 
-import           Lib
+import           Lib.Model.Class
+import           Lib.Model.Types
 import           Lib.NamedMap
+import           Lib.Types
 
 data DependencyType
   = OneToOne
@@ -31,9 +38,6 @@ data DependencyType
 
 instance ToJSON DependencyType
 instance FromJSON DependencyType
-
-instance ToValue DependencyType
-instance FromValue DependencyType
 
 type Connections = NamedMap (Id Column) DependencyType
 
@@ -51,8 +55,25 @@ connection c1 c2 = namedMap . at c1 . non emptyNamedMap . namedMap . at c2
 instance ToJSON DependencyGraph
 instance FromJSON DependencyGraph
 
-instance ToValue DependencyGraph
-instance FromValue DependencyGraph
+instance ToBSON DependencyGraph
+instance FromBSON DependencyGraph
+
+
+data Dependencies = Dependencies
+  { dependenciesGraph :: DependencyGraph
+  }
+
+instance ToDocument Dependencies where
+  toDocument (Dependencies graph) =
+    [ "graph" =: toValue graph
+    ]
+
+instance FromDocument Dependencies where
+  parseDocument doc = do
+    val <- Bson.lookup "graph" doc
+    case fromValue val of
+      Error msg -> Left $ pack msg
+      Success g -> pure $ Dependencies g
 
 emptyDependencyGraph :: DependencyGraph
 emptyDependencyGraph = DependencyGraph (NamedMap Map.empty) (NamedMap Map.empty)

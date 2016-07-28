@@ -8,15 +8,12 @@ module Propagate
 
 import           Control.Monad.Reader
 import           Control.Monad.State
-
-import           Data.Aeson.Bson
-
-import           Database.MongoDB     ((=:))
-import qualified Database.MongoDB     as Mongo
+import           Control.Monad.Except
 
 import           CellCache
 import           Eval
-import           Lib
+import           Lib.Types
+import           Lib.Model.Types
 import           Monads
 import           Lib.Expression
 import           Lib.Api.WebSocket
@@ -58,9 +55,9 @@ propagate (colId:cols) = do
 
 getExpression :: MonadHexl m => Id Column -> m Expr
 getExpression colId = do
-  mCol <- runMongo $ Mongo.findOne (Mongo.select [ "_id" =: toObjectId colId ] "columns")
-  case mCol >>= Mongo.lookup "columnType" >>= decodeValue of
-    Just (ColumnDerived formula) -> case parseExpression formula of
+  col <- getById' colId
+  case columnType col of
+    ColumnDerived formula -> case parseExpression formula of
       Right expr -> pure expr
-      Left _ -> pure (ExprStringLit "")
+      Left _ -> throwError $ ErrBug "cannot parse stored expression"
     _ -> pure (ExprStringLit "")

@@ -8,12 +8,13 @@ module CellCache
   , retrieveAll
   ) where
 
-import Control.Lens
+import           Control.Lens
 
-import Data.Map (Map)
-import qualified Data.Map as Map
+import           Data.Map        (Map)
+import qualified Data.Map        as Map
 
-import Lib
+import           Lib.Model.Types
+import           Lib.Types
 
 newtype CellCache = CellCache
   { _unCellCache :: Map (Id Column, Id Record) Value

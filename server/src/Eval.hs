@@ -9,18 +9,18 @@ module Eval
 
 import           Control.Monad.Except
 
-import           Data.Maybe
 import           Data.Monoid
 import           Data.Text
 
 import           Database.MongoDB     ((=:))
-import qualified Database.MongoDB     as Mongo
 
-import           Lib
+import           Lib.Types
+import           Lib.Model.Types
+import           Lib.Model
 import           Lib.Expression
 
 import           CellCache
-import           Dependencies
+import           Lib.Model.Dependencies
 import           Monads
 
 import           Control.Monad.Reader
@@ -62,13 +62,13 @@ eval (ExprColumnRef colName) = do
         Just val -> pure val
         Nothing -> do
           let cellQuery =
-                  [ "aspects" =:
+                [ "aspects" =:
                   [ "columnId" =: toObjectId colId
                   , "recordId" =: toObjectId ownRecId
                   ]
-                  ]
-          mCell <- lift $ runMongo $ Mongo.findOne (Mongo.select cellQuery "cells")
-          pure $ fromMaybe "" $ mCell >>= Mongo.lookup "value"
+                ]
+          cellRes <- lift $ getOneByQuery cellQuery
+          pure $ either (const "") id $ (cellValue . entityVal) <$> cellRes
 
 collectDependencies :: MonadHexl m => Expr -> m [(Id Column, DependencyType)]
 collectDependencies (ExprBinOp _ l r) =
@@ -85,5 +85,7 @@ resolveColumnRef colName = do
   let colQuery =
         [ "name" =: colName
         ]
-  mColumn <- runMongo $ Mongo.findOne (Mongo.select colQuery "columns")
-  pure $ mColumn >>= Mongo.lookup "_id"
+  columnRes <- getOneByQuery colQuery
+  case columnRes of
+    Left _ -> pure Nothing
+    Right e -> pure $ Just $ entityId e
