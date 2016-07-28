@@ -101,8 +101,8 @@ setDependencies start edges graph =
 
 getDependentTopological :: Id Column -> DependencyGraph -> Maybe [Id Column]
 getDependentTopological root graph =
-    let _:ordering = bfs [root]
-    in if root `elem` ordering then Nothing else Just ordering
+    let ordering = bfs [root]
+    in if root `elem` (tail ordering) then Nothing else Just ordering
   where
     bfs :: [Id Column] -> [Id Column]
     bfs [] = []

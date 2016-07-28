@@ -92,11 +92,13 @@ handleColumnSetType colId cType = do
       Right expr -> do
         deps <- collectDependencies expr
         let graph' = setDependencies colId deps graph
-            topoResult = getDependentTopological colId graph'
-        case topoResult of
-          Nothing -> pure $ setDependencies colId [] graph
+            mOrder = getDependentTopological colId graph'
+        case mOrder of
+          Nothing -> throwError $ ErrUser "Dependency graph has cycles"
           Just order -> do
-            -- TODO: Propagate
+            (Column t _ _) <- getById' colId
+            records <- listByQuery [ "tableId" =: t ]
+            traverse (flip runPropagate order) $ map entityId records
             pure graph'
   storeDependencyGraph graph'
 
@@ -128,5 +130,5 @@ handleCellSet cell@(Cell _ (Aspects _ colId recId)) = do
   graph <- getDependencyGraph
   let mOrder = getDependentTopological colId graph
   case mOrder of
-    Just order -> runPropagate recId order
+    Just order -> runPropagate recId (tail order)
     Nothing -> throwError $ ErrBug "Dependency graph has cycles"
