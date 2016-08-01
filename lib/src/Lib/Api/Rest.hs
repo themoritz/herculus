@@ -33,8 +33,7 @@ type TableRoutes =
 
 type ColumnRoutes =
       "create" :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Id Column)
- :<|> "setName" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] Text :> Post '[JSON] ()
- :<|> "setType" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] ColumnType :> Post '[JSON] ()
+ :<|> "update" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] Column :> Post '[JSON] ()
  :<|> "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [Entity Column]
 
 type RecordRoutes =

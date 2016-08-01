@@ -4,13 +4,14 @@
 
 module Lib.Types where
 
-import Data.Aeson hiding (Value)
-import           Data.Bson        (Document, ObjectId (..), Val, (=:))
-import           Data.Text        (Text, pack, unpack)
-import           Data.Monoid      ((<>))
+import           Data.Aeson      (FromJSON (..), ToJSON (..))
+import           Data.Bson       (Document, ObjectId (..), Val, (=:))
+import           Data.Decimal
+import           Data.Monoid     ((<>))
 import           Data.String
+import           Data.Text       (Text, pack, unpack)
 
-import           Text.Read        (readMaybe)
+import           Text.Read       (readMaybe)
 
 import           GHC.Generics
 
@@ -66,3 +67,39 @@ newtype Value = Value { unValue :: Text }
 
 instance ToJSON Value
 instance FromJSON Value
+
+class ParseValue a where
+  parseValue :: Value -> Maybe a
+
+class ShowValue a where
+  showValue :: a -> Value
+
+instance ParseValue Text where
+  parseValue (Value s) = Just s
+
+instance ShowValue Text where
+  showValue = Value
+
+instance ParseValue Number where
+  parseValue (Value x) = Number <$> (readMaybe $ unpack x)
+
+instance ShowValue Number where
+  showValue (Number x) = Value . pack . show $ x
+
+instance ShowValue a => ShowValue [a] where
+  showValue as = "show list not implemented"
+
+--
+
+newtype Number = Number Decimal
+  deriving (Num, Show)
+
+instance ToJSON Number where
+  toJSON (Number x) = toJSON . show $ x
+
+instance FromJSON Number where
+  parseJSON json = do
+    x <- parseJSON json
+    case readMaybe x of
+      Nothing -> fail "could not read number"
+      Just x' -> pure $ Number x'

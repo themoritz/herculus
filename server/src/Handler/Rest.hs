@@ -1,11 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE LambdaCase        #-}
 
 module Handler.Rest where
 
 import           Control.Monad.Logger
 
 import           Data.Text        (Text, pack)
+import           Data.Monoid
 
 import           Text.Show.Pretty (ppShow)
 
@@ -22,6 +24,7 @@ import           Lib.Model.Dependencies
 import           Propagate
 import           Lib.Expression
 import           Eval
+import           Typecheck
 
 handle :: MonadHexl m => ServerT Routes m
 handle =
@@ -69,38 +72,40 @@ handleTableData tblId = do
 handleColumn :: MonadHexl m => ServerT ColumnRoutes m
 handleColumn =
        handleColumnCreate
-  :<|> handleColumnSetName
-  :<|> handleColumnSetType
+  :<|> handleColumnUpdate
   :<|> handleColumnList
 
 handleColumnCreate :: MonadHexl m => Id Table -> m (Id Column)
-handleColumnCreate tblId = create $ Column tblId "" (ColumnInput DataString)
+handleColumnCreate tblId = create $ Column tblId "" DataString ColumnInput ""
 
-handleColumnSetName :: MonadHexl m => Id Column -> Text -> m ()
-handleColumnSetName colId name =
-  update colId (\col -> col { columnName = name })
-
-handleColumnSetType :: MonadHexl m => Id Column -> ColumnType -> m ()
-handleColumnSetType colId cType = do
-  update colId (\col -> col { columnType = cType })
+handleColumnUpdate :: MonadHexl m => Id Column -> Column -> m ()
+handleColumnUpdate colId newCol = do
+  update colId (const newCol)
   -- Get old dependencies
   graph <- getDependencyGraph
-  graph' <- case cType of
-    ColumnInput _ -> pure $ setDependencies colId [] graph
-    ColumnDerived formula -> case parseExpression formula of
-      Left _ -> pure $ setDependencies colId [] graph
+  case columnInputType newCol of
+    ColumnInput -> storeDependencyGraph $ setDependencies colId [] graph
+    ColumnDerived -> case parseExpression (columnExpression newCol) of
+      Left msg -> do
+        storeDependencyGraph $ setDependencies colId [] graph
+        throwError $ ErrUser $ "cannot parse expression: " <> msg
       Right expr -> do
-        deps <- collectDependencies expr
-        let graph' = setDependencies colId deps graph
-            mOrder = getDependentTopological colId graph'
-        case mOrder of
-          Nothing -> throwError $ ErrUser "Dependency graph has cycles"
-          Just order -> do
-            (Column t _ _) <- getById' colId
-            records <- listByQuery [ "tableId" =: t ]
-            traverse (flip runPropagate order) $ map entityId records
-            pure graph'
-  storeDependencyGraph graph'
+        (Column t _ _ _ _) <- getById' colId
+        runTypecheck t expr (columnType newCol) >>= \case
+          Left msg -> do
+            storeDependencyGraph $ setDependencies colId [] graph
+            throwError $ ErrUser $ "type error: " <> msg
+          Right atexpr -> do
+            let deps = collectDependencies atexpr
+                graph' = setDependencies colId deps graph
+                mOrder = getDependentTopological colId graph'
+            case mOrder of
+              Nothing -> throwError $ ErrUser "Dependency graph has cycles"
+              Just order -> do
+                records <- listByQuery [ "tableId" =: t ]
+                storeDependencyGraph graph'
+                _ <- traverse (flip runPropagate order) $ map entityId records
+                pure ()
 
 handleColumnList :: MonadHexl m => Id Table -> m [Entity Column]
 handleColumnList tblId = listByQuery [ "tableId" =: toObjectId tblId ]

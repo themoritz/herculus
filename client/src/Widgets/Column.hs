@@ -2,12 +2,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Widgets.Column
-  ( CellType
-  , ColumnConfig (..)
+  ( ColumnConfig (..)
   , column
   ) where
 
-import Data.Default
 import Data.Text (Text, pack, unpack)
 import Data.Maybe
 
@@ -23,41 +21,14 @@ import Lib.Types
 import Lib.Model.Types
 
 data ColumnConfig t = ColumnConfig
-  { _columnConfig_setType :: Event t ColumnType
-  , _columnConfig_setName :: Event t Text
-  , _columnConfig_initialType :: ColumnType
-  , _columnConfig_initialName :: Text
+  { _columnConfig_set :: Event t Column
+  , _columnConfig_initial :: Column
   }
 
-instance Reflex t => Default (ColumnConfig t) where
-  def = ColumnConfig
-    { _columnConfig_setType = never
-    , _columnConfig_setName = never
-    , _columnConfig_initialType = ColumnInput DataString
-    , _columnConfig_initialName = ""
-    }
-
-data CellType
-  = CTInput
-  | CTDerived
-  deriving (Eq, Ord, Show, Read)
-
-toCellType :: ColumnType -> CellType
-toCellType (ColumnInput _) = CTInput
-toCellType (ColumnDerived _) = CTDerived
-
-toDataType :: ColumnType -> Maybe DataType
-toDataType (ColumnInput t) = Just t
-toDataType _ = Nothing
-
-toExpr :: ColumnType -> Maybe String
-toExpr (ColumnInput _) = Nothing
-toExpr (ColumnDerived t) = Just $ unpack t
-
-cellTypeEntries :: Map CellType String
+cellTypeEntries :: Map ColumnType String
 cellTypeEntries = Map.fromList
-  [ (CTInput, "Input")
-  , (CTDerived, "Derived")
+  [ (ColumnInput, "Input")
+  , (ColumnDerived, "Derived")
   ]
 
 dataTypeEntries :: Map DataType String
@@ -68,40 +39,41 @@ dataTypeEntries = Map.fromList
  , (DataRecord, "Record")
  ]
 
-column :: forall t m. MonadWidget t m => Id Column -> ColumnConfig t -> m ()
-column columnId (ColumnConfig setType setName initialType initialName) = el "div" $ do
+column :: forall t m. MonadWidget t m
+       => Id Table -> Id Column
+       -> ColumnConfig t -> m (Event t Column)
+column tableId columnId (ColumnConfig set initial) = el "div" $ do
   name <- (fmap pack . current . _textInput_value) <$> textInput
-            def { _textInputConfig_setValue = unpack <$> setName
-                , _textInputConfig_initialValue = unpack initialName
+            def { _textInputConfig_setValue = unpack . columnName <$> set
+                , _textInputConfig_initialValue = unpack . columnName $ initial
                 }
-  nameTrigger <- button "Set Name"
-  _ <- loader (Api.columnSetName api (constant $ Right columnId) (Right <$> name)) nameTrigger
   (selectCellType, selectDataType) <-
     divClass "row" $ do
-      ct <- dropdown (toCellType initialType)
+      ct <- dropdown (columnInputType initial)
                      (constDyn cellTypeEntries) $
-                     (def :: DropdownConfig t CellType)
+                     (def :: DropdownConfig t ColumnType)
                        { _dropdownConfig_setValue =
-                             (toCellType <$> setType)
+                             (columnInputType <$> set)
                        }
-      dt <- dropdown (fromMaybe DataString $ toDataType initialType)
+      dt <- dropdown (columnType initial)
                      (constDyn dataTypeEntries)
                      (def :: DropdownConfig t DataType)
                        { _dropdownConfig_setValue =
-                           fmapMaybe toDataType setType
+                           (columnType <$> set)
                        }
       pure (ct, dt)
   expr <- (fmap pack . current . _textInput_value) <$> textInput
             (def :: TextInputConfig t)
-                { _textInputConfig_setValue = fmapMaybe toExpr setType
-                , _textInputConfig_initialValue = fromMaybe "" $ toExpr initialType
+                { _textInputConfig_setValue = unpack . columnExpression <$> set
+                , _textInputConfig_initialValue = unpack . columnExpression $ initial
                 , _textInputConfig_attributes = constDyn ("style" =: "width: 160px")
                 }
-  typeTrigger <- button "Set"
-  let columnType = do
-        cellType <- current $ _dropdown_value selectCellType
-        case cellType of
-          CTInput   -> ColumnInput <$> (current $ _dropdown_value selectDataType)
-          CTDerived -> ColumnDerived <$> expr
-  _ <- loader (Api.columnSetType api (constant $ Right columnId) (Right <$> columnType)) typeTrigger
-  pure ()
+  trigger <- button "Set"
+  let column = do
+        nm <- name
+        columnType <- current $ _dropdown_value selectCellType
+        dataType <- current $ _dropdown_value selectDataType
+        expression <- expr
+        pure $ Column tableId nm dataType columnType expression
+  _ <- loader (Api.columnUpdate api (constant $ Right columnId) (Right <$> column)) trigger
+  pure $ tag column trigger

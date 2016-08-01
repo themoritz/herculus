@@ -53,17 +53,21 @@ instance FromDocument Table where
 data Column = Column
   { columnTableId :: Id Table
   , columnName :: Text
-  , columnType :: ColumnType
+  , columnType :: DataType
+  , columnInputType :: ColumnType
+  , columnExpression :: Text
   } deriving (Generic)
 
 instance ToJSON Column
 instance FromJSON Column
 
 instance ToDocument Column where
-  toDocument (Column t name typ) =
+  toDocument (Column t name typ inputType expr) =
     [ "tableId" =: toObjectId t
     , "name" =: name
     , "type" =: toValue typ
+    , "inputType" =: toValue inputType
+    , "expression" =: expr
     ]
 
 instance FromDocument Column where
@@ -71,14 +75,18 @@ instance FromDocument Column where
     t <- Bson.lookup "tableId" doc
     name <- Bson.lookup "name" doc
     typVal <- Bson.lookup "type" doc
+    inpTypeVal <- Bson.lookup "inputType" doc
+    expr <- Bson.lookup "expression" doc
     case eitherDecodeValue typVal of
-      Right typ -> pure $ Column (fromObjectId t)name typ
+      Right typ -> case eitherDecodeValue inpTypeVal of
+        Right inpTyp -> pure $ Column (fromObjectId t) name typ inpTyp expr
+        Left msg -> Left $ pack msg
       Left msg -> Left $ pack msg
 
 data ColumnType
-  = ColumnInput DataType
-  | ColumnDerived Text
-  deriving (Show, Generic)
+  = ColumnInput
+  | ColumnDerived
+  deriving (Eq, Ord, Show, Read, Generic)
 
 instance ToJSON ColumnType
 instance FromJSON ColumnType
@@ -95,6 +103,9 @@ data DataType
 
 instance ToJSON DataType
 instance FromJSON DataType
+
+instance ToBSON DataType
+instance FromBSON DataType
 
 data Record = Record
   { recordTableId :: Id Table

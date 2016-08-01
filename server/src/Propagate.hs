@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE GADTs                      #-}
 
 module Propagate
   ( runPropagate
@@ -11,9 +12,11 @@ import           Control.Monad.State
 import           Control.Monad.Except
 
 import           Data.Monoid
+import           Data.Text (pack)
 
 import           CellCache
 import           Eval
+import           Typecheck
 import           Lib.Types
 import           Lib.Model.Types
 import           Monads
@@ -46,26 +49,22 @@ runPropagate recId order = do
 propagate :: MonadHexl m => [Id Column] -> PropT m ()
 propagate [] = pure ()
 propagate (colId:cols) = do
-  expr <- lift $ getExpression colId
-  cache <- get
-  recId <- asks propRecordId
-  lift (runEval cache recId expr) >>= \case
-    Left msg -> lift $ throwError $ ErrBug $ "error during eval: " <> msg
-    Right val -> do
-      modify $ store colId recId val
-      lift $ setCellByCoords colId recId val
-      propagate cols
-
-getExpression :: MonadHexl m => Id Column -> m Expr
-getExpression colId = do
-  col <- getById' colId
-  case columnType col of
-    ColumnDerived formula -> case parseExpression formula of
-      Right expr -> pure expr
-      Left _ -> throwError $ ErrBug "cannot parse stored expression"
-    _ -> throwError $ ErrBug "column is not derived"
+  col <- lift $ getById' colId
+  case parseExpression $ columnExpression col of
+    Left msg -> lift $ throwError $ ErrBug $ "cannot parse stored expression: " <> pack (show msg)
+    Right expr -> do
+      cache <- get
+      recId <- asks propRecordId
+      lift (runTypecheck (columnTableId col) expr (columnType col)) >>= \case
+        Left msg -> lift $ throwError $ ErrBug $ "type checker failed: " <> msg
+        Right (texpr ::: _) -> lift (runEval cache recId texpr) >>= \case
+          Left msg -> lift $ throwError $ ErrBug $ "error during eval: " <> msg
+          Right val -> do
+            modify $ store colId recId $ showValue val
+            lift $ setCellByCoords colId recId $ showValue val
+            propagate cols
 
 setCellByCoords :: MonadHexl m => Id Column -> Id Record -> Value -> m ()
 setCellByCoords c r v = do
-  (Column t _ _) <- getById' c
+  (Column t _ _ _ _) <- getById' c
   upsertCell (Cell v (Aspects t c r))

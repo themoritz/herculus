@@ -15,6 +15,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     Monads
                      , Eval
+                     , Typecheck
                      , Propagate
                      , CellCache
                      , ConnectionManager
