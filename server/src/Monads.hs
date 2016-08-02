@@ -1,13 +1,13 @@
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE InstanceSigs               #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
-{-# LANGUAGE OverloadedStrings       #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE LambdaCase       #-}
-{-# LANGUAGE InstanceSigs           #-}
 -- {-# LANGUAGE StandaloneDeriving #-}
 
 module Monads
@@ -20,17 +20,17 @@ module Monads
   ) where
 
 import           Control.Concurrent.STM
-import           Control.Monad.Reader
 import           Control.Monad.Except
 import           Control.Monad.Logger
+import           Control.Monad.Reader
 import           Control.Monad.Trans.Control
 -- import Control.Monad.Base
 
-import           Data.Proxy
 import           Data.Aeson
+import qualified Data.ByteString.Char8       as B8
+import           Data.Proxy
 import           Data.Text
-import           Database.MongoDB ((=:))
-import qualified Data.ByteString.Char8 as B8
+import           Database.MongoDB            ((=:))
 
 import qualified Database.MongoDB            as Mongo
 
@@ -38,13 +38,13 @@ import           System.Log.FastLogger
 
 import           Network.WebSockets
 
-import           Lib.Model
-import           Lib.Model.Cell
-import           Lib.Model.Dependencies
-import           Lib.Model.Class
-import           Lib.Types
-import           Lib.Api.WebSocket
 import           ConnectionManager
+import           Lib.Api.WebSocket
+import           Lib.Model
+import           Lib.Model.Class
+import           Lib.Model.Column
+import           Lib.Model.Dependencies
+import           Lib.Types
 
 data AppError
   = ErrUser Text
@@ -64,7 +64,8 @@ class (Monad m, MonadLogger m, MonadError AppError m) => MonadDB m where
   listAll :: Model a => m [Entity a]
   create :: Model a => a -> m (Id a)
   update :: Model a => Id a -> (a -> a) -> m ()
-  upsert :: Model a => Mongo.Selector -> a -> m ()
+  updateByQuery' :: Model a => Mongo.Selector -> (a -> a) -> m ()
+  upsert :: Model a => Mongo.Selector -> a -> (a -> a) -> m (Maybe (Id a))
 
 -- Hexl layer: Business logic
 
@@ -74,7 +75,7 @@ class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m 
   getDependencyGraph :: m DependencyGraph
   storeDependencyGraph :: DependencyGraph -> m ()
 
-  upsertCell :: Cell -> m ()
+  getColumnOrder :: Id Column -> m ColumnOrder
 
 data HexlEnv = HexlEnv
   { envPipe        :: Mongo.Pipe
@@ -151,10 +152,19 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
     x <- getById' i
     runMongo $ Mongo.save collection $ toDocument $ Entity i (f x)
 
-  upsert :: forall a. Model a => Mongo.Selector -> a -> HexlT m ()
-  upsert query new = do
+  updateByQuery' :: forall a. Model a => Mongo.Selector -> (a -> a) -> HexlT m ()
+  updateByQuery' query f = do
     let collection = collectionName (Proxy :: Proxy a)
-    runMongo $ Mongo.upsert (Mongo.select query collection) $ toDocument new
+    getOneByQuery query >>= \case
+      Left _ -> throwError $ ErrBug "updateByQuery: nothing found"
+      Right (Entity i x) ->
+        runMongo $ Mongo.save collection $ toDocument $ Entity i (f x)
+
+  upsert :: Model a => Mongo.Selector -> a -> (a -> a) -> HexlT m (Maybe (Id a))
+  upsert query new f = do
+    getOneByQuery query >>= \case
+      Right (Entity i _) -> update i f *> pure Nothing
+      Left _ -> Just <$> create new
 
 --
 
@@ -175,13 +185,11 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
     Left "Not found" -> void $ create (Dependencies graph)
     Left _ -> throwError $ ErrBug "Dependency graph corrupt"
 
-  upsertCell cell@(Cell _ _ (Aspects t c r)) = do
-    let query =
-            [ "aspects.columnId" =: toObjectId c
-            , "aspects.recordId" =: toObjectId r
-            , "aspects.tableId"  =: toObjectId t
-            ]
-    upsert query cell
+  getColumnOrder c = do
+    graph <- getDependencyGraph
+    case getDependentTopological c graph of
+      Nothing -> throwError $ ErrBug "dependency graph has cycles"
+      Just order -> pure order
 
 --
 

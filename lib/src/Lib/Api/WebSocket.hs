@@ -26,7 +26,7 @@ data WsDownMessage
   = WsDownGreet Text
   | WsDownList [Text]
   -- Cell updates
-  | WsDownCellsChanged [(Id Column, Id Record, Value)]
+  | WsDownCellsChanged [(Id Column, Id Record, CellResult)]
   deriving (Generic, Show)
 
 instance ToJSON WsDownMessage

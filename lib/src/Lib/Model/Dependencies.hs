@@ -12,6 +12,7 @@ module Lib.Model.Dependencies
   , removeDependency
   , getDependentTopological
   , DependencyType (..)
+  , ColumnOrder
   ) where
 
 import           Control.Lens
@@ -92,10 +93,14 @@ setDependencies start edges graph =
       setNew g    = foldr (\(end, typ) -> setDependency start end typ) g edges
   in setNew . removeOld $ graph
 
-getDependentTopological :: Id Column -> DependencyGraph -> Maybe [Id Column]
+type ColumnOrder = [(Id Column, [(Id Column, DependencyType)])]
+
+getDependentTopological :: Id Column -> DependencyGraph -> Maybe ColumnOrder
 getDependentTopological root graph =
     let ordering = bfs [root]
-    in if root `elem` (tail ordering) then Nothing else Just ordering
+    in if root `elem` (tail ordering)
+         then Nothing
+         else Just $ map (\c -> (c, getChildrenWithType c)) ordering
   where
     bfs :: [Id Column] -> [Id Column]
     bfs [] = []
@@ -103,4 +108,8 @@ getDependentTopological root graph =
 
     getChildren :: Id Column -> [Id Column]
     getChildren col = map fst . Map.toList $
+      graph ^. influencesColumns . namedMap . at col . non emptyNamedMap . namedMap
+
+    getChildrenWithType :: Id Column -> [(Id Column, DependencyType)]
+    getChildrenWithType col = Map.toList $
       graph ^. influencesColumns . namedMap . at col . non emptyNamedMap . namedMap

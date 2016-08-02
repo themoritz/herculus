@@ -24,6 +24,7 @@ import           Lib.Api.Rest
 import           Monads
 import           Lib.Model.Dependencies
 import           Propagate
+import           Propagate.Monad
 import           Lib.Expression
 import           Eval
 import           Typecheck
@@ -106,8 +107,7 @@ handleColumnUpdate colId newCol = do
               Just order -> do
                 records <- listByQuery [ "tableId" =: t ]
                 storeDependencyGraph graph'
-                _ <- traverse (flip runPropagate order) $ map entityId records
-                pure ()
+                propagate colId CompleteColumn
 
 handleColumnList :: MonadHexl m => Id Table -> m [Entity Column]
 handleColumnList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
@@ -131,11 +131,7 @@ handleCell :: MonadHexl m => ServerT CellRoutes m
 handleCell =
        handleCellSet
 
-handleCellSet :: MonadHexl m => Cell -> m ()
-handleCellSet cell@(Cell _ _ (Aspects _ colId recId)) = do
+handleCellSet :: MonadHexl m => Id Column -> Id Record -> Text -> m CellResult
+handleCellSet c r inp = do
   upsertCell cell
-  graph <- getDependencyGraph
-  let mOrder = getDependentTopological colId graph
-  case mOrder of
-    Just order -> runPropagate recId (tail order)
-    Nothing -> throwError $ ErrBug "Dependency graph has cycles"
+  propagate c (OneRecord r)

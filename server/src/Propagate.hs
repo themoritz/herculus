@@ -1,75 +1,52 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Propagate
-  ( runPropagate
+  ( propagate
   ) where
 
-import           Control.Monad.Reader
-import           Control.Monad.State
-import           Control.Monad.Except
+import           Data.Foldable
 
-import           Data.Monoid
-import           Data.Text (pack)
-
-import           Propagate.Cache
 import           Eval
-import           Typecheck
-import           Lib.Types
-import           Lib.Model.Types
 import           Lib.Model.Column
-import           Lib.Model.Cell
+import           Lib.Model.Dependencies
+import           Lib.Model.Types
+import           Lib.Types
 import           Monads
-import           Lib.Expression
-import           Lib.Api.WebSocket
 
-data PropEnv = PropEnv
-  { propRecordId :: Id Record
-  }
+import           Propagate.Monad
 
-newtype PropT m a = PropT
-  { unPropT :: ReaderT PropEnv (StateT CellCache m) a
-  } deriving ( Functor
-             , Applicative
-             , Monad
-             , MonadReader PropEnv
-             , MonadState CellCache
-             )
+propagate :: MonadHexl m => Id Column -> Propagate -> m ()
+propagate c start = do
+  order <- getColumnOrder c
 
-instance MonadTrans PropT where
-  lift = PropT . lift  . lift
+  runPropagate $ do
+    addTargets c start
+    propagate' order
 
-runPropagate :: MonadHexl m => Id Record -> [Id Column] -> m ()
-runPropagate recId order = do
-  let action = unPropT $ propagate order
-      env = PropEnv recId
-  cache <- execStateT (runReaderT action env) emptyCellCache
-  sendWS $ WsDownCellsChanged $ retrieveAll cache
+propagate' :: forall m. MonadPropagate m => ColumnOrder -> m ()
+propagate' [] = pure ()
+propagate' ((next, children):rest) = do
+  records <- getTargets next
+  (texpr ::: _) <- getCompiledCode next
 
-propagate :: MonadHexl m => [Id Column] -> PropT m ()
-propagate [] = pure ()
-propagate (colId:cols) = do
-  col <- lift $ getById' colId
-  case parseExpression $ columnSourceCode col of
-    Left msg -> lift $ throwError $ ErrBug $ "cannot parse stored expression: " <> pack (show msg)
-    Right expr -> do
-      cache <- get
-      recId <- asks propRecordId
-      lift (runTypecheck (columnTableId col) expr (columnType col)) >>= \case
-        Left msg -> lift $ throwError $ ErrBug $ "type checker failed: " <> msg
-        Right (texpr ::: _) -> lift (runEval cache recId texpr) >>= \case
-          Left msg -> lift $ throwError $ ErrBug $ "error during eval: " <> msg
-          Right val -> do
-            case makeValue val of
-              Nothing -> pure ()
-              Just val' -> do
-                modify $ store colId recId val'
-                lift $ setCellByCoords colId recId val'
-                propagate cols
+  let doTarget :: Id Record -> m ()
+      doTarget r = do
 
-setCellByCoords :: MonadHexl m => Id Column -> Id Record -> Value -> m ()
-setCellByCoords c r v = do
-  (Column t _ _ _ _ _) <- getById' c
-  upsertCell (Cell Nothing (CellOk v) (Aspects t c r))
+        let env = EvalEnv
+                    { envGetCellValue = flip getCellValue r
+                    , envGetColumnValues = getColumnValues
+                    }
+
+        result <- eval env texpr
+        setCellResult next r result
+
+        for_ children $ \(child, depType) -> case depType of
+          OneToOne -> addTargets child (OneRecord r)
+          OneToAll -> addTargets child CompleteColumn
+
+  mapM_ doTarget records
+
+  propagate' rest
