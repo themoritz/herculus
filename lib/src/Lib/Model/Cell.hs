@@ -42,6 +42,7 @@ instance Val Aspects where
 
 data Cell = Cell
   { cellInput   :: Maybe Text
+  , cellResult  :: CellResult
   , cellAspects :: Aspects
   } deriving (Generic)
 
@@ -51,11 +52,13 @@ instance ToJSON Cell
 instance FromJSON Cell
 
 instance ToDocument Cell where
-  toDocument (Cell inp asp) =
+  toDocument (Cell inp res asp) =
     [ "input" =: inp
+    , "result" =: res
     , "aspects" =: asp
     ]
 
 instance FromDocument Cell where
   parseDocument doc = Cell <$> Bson.lookup "input" doc
+                           <*> Bson.lookup "result" doc
                            <*> Bson.lookup "aspects" doc

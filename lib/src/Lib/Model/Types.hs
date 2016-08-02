@@ -50,19 +50,6 @@ instance FromDocument Table where
   parseDocument doc = Table <$> (fromObjectId <$> Bson.lookup "projectId" doc)
                             <*> Bson.lookup "name" doc
 
-data DataType
-  = DataBoolean
-  | DataString
-  | DataNumber
-  | DataRecord
-  deriving (Eq, Ord, Show, Read, Generic)
-
-instance ToJSON DataType
-instance FromJSON DataType
-
-instance ToBSON DataType
-instance FromBSON DataType
-
 data Record = Record
   { recordTableId :: Id Table
   }

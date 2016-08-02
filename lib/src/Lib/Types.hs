@@ -1,19 +1,29 @@
 {-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE ExistentialQuantification  #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 
 module Lib.Types where
 
-import           Data.Aeson      (FromJSON (..), ToJSON (..))
-import           Data.Bson       (Document, ObjectId (..), Val, (=:))
+import           Data.Aeson         (FromJSON (..), ToJSON (..), object, (.:),
+                                     (.=))
+import qualified Data.Aeson         as Aeson
+import           Data.Aeson.Bson
+import           Data.Aeson.Types   (Parser)
+import           Data.Bson          (Document, ObjectId (..), Val (..), (=:))
 import           Data.Decimal
-import           Data.Monoid     ((<>))
-import           Data.String
-import           Data.Text       (Text, pack, unpack)
-import           Data.Text.Encoding
+import           Data.Monoid        ((<>))
 import           Data.Serialize
+import           Data.String
+import           Data.Text          (Text, pack, unpack)
+import           Data.Text.Encoding
+import           Data.Typeable
 
-import           Text.Read       (readMaybe)
+import           Text.Read          (readMaybe)
 
 import           GHC.Generics
 
@@ -68,32 +78,84 @@ instance FromJSON (Ref a)
 
 --
 
-newtype Value = Value { unValue :: Text }
-  deriving (Show, Eq, IsString, Monoid, Generic, Val)
+data DataType
+  = DataBoolean
+  | DataString
+  | DataNumber
+  | DataRecord
+  deriving (Eq, Ord, Show, Read, Generic)
+
+instance ToJSON DataType
+instance FromJSON DataType
+
+instance ToBSON DataType
+instance FromBSON DataType
+
+data TType a where
+  TypeString :: TType Text
+  TypeNumber :: TType Number
+  TypeStringList :: TType [Text]
+  TypeNumberList :: TType [Number]
+
+deriving instance Show (TType a)
+
+data Equal a b where
+    Eq :: Equal a a
+
+checkEqual :: TType a -> TType b -> Maybe (Equal a b)
+checkEqual TypeNumber    TypeNumber    = Just Eq
+checkEqual TypeString    TypeString    = Just Eq
+checkEqual _             _             = Nothing
+
+data SigOk a where
+  Ok :: SigOk a
+
+checkSig :: DataType -> TType a -> Maybe (SigOk a)
+checkSig DataString TypeString = Just Ok
+checkSig DataNumber TypeNumber = Just Ok
+checkSig _          _          = Nothing
+
+--
+
+data Value
+  = ValueString Text
+  | ValueNumber Number
+  deriving (Generic, Typeable, Show, Eq)
 
 instance ToJSON Value
 instance FromJSON Value
 
 class ParseValue a where
-  parseValue :: Value -> Maybe a
-
-class ShowValue a where
-  showValue :: a -> Value
+  parseValue :: Text -> Maybe a
 
 instance ParseValue Text where
-  parseValue (Value s) = Just s
-
-instance ShowValue Text where
-  showValue = Value
+  parseValue s = Just s
 
 instance ParseValue Number where
-  parseValue (Value x) = Number <$> (readMaybe $ unpack x)
+  parseValue s = Number <$> (readMaybe $ unpack s)
 
-instance ShowValue Number where
-  showValue (Number x) = Value . pack . show $ x
+class ExtractValue a where
+  extractValue :: Value -> Maybe a
 
-instance ShowValue a => ShowValue [a] where
-  showValue as = "show list not implemented"
+instance ExtractValue Text where
+  extractValue (ValueString s) = Just s
+  extractValue _ = Nothing
+
+instance ExtractValue Number where
+  extractValue (ValueNumber n) = Just n
+  extractValue _ = Nothing
+
+class MakeValue a where
+  makeValue :: a -> Maybe Value
+
+instance MakeValue Text where
+  makeValue = Just . ValueString
+
+instance MakeValue Number where
+  makeValue = Just . ValueNumber
+
+instance MakeValue [a] where
+  makeValue = const Nothing
 
 --
 
@@ -101,11 +163,22 @@ data CellResult
   = CellOk Value
   | CellParseError Text
   | CellEvalError Text
+  deriving (Eq, Show, Typeable, Generic)
+
+instance ToJSON CellResult
+instance FromJSON CellResult
+
+instance ToBSON CellResult
+instance FromBSON CellResult
+
+instance Val CellResult where
+  val = toValue
+  cast' = decodeValue
 
 --
 
 newtype Number = Number Decimal
-  deriving (Num, Show)
+  deriving (Num, Show, Eq, Ord)
 
 instance ToJSON Number where
   toJSON (Number x) = toJSON . show $ x

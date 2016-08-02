@@ -19,6 +19,8 @@ import           Eval
 import           Typecheck
 import           Lib.Types
 import           Lib.Model.Types
+import           Lib.Model.Column
+import           Lib.Model.Cell
 import           Monads
 import           Lib.Expression
 import           Lib.Api.WebSocket
@@ -50,7 +52,7 @@ propagate :: MonadHexl m => [Id Column] -> PropT m ()
 propagate [] = pure ()
 propagate (colId:cols) = do
   col <- lift $ getById' colId
-  case parseExpression $ columnExpression col of
+  case parseExpression $ columnSourceCode col of
     Left msg -> lift $ throwError $ ErrBug $ "cannot parse stored expression: " <> pack (show msg)
     Right expr -> do
       cache <- get
@@ -60,11 +62,14 @@ propagate (colId:cols) = do
         Right (texpr ::: _) -> lift (runEval cache recId texpr) >>= \case
           Left msg -> lift $ throwError $ ErrBug $ "error during eval: " <> msg
           Right val -> do
-            modify $ store colId recId $ showValue val
-            lift $ setCellByCoords colId recId $ showValue val
-            propagate cols
+            case makeValue val of
+              Nothing -> pure ()
+              Just val' -> do
+                modify $ store colId recId val'
+                lift $ setCellByCoords colId recId val'
+                propagate cols
 
 setCellByCoords :: MonadHexl m => Id Column -> Id Record -> Value -> m ()
 setCellByCoords c r v = do
-  (Column t _ _ _ _) <- getById' c
-  upsertCell (Cell v (Aspects t c r))
+  (Column t _ _ _ _ _) <- getById' c
+  upsertCell (Cell Nothing (CellOk v) (Aspects t c r))

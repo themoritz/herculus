@@ -175,7 +175,7 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
     Left "Not found" -> void $ create (Dependencies graph)
     Left _ -> throwError $ ErrBug "Dependency graph corrupt"
 
-  upsertCell cell@(Cell _ (Aspects t c r)) = do
+  upsertCell cell@(Cell _ _ (Aspects t c r)) = do
     let query =
             [ "aspects.columnId" =: toObjectId c
             , "aspects.recordId" =: toObjectId r

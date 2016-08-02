@@ -17,6 +17,8 @@ import           Database.MongoDB ((=:))
 
 import           Lib.Types
 import           Lib.Model.Types
+import           Lib.Model.Column
+import           Lib.Model.Cell
 import           Lib.Model
 import           Lib.Api.Rest
 import           Monads
@@ -61,10 +63,10 @@ handleTableCreate = create
 handleTableList :: MonadHexl m => Id Project -> m [Entity Table]
 handleTableList projId = listByQuery [ "projectId" =: toObjectId projId ]
 
-handleTableData :: MonadHexl m => Id Table -> m [(Id Column, Id Record, Value)]
+handleTableData :: MonadHexl m => Id Table -> m [(Id Column, Id Record, CellResult)]
 handleTableData tblId = do
   cells <- listByQuery [ "aspects.tableId" =: toObjectId tblId ]
-  let go (Cell v (Aspects _ c r)) = (c, r, v)
+  let go (Cell _ v (Aspects _ c r)) = (c, r, v)
   pure $ map (go . entityVal) cells
 
 --
@@ -76,7 +78,7 @@ handleColumn =
   :<|> handleColumnList
 
 handleColumnCreate :: MonadHexl m => Id Table -> m (Id Column)
-handleColumnCreate tblId = create $ Column tblId "" DataString ColumnInput ""
+handleColumnCreate tblId = create $ Column tblId "" DataString ColumnInput "" CompiledCodeNone
 
 handleColumnUpdate :: MonadHexl m => Id Column -> Column -> m ()
 handleColumnUpdate colId newCol = do
@@ -85,12 +87,12 @@ handleColumnUpdate colId newCol = do
   graph <- getDependencyGraph
   case columnInputType newCol of
     ColumnInput -> storeDependencyGraph $ setDependencies colId [] graph
-    ColumnDerived -> case parseExpression (columnExpression newCol) of
+    ColumnDerived -> case parseExpression (columnSourceCode newCol) of
       Left msg -> do
         storeDependencyGraph $ setDependencies colId [] graph
         throwError $ ErrUser $ "cannot parse expression: " <> msg
       Right expr -> do
-        (Column t _ _ _ _) <- getById' colId
+        (Column t _ _ _ _ _) <- getById' colId
         runTypecheck t expr (columnType newCol) >>= \case
           Left msg -> do
             storeDependencyGraph $ setDependencies colId [] graph
@@ -130,7 +132,7 @@ handleCell =
        handleCellSet
 
 handleCellSet :: MonadHexl m => Cell -> m ()
-handleCellSet cell@(Cell _ (Aspects _ colId recId)) = do
+handleCellSet cell@(Cell _ _ (Aspects _ colId recId)) = do
   upsertCell cell
   graph <- getDependencyGraph
   let mOrder = getDependentTopological colId graph

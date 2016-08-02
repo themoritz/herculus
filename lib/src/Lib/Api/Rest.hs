@@ -31,7 +31,7 @@ type ProjectRoutes =
 type TableRoutes =
       "create" :> ReqBody '[JSON] Table :> Post '[JSON] (Id Table)
  :<|> "list" :> Capture "projectId" (Id Project) :> Get '[JSON] [Entity Table]
- :<|> "data" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Column, Id Record, Value)]
+ :<|> "data" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Column, Id Record, CellResult)]
 
 type ColumnRoutes =
       "create" :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Id Column)

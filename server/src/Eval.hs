@@ -11,9 +11,7 @@ import           Control.Monad.Except
 import           Control.Monad.Reader
 
 import           Data.Monoid
-import           Data.Text (Text, pack, unpack)
-
-import           Text.Read (readMaybe)
+import           Data.Text (Text)
 
 import           Database.MongoDB     ((=:))
 
@@ -62,7 +60,7 @@ eval expr = case expr of
   TExprNumberAdd l r -> (+) <$> eval l <*> eval r
   TExprSum sub -> sum <$> eval sub
 
-getCellValue :: (MonadHexl m, ParseValue a) => Id Column -> EvalT m a
+getCellValue :: (MonadHexl m, ExtractValue a) => Id Column -> EvalT m a
 getCellValue colId = do
   recId <- asks evalRecordId
   cellCache <- asks evalCellCache
@@ -73,17 +71,23 @@ getCellValue colId = do
             [ "aspects.columnId" =: toObjectId colId
             , "aspects.recordId" =: toObjectId recId
             ]
-      cellRes <- lift $ getOneByQuery cellQuery
-      pure $ either (const "") id $ (cellInput . entityVal) <$> cellRes
-  case parseValue val of
+      cell <- lift $ getOneByQuery' cellQuery
+      case cellResult $ entityVal cell of
+        CellParseError _ -> throwError "dependent cell not parsed"
+        CellEvalError _ -> throwError "dependent cell not evaluated"
+        CellOk val -> pure val
+  case extractValue val of
     Just x -> pure x
-    Nothing -> throwError "Cannot parse value"
+    Nothing -> throwError "wrong type in value"
 
-getColumnValues :: (MonadHexl m, ParseValue a) => Id Column -> EvalT m [a]
+getColumnValues :: (MonadHexl m, ExtractValue a) => Id Column -> EvalT m [a]
 getColumnValues colId = do
   let query = [ "aspects.columnId" =: toObjectId colId ]
   cells <- lift $ listByQuery query
-  let go cell = case parseValue $ cellInput $ entityVal cell of
-        Just x -> pure x
-        Nothing -> throwError "Cannot parse value"
+  let go cell = case cellResult $ entityVal cell of
+        CellParseError _ -> throwError "dependent cell not parsed"
+        CellEvalError _ -> throwError "dependent cell not evaluated"
+        CellOk val -> case extractValue val of
+          Just x -> pure x
+          Nothing -> throwError "Cannot parse value"
   traverse go cells

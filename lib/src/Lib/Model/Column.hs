@@ -143,15 +143,7 @@ data TExpr a where
 
 deriving instance Show (TExpr a)
 
-data TType a where
-  TypeString :: TType Text
-  TypeNumber :: TType Number
-  TypeStringList :: TType [Text]
-  TypeNumberList :: TType [Number]
-
-deriving instance Show (TType a)
-
-data ATExpr = forall a. ShowValue a => TExpr a ::: TType a
+data ATExpr = forall a. MakeValue a => TExpr a ::: TType a
 
 deriving instance Show ATExpr
 
@@ -198,22 +190,6 @@ instance Serialize ATExpr where
     8 -> do
       (s ::: TypeNumberList) <- get
       pure $ TExprSum s ::: TypeNumber
-
-data Equal a b where
-    Eq :: Equal a a
-
-checkEqual :: TType a -> TType b -> Maybe (Equal a b)
-checkEqual TypeNumber    TypeNumber    = Just Eq
-checkEqual TypeString    TypeString    = Just Eq
-checkEqual _             _             = Nothing
-
-data SigOk a where
-  Ok :: SigOk a
-
-checkSig :: DataType -> TType a -> Maybe (SigOk a)
-checkSig DataString TypeString = Just Ok
-checkSig DataNumber TypeNumber = Just Ok
-checkSig _          _          = Nothing
 
 collectDependencies :: ATExpr -> [(Id Column, DependencyType)]
 collectDependencies (texpr ::: _) = collectDependencies' texpr
