@@ -22,8 +22,11 @@ library
                      , Lib.Types
                      , Lib.Model
                      , Lib.Model.Types
+                     , Lib.Model.Column
+                     , Lib.Model.Cell
                      , Lib.Model.Class
                      , Lib.Model.Dependencies
+                     , Lib.Model.Dependencies.Types
                      , Data.Aeson.Bson
   build-depends:       base >= 4.7 && < 5
                      , aeson
@@ -31,6 +34,7 @@ library
                      , bson
                      , bytestring
                      , base64-bytestring
+                     , cereal
                      , containers
                      , Decimal
                      , http-api-data

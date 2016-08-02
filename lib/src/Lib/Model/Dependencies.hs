@@ -27,17 +27,10 @@ import           Data.Text       (pack)
 import           GHC.Generics
 
 import           Lib.Model.Class
-import           Lib.Model.Types
+import           Lib.Model.Column
+import           Lib.Model.Dependencies.Types
 import           Lib.NamedMap
 import           Lib.Types
-
-data DependencyType
-  = OneToOne
-  | OneToAll
-  deriving (Generic, Eq, Ord, Show)
-
-instance ToJSON DependencyType
-instance FromJSON DependencyType
 
 type Connections = NamedMap (Id Column) DependencyType
 

@@ -9,6 +9,7 @@ import GHC.Generics
 
 import Lib.Types
 import Lib.Model.Types
+import Lib.Model.Column
 
 data WsUpMessage
   -- Play

@@ -13,6 +13,8 @@ import           Servant.API
 
 import           Lib.Model
 import           Lib.Model.Types
+import           Lib.Model.Column
+import           Lib.Model.Cell
 import           Lib.Types
 
 type Routes =

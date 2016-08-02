@@ -17,6 +17,7 @@ import           Database.MongoDB     ((=:))
 import           Lib.Expression
 import           Lib.Model
 import           Lib.Model.Types
+import           Lib.Model.Column
 import           Lib.Types
 
 import           Monads

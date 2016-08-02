@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module CellCache
+module Propagate.Cache
   ( CellCache
   , emptyCellCache
   , store
@@ -14,6 +14,7 @@ import           Data.Map        (Map)
 import qualified Data.Map        as Map
 
 import           Lib.Model.Types
+import           Lib.Model.Column
 import           Lib.Types
 
 newtype CellCache = CellCache

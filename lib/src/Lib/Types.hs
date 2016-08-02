@@ -10,6 +10,8 @@ import           Data.Decimal
 import           Data.Monoid     ((<>))
 import           Data.String
 import           Data.Text       (Text, pack, unpack)
+import           Data.Text.Encoding
+import           Data.Serialize
 
 import           Text.Read       (readMaybe)
 
@@ -52,6 +54,10 @@ instance ToName (Id a) where
 instance FromName (Id a) where
   fromName txt = Id $ read $ unpack txt
 
+instance Serialize (Id a) where
+  put (Id (Oid x y)) = put x *> put y
+  get = Id <$> (Oid <$> get <*> get)
+
 --
 
 newtype Ref a = Ref Text
@@ -91,6 +97,13 @@ instance ShowValue a => ShowValue [a] where
 
 --
 
+data CellResult
+  = CellOk Value
+  | CellParseError Text
+  | CellEvalError Text
+
+--
+
 newtype Number = Number Decimal
   deriving (Num, Show)
 
@@ -103,3 +116,23 @@ instance FromJSON Number where
     case readMaybe x of
       Nothing -> fail "could not read number"
       Just x' -> pure $ Number x'
+
+instance Serialize Number where
+  put (Number x) = put (BinaryDecimal x)
+  get = Number . unBinaryDecimal <$> get
+
+--
+
+newtype BinaryDecimal = BinaryDecimal { unBinaryDecimal :: Decimal }
+
+instance Serialize BinaryDecimal where
+  put (BinaryDecimal (Decimal places mantissa)) = put places >> put mantissa
+  get = BinaryDecimal <$> (Decimal <$> get <*> get)
+
+--
+
+newtype Utf8Text = Utf8Text { unUtf8Text :: Text }
+
+instance Serialize Utf8Text where
+    put = put . encodeUtf8 . unUtf8Text
+    get = (Utf8Text . decodeUtf8) <$> get

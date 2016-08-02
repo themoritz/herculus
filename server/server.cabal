@@ -17,7 +17,7 @@ library
                      , Eval
                      , Typecheck
                      , Propagate
-                     , CellCache
+                     , Propagate.Cache
                      , ConnectionManager
                      , Handler.WebSocket
                      , Handler.Rest

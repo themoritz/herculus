@@ -19,10 +19,11 @@ import           Database.MongoDB     ((=:))
 
 import           Lib.Types
 import           Lib.Model.Types
+import           Lib.Model.Column
+import           Lib.Model.Cell
 import           Lib.Model
-import           Lib.Expression
 
-import           CellCache
+import           Propagate.Cache
 import           Monads
 
 data EvalEnv = EvalEnv
@@ -73,7 +74,7 @@ getCellValue colId = do
             , "aspects.recordId" =: toObjectId recId
             ]
       cellRes <- lift $ getOneByQuery cellQuery
-      pure $ either (const "") id $ (cellValue . entityVal) <$> cellRes
+      pure $ either (const "") id $ (cellInput . entityVal) <$> cellRes
   case parseValue val of
     Just x -> pure x
     Nothing -> throwError "Cannot parse value"
@@ -82,7 +83,7 @@ getColumnValues :: (MonadHexl m, ParseValue a) => Id Column -> EvalT m [a]
 getColumnValues colId = do
   let query = [ "aspects.columnId" =: toObjectId colId ]
   cells <- lift $ listByQuery query
-  let go cell = case parseValue $ cellValue $ entityVal cell of
+  let go cell = case parseValue $ cellInput $ entityVal cell of
         Just x -> pure x
         Nothing -> throwError "Cannot parse value"
   traverse go cells

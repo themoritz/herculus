@@ -14,7 +14,7 @@ import           Control.Monad.Except
 import           Data.Monoid
 import           Data.Text (pack)
 
-import           CellCache
+import           Propagate.Cache
 import           Eval
 import           Typecheck
 import           Lib.Types

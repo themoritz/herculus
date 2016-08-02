@@ -39,7 +39,7 @@ import           System.Log.FastLogger
 import           Network.WebSockets
 
 import           Lib.Model
-import           Lib.Model.Types
+import           Lib.Model.Cell
 import           Lib.Model.Dependencies
 import           Lib.Model.Class
 import           Lib.Types

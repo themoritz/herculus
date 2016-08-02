@@ -7,7 +7,6 @@ import           Data.Aeson             (FromJSON, ToJSON)
 import           Data.Bson              ((=:))
 import qualified Data.Bson              as Bson
 import           Data.Monoid
-import           Data.Proxy
 import           Data.Text              (Text)
 
 import           GHC.Generics
@@ -17,14 +16,9 @@ import           Lib.Model.Dependencies
 import           Lib.Model.Types
 import           Lib.Types
 
-class (ToDocument a, FromDocument a) => Model a where
-  collectionName :: Proxy a -> Text
-
 instance Model Project      where collectionName = const "projects"
 instance Model Table        where collectionName = const "tables"
-instance Model Column       where collectionName = const "columns"
 instance Model Record       where collectionName = const "records"
-instance Model Cell         where collectionName = const "cells"
 instance Model Dependencies where collectionName = const "dependencies"
 
 data Entity a = Entity
