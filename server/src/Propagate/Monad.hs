@@ -35,7 +35,6 @@ class Monad m => MonadPropagate m where
   getColumnValues :: ExtractValue a => Id Column -> m [Maybe a]
   addTargets :: Id Column -> Propagate -> m ()
   getTargets :: Id Column -> m [Id Record]
-  -- Should be type checked!
   getCompiledCode :: Id Column -> m ATExpr
 
 data State = State

@@ -18,6 +18,7 @@ library
                      , Typecheck
                      , Propagate
                      , Propagate.Cache
+                     , Propagate.Monad
                      , ConnectionManager
                      , Handler.WebSocket
                      , Handler.Rest

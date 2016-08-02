@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings          #-}
 
 module Typecheck
- ( runTypecheck
+ ( typecheck
  ) where
 
 import           Control.Monad.Except
@@ -34,16 +34,16 @@ newtype TypecheckT m a = TypecheckT
 instance MonadTrans TypecheckT where
   lift = TypecheckT . lift . lift
 
-runTypecheck :: MonadHexl m => Id Table -> Expr -> DataType -> m (Either Text ATExpr)
-runTypecheck tblId expr signature = do
-  let action = unTypecheckT $ typecheck expr
+typecheck :: MonadHexl m => Id Table -> Expr -> DataType -> m (Either Text ATExpr)
+typecheck tblId expr signature = do
+  let action = unTypecheckT $ typecheck' expr
       go atexpr@(_ ::: ttype) = case checkSig signature ttype of
         Just Ok -> Right atexpr
         Nothing -> Left "expression does not match type signature"
   (>>= go) <$> (runExceptT $ runReaderT action tblId)
 
-typecheck :: MonadHexl m => Expr -> TypecheckT m ATExpr
-typecheck expr = case expr of
+typecheck' :: MonadHexl m => Expr -> TypecheckT m ATExpr
+typecheck' expr = case expr of
   ExprColumnRef colRef -> do
     tblId <- ask
     (Entity i col) <- resolveColumnRef tblId colRef
@@ -58,14 +58,14 @@ typecheck expr = case expr of
       DataNumber -> pure $ TExprColumnRefNumbers i ::: TypeNumberList
       _          -> throwError "unsupported data type"
   ExprBinOp op lhs rhs -> do
-    checkedL <- typecheck lhs
-    checkedR <- typecheck rhs
+    checkedL <- typecheck' lhs
+    checkedR <- typecheck' rhs
     case (op, checkedL, checkedR) of
       (Append, l ::: TypeString, r ::: TypeString) -> pure $ TExprStringAppend l r ::: TypeString
       (Add,    l ::: TypeNumber, r ::: TypeNumber) -> pure $ TExprNumberAdd l r ::: TypeNumber
       _ -> throwError "not well typed binary operator"
   ExprUnOp Sum sub -> do
-    checked <- typecheck sub
+    checked <- typecheck' sub
     case checked of
       (s ::: TypeNumberList) -> pure $ TExprSum s ::: TypeNumber
       _ -> throwError "can only sum list of numbers"

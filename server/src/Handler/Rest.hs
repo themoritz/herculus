@@ -75,39 +75,55 @@ handleTableData tblId = do
 handleColumn :: MonadHexl m => ServerT ColumnRoutes m
 handleColumn =
        handleColumnCreate
-  :<|> handleColumnUpdate
+  :<|> handleColumnSetName
+  :<|> handleColumnSetType
+  :<|> handleColumnSetInputType
+  :<|> handleColumnSetSourceCode
   :<|> handleColumnList
 
 handleColumnCreate :: MonadHexl m => Id Table -> m (Id Column)
-handleColumnCreate tblId = create $ Column tblId "" DataString ColumnInput "" CompiledCodeNone
+handleColumnCreate tblId = create $
+  Column tblId "" DataString ColumnInput "" CompiledCodeNone
 
-handleColumnUpdate :: MonadHexl m => Id Column -> Column -> m ()
-handleColumnUpdate colId newCol = do
-  update colId (const newCol)
-  -- Get old dependencies
-  graph <- getDependencyGraph
-  case columnInputType newCol of
-    ColumnInput -> storeDependencyGraph $ setDependencies colId [] graph
-    ColumnDerived -> case parseExpression (columnSourceCode newCol) of
-      Left msg -> do
-        storeDependencyGraph $ setDependencies colId [] graph
-        throwError $ ErrUser $ "cannot parse expression: " <> msg
-      Right expr -> do
-        (Column t _ _ _ _ _) <- getById' colId
-        runTypecheck t expr (columnType newCol) >>= \case
-          Left msg -> do
-            storeDependencyGraph $ setDependencies colId [] graph
-            throwError $ ErrUser $ "type error: " <> msg
-          Right atexpr -> do
-            let deps = collectDependencies atexpr
-                graph' = setDependencies colId deps graph
-                mOrder = getDependentTopological colId graph'
-            case mOrder of
-              Nothing -> throwError $ ErrUser "Dependency graph has cycles"
-              Just order -> do
-                records <- listByQuery [ "tableId" =: t ]
-                storeDependencyGraph graph'
-                propagate colId CompleteColumn
+handleColumnSetName :: MonadHexl m => Id Column -> Text -> m ()
+handleColumnSetName c name = do
+  update c $ \col -> col { columnName = name }
+  -- TODO: re-compile dependent columns
+
+handleColumnSetType :: MonadHexl m => Id Column -> DataType -> m ()
+handleColumnSetType c typ = do
+  update c $ \col -> col { columnType = typ }
+  -- TODO: re-parse all cells
+  -- TODO: re-compile this and all dependent columns
+
+handleColumnSetInputType :: MonadHexl m => Id Column -> ColumnType -> m ()
+handleColumnSetInputType c typ = do
+  update c $ \col -> col { columnInputType = typ }
+  -- TODO: re-parse all cells
+  -- TODO: re-compile this and all dependent columns
+  -- TODO: update dependency graph
+
+-- | Just = error
+-- sets columnInputType to Derived
+handleColumnSetSourceCode :: MonadHexl m => Id Column -> Text -> m CompiledCode
+handleColumnSetSourceCode c code = do
+  compileResult <- compileColumn c code
+  result <- case compileResult of
+    Left msg -> do
+      modifyDependencies $ setDependencies c []
+      pure $ CompiledCodeError msg
+    Right atexpr -> do
+      let deps = collectDependencies atexpr
+      -- TODO: check for cycles
+      modifyDependencies $ setDependencies c deps
+      -- TODO: fork this
+      propagate c CompleteColumn
+      pure $ CompiledCode atexpr
+  update c $ \col -> col { columnSourceCode = code
+                         , columnCompiledCode = result
+                         , columnInputType = ColumnDerived
+                         }
+  pure result
 
 handleColumnList :: MonadHexl m => Id Table -> m [Entity Column]
 handleColumnList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
@@ -133,5 +149,35 @@ handleCell =
 
 handleCellSet :: MonadHexl m => Id Column -> Id Record -> Text -> m CellResult
 handleCellSet c r inp = do
-  upsertCell cell
+  result <- parseCell c r inp
+  -- TODO: fork this
   propagate c (OneRecord r)
+  pure result
+
+-- Helper ----------------------------
+
+compileColumn :: MonadHexl m => Id Column -> Text -> m (Either Text ATExpr)
+compileColumn c code = case parseExpression code of
+  Left msg -> pure $ Left $ "parse error: " <> msg
+  Right expr -> do
+    col <- getById' c
+    typecheck (columnTableId col) expr (columnType col)
+
+parseCell :: MonadHexl m => Id Column -> Id Record -> Text -> m CellResult
+parseCell c r inp = do
+  col <- getById' c
+  let parsedValue = case columnType col of
+        DataString -> ValueString <$> parseValue inp
+        DataNumber -> ValueNumber <$> parseValue inp
+        _          -> Nothing
+      result = case parsedValue of
+        Just val -> CellOk val
+        Nothing -> CellParseError "could not parse"
+      query =
+        [ "aspects.columnId" =: toObjectId c
+        , "aspects.recordId" =: toObjectId r
+        ]
+  updateByQuery' query $ \cell -> cell { cellInput = Just inp
+                                       , cellResult = result
+                                       }
+  pure result

@@ -35,7 +35,8 @@ data Column = Column
   , columnCompiledCode :: CompiledCode
   } deriving (Generic)
 
-instance Model Column       where collectionName = const "columns"
+instance Model Column where
+  collectionName = const "columns"
 
 instance ToJSON Column
 instance FromJSON Column

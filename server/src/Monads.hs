@@ -72,8 +72,8 @@ class (Monad m, MonadLogger m, MonadError AppError m) => MonadDB m where
 class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m where
   sendWS :: WsDownMessage -> m ()
 
-  getDependencyGraph :: m DependencyGraph
-  storeDependencyGraph :: DependencyGraph -> m ()
+  getDependencies :: m DependencyGraph
+  modifyDependencies :: (DependencyGraph -> DependencyGraph) -> m ()
 
   getColumnOrder :: Id Column -> m ColumnOrder
 
@@ -175,18 +175,16 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
     forM_ connections $ \connection ->
       liftIO $ sendTextData connection $ encode msg
 
-  getDependencyGraph = getOneByQuery [] >>= \case
+  getDependencies = getOneByQuery [] >>= \case
     Right e -> pure $ dependenciesGraph $ entityVal e
     Left "Not found" -> pure emptyDependencyGraph
     Left _ -> throwError $ ErrBug "Dependency graph corrupt"
 
-  storeDependencyGraph graph = getOneByQuery [] >>= \case
-    Right e -> update (entityId e) (const (Dependencies graph))
-    Left "Not found" -> void $ create (Dependencies graph)
-    Left _ -> throwError $ ErrBug "Dependency graph corrupt"
+  modifyDependencies f = updateByQuery' [] $ \deps ->
+    deps { dependenciesGraph = f $ dependenciesGraph deps}
 
   getColumnOrder c = do
-    graph <- getDependencyGraph
+    graph <- getDependencies
     case getDependentTopological c graph of
       Nothing -> throwError $ ErrBug "dependency graph has cycles"
       Just order -> pure order

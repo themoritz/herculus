@@ -52,7 +52,6 @@ instance FromJSON DependencyGraph
 instance ToBSON DependencyGraph
 instance FromBSON DependencyGraph
 
-
 data Dependencies = Dependencies
   { dependenciesGraph :: DependencyGraph
   }
