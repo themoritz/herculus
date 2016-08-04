@@ -125,8 +125,8 @@ instance MonadHexl m => MonadPropagate (PropT m) where
     Just atexpr -> pure atexpr
     Nothing -> do
       col <- lift $ getById' c
-      case columnCompiledCode col of
-        CompiledCode atexpr@(_ ::: ttype) ->
+      case columnCompileResult col of
+        CompileResultCode atexpr@(_ ::: ttype) ->
           case checkSig (columnDataType col) ttype of
             Just Ok -> do
               stateCache %= storeCode c atexpr

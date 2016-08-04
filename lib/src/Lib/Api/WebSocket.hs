@@ -8,6 +8,7 @@ import Data.Text (Text)
 import GHC.Generics
 
 import Lib.Types
+import Lib.Model
 import Lib.Model.Types
 import Lib.Model.Column
 import Lib.Model.Cell
@@ -26,9 +27,10 @@ data WsDownMessage
   -- Play
   = WsDownGreet Text
   | WsDownList [Text]
-  -- Cell updates
+  -- Updates
   | WsDownCellsChanged [(Id Column, Id Record, CellContent)]
-  deriving (Generic, Show)
+  | WsDownColumnsChanged [Entity Column]
+  deriving (Generic)
 
 instance ToJSON WsDownMessage
 instance FromJSON WsDownMessage

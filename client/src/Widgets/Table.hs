@@ -59,9 +59,9 @@ data Action
   | SetRecords [Entity Record]
   | SetCells [(Id Column, Id Record, CellContent)]
   | UpdateCells [(Id Column, Id Record, CellContent)]
+  | UpdateColumns [Entity Column]
   | AddColumn (Id Column)
   | AddRecord (Id Record)
-  | UpdateColumn (Id Column) Column
   | SetTableId (Id Table)
 
 update :: Action -> State -> State
@@ -74,11 +74,13 @@ update action st = case action of
     UpdateCells entries -> st & stateCells %~ fillEntries entries
     AddColumn i -> case st ^. stateTableId of
       Nothing -> st
-      Just t  -> st & stateColumns %~ Map.insert i (Column t "" DataString ColumnInput "" CompiledCodeNone)
+      Just t  -> st & stateColumns %~ Map.insert i
+        (Column t "" DataString ColumnInput "" CompileResultNone)
     AddRecord i -> case st ^. stateTableId of
       Nothing -> st
       Just t  -> st & stateRecords %~ Map.insert i (Record t)
-    UpdateColumn i c -> st & stateColumns %~ Map.insert i c
+    UpdateColumns entries -> st & stateColumns %~ \cols ->
+      foldl (\cols' (Entity i c) -> Map.insert i c cols') cols entries
     SetTableId tblId -> st & stateTableId .~ Just tblId
   where
     fillEntries entries m = foldr (\(c, v) -> Map.insert c v) m $
@@ -115,8 +117,11 @@ toRecords (State tblId _ _ records) =
   in Map.fromList $ map (\((recId, reco), i) -> ((i, recId, tblId), reco)) indexedRecs
 
 table :: MonadWidget t m
-      => Event t (Id Table) -> Event t [(Id Column, Id Record, CellContent)]-> m ()
-table loadTable updateCells = el "div" $ divClass "canvas" $ mdo
+      => Event t (Id Table)
+      -> Event t [(Id Column, Id Record, CellContent)]
+      -> Event t [Entity Column]
+      -> m ()
+table loadTable updateCells updateColumns = el "div" $ divClass "canvas" $ mdo
 
   tableIdArg <- hold (Left "") (Right <$> loadTable)
 
@@ -133,9 +138,10 @@ table loadTable updateCells = el "div" $ divClass "canvas" $ mdo
     , SetCells    <$> dataRes
     , (\((Coords c r), val) -> UpdateCells [(c, r, CellValue val)]) <$> cellChanged
     , UpdateCells <$> updateCells
+    , UpdateColumns <$> updateColumns
     , AddColumn   <$> newColId
     , AddRecord   <$> newRecId
-    , (\((_, i, _), c) -> UpdateColumn i c) <$> colChanged
+    , (\((_, i, _), c) -> UpdateColumns [Entity i c]) <$> colChanged
     , SetTableId  <$> loadTable
     ]
 

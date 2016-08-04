@@ -10,6 +10,7 @@ module Lib.Model.Dependencies
   , setDependency
   , setDependencies
   , removeDependency
+  , getChildren
   , getDependentTopological
   , DependencyType (..)
   , ColumnOrder
@@ -94,21 +95,21 @@ setDependencies start edges graph =
 
 type ColumnOrder = [(Id Column, [(Id Column, DependencyType)])]
 
+getChildren :: Id Column -> DependencyGraph -> [(Id Column, DependencyType)]
+getChildren col graph = Map.toList $
+  graph ^. influencesColumns . namedMap . at col . non emptyNamedMap . namedMap
+
 getDependentTopological :: Id Column -> DependencyGraph -> Maybe ColumnOrder
 getDependentTopological root graph =
     let ordering = bfs [root]
     in if root `elem` (tail ordering)
          then Nothing
-         else Just $ map (\c -> (c, getChildrenWithType c)) ordering
+         else Just $ map (\c -> (c, getChildren c graph)) ordering
   where
     bfs :: [Id Column] -> [Id Column]
     bfs [] = []
-    bfs cols = cols <> bfs (concatMap getChildren cols)
+    bfs cols = cols <> bfs (concatMap getChildren' cols)
 
-    getChildren :: Id Column -> [Id Column]
-    getChildren col = map fst . Map.toList $
-      graph ^. influencesColumns . namedMap . at col . non emptyNamedMap . namedMap
-
-    getChildrenWithType :: Id Column -> [(Id Column, DependencyType)]
-    getChildrenWithType col = Map.toList $
+    getChildren' :: Id Column -> [Id Column]
+    getChildren' col = map fst . Map.toList $
       graph ^. influencesColumns . namedMap . at col . non emptyNamedMap . namedMap

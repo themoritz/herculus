@@ -33,8 +33,7 @@ data RestApi t m = MonadWidget t m => RestApi
   , columnCreate  :: Arg t (Id Table) -> Res t m (Id Column)
   , columnSetName :: Arg t (Id Column) -> Arg t Text -> Res t m ()
   , columnSetDataType :: Arg t (Id Column) -> Arg t DataType -> Res t m ()
-  , columnSetInputType :: Arg t (Id Column) -> Arg t InputType -> Res t m ()
-  , columnSetSourceCode :: Arg t (Id Column) -> Arg t Text -> Res t m (Maybe CompiledCode)
+  , columnSetInput :: Arg t (Id Column) -> Arg t (InputType, Text) -> Res t m ()
   , columnList    :: Arg t (Id Table) -> Res t m [Entity Column]
   , recordCreate  :: Arg t (Id Table) -> Res t m (Id Record)
   , recordList    :: Arg t (Id Table) -> Res t m [Entity Record]
@@ -49,7 +48,7 @@ api =
                    (constDyn (BasePath "/"))
       (projectC :<|> projectL) = project
       (tableC :<|> tableL :<|> tableD) = table
-      (columnC :<|> columnSN :<|> columnSDT :<|> columnSIT :<|> columnSSC :<|> columnL) = column
+      (columnC :<|> columnSN :<|> columnSDT :<|> columnSI :<|> columnL) = column
       (recordC :<|> recordL) = record
       cellS = cell
   in RestApi
@@ -61,8 +60,7 @@ api =
        , columnCreate  = columnC
        , columnSetName = columnSN
        , columnSetDataType = columnSDT
-       , columnSetInputType = columnSIT
-       , columnSetSourceCode = columnSSC
+       , columnSetInput = columnSI
        , columnList    = columnL
        , recordCreate  = recordC
        , recordList    = recordL

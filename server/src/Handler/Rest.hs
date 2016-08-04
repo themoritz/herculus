@@ -4,16 +4,19 @@
 
 module Handler.Rest where
 
+import           Control.Monad (unless, void)
 
 import           Data.Text        (Text)
 import           Data.Monoid
 import           Data.Foldable
+import           Data.Traversable
 
 import           Servant
 
 import           Database.MongoDB ((=:))
 
 import           Lib.Types
+import           Lib.Api.WebSocket
 import           Lib.Model.Types
 import           Lib.Model.Column
 import           Lib.Model.Cell
@@ -74,13 +77,12 @@ handleColumn =
        handleColumnCreate
   :<|> handleColumnSetName
   :<|> handleColumnSetDataType
-  :<|> handleColumnSetInputType
-  :<|> handleColumnSetSourceCode
+  :<|> handleColumnSetInput
   :<|> handleColumnList
 
 handleColumnCreate :: MonadHexl m => Id Table -> m (Id Column)
 handleColumnCreate t = do
-  c <- create $ Column t "" DataString ColumnInput "" CompiledCodeNone
+  c <- create $ Column t "" DataString ColumnInput "" CompileResultNone
   rs <- listByQuery [ "tableId" =: toObjectId t ]
   for_ rs $ \e -> create $ emptyCell t c (entityId e)
   pure c
@@ -88,44 +90,28 @@ handleColumnCreate t = do
 handleColumnSetName :: MonadHexl m => Id Column -> Text -> m ()
 handleColumnSetName c name = do
   update c $ \col -> col { columnName = name }
-  -- TODO: re-compile dependent columns
+  compileColumnChildren c
 
 handleColumnSetDataType :: MonadHexl m => Id Column -> DataType -> m ()
 handleColumnSetDataType c typ = do
+  oldCol <- getById' c
   update c $ \col -> col { columnDataType = typ }
-  -- TODO: re-parse all cells
-  -- TODO: re-compile this and all dependent columns
-
-handleColumnSetInputType :: MonadHexl m => Id Column -> InputType -> m ()
-handleColumnSetInputType c typ = do
-  update c $ \col -> col { columnInputType = typ }
-  -- TODO: re-parse all cells
-  -- TODO: re-compile this and all dependent columns
-  -- TODO: update dependency graph
+  unless (columnDataType oldCol == typ) $ do
+    compileColumnChildren c
+    case columnInputType oldCol of
+      ColumnInput -> invalidateCells c
+      ColumnDerived -> compileColumn c
 
 -- | Just = error
 -- sets columnInputType to Derived
-handleColumnSetSourceCode :: MonadHexl m => Id Column -> Text -> m (Maybe CompiledCode)
-handleColumnSetSourceCode c code = do
-  update c $ \col -> col { columnSourceCode = code }
-  col <- getById' c
-  case columnInputType col of
-    ColumnInput -> pure Nothing
-    ColumnDerived -> do
-      compileResult <- compileColumn c code
-      result <- case compileResult of
-        Left msg -> do
-          modifyDependencies $ setDependencies c []
-          pure $ CompiledCodeError msg
-        Right atexpr -> do
-          let deps = collectDependencies atexpr
-          -- TODO: check for cycles
-          modifyDependencies $ setDependencies c deps
-          -- TODO: fork this
-          update c $ \col -> col { columnCompiledCode = CompiledCode atexpr }
-          propagate c CompleteColumn
-          pure $ CompiledCode atexpr
-      pure $ Just result
+handleColumnSetInput :: MonadHexl m => Id Column -> (InputType, Text) -> m ()
+handleColumnSetInput c (typ, code) = do
+  oldCol <- getById' c
+  update c $ \col -> col { columnInputType = typ
+                         , columnSourceCode = code }
+  case (columnInputType oldCol, columnSourceCode oldCol == code) of
+    (ColumnDerived, False) -> compileColumn c
+    _                      -> pure ()
 
 handleColumnList :: MonadHexl m => Id Table -> m [Entity Column]
 handleColumnList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
@@ -166,9 +152,42 @@ handleCellSet c r val = do
 
 -- Helper ----------------------------
 
-compileColumn :: MonadHexl m => Id Column -> Text -> m (Either Text ATExpr)
-compileColumn c code = case parseExpression code of
-  Left msg -> pure $ Left $ "parse error: " <> msg
-  Right expr -> do
-    col <- getById' c
-    typecheck (columnTableId col) expr (columnDataType col)
+compileColumn :: MonadHexl m => Id Column -> m ()
+compileColumn c = do
+  col <- getById' c
+  let abort msg = do
+        void $ modifyDependencies c []
+        pure $ CompileResultError msg
+  compileResult <- case parseExpression (columnSourceCode col) of
+    Left msg -> abort $ "Parse error: " <> msg
+    Right expr -> do
+      atexprRes <- typecheck (columnTableId col) expr (columnDataType col)
+      case atexprRes of
+        Left msg -> abort $ "Type error: " <> msg
+        Right atexpr -> do
+          let deps = collectDependencies atexpr
+          cycles <- modifyDependencies c deps
+          if cycles then abort "Dependency graph has cycles"
+                    else pure $ CompileResultCode atexpr
+  update c $ \col' -> col' { columnCompileResult = compileResult }
+  sendWS $ WsDownColumnsChanged [Entity c col { columnCompileResult = compileResult }]
+  propagate c CompleteColumn
+
+compileColumnChildren :: MonadHexl m => Id Column -> m ()
+compileColumnChildren c = do
+  graph <- getDependencies
+  entries <- for (getChildren c graph) $ \(child, _) -> do
+    compileColumn child
+    childCol <- getById' child
+    pure $ Entity child childCol
+  sendWS $ WsDownColumnsChanged entries
+
+invalidateCells :: MonadHexl m => Id Column -> m ()
+invalidateCells c = do
+  cells <- listByQuery [ "aspects.columnId" =: toObjectId c]
+  changes <- for cells $ \e -> do
+    update (entityId e) $ \cell -> cell { cellContent = CellNothing }
+    let aspects = cellAspects $ entityVal e
+    pure (aspectsColumnId aspects, aspectsRecordId aspects, CellNothing)
+  sendWS $ WsDownCellsChanged changes
+  propagate c CompleteColumn

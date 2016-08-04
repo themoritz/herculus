@@ -40,10 +40,8 @@ type ColumnRoutes =
                   :> ReqBody '[JSON] Text :> Post '[JSON] ()
   :<|>  "setDataType" :> Capture "columnId" (Id Column)
                   :> ReqBody '[JSON] DataType :> Post '[JSON] ()
-  :<|>  "setInputType" :> Capture "columnId" (Id Column)
-                  :> ReqBody '[JSON] InputType :> Post '[JSON] ()
-  :<|>  "setSourceCode" :> Capture "columnId" (Id Column)
-                  :> ReqBody '[JSON] Text :> Post '[JSON] (Maybe CompiledCode)
+  :<|>  "setInput" :> Capture "columnId" (Id Column)
+                  :> ReqBody '[JSON] (InputType, Text) :> Post '[JSON] ()
   :<|>  "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [Entity Column]
 
 type RecordRoutes =

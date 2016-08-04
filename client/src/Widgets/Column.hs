@@ -16,10 +16,10 @@ import Data.Monoid
 
 import Reflex.Dom
 
-import Api.Rest (loader, loader', api)
+import Api.Rest (loader', api)
 import qualified Api.Rest as Api
 
-import           Data.Map        (Map)
+import Data.Map (Map)
 import qualified Data.Map as Map
 
 import Lib.Types
@@ -61,17 +61,6 @@ column tableId columnId (ColumnConfig set initial) = el "div" $ do
   nameSet <- button "Set"
   loader' (Api.columnSetName api columnIdArg (Right <$> current name)) nameSet
 
-  it <- dropdown (columnInputType initial)
-                 (constDyn inputTypeEntries) $
-                 (def :: DropdownConfig t InputType)
-                   { _dropdownConfig_setValue =
-                         (columnInputType <$> set)
-                   }
-  setIt <- button "Set"
-  let inputType = _dropdown_value it
-  loader' (Api.columnSetInputType api columnIdArg (Right <$> current inputType))
-          setIt
-
   dt <- dropdown (columnDataType initial)
                  (constDyn dataTypeEntries)
                  (def :: DropdownConfig t DataType)
@@ -83,19 +72,28 @@ column tableId columnId (ColumnConfig set initial) = el "div" $ do
   loader' (Api.columnSetDataType api columnIdArg (Right <$> current dataType))
           setDt
 
+  it <- dropdown (columnInputType initial)
+                 (constDyn inputTypeEntries) $
+                 (def :: DropdownConfig t InputType)
+                   { _dropdownConfig_setValue =
+                         (columnInputType <$> set)
+                   }
+  let inputType = _dropdown_value it
+  trigger <- button "Set"
+
   dynColumn <- holdDyn initial set
   sourceAttr <- forDyn dynColumn $ \col -> case columnInputType col of
     ColumnInput   -> "style" =: "display: none"
     ColumnDerived -> "style" =: "display: inherit"
 
-  rec compiledE <- loader (Api.columnSetSourceCode api columnIdArg
-                                                      (Right <$> current source))
-                          sourceSet
+  rec let inputArg = do
+            inputType' <- current inputType
+            source' <- current source
+            pure $ Right (inputType', source')
 
-      compiledD <- holdDyn (columnCompiledCode initial) $ leftmost
-        [ fmapMaybe id compiledE
-        , columnCompiledCode <$> set
-        ]
+      loader' (Api.columnSetInput api columnIdArg inputArg) sourceSet
+
+      compiledD <- holdDyn (columnCompileResult initial) $ columnCompileResult <$> set
 
       (source, sourceSet) <- elDynAttr "div" sourceAttr $ do
         val <- textInputT (def :: TextInputConfig t)
@@ -103,12 +101,11 @@ column tableId columnId (ColumnConfig set initial) = el "div" $ do
                  , _textInputConfig_initialValue = unpack . columnSourceCode $ initial
                  , _textInputConfig_attributes = constDyn ("style" =: "width: 160px")
                  }
-        trigger <- button "Set"
 
         void $ dynWidget compiledD $ \case
-          CompiledCode _        -> text "Ok"
-          CompiledCodeNone      -> pure ()
-          CompiledCodeError msg -> text $ "Error: " <> unpack msg
+          CompileResultCode _        -> text "Ok"
+          CompileResultNone      -> pure ()
+          CompileResultError msg -> text $ "Error: " <> unpack msg
 
         pure (val, trigger)
 
@@ -119,4 +116,4 @@ column tableId columnId (ColumnConfig set initial) = el "div" $ do
                        <*> current source
                        <*> current compiledD
 
-  pure $ tag columnB $ leftmost [ nameSet, setIt, setDt, sourceSet ]
+  pure $ tag columnB $ leftmost [ nameSet, setDt, sourceSet ]

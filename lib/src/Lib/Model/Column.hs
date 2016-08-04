@@ -14,10 +14,10 @@ import           Data.Aeson                   (FromJSON (..), ToJSON (..),
 import           Data.Aeson.Bson
 import           Data.Bson                    (Val, (=:))
 import qualified Data.Bson                    as Bson
+import qualified Data.ByteString              as BS
 import qualified Data.ByteString.Base64       as Base64
 import           Data.Monoid                  ((<>))
 import           Data.Serialize
-import qualified Data.ByteString as BS
 import           Data.Text                    (Text, pack)
 import           Data.Text.Encoding
 
@@ -29,12 +29,12 @@ import           Lib.Model.Types
 import           Lib.Types
 
 data Column = Column
-  { columnTableId      :: Id Table
-  , columnName         :: Text
-  , columnDataType     :: DataType
-  , columnInputType    :: InputType
-  , columnSourceCode   :: Text
-  , columnCompiledCode :: CompiledCode
+  { columnTableId       :: Id Table
+  , columnName          :: Text
+  , columnDataType      :: DataType
+  , columnInputType     :: InputType
+  , columnSourceCode    :: Text
+  , columnCompileResult :: CompileResult
   } deriving (Generic)
 
 instance Model Column where
@@ -67,65 +67,66 @@ instance FromDocument Column where
         Left msg -> Left $ pack msg
       Left msg -> Left $ pack msg
 
-data CompiledCode
-  = CompiledCode ATExpr
-  | CompiledCodeNone
-  | CompiledCodeError Text
+data CompileResult
+  = CompileResultCode ATExpr
+  | CompileResultNone
+  | CompileResultError Text
   deriving (Show)
 
-instance ToJSON CompiledCode where
-  toJSON (CompiledCode atexpr) = object
-    [ "tag" .= ("CompiledCode" :: String)
+instance ToJSON CompileResult where
+  toJSON (CompileResultCode atexpr) = object
+    [ "tag" .= ("CompileResultCode" :: String)
     , "content" .= BS.unpack (Base64.encode $ encode atexpr)
     ]
-  toJSON CompiledCodeNone = object
-    [ "tag" .= ("CompiledCodeNone" :: String)
+  toJSON CompileResultNone = object
+    [ "tag" .= ("CompileResultNone" :: String)
     ]
-  toJSON (CompiledCodeError e) = object
-    [ "tag" .= ("CompiledCodeError" :: String)
+  toJSON (CompileResultError e) = object
+    [ "tag" .= ("CompileResultError" :: String)
     , "content" .= e
     ]
 
-instance FromJSON CompiledCode where
+instance FromJSON CompileResult where
   parseJSON (Object v) = do
     (tag :: String) <- v .: "tag"
     case tag of
-      "CompiledCode" -> do
+      "CompileResultCode" -> do
         text <- v .: "content"
         case Base64.decode (BS.pack text) >>= decode of
           Left msg -> fail $ "could not decode atexpr" <> msg
-          Right atexpr -> pure $ CompiledCode atexpr
-      "CompiledCodeNone" -> pure $ CompiledCodeNone
-      "CompiledCodeError" -> CompiledCodeError <$> v .: "content"
+          Right atexpr -> pure $ CompileResultCode atexpr
+      "CompileResultNone" -> pure $ CompileResultNone
+      "CompileResultError" -> CompileResultError <$> v .: "content"
       _ -> fail "unknown tag"
 
-instance Eq CompiledCode where
-  CompiledCode a == CompiledCode b = encode a == encode b
-  CompiledCodeNone == CompiledCodeNone = True
-  CompiledCodeError a == CompiledCodeError b = a == b
+instance Eq CompileResult where
+  CompileResultCode a == CompileResultCode b = encode a == encode b
+  CompileResultNone == CompileResultNone = True
+  CompileResultError a == CompileResultError b = a == b
   _ == _ = False
 
-instance Val CompiledCode where
-  val (CompiledCode atexpr) = Bson.Doc
-    [ "tag" =: ("CompiledCode" :: Text)
+instance Val CompileResult where
+  val (CompileResultCode atexpr) = Bson.Doc
+    [ "tag" =: ("CompileResultCode" :: Text)
     , "content" =: Bson.Bin (Bson.Binary $ encode atexpr)
     ]
-  val CompiledCodeNone = Bson.Doc
-    [ "tag" =: ("CompiledCodeNone" :: Text) ]
-  val (CompiledCodeError msg) = Bson.Doc
-    [ "tag" =: ("CompiledCodeError" :: Text)
+  val CompileResultNone = Bson.Doc
+    [ "tag" =: ("CompileResultNone" :: Text) ]
+  val (CompileResultError msg) = Bson.Doc
+    [ "tag" =: ("CompileResultError" :: Text)
     , "content" =: msg
     ]
   cast' (Bson.Doc doc) = do
     (tag :: String) <- Bson.lookup "tag" doc
     case tag of
-      "CompiledCode" -> do
+      "CompileResultCode" -> do
         (Bson.Bin (Bson.Binary bs)) <- Bson.lookup "content" doc
         case decode bs of
           Left msg -> fail $ "could not decode atexpr" <> msg
-          Right atexpr -> pure $ CompiledCode atexpr
-      "CompiledCodeError" -> CompiledCodeError <$> Bson.lookup "content" doc
-      "CompiledCodeNone" -> pure $ CompiledCodeNone
+          Right atexpr -> pure $ CompileResultCode atexpr
+      "CompileResultError" -> CompileResultError <$> Bson.lookup "content" doc
+      "CompileResultNone" -> pure $ CompileResultNone
+      _ -> fail "unknown tag"
 
 data InputType
   = ColumnInput

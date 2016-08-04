@@ -74,7 +74,7 @@ class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m 
   sendWS :: WsDownMessage -> m ()
 
   getDependencies :: m DependencyGraph
-  modifyDependencies :: (DependencyGraph -> DependencyGraph) -> m ()
+  modifyDependencies :: Id Column -> [(Id Column, DependencyType)] -> m Bool
 
   getColumnOrder :: Id Column -> m ColumnOrder
 
@@ -185,12 +185,16 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
 
   getDependencies = getOneByQuery [] >>= \case
     Right e -> pure $ dependenciesGraph $ entityVal e
-    Left "Not found" -> pure emptyDependencyGraph
-    Left _ -> throwError $ ErrBug "Dependency graph corrupt"
+    Left _  -> pure emptyDependencyGraph
 
-  modifyDependencies f = void $
-    upsert [] (Dependencies emptyDependencyGraph) $ \deps ->
-      deps { dependenciesGraph = f $ dependenciesGraph deps}
+  modifyDependencies c newDeps = do
+    graph <- getDependencies
+    case getDependentTopological c (setDependencies c newDeps graph) of
+      Nothing -> pure True
+      Just _  -> do
+        void $ upsert [] (Dependencies emptyDependencyGraph) $ \deps ->
+          deps { dependenciesGraph = setDependencies c newDeps $ dependenciesGraph deps }
+        pure False
 
   getColumnOrder c = do
     graph <- getDependencies

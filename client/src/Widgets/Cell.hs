@@ -9,19 +9,16 @@ module Widgets.Cell
 
 import Control.Monad
 
-import Data.Text (Text, pack, unpack)
+import Data.Text (Text, unpack)
 import Data.Monoid
 import Data.Maybe
 
 import Reflex.Dom hiding (Value)
 
-import Api.Rest (loader, loader', api)
-import qualified Api.Rest as Api
 import Lib.Types
 import Lib.Model.Types
 import Lib.Model.Cell
 import Lib.Model.Column
-import Lib.Api.Rest
 
 import Misc
 
