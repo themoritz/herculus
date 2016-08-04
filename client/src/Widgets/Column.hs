@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE RecursiveDo #-}
 
 module Widgets.Column
   ( ColumnConfig (..)
@@ -67,6 +68,9 @@ column tableId columnId (ColumnConfig set initial) = el "div" $ do
                          (columnInputType <$> set)
                    }
   setIt <- button "Set"
+  let inputType = _dropdown_value it
+  loader' (Api.columnSetInputType api columnIdArg (Right <$> current inputType))
+          setIt
 
   dt <- dropdown (columnDataType initial)
                  (constDyn dataTypeEntries)
@@ -75,33 +79,38 @@ column tableId columnId (ColumnConfig set initial) = el "div" $ do
                        (columnDataType <$> set)
                    }
   setDt <- button "Set"
-
-  let inputType = _dropdown_value it
-      dataType = _dropdown_value dt
-
-  loader' (Api.columnSetInputType api columnIdArg (Right <$> current inputType))
-          setIt
-
+  let dataType = _dropdown_value dt
   loader' (Api.columnSetDataType api columnIdArg (Right <$> current dataType))
           setDt
 
-  source <- textInputT (def :: TextInputConfig t)
-              { _textInputConfig_setValue = unpack . columnSourceCode <$> set
-              , _textInputConfig_initialValue = unpack . columnSourceCode $ initial
-              , _textInputConfig_attributes = constDyn ("style" =: "width: 160px")
-              }
-  sourceSet <- button "Set"
+  dynColumn <- holdDyn initial set
+  sourceAttr <- forDyn dynColumn $ \col -> case columnInputType col of
+    ColumnInput   -> "style" =: "display: none"
+    ColumnDerived -> "style" =: "display: inherit"
 
-  compiledE <- loader (Api.columnSetSourceCode api columnIdArg
-                                                  (Right <$> current source))
-                      sourceSet
+  rec compiledE <- loader (Api.columnSetSourceCode api columnIdArg
+                                                      (Right <$> current source))
+                          sourceSet
 
-  compiledD <- holdDyn (columnCompiledCode initial) $ fmapMaybe id compiledE
+      compiledD <- holdDyn (columnCompiledCode initial) $ leftmost
+        [ fmapMaybe id compiledE
+        , columnCompiledCode <$> set
+        ]
 
-  void $ dynWidget compiledD $ \case
-    CompiledCode _        -> text "Ok"
-    CompiledCodeNone      -> pure ()
-    CompiledCodeError msg -> text $ "Error: " <> unpack msg
+      (source, sourceSet) <- elDynAttr "div" sourceAttr $ do
+        val <- textInputT (def :: TextInputConfig t)
+                 { _textInputConfig_setValue = unpack . columnSourceCode <$> set
+                 , _textInputConfig_initialValue = unpack . columnSourceCode $ initial
+                 , _textInputConfig_attributes = constDyn ("style" =: "width: 160px")
+                 }
+        trigger <- button "Set"
+
+        void $ dynWidget compiledD $ \case
+          CompiledCode _        -> text "Ok"
+          CompiledCodeNone      -> pure ()
+          CompiledCodeError msg -> text $ "Error: " <> unpack msg
+
+        pure (val, trigger)
 
   let columnB = Column <$> pure tableId
                        <*> current name
