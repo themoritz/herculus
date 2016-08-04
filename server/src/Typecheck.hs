@@ -47,13 +47,13 @@ typecheck' expr = case expr of
   ExprColumnRef colRef -> do
     tblId <- ask
     (Entity i col) <- resolveColumnRef tblId colRef
-    case columnType col of
+    case columnDataType col of
       DataString -> pure $ TExprColumnRefString i ::: TypeString
       DataNumber -> pure $ TExprColumnRefNumber i ::: TypeNumber
       _          -> throwError "unsupported data type"
   ExprWholeColumnRef tblRef colRef -> do
     (Entity i col) <- resolveTableColumnRef tblRef colRef
-    case columnType col of
+    case columnDataType col of
       DataString -> pure $ TExprColumnRefStrings i ::: TypeStringList
       DataNumber -> pure $ TExprColumnRefNumbers i ::: TypeNumberList
       _          -> throwError "unsupported data type"

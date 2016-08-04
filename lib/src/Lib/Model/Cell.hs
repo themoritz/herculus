@@ -4,6 +4,7 @@
 module Lib.Model.Cell where
 
 import           Data.Aeson       (FromJSON, ToJSON)
+import           Data.Aeson.Bson
 import           Data.Aeson.Bson  (FromBSON, ToBSON)
 import           Data.Bson        (Val, (=:))
 import qualified Data.Bson        as Bson
@@ -17,6 +18,22 @@ import           Lib.Model.Class
 import           Lib.Model.Column
 import           Lib.Model.Types
 import           Lib.Types
+
+data CellContent
+  = CellNothing
+  | CellValue Value
+  | CellEvalError Text
+  deriving (Eq, Show, Typeable, Generic)
+
+instance ToJSON CellContent
+instance FromJSON CellContent
+
+instance ToBSON CellContent
+instance FromBSON CellContent
+
+instance Val CellContent where
+  val = toValue
+  cast' = decodeValue
 
 data Aspects = Aspects
   { aspectsTableId  :: Id Table
@@ -41,10 +58,15 @@ instance Val Aspects where
   cast' _ = fail "expected document"
 
 data Cell = Cell
-  { cellInput   :: Maybe Text
-  , cellResult  :: CellResult
+  { cellContent :: CellContent
   , cellAspects :: Aspects
   } deriving (Generic)
+
+emptyCell :: Id Table -> Id Column -> Id Record -> Cell
+emptyCell t c r = Cell
+  { cellContent = CellNothing
+  , cellAspects = Aspects t c r
+  }
 
 instance Model Cell         where collectionName = const "cells"
 
@@ -52,13 +74,11 @@ instance ToJSON Cell
 instance FromJSON Cell
 
 instance ToDocument Cell where
-  toDocument (Cell inp res asp) =
-    [ "input" =: inp
-    , "result" =: res
+  toDocument (Cell con asp) =
+    [ "content" =: con
     , "aspects" =: asp
     ]
 
 instance FromDocument Cell where
-  parseDocument doc = Cell <$> Bson.lookup "input" doc
-                           <*> Bson.lookup "result" doc
+  parseDocument doc = Cell <$> Bson.lookup "content" doc
                            <*> Bson.lookup "aspects" doc

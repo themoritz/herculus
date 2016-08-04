@@ -7,9 +7,10 @@ module Widgets.Table
   ) where
 
 import Control.Lens
+import Control.Monad (void)
 
 import Data.Monoid
-import           Data.Map        (Map)
+import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Text (Text)
 
@@ -18,6 +19,8 @@ import Reflex.Dom hiding (Value)
 import Lib.Types
 import Lib.Model
 import Lib.Model.Types
+import Lib.Model.Column
+import Lib.Model.Cell
 
 import Api.Rest (loader, api)
 import qualified Api.Rest as Api
@@ -39,9 +42,15 @@ data Position = Position
   , posY :: Int
   } deriving (Eq, Ord)
 
+data CellInfo = CellInfo
+  { ciPos :: Position
+  , ciCol :: Column
+  , ciContent :: CellContent
+  }
+
 data State = State
   { _stateTableId :: Maybe (Id Table)
-  , _stateCells   :: Map Coords Value
+  , _stateCells   :: Map Coords CellContent
   , _stateColumns :: Map (Id Column) Column
   , _stateRecords :: Map (Id Record) Record
   }
@@ -54,8 +63,8 @@ emptyState = State Nothing Map.empty Map.empty Map.empty
 data Action
   = SetColumns [Entity Column]
   | SetRecords [Entity Record]
-  | SetCells [(Id Column, Id Record, Value)]
-  | UpdateCells [(Id Column, Id Record, Value)]
+  | SetCells [(Id Column, Id Record, CellContent)]
+  | UpdateCells [(Id Column, Id Record, CellContent)]
   | AddColumn (Id Column)
   | AddRecord (Id Record)
   | UpdateColumn (Id Column) Column
@@ -71,7 +80,7 @@ update action st = case action of
     UpdateCells entries -> st & stateCells %~ fillEntries entries
     AddColumn i -> case st ^. stateTableId of
       Nothing -> st
-      Just t  -> st & stateColumns %~ Map.insert i (Column t "" DataString ColumnInput "")
+      Just t  -> st & stateColumns %~ Map.insert i (Column t "" DataString ColumnInput "" CompiledCodeNone)
     AddRecord i -> case st ^. stateTableId of
       Nothing -> st
       Just t  -> st & stateRecords %~ Map.insert i (Record t)
@@ -81,20 +90,24 @@ update action st = case action of
     fillEntries entries m = foldr (\(c, v) -> Map.insert c v) m $
         map (\(colId, recId, val) -> ((Coords colId recId), val)) entries
 
-toCellGrid :: State -> Map (Position, Coords, Maybe (Id Table)) Value
-toCellGrid (State tblId cells columns records) =
-  let indexedCols = zip (Map.keys columns) [0..]
+toCellGrid :: State -> Map Coords CellInfo
+toCellGrid (State _ cells columns records) =
+  let indexedCols = map (\((i, c), p) -> (i, (c, p))) $ zip (Map.toList columns) [0..]
       indexedRows = zip (Map.keys records) [0..]
       colMap = Map.fromList indexedCols
       rowMap = Map.fromList indexedRows
-      emptyGrid = Map.fromList [ ((Position x y, Coords col row, tblId), "")
-                               | (col, x) <- indexedCols
-                               , (row, y) <- indexedRows
+      emptyGrid = Map.fromList [ (Coords c r, CellInfo (Position x y) col CellNothing)
+                               | (c, (col, x)) <- indexedCols
+                               , (r, y) <- indexedRows
                                ]
       set (Coords colId recId, val) m =
-        case Position <$> Map.lookup colId colMap <*> Map.lookup recId rowMap of
-          Just pos -> Map.insert (pos, Coords colId recId, tblId) val m
-          Nothing  -> m
+        let may = do
+              (col, x) <- Map.lookup colId colMap
+              y <- Map.lookup recId rowMap
+              pure (Position x y, col)
+        in case may of
+          Just (pos, col) -> Map.insert (Coords colId recId) (CellInfo pos col val) m
+          Nothing         -> m
   in foldr set emptyGrid $ Map.toList cells
 
 toColumns :: State -> Map (Int, Id Column, Maybe (Id Table)) Column
@@ -108,60 +121,77 @@ toRecords (State tblId _ _ records) =
   in Map.fromList $ map (\((recId, reco), i) -> ((i, recId, tblId), reco)) indexedRecs
 
 table :: MonadWidget t m
-      => Event t (Id Table) -> Event t [(Id Column, Id Record, Value)]-> m ()
+      => Event t (Id Table) -> Event t [(Id Column, Id Record, CellContent)]-> m ()
 table loadTable updateCells = el "div" $ mdo
+
   tableIdArg <- hold (Left "") (Right <$> loadTable)
+
   columnsRes <- loader (Api.columnList api tableIdArg) $
                        () <$ loadTable
   recordsRes <- loader (Api.recordList api tableIdArg) $
                        () <$ loadTable
   dataRes <- loader (Api.tableData api tableIdArg) $
                     () <$ loadTable
+
   state <- foldDyn update emptyState $ leftmost
     [ SetColumns  <$> columnsRes
     , SetRecords  <$> recordsRes
     , SetCells    <$> dataRes
+    , (\((Coords c r), val) -> UpdateCells [(c, r, CellValue val)]) <$> cellChanged
     , UpdateCells <$> updateCells
-    , (\((_, Coords c r, _), v) -> UpdateCells [(c, r, v)]) <$> cellChanged
     , AddColumn   <$> newColId
     , AddRecord   <$> newRecId
     , (\((_, i, _), c) -> UpdateColumn i c) <$> colChanged
     , SetTableId  <$> loadTable
     ]
-  let colHeight = 100
+
+  let colHeight = 200
       cellWidth = 200
-      cellHeight = 50
+      cellHeight = 100
       recWidth = 50
+
   columns <- mapDyn toColumns state
   records <- mapDyn toRecords state
   cells <- mapDyn toCellGrid state
+
   (addCol, colChanged, addRec, cellChanged) <- divClass "canvas" $ do
+
     -- Columns
-    colChanged <- listWithKeyEvent columns $ \(i, columnId, mTblId) initial valE ->
+    colChanged <- listWithKeyNoHoldEvent columns $ \(i, columnId, mTblId) initial valE ->
       rectangle (Rectangle (i * cellWidth + recWidth) 0 cellWidth colHeight) $
         case mTblId of
           Nothing -> pure never
           Just tblId -> column tblId columnId $ ColumnConfig valE initial
+
     addColRect <- forDyn columns $ \cols ->
       Rectangle ((Map.size cols) * cellWidth + recWidth) 0 cellWidth colHeight
     addCol <- rectangleDyn addColRect $ button "+"
+
     -- Records
-    _ <- listWithKeyNoHold records $ \(i, recordId, _) _ _ ->
+    void $ listWithKeyNoHold records $ \(i, recordId, _) _ _ ->
       rectangle (Rectangle 0 (i * cellHeight + colHeight) recWidth cellHeight) $
         record recordId
+
     addRecRect <- forDyn records $ \recs ->
       Rectangle 0 ((Map.size recs) * cellHeight + colHeight) recWidth cellHeight
     addRec <- rectangleDyn addRecRect $ button "+"
+
     -- Cells
-    cellChanged <- listWithKeyEvent cells $ \(Position x y, Coords colId recId, mTblId) valInit valE ->
+    cellChanged <- listWithKeyEvent cells $ \(Coords colId recId) cellInfo -> do
+      pos <- mapDyn ciPos cellInfo
+      colD <- mapDyn ciCol cellInfo
+      content <- mapDyn ciContent cellInfo
+      (Position x y) <- sample $ current pos
       rectangle (Rectangle (x * cellWidth + recWidth)
                            (y * cellHeight + colHeight)
                            cellWidth
                            cellHeight) $
-        case mTblId of
-          Nothing -> pure never
-          Just tblId -> cell tblId colId recId (CellConfig valE valInit)
+        switchEvent $ dynWidget colD $ \col ->
+          cell colId recId (CellConfig content col)
+
     pure (addCol, colChanged, addRec, cellChanged)
+
   newColId <- loader (Api.columnCreate api tableIdArg) addCol
   newRecId <- loader (Api.recordCreate api tableIdArg) addRec
+
   pure ()

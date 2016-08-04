@@ -10,6 +10,7 @@ import GHC.Generics
 import Lib.Types
 import Lib.Model.Types
 import Lib.Model.Column
+import Lib.Model.Cell
 
 data WsUpMessage
   -- Play
@@ -26,7 +27,7 @@ data WsDownMessage
   = WsDownGreet Text
   | WsDownList [Text]
   -- Cell updates
-  | WsDownCellsChanged [(Id Column, Id Record, CellResult)]
+  | WsDownCellsChanged [(Id Column, Id Record, CellContent)]
   deriving (Generic, Show)
 
 instance ToJSON WsDownMessage

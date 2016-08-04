@@ -16,6 +16,7 @@ import           Data.Aeson.Bson
 import           Data.Aeson.Types   (Parser)
 import           Data.Bson          (Document, ObjectId (..), Val (..), (=:))
 import           Data.Decimal
+import           Data.Maybe         (fromMaybe)
 import           Data.Monoid        ((<>))
 import           Data.Serialize
 import           Data.String
@@ -157,28 +158,16 @@ instance MakeValue Number where
 instance MakeValue [a] where
   makeValue = const Nothing
 
---
-
-data CellResult
-  = CellOk Value
-  | CellParseError Text
-  | CellEvalError Text
-  deriving (Eq, Show, Typeable, Generic)
-
-instance ToJSON CellResult
-instance FromJSON CellResult
-
-instance ToBSON CellResult
-instance FromBSON CellResult
-
-instance Val CellResult where
-  val = toValue
-  cast' = decodeValue
+extractValue' :: ExtractValue a => Value -> a
+extractValue' = fromMaybe (error "expexted certain value") . extractValue
 
 --
 
 newtype Number = Number Decimal
-  deriving (Num, Show, Eq, Ord)
+  deriving (Num, Eq, Ord)
+
+instance Show Number where
+  show (Number x) = show x
 
 instance ToJSON Number where
   toJSON (Number x) = toJSON . show $ x

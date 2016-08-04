@@ -13,11 +13,9 @@ import qualified Data.Map as Map
 
 import Reflex.Dom
 
-import Lib
 import Lib.Types
 import Lib.Model
 import Lib.Model.Types
-import Lib.Api.Rest
 
 import Api.Rest (loader, api)
 import qualified Api.Rest as Api

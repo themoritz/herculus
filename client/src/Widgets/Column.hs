@@ -1,17 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE GADTs #-}
 
 module Widgets.Column
   ( ColumnConfig (..)
   , column
   ) where
 
-import Data.Text (Text, pack, unpack)
-import Data.Maybe
+import Control.Monad (void)
+
+import Data.Text (unpack)
+import Data.Monoid
 
 import Reflex.Dom
 
-import Api.Rest (loader, api)
+import Api.Rest (loader, loader', api)
 import qualified Api.Rest as Api
 
 import           Data.Map        (Map)
@@ -19,14 +23,17 @@ import qualified Data.Map as Map
 
 import Lib.Types
 import Lib.Model.Types
+import Lib.Model.Column
+
+import Misc
 
 data ColumnConfig t = ColumnConfig
   { _columnConfig_set :: Event t Column
   , _columnConfig_initial :: Column
   }
 
-cellTypeEntries :: Map ColumnType String
-cellTypeEntries = Map.fromList
+inputTypeEntries :: Map InputType String
+inputTypeEntries = Map.fromList
   [ (ColumnInput, "Input")
   , (ColumnDerived, "Derived")
   ]
@@ -43,37 +50,64 @@ column :: forall t m. MonadWidget t m
        => Id Table -> Id Column
        -> ColumnConfig t -> m (Event t Column)
 column tableId columnId (ColumnConfig set initial) = el "div" $ do
-  name <- (fmap pack . current . _textInput_value) <$> textInput
-            def { _textInputConfig_setValue = unpack . columnName <$> set
-                , _textInputConfig_initialValue = unpack . columnName $ initial
-                }
-  (selectCellType, selectDataType) <-
-    divClass "row" $ do
-      ct <- dropdown (columnInputType initial)
-                     (constDyn cellTypeEntries) $
-                     (def :: DropdownConfig t ColumnType)
-                       { _dropdownConfig_setValue =
-                             (columnInputType <$> set)
-                       }
-      dt <- dropdown (columnType initial)
-                     (constDyn dataTypeEntries)
-                     (def :: DropdownConfig t DataType)
-                       { _dropdownConfig_setValue =
-                           (columnType <$> set)
-                       }
-      pure (ct, dt)
-  expr <- (fmap pack . current . _textInput_value) <$> textInput
-            (def :: TextInputConfig t)
-                { _textInputConfig_setValue = unpack . columnExpression <$> set
-                , _textInputConfig_initialValue = unpack . columnExpression $ initial
-                , _textInputConfig_attributes = constDyn ("style" =: "width: 160px")
-                }
-  trigger <- button "Set"
-  let column = do
-        nm <- name
-        columnType <- current $ _dropdown_value selectCellType
-        dataType <- current $ _dropdown_value selectDataType
-        expression <- expr
-        pure $ Column tableId nm dataType columnType expression
-  _ <- loader (Api.columnUpdate api (constant $ Right columnId) (Right <$> column)) trigger
-  pure $ tag column trigger
+
+  let columnIdArg = constant $ Right columnId
+
+  name <- textInputT def
+            { _textInputConfig_setValue = unpack . columnName <$> set
+            , _textInputConfig_initialValue = unpack . columnName $ initial
+            }
+  nameSet <- button "Set"
+  loader' (Api.columnSetName api columnIdArg (Right <$> current name)) nameSet
+
+  it <- dropdown (columnInputType initial)
+                 (constDyn inputTypeEntries) $
+                 (def :: DropdownConfig t InputType)
+                   { _dropdownConfig_setValue =
+                         (columnInputType <$> set)
+                   }
+  setIt <- button "Set"
+
+  dt <- dropdown (columnDataType initial)
+                 (constDyn dataTypeEntries)
+                 (def :: DropdownConfig t DataType)
+                   { _dropdownConfig_setValue =
+                       (columnDataType <$> set)
+                   }
+  setDt <- button "Set"
+
+  let inputType = _dropdown_value it
+      dataType = _dropdown_value dt
+
+  loader' (Api.columnSetInputType api columnIdArg (Right <$> current inputType))
+          setIt
+
+  loader' (Api.columnSetDataType api columnIdArg (Right <$> current dataType))
+          setDt
+
+  source <- textInputT (def :: TextInputConfig t)
+              { _textInputConfig_setValue = unpack . columnSourceCode <$> set
+              , _textInputConfig_initialValue = unpack . columnSourceCode $ initial
+              , _textInputConfig_attributes = constDyn ("style" =: "width: 160px")
+              }
+  sourceSet <- button "Set"
+
+  compiledE <- loader (Api.columnSetSourceCode api columnIdArg
+                                                  (Right <$> current source))
+                      sourceSet
+
+  compiledD <- holdDyn (columnCompiledCode initial) $ fmapMaybe id compiledE
+
+  void $ dynWidget compiledD $ \case
+    CompiledCode _        -> text "Ok"
+    CompiledCodeNone      -> pure ()
+    CompiledCodeError msg -> text $ "Error: " <> unpack msg
+
+  let columnB = Column <$> pure tableId
+                       <*> current name
+                       <*> current dataType
+                       <*> current inputType
+                       <*> current source
+                       <*> current compiledD
+
+  pure $ tag columnB $ leftmost [ nameSet, setIt, setDt, sourceSet ]

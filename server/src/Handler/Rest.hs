@@ -4,12 +4,10 @@
 
 module Handler.Rest where
 
-import           Control.Monad.Logger
 
-import           Data.Text        (Text, pack)
+import           Data.Text        (Text)
 import           Data.Monoid
-
-import           Text.Show.Pretty (ppShow)
+import           Data.Foldable
 
 import           Servant
 
@@ -26,7 +24,6 @@ import           Lib.Model.Dependencies
 import           Propagate
 import           Propagate.Monad
 import           Lib.Expression
-import           Eval
 import           Typecheck
 
 handle :: MonadHexl m => ServerT Routes m
@@ -64,10 +61,10 @@ handleTableCreate = create
 handleTableList :: MonadHexl m => Id Project -> m [Entity Table]
 handleTableList projId = listByQuery [ "projectId" =: toObjectId projId ]
 
-handleTableData :: MonadHexl m => Id Table -> m [(Id Column, Id Record, CellResult)]
+handleTableData :: MonadHexl m => Id Table -> m [(Id Column, Id Record, CellContent)]
 handleTableData tblId = do
   cells <- listByQuery [ "aspects.tableId" =: toObjectId tblId ]
-  let go (Cell _ v (Aspects _ c r)) = (c, r, v)
+  let go (Cell v (Aspects _ c r)) = (c, r, v)
   pure $ map (go . entityVal) cells
 
 --
@@ -76,27 +73,30 @@ handleColumn :: MonadHexl m => ServerT ColumnRoutes m
 handleColumn =
        handleColumnCreate
   :<|> handleColumnSetName
-  :<|> handleColumnSetType
+  :<|> handleColumnSetDataType
   :<|> handleColumnSetInputType
   :<|> handleColumnSetSourceCode
   :<|> handleColumnList
 
 handleColumnCreate :: MonadHexl m => Id Table -> m (Id Column)
-handleColumnCreate tblId = create $
-  Column tblId "" DataString ColumnInput "" CompiledCodeNone
+handleColumnCreate t = do
+  c <- create $ Column t "" DataString ColumnInput "" CompiledCodeNone
+  rs <- listByQuery [ "tableId" =: toObjectId t ]
+  for_ rs $ \e -> create $ emptyCell t c (entityId e)
+  pure c
 
 handleColumnSetName :: MonadHexl m => Id Column -> Text -> m ()
 handleColumnSetName c name = do
   update c $ \col -> col { columnName = name }
   -- TODO: re-compile dependent columns
 
-handleColumnSetType :: MonadHexl m => Id Column -> DataType -> m ()
-handleColumnSetType c typ = do
-  update c $ \col -> col { columnType = typ }
+handleColumnSetDataType :: MonadHexl m => Id Column -> DataType -> m ()
+handleColumnSetDataType c typ = do
+  update c $ \col -> col { columnDataType = typ }
   -- TODO: re-parse all cells
   -- TODO: re-compile this and all dependent columns
 
-handleColumnSetInputType :: MonadHexl m => Id Column -> ColumnType -> m ()
+handleColumnSetInputType :: MonadHexl m => Id Column -> InputType -> m ()
 handleColumnSetInputType c typ = do
   update c $ \col -> col { columnInputType = typ }
   -- TODO: re-parse all cells
@@ -105,25 +105,27 @@ handleColumnSetInputType c typ = do
 
 -- | Just = error
 -- sets columnInputType to Derived
-handleColumnSetSourceCode :: MonadHexl m => Id Column -> Text -> m CompiledCode
+handleColumnSetSourceCode :: MonadHexl m => Id Column -> Text -> m (Maybe CompiledCode)
 handleColumnSetSourceCode c code = do
-  compileResult <- compileColumn c code
-  result <- case compileResult of
-    Left msg -> do
-      modifyDependencies $ setDependencies c []
-      pure $ CompiledCodeError msg
-    Right atexpr -> do
-      let deps = collectDependencies atexpr
-      -- TODO: check for cycles
-      modifyDependencies $ setDependencies c deps
-      -- TODO: fork this
-      propagate c CompleteColumn
-      pure $ CompiledCode atexpr
-  update c $ \col -> col { columnSourceCode = code
-                         , columnCompiledCode = result
-                         , columnInputType = ColumnDerived
-                         }
-  pure result
+  update c $ \col -> col { columnSourceCode = code }
+  col <- getById' c
+  case columnInputType col of
+    ColumnInput -> pure Nothing
+    ColumnDerived -> do
+      compileResult <- compileColumn c code
+      result <- case compileResult of
+        Left msg -> do
+          modifyDependencies $ setDependencies c []
+          pure $ CompiledCodeError msg
+        Right atexpr -> do
+          let deps = collectDependencies atexpr
+          -- TODO: check for cycles
+          modifyDependencies $ setDependencies c deps
+          -- TODO: fork this
+          update c $ \col -> col { columnCompiledCode = CompiledCode atexpr }
+          propagate c CompleteColumn
+          pure $ CompiledCode atexpr
+      pure $ Just result
 
 handleColumnList :: MonadHexl m => Id Table -> m [Entity Column]
 handleColumnList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
@@ -136,7 +138,12 @@ handleRecord =
   :<|> handleRecordList
 
 handleRecordCreate :: MonadHexl m => Id Table -> m (Id Record)
-handleRecordCreate = create . Record
+handleRecordCreate t = do
+  r <- create $ Record t
+  cs <- listByQuery [ "tableId" =: toObjectId t ]
+  for_ cs $ \e -> create $ emptyCell t (entityId e) r
+  -- TODO: propagate all columns with the new record
+  pure r
 
 handleRecordList :: MonadHexl m => Id Table -> m [Entity Record]
 handleRecordList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
@@ -147,12 +154,15 @@ handleCell :: MonadHexl m => ServerT CellRoutes m
 handleCell =
        handleCellSet
 
-handleCellSet :: MonadHexl m => Id Column -> Id Record -> Text -> m CellResult
-handleCellSet c r inp = do
-  result <- parseCell c r inp
+handleCellSet :: MonadHexl m => Id Column -> Id Record -> Value -> m ()
+handleCellSet c r val = do
+  let query =
+        [ "aspects.columnId" =: toObjectId c
+        , "aspects.recordId" =: toObjectId r
+        ]
+  updateByQuery' query $ \cell -> cell { cellContent = CellValue val }
   -- TODO: fork this
   propagate c (OneRecord r)
-  pure result
 
 -- Helper ----------------------------
 
@@ -161,23 +171,4 @@ compileColumn c code = case parseExpression code of
   Left msg -> pure $ Left $ "parse error: " <> msg
   Right expr -> do
     col <- getById' c
-    typecheck (columnTableId col) expr (columnType col)
-
-parseCell :: MonadHexl m => Id Column -> Id Record -> Text -> m CellResult
-parseCell c r inp = do
-  col <- getById' c
-  let parsedValue = case columnType col of
-        DataString -> ValueString <$> parseValue inp
-        DataNumber -> ValueNumber <$> parseValue inp
-        _          -> Nothing
-      result = case parsedValue of
-        Just val -> CellOk val
-        Nothing -> CellParseError "could not parse"
-      query =
-        [ "aspects.columnId" =: toObjectId c
-        , "aspects.recordId" =: toObjectId r
-        ]
-  updateByQuery' query $ \cell -> cell { cellInput = Just inp
-                                       , cellResult = result
-                                       }
-  pure result
+    typecheck (columnTableId col) expr (columnDataType col)

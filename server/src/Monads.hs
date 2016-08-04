@@ -30,6 +30,7 @@ import           Data.Aeson
 import qualified Data.ByteString.Char8       as B8
 import           Data.Proxy
 import           Data.Text
+import           Data.Monoid
 import           Database.MongoDB            ((=:))
 
 import qualified Database.MongoDB            as Mongo
@@ -106,7 +107,9 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
         collection = collectionName (Proxy :: Proxy a)
     res <- runMongo $ Mongo.findOne (Mongo.select query collection)
     case res of
-      Nothing -> pure $ Left "Not found"
+      Nothing -> pure $ Left $
+        "getById: Not found. Collection: " <> collection <>
+        ", id: " <> pack (show i)
       Just doc -> pure $ parseDocument doc
 
   -- -- Throws `ErrBug` in Left case
@@ -120,7 +123,9 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
     let collection = collectionName (Proxy :: Proxy a)
     res <- runMongo $ Mongo.findOne (Mongo.select query collection)
     case res of
-      Nothing -> pure $ Left "Not found"
+      Nothing -> pure $ Left $
+        "getOneByQuery: Not found. Collection: " <> collection <>
+        ", query: " <> pack (show query)
       Just doc -> pure $ parseDocument doc
 
   -- -- Throws `ErrBug` in Left case
@@ -156,7 +161,10 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
   updateByQuery' query f = do
     let collection = collectionName (Proxy :: Proxy a)
     getOneByQuery query >>= \case
-      Left _ -> throwError $ ErrBug "updateByQuery: nothing found"
+      Left _ -> throwError $ ErrBug $
+                  "updateByQuery: nothing found. Collection: " <>
+                  collection <> ", query: " <>
+                  pack (show query)
       Right (Entity i x) ->
         runMongo $ Mongo.save collection $ toDocument $ Entity i (f x)
 
@@ -164,7 +172,7 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
   upsert query new f = do
     getOneByQuery query >>= \case
       Right (Entity i _) -> update i f *> pure Nothing
-      Left _ -> Just <$> create new
+      Left _ -> Just <$> create (f new)
 
 --
 
@@ -180,8 +188,9 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
     Left "Not found" -> pure emptyDependencyGraph
     Left _ -> throwError $ ErrBug "Dependency graph corrupt"
 
-  modifyDependencies f = updateByQuery' [] $ \deps ->
-    deps { dependenciesGraph = f $ dependenciesGraph deps}
+  modifyDependencies f = void $
+    upsert [] (Dependencies emptyDependencyGraph) $ \deps ->
+      deps { dependenciesGraph = f $ dependenciesGraph deps}
 
   getColumnOrder c = do
     graph <- getDependencies

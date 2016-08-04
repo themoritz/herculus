@@ -18,6 +18,7 @@ import           Data.Text (Text)
 
 import           Lib.Types
 import           Lib.Model.Column
+import           Lib.Model.Cell
 
 import           Propagate.Monad
 
@@ -38,14 +39,14 @@ newtype EvalT m a = EvalT
 instance MonadTrans EvalT where
   lift = EvalT . lift . lift
 
-eval :: (MonadPropagate m, MakeValue a) => (EvalEnv m) -> TExpr a -> m CellResult
+eval :: (MonadPropagate m, MakeValue a) => (EvalEnv m) -> TExpr a -> m CellContent
 eval env expr = do
   let action = unEvalT $ eval' expr
   runExceptT (runReaderT action env) >>= \case
     Left msg -> pure $ CellEvalError msg
     Right a -> case makeValue a of
       Nothing -> pure $ CellEvalError "cannot make value"
-      Just val -> pure $ CellOk val
+      Just val -> pure $ CellValue val
 
 eval' :: MonadPropagate m => TExpr a -> EvalT m a
 eval' expr = case expr of

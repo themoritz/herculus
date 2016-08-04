@@ -32,18 +32,18 @@ type TableRoutes =
       "create" :> ReqBody '[JSON] Table :> Post '[JSON] (Id Table)
  :<|> "list" :> Capture "projectId" (Id Project) :> Get '[JSON] [Entity Table]
  :<|> "data" :> Capture "tableId" (Id Table)
-             :> Get '[JSON] [(Id Column, Id Record, CellResult)]
+             :> Get '[JSON] [(Id Column, Id Record, CellContent)]
 
 type ColumnRoutes =
         "create"  :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Id Column)
   :<|>  "setName" :> Capture "columnId" (Id Column)
                   :> ReqBody '[JSON] Text :> Post '[JSON] ()
-  :<|>  "setType" :> Capture "columnId" (Id Column)
+  :<|>  "setDataType" :> Capture "columnId" (Id Column)
                   :> ReqBody '[JSON] DataType :> Post '[JSON] ()
   :<|>  "setInputType" :> Capture "columnId" (Id Column)
-                  :> ReqBody '[JSON] ColumnType :> Post '[JSON] ()
+                  :> ReqBody '[JSON] InputType :> Post '[JSON] ()
   :<|>  "setSourceCode" :> Capture "columnId" (Id Column)
-                  :> ReqBody '[JSON] Text :> Post '[JSON] CompiledCode
+                  :> ReqBody '[JSON] Text :> Post '[JSON] (Maybe CompiledCode)
   :<|>  "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [Entity Column]
 
 type RecordRoutes =
@@ -52,4 +52,4 @@ type RecordRoutes =
 
 type CellRoutes =
       "set" :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record)
-            :> ReqBody '[JSON] Text :> Post '[JSON] CellResult
+            :> ReqBody '[JSON] Value :> Post '[JSON] ()

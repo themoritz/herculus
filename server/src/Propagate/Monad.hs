@@ -31,7 +31,7 @@ data Propagate
 
 class Monad m => MonadPropagate m where
   getCellValue :: ExtractValue a => Id Column -> Id Record -> m (Maybe a)
-  setCellResult :: Id Column -> Id Record -> CellResult -> m ()
+  setCellContent :: Id Column -> Id Record -> CellContent -> m ()
   getColumnValues :: ExtractValue a => Id Column -> m [Maybe a]
   addTargets :: Id Column -> Propagate -> m ()
   getTargets :: Id Column -> m [Id Record]
@@ -61,8 +61,8 @@ runPropagate action = do
   sendWS $ WsDownCellsChanged $ getAllCells $ _stateCache st
   pure a
 
-cacheCellResult :: Monad m => Id Column -> Id Record -> CellResult -> PropT m ()
-cacheCellResult c r result = stateCache %= storeCell c r result
+cacheCellContent :: Monad m => Id Column -> Id Record -> CellContent -> PropT m ()
+cacheCellContent c r result = stateCache %= storeCell c r result
 
 instance MonadHexl m => MonadPropagate (PropT m) where
   getCellValue c r = do
@@ -74,23 +74,23 @@ instance MonadHexl m => MonadPropagate (PropT m) where
               , "aspects.recordId" =: toObjectId r
               ]
         cell <- lift $ getOneByQuery' cellQuery
-        let result = cellResult $ entityVal cell
-        cacheCellResult c r result
+        let result = cellContent $ entityVal cell
+        cacheCellContent c r result
         pure result
     case result of
-      CellParseError _ -> pure Nothing
+      CellNothing -> pure Nothing
       CellEvalError _ -> pure Nothing
-      CellOk val -> case extractValue val of
+      CellValue val -> case extractValue val of
         Just x -> pure $ Just x
         Nothing -> lift $ throwError $ ErrBug "wrong type in value"
 
-  setCellResult c r result = do
-    cacheCellResult c r result
+  setCellContent c r content = do
+    cacheCellContent c r content
     let query =
-          [ "aspects.column" =: toObjectId c
-          , "aspects.record" =: toObjectId r
+          [ "aspects.columnId" =: toObjectId c
+          , "aspects.recordId" =: toObjectId r
           ]
-    lift $ updateByQuery' query $ \cell -> cell { cellResult = result }
+    lift $ updateByQuery' query $ \cell -> cell { cellContent = content }
 
   getColumnValues c = do
     results <- gets (getColumn c . _stateCache) >>= \case
@@ -98,13 +98,13 @@ instance MonadHexl m => MonadPropagate (PropT m) where
       Nothing -> do
         let query = [ "aspects.columnId" =: toObjectId c ]
         cells <- lift $ listByQuery query
-        let results = map (cellResult . entityVal) cells
+        let results = map (cellContent . entityVal) cells
         stateCache %= storeColumn c results
         pure results
     let go = \case
-          CellParseError _ -> pure Nothing
+          CellNothing -> pure Nothing
           CellEvalError _ -> pure Nothing
-          CellOk val -> case extractValue val of
+          CellValue val -> case extractValue val of
             Just x -> pure $ Just x
             Nothing -> lift $ throwError $ ErrBug "wrong type in value"
     traverse go results
@@ -127,7 +127,7 @@ instance MonadHexl m => MonadPropagate (PropT m) where
       col <- lift $ getById' c
       case columnCompiledCode col of
         CompiledCode atexpr@(_ ::: ttype) ->
-          case checkSig (columnType col) ttype of
+          case checkSig (columnDataType col) ttype of
             Just Ok -> do
               stateCache %= storeCode c atexpr
               pure atexpr

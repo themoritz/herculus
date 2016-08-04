@@ -3,6 +3,8 @@
 
 module Api.Rest where
 
+import Control.Monad
+
 import Data.Proxy
 import Data.Text
 import Data.Monoid
@@ -15,6 +17,8 @@ import Servant.Reflex
 import Lib.Types as Lib
 import Lib.Model
 import Lib.Model.Types
+import Lib.Model.Column
+import Lib.Model.Cell
 import Lib.Api.Rest
 
 type Arg t a = Behavior t (Either String a)
@@ -25,13 +29,16 @@ data RestApi t m = MonadWidget t m => RestApi
   , projectList   :: Res t m [Entity Project]
   , tableCreate   :: Arg t Table -> Res t m (Id Table)
   , tableList     :: Arg t (Id Project) -> Res t m [Entity Table]
-  , tableData     :: Arg t (Id Table) -> Res t m [(Id Column, Id Record, Lib.Value)]
+  , tableData     :: Arg t (Id Table) -> Res t m [(Id Column, Id Record, CellContent)]
   , columnCreate  :: Arg t (Id Table) -> Res t m (Id Column)
-  , columnUpdate  :: Arg t (Id Column) -> Arg t Column -> Res t m ()
+  , columnSetName :: Arg t (Id Column) -> Arg t Text -> Res t m ()
+  , columnSetDataType :: Arg t (Id Column) -> Arg t DataType -> Res t m ()
+  , columnSetInputType :: Arg t (Id Column) -> Arg t InputType -> Res t m ()
+  , columnSetSourceCode :: Arg t (Id Column) -> Arg t Text -> Res t m (Maybe CompiledCode)
   , columnList    :: Arg t (Id Table) -> Res t m [Entity Column]
   , recordCreate  :: Arg t (Id Table) -> Res t m (Id Record)
   , recordList    :: Arg t (Id Table) -> Res t m [Entity Record]
-  , cellSet       :: Arg t Cell -> Res t m ()
+  , cellSet       :: Arg t (Id Column) -> Arg t (Id Record) -> Arg t Lib.Value -> Res t m ()
   }
 
 api :: forall t m. MonadWidget t m => RestApi t m
@@ -42,7 +49,7 @@ api =
                    (constDyn (BasePath "/"))
       (projectC :<|> projectL) = project
       (tableC :<|> tableL :<|> tableD) = table
-      (columnC :<|> columnU :<|> columnL) = column
+      (columnC :<|> columnSN :<|> columnSDT :<|> columnSIT :<|> columnSSC :<|> columnL) = column
       (recordC :<|> recordL) = record
       cellS = cell
   in RestApi
@@ -52,7 +59,10 @@ api =
        , tableList     = tableL
        , tableData     = tableD
        , columnCreate  = columnC
-       , columnUpdate  = columnU
+       , columnSetName = columnSN
+       , columnSetDataType = columnSDT
+       , columnSetInputType = columnSIT
+       , columnSetSourceCode = columnSSC
        , columnList    = columnL
        , recordCreate  = recordC
        , recordList    = recordL
@@ -77,3 +87,6 @@ loader call trigger = el "div" $ do
                 , "" <$ success
                 ])
   pure success
+
+loader' :: MonadWidget t m => Res t m a -> Event t () -> m ()
+loader' call trigger = void $ loader call trigger
