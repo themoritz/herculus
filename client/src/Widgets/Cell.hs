@@ -43,27 +43,13 @@ cell colId recId (CellConfig content column) = el "div" $
                   CellValue (ValueString v) -> v
                   _                         -> ""
             inp <- cellInput val
-            inp' <- delay 0.002 inp
-            inpB <- hold "" inp
-            valArg <- hold (Left "") (Right . ValueString <$> inp)
-            loader' (Api.cellSet api (constant $ Right colId)
-                                     (constant $ Right recId)
-                                     valArg)
-                    (() <$ inp)
-            pure $ tag (ValueString <$> inpB) inp'
+            pure $ (ValueString <$> inp)
           DataNumber -> do
             let val = case c of
                   CellValue (ValueNumber v) -> v
                   _                         -> 0
             inp <- cellInput val
-            inp' <- delay 0.002 inp
-            inpB <- hold 0 inp
-            valArg <- hold (Left "") (Right . ValueNumber <$> inp)
-            loader' (Api.cellSet api (constant $ Right colId)
-                                     (constant $ Right recId)
-                                     valArg)
-                    (() <$ inp)
-            pure $ tag (ValueNumber <$> inpB) inp'
+            pure $ (ValueNumber <$> inp)
 
     ColumnDerived -> do
       void $ dynWidget content $ \case
