@@ -40,7 +40,7 @@ data CellInfo = CellInfo
   { ciPos :: Position
   , ciCol :: Column
   , ciContent :: CellContent
-  }
+  } deriving (Eq)
 
 data State = State
   { _stateTableId :: Maybe (Id Table)
@@ -155,7 +155,7 @@ table loadTable updateCells updateColumns = el "div" $ divClass "canvas" $ mdo
   cells <- mapDyn toCellGrid state
 
   -- Columns
-  colChanged <- listWithKeyNoHoldEvent columns $ \(i, columnId, mTblId) initial valE ->
+  colChanged <- (>>= dynMapEvents) $ listWithKeyNoHold columns $ \(i, columnId, mTblId) initial valE ->
     rectangle (Rectangle (i * cellWidth + recWidth) 0 cellWidth colHeight) $
       case mTblId of
         Nothing -> pure never
@@ -175,7 +175,7 @@ table loadTable updateCells updateColumns = el "div" $ divClass "canvas" $ mdo
   addRec <- rectangleDyn addRecRect $ button "+"
 
   -- Cells
-  cellChanged <- listWithKeyEvent cells $ \(Coords colId recId) cellInfo -> do
+  cellChanged <- (>>= dynMapEvents) $ listWithKeyEq cells $ \(Coords colId recId) cellInfo -> do
     pos <- mapDyn ciPos cellInfo
     colD <- mapDyn ciCol cellInfo
     content <- mapDyn ciContent cellInfo

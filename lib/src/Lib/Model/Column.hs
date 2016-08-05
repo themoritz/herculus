@@ -35,7 +35,7 @@ data Column = Column
   , columnInputType     :: InputType
   , columnSourceCode    :: Text
   , columnCompileResult :: CompileResult
-  } deriving (Generic)
+  } deriving (Eq, Generic)
 
 instance Model Column where
   collectionName = const "columns"
