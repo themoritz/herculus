@@ -2,15 +2,20 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts    #-}
 
 module Propagate
-  ( propagate
+  ( PropagationRoot (..)
+  , propagate
   ) where
+
+import           Control.Monad.Except
 
 import           Data.Foldable
 
 import           Eval
 import           Lib.Model.Column
+import           Lib.Model.Cell
 import           Lib.Model.Dependencies
 import           Lib.Model.Types
 import           Lib.Types
@@ -18,36 +23,44 @@ import           Monads
 
 import           Propagate.Monad
 
-propagate :: MonadHexl m => Id Column -> Propagate -> m ()
-propagate c start = do
-  order <- getColumnOrder c
+data PropagationRoot
+  = RootCellChange (Id Column) (Id Record)
+  | RootWholeColumns [Id Column]
 
-  runPropagate $ case start of
-    CompleteColumn -> do
-      addTargets c CompleteColumn
-      propagate' order
-    OneRecord r -> do
-      let ((_, children):rest) = order
-      for_ children $ \(child, depType) -> case depType of
-        OneToOne -> addTargets child (OneRecord r)
-        OneToAll -> addTargets child CompleteColumn
-      propagate' rest
+propagate :: MonadHexl m => PropagationRoot -> m ()
+propagate root = runPropagate $ case root of
+  RootWholeColumns cs -> do
+    order <- lift $ getColumnOrder cs
+    for_ cs $ \c -> addTargets c CompleteColumn
+    propagate' order
+  RootCellChange c r -> do
+    order <- lift $ getColumnOrder [c]
+    let ((_, children):rest) = order
+    for_ children $ \(child, depType) -> case depType of
+      OneToOne -> addTargets child (OneRecord r)
+      OneToAll -> addTargets child CompleteColumn
+    propagate' rest
 
 propagate' :: forall m. MonadPropagate m => ColumnOrder -> m ()
 propagate' [] = pure ()
 propagate' ((next, children):rest) = do
   records <- getTargets next
-  (texpr ::: _) <- getCompiledCode next
+  compileResult <- getCompileResult next
 
   let doTarget :: Id Record -> m ()
       doTarget r = do
+        result <- case compileResult of
+          CompileResultCode (texpr ::: _) -> do
+            let env = EvalEnv
+                        { envGetCellValue = flip getCellValue r
+                        , envGetColumnValues = getColumnValues
+                        }
+            eval env texpr
+          CompileResultError _ -> pure $
+            CellEvalError "Column not compiled"
+          CompileResultNone -> throwError $
+            ErrBug "propagate: no compile result for column"
 
-        let env = EvalEnv
-                    { envGetCellValue = flip getCellValue r
-                    , envGetColumnValues = getColumnValues
-                    }
-
-        result <- eval env texpr
         setCellContent next r result
 
         for_ children $ \(child, depType) -> case depType of

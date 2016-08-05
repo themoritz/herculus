@@ -76,7 +76,7 @@ class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m 
   getDependencies :: m DependencyGraph
   modifyDependencies :: Id Column -> [(Id Column, DependencyType)] -> m Bool
 
-  getColumnOrder :: Id Column -> m ColumnOrder
+  getColumnOrder :: [Id Column] -> m ColumnOrder
 
 data HexlEnv = HexlEnv
   { envPipe        :: Mongo.Pipe
@@ -189,16 +189,16 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
 
   modifyDependencies c newDeps = do
     graph <- getDependencies
-    case getDependentTopological c (setDependencies c newDeps graph) of
+    case getDependentTopological [c] (setDependencies c newDeps graph) of
       Nothing -> pure True
       Just _  -> do
         void $ upsert [] (Dependencies emptyDependencyGraph) $ \deps ->
           deps { dependenciesGraph = setDependencies c newDeps $ dependenciesGraph deps }
         pure False
 
-  getColumnOrder c = do
+  getColumnOrder cs = do
     graph <- getDependencies
-    case getDependentTopological c graph of
+    case getDependentTopological cs graph of
       Nothing -> throwError $ ErrBug "dependency graph has cycles"
       Just order -> pure order
 

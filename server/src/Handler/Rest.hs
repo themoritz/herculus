@@ -90,28 +90,33 @@ handleColumnCreate t = do
 handleColumnSetName :: MonadHexl m => Id Column -> Text -> m ()
 handleColumnSetName c name = do
   update c $ \col -> col { columnName = name }
-  compileColumnChildren c
+  newChilds <- compileColumnChildren c
+  sendWS $ WsDownColumnsChanged newChilds
+  propagate (RootWholeColumns $ map entityId newChilds)
 
 handleColumnSetDataType :: MonadHexl m => Id Column -> DataType -> m ()
 handleColumnSetDataType c typ = do
   oldCol <- getById' c
   update c $ \col -> col { columnDataType = typ }
   unless (columnDataType oldCol == typ) $ do
-    compileColumnChildren c
+    newChilds <- compileColumnChildren c
     case columnInputType oldCol of
-      ColumnInput -> invalidateCells c
-      ColumnDerived -> compileColumn c
+      ColumnInput   -> do invalidateCells c
+      ColumnDerived -> do newC <- compileColumn c
+                          propagate (RootWholeColumns [c])
+                          sendWS $ WsDownColumnsChanged [newC]
+    sendWS $ WsDownColumnsChanged newChilds
+    propagate (RootWholeColumns $ map entityId newChilds)
 
--- | Just = error
--- sets columnInputType to Derived
 handleColumnSetInput :: MonadHexl m => Id Column -> (InputType, Text) -> m ()
 handleColumnSetInput c (typ, code) = do
-  oldCol <- getById' c
   update c $ \col -> col { columnInputType = typ
                          , columnSourceCode = code }
-  case (columnInputType oldCol, columnSourceCode oldCol == code) of
-    (ColumnDerived, False) -> compileColumn c
-    _                      -> pure ()
+  case typ of
+    ColumnDerived -> do newCol <- compileColumn c
+                        sendWS $ WsDownColumnsChanged [newCol]
+                        propagate (RootWholeColumns [c])
+    _             -> pure ()
 
 handleColumnList :: MonadHexl m => Id Table -> m [Entity Column]
 handleColumnList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
@@ -148,11 +153,11 @@ handleCellSet c r val = do
         ]
   updateByQuery' query $ \cell -> cell { cellContent = CellValue val }
   -- TODO: fork this
-  propagate c (OneRecord r)
+  propagate (RootCellChange c r)
 
 -- Helper ----------------------------
 
-compileColumn :: MonadHexl m => Id Column -> m ()
+compileColumn :: MonadHexl m => Id Column -> m (Entity Column)
 compileColumn c = do
   col <- getById' c
   let abort msg = do
@@ -170,17 +175,15 @@ compileColumn c = do
           if cycles then abort "Dependency graph has cycles"
                     else pure $ CompileResultCode atexpr
   update c $ \col' -> col' { columnCompileResult = compileResult }
-  sendWS $ WsDownColumnsChanged [Entity c col { columnCompileResult = compileResult }]
-  propagate c CompleteColumn
+  pure $ Entity c col { columnCompileResult = compileResult }
 
-compileColumnChildren :: MonadHexl m => Id Column -> m ()
+compileColumnChildren :: MonadHexl m => Id Column -> m [Entity Column]
 compileColumnChildren c = do
   graph <- getDependencies
-  entries <- for (getChildren c graph) $ \(child, _) -> do
+  for (getChildren c graph) $ \(child, _) -> do
     compileColumn child
     childCol <- getById' child
     pure $ Entity child childCol
-  sendWS $ WsDownColumnsChanged entries
 
 invalidateCells :: MonadHexl m => Id Column -> m ()
 invalidateCells c = do
@@ -190,4 +193,3 @@ invalidateCells c = do
     let aspects = cellAspects $ entityVal e
     pure (aspectsColumnId aspects, aspectsRecordId aspects, CellNothing)
   sendWS $ WsDownCellsChanged changes
-  propagate c CompleteColumn

@@ -25,6 +25,7 @@ import qualified Data.Bson       as Bson
 import qualified Data.Map        as Map
 import           Data.Monoid
 import           Data.Text       (pack)
+import           Data.List       (intersect)
 
 import           GHC.Generics
 
@@ -99,12 +100,12 @@ getChildren :: Id Column -> DependencyGraph -> [(Id Column, DependencyType)]
 getChildren col graph = Map.toList $
   graph ^. influencesColumns . namedMap . at col . non emptyNamedMap . namedMap
 
-getDependentTopological :: Id Column -> DependencyGraph -> Maybe ColumnOrder
-getDependentTopological root graph =
-    let ordering = bfs [root]
-    in if root `elem` (tail ordering)
-         then Nothing
-         else Just $ map (\c -> (c, getChildren c graph)) ordering
+getDependentTopological :: [Id Column] -> DependencyGraph -> Maybe ColumnOrder
+getDependentTopological roots graph =
+    let ordering = bfs roots
+    in if length (roots `intersect` (drop (length roots) ordering)) == 0
+         then Just $ map (\c -> (c, getChildren c graph)) ordering
+         else Nothing
   where
     bfs :: [Id Column] -> [Id Column]
     bfs [] = []

@@ -3,11 +3,14 @@
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
 
 module Propagate.Monad where
 
 import           Control.Lens
 import           Control.Monad.Except
+import           Control.Monad.Trans.Identity (liftCatch)
 import           Control.Monad.State  (MonadState, StateT, gets, runStateT)
 
 import           Data.Map             (Map)
@@ -25,17 +28,17 @@ import           Lib.Types
 import           Monads
 import           Propagate.Cache
 
-data Propagate
+data AddTarget
   = CompleteColumn
   | OneRecord (Id Record)
 
-class Monad m => MonadPropagate m where
+class (MonadError AppError m, Monad m) => MonadPropagate m where
   getCellValue :: ExtractValue a => Id Column -> Id Record -> m (Maybe a)
   setCellContent :: Id Column -> Id Record -> CellContent -> m ()
   getColumnValues :: ExtractValue a => Id Column -> m [Maybe a]
-  addTargets :: Id Column -> Propagate -> m ()
+  addTargets :: Id Column -> AddTarget -> m ()
   getTargets :: Id Column -> m [Id Record]
-  getCompiledCode :: Id Column -> m ATExpr
+  getCompileResult :: Id Column -> m CompileResult
 
 data State = State
   { _stateCache   :: Cache
@@ -54,6 +57,10 @@ newtype PropT m a = PropT
 
 instance MonadTrans PropT where
   lift = PropT . lift
+
+instance MonadError AppError m => MonadError AppError (PropT m) where
+  throwError = lift . throwError
+  catchError a h = PropT $ (unPropT a) `catchError` (unPropT . h)
 
 runPropagate :: MonadHexl m => PropT m a -> m a
 runPropagate action = do
@@ -121,16 +128,10 @@ instance MonadHexl m => MonadPropagate (PropT m) where
       records <- lift $ listByQuery [ "tableId" =: toObjectId (columnTableId col) ]
       pure $ map entityId records
 
-  getCompiledCode c = gets (getCode c . _stateCache) >>= \case
-    Just atexpr -> pure atexpr
+  getCompileResult c = gets (getCode c . _stateCache) >>= \case
+    Just result -> pure result
     Nothing -> do
       col <- lift $ getById' c
-      case columnCompileResult col of
-        CompileResultCode atexpr@(_ ::: ttype) ->
-          case checkSig (columnDataType col) ttype of
-            Just Ok -> do
-              stateCache %= storeCode c atexpr
-              pure atexpr
-            Nothing -> lift $ throwError $
-              ErrBug "getCompiledCode: signature mismatch"
-        _ -> lift $ throwError $ ErrBug "getCompiledCode: no atexpr found"
+      let compileResult = columnCompileResult col
+      stateCache %= storeCode c compileResult
+      pure compileResult

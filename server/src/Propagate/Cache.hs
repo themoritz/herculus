@@ -23,9 +23,9 @@ import           Lib.Model.Types
 import           Lib.Types
 
 data Cache = Cache
-  { _cacheCell         :: Map (Id Column, Id Record) CellContent
-  , _cacheColumn       :: Map (Id Column) [CellContent]
-  , _cacheCompiledCode :: Map (Id Column) ATExpr
+  { _cacheCell          :: Map (Id Column, Id Record) CellContent
+  , _cacheColumn        :: Map (Id Column) [CellContent]
+  , _cacheCompileResult :: Map (Id Column) CompileResult
   }
 
 makeLenses ''Cache
@@ -54,8 +54,8 @@ getColumn c = view (cacheColumn . at c)
 
 --
 
-storeCode :: Id Column -> ATExpr -> Cache -> Cache
-storeCode c expr = set (cacheCompiledCode . at c) (Just expr)
+storeCode :: Id Column -> CompileResult -> Cache -> Cache
+storeCode c expr = set (cacheCompileResult . at c) (Just expr)
 
-getCode :: Id Column -> Cache -> Maybe ATExpr
-getCode c = view (cacheCompiledCode . at c)
+getCode :: Id Column -> Cache -> Maybe CompileResult
+getCode c = view (cacheCompileResult . at c)
