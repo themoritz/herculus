@@ -30,12 +30,14 @@ data RestApi t m = MonadWidget t m => RestApi
   , tableCreate   :: Arg t Table -> Res t m (Id Table)
   , tableList     :: Arg t (Id Project) -> Res t m [Entity Table]
   , tableData     :: Arg t (Id Table) -> Res t m [(Id Column, Id Record, CellContent)]
-  , columnCreate  :: Arg t (Id Table) -> Res t m (Id Column)
+  , columnCreate  :: Arg t (Id Table) -> Res t m (Id Column, [Entity Cell])
+  , columnDelete  :: Arg t (Id Column) -> Res t m ()
   , columnSetName :: Arg t (Id Column) -> Arg t Text -> Res t m ()
   , columnSetDataType :: Arg t (Id Column) -> Arg t DataType -> Res t m ()
   , columnSetInput :: Arg t (Id Column) -> Arg t (InputType, Text) -> Res t m ()
   , columnList    :: Arg t (Id Table) -> Res t m [Entity Column]
-  , recordCreate  :: Arg t (Id Table) -> Res t m (Id Record)
+  , recordCreate  :: Arg t (Id Table) -> Res t m (Id Record, [Entity Cell])
+  , recordDelete  :: Arg t (Id Record) -> Res t m ()
   , recordList    :: Arg t (Id Table) -> Res t m [Entity Record]
   , cellSet       :: Arg t (Id Column) -> Arg t (Id Record) -> Arg t Lib.Value -> Res t m ()
   }
@@ -48,8 +50,8 @@ api =
                    (constDyn (BasePath "/"))
       (projectC :<|> projectL) = project
       (tableC :<|> tableL :<|> tableD) = table
-      (columnC :<|> columnSN :<|> columnSDT :<|> columnSI :<|> columnL) = column
-      (recordC :<|> recordL) = record
+      (columnC :<|> columnD :<|> columnSN :<|> columnSDT :<|> columnSI :<|> columnL) = column
+      (recordC :<|> recordD :<|> recordL) = record
       cellS = cell
   in RestApi
        { projectCreate = projectC
@@ -58,11 +60,13 @@ api =
        , tableList     = tableL
        , tableData     = tableD
        , columnCreate  = columnC
+       , columnDelete  = columnD
        , columnSetName = columnSN
        , columnSetDataType = columnSDT
        , columnSetInput = columnSI
        , columnList    = columnL
        , recordCreate  = recordC
+       , recordDelete  = recordD
        , recordList    = recordL
        , cellSet       = cellS
        }

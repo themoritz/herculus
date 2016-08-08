@@ -35,7 +35,8 @@ type TableRoutes =
              :> Get '[JSON] [(Id Column, Id Record, CellContent)]
 
 type ColumnRoutes =
-        "create"  :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Id Column)
+        "create"  :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Id Column, [Entity Cell])
+  :<|>  "delete"  :> Capture "columnId" (Id Column) :> Get '[JSON] ()
   :<|>  "setName" :> Capture "columnId" (Id Column)
                   :> ReqBody '[JSON] Text :> Post '[JSON] ()
   :<|>  "setDataType" :> Capture "columnId" (Id Column)
@@ -45,7 +46,8 @@ type ColumnRoutes =
   :<|>  "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [Entity Column]
 
 type RecordRoutes =
-      "create" :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Id Record)
+      "create" :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Id Record, [Entity Cell])
+ :<|> "delete" :> Capture "recordId" (Id Record) :> Get '[JSON] ()
  :<|> "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [Entity Record]
 
 type CellRoutes =

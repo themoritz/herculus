@@ -1,32 +1,33 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Handler.Rest where
 
-import           Control.Monad (unless, void)
+import           Control.Monad          (unless, void)
 
-import           Data.Text        (Text)
+import           Data.List              (union)
+import           Data.Maybe             (mapMaybe)
 import           Data.Monoid
-import           Data.Foldable
+import           Data.Text              (Text)
 import           Data.Traversable
 
 import           Servant
 
-import           Database.MongoDB ((=:))
+import           Database.MongoDB       ((=:))
 
-import           Lib.Types
-import           Lib.Api.WebSocket
-import           Lib.Model.Types
-import           Lib.Model.Column
-import           Lib.Model.Cell
-import           Lib.Model
 import           Lib.Api.Rest
-import           Monads
-import           Lib.Model.Dependencies
-import           Propagate
-import           Propagate.Monad
+import           Lib.Api.WebSocket
 import           Lib.Expression
+import           Lib.Model
+import           Lib.Model.Cell
+import           Lib.Model.Column
+import           Lib.Model.Dependencies
+import           Lib.Model.Types
+import           Lib.Types
+import           Monads
+import           Propagate
 import           Typecheck
 
 handle :: MonadHexl m => ServerT Routes m
@@ -75,24 +76,39 @@ handleTableData tblId = do
 handleColumn :: MonadHexl m => ServerT ColumnRoutes m
 handleColumn =
        handleColumnCreate
+  :<|> handleColumnDelete
   :<|> handleColumnSetName
   :<|> handleColumnSetDataType
   :<|> handleColumnSetInput
   :<|> handleColumnList
 
-handleColumnCreate :: MonadHexl m => Id Table -> m (Id Column)
+handleColumnCreate :: MonadHexl m => Id Table -> m (Id Column, [Entity Cell])
 handleColumnCreate t = do
   c <- create $ Column t "" DataString ColumnInput "" CompileResultNone
   rs <- listByQuery [ "tableId" =: toObjectId t ]
-  for_ rs $ \e -> create $ emptyCell t c (entityId e)
-  pure c
+  cells <- for rs $ \e -> do
+    let cell = emptyCell t c (entityId e)
+    i <- create cell
+    pure $ Entity i cell
+  pure (c, cells)
+
+handleColumnDelete :: MonadHexl m => Id Column -> m ()
+handleColumnDelete colId = do
+  delete colId
+  deleteByQuery (Proxy :: Proxy Cell)
+    [ "aspects.columnId" =: toObjectId colId
+    ]
+  newChilds <- compileColumnChildren colId
+  void $ modifyDependencies colId []
+  sendWS $ WsDownColumnsChanged newChilds
+  propagate $ RootWholeColumns $ map entityId newChilds
 
 handleColumnSetName :: MonadHexl m => Id Column -> Text -> m ()
 handleColumnSetName c name = do
   update c $ \col -> col { columnName = name }
   newChilds <- compileColumnChildren c
   sendWS $ WsDownColumnsChanged newChilds
-  propagate (RootWholeColumns $ map entityId newChilds)
+  propagate $ RootWholeColumns $ map entityId newChilds
 
 handleColumnSetDataType :: MonadHexl m => Id Column -> DataType -> m ()
 handleColumnSetDataType c typ = do
@@ -100,13 +116,13 @@ handleColumnSetDataType c typ = do
   update c $ \col -> col { columnDataType = typ }
   unless (columnDataType oldCol == typ) $ do
     newChilds <- compileColumnChildren c
-    case columnInputType oldCol of
+    toUpdate <- case columnInputType oldCol of
       ColumnInput   -> do invalidateCells c
+                          pure newChilds
       ColumnDerived -> do newC <- compileColumn c
-                          propagate (RootWholeColumns [c])
-                          sendWS $ WsDownColumnsChanged [newC]
-    sendWS $ WsDownColumnsChanged newChilds
-    propagate (RootWholeColumns $ map entityId newChilds)
+                          pure $ newC:newChilds
+    sendWS $ WsDownColumnsChanged toUpdate
+    propagate $ RootWholeColumns $ map entityId toUpdate
 
 handleColumnSetInput :: MonadHexl m => Id Column -> (InputType, Text) -> m ()
 handleColumnSetInput c (typ, code) = do
@@ -115,7 +131,7 @@ handleColumnSetInput c (typ, code) = do
   case typ of
     ColumnDerived -> do newCol <- compileColumn c
                         sendWS $ WsDownColumnsChanged [newCol]
-                        propagate (RootWholeColumns [c])
+                        propagate $ RootWholeColumns [c]
     _             -> pure ()
 
 handleColumnList :: MonadHexl m => Id Table -> m [Entity Column]
@@ -126,15 +142,37 @@ handleColumnList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
 handleRecord :: MonadHexl m => ServerT RecordRoutes m
 handleRecord =
        handleRecordCreate
+  :<|> handleRecordDelete
   :<|> handleRecordList
 
-handleRecordCreate :: MonadHexl m => Id Table -> m (Id Record)
+handleRecordCreate :: MonadHexl m => Id Table -> m (Id Record, [Entity Cell])
 handleRecordCreate t = do
   r <- create $ Record t
   cs <- listByQuery [ "tableId" =: toObjectId t ]
-  for_ cs $ \e -> create $ emptyCell t (entityId e) r
-  -- TODO: propagate all columns with the new record
-  pure r
+  maybes <- for cs $ \e -> do
+    let cell = emptyCell t (entityId e) r
+    i <- create cell
+    pure $ case columnInputType $ entityVal e of
+      ColumnInput -> Just $ Entity i cell
+      ColumnDerived -> Nothing
+  let cells = mapMaybe id maybes
+  propagate $ RootCellChanges $ map (\e -> (aspectsColumnId $ cellAspects $ entityVal e, r)) cells
+  pure (r, cells)
+
+handleRecordDelete :: MonadHexl m => Id Record -> m ()
+handleRecordDelete recId = do
+  record <- getById' recId
+  delete recId
+  deleteByQuery (Proxy :: Proxy Cell)
+    [ "aspects.recordId" =: toObjectId recId
+    ]
+  graph <- getDependencies
+  cs <- listByQuery [ "tableId" =: toObjectId (recordTableId record) ]
+  let allChildren = foldr union [] $
+        map (\e -> map fst .
+                   filter (\(_, typ) -> typ == OneToAll) .
+                   getChildren (entityId e) $ graph) cs
+  propagate $ RootWholeColumns allChildren
 
 handleRecordList :: MonadHexl m => Id Table -> m [Entity Record]
 handleRecordList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
@@ -153,7 +191,7 @@ handleCellSet c r val = do
         ]
   updateByQuery' query $ \cell -> cell { cellContent = CellValue val }
   -- TODO: fork this
-  propagate (RootCellChange c r)
+  propagate $ RootCellChanges [(c, r)]
 
 -- Helper ----------------------------
 
@@ -181,7 +219,7 @@ compileColumnChildren :: MonadHexl m => Id Column -> m [Entity Column]
 compileColumnChildren c = do
   graph <- getDependencies
   for (getChildren c graph) $ \(child, _) -> do
-    compileColumn child
+    void $ compileColumn child
     childCol <- getById' child
     pure $ Entity child childCol
 

@@ -67,6 +67,8 @@ class (Monad m, MonadLogger m, MonadError AppError m) => MonadDB m where
   update :: Model a => Id a -> (a -> a) -> m ()
   updateByQuery' :: Model a => Mongo.Selector -> (a -> a) -> m ()
   upsert :: Model a => Mongo.Selector -> a -> (a -> a) -> m (Maybe (Id a))
+  delete :: Model a => Id a -> m ()
+  deleteByQuery :: Model a => Proxy a -> Mongo.Selector -> m ()
 
 -- Hexl layer: Business logic
 
@@ -173,6 +175,14 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
     getOneByQuery query >>= \case
       Right (Entity i _) -> update i f *> pure Nothing
       Left _ -> Just <$> create (f new)
+
+  delete :: forall a. Model a => Id a -> HexlT m ()
+  delete i = deleteByQuery (Proxy :: Proxy a) [ "_id" =: toObjectId i ]
+
+  deleteByQuery :: Model a => Proxy a -> Mongo.Selector -> HexlT m ()
+  deleteByQuery proxy query = do
+    let collection = collectionName proxy
+    runMongo $ Mongo.delete (Mongo.select query collection)
 
 --
 

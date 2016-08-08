@@ -5,8 +5,7 @@
 {-# LANGUAGE RecursiveDo #-}
 
 module Widgets.Column
-  ( ColumnConfig (..)
-  , column
+  ( column
   ) where
 
 import Control.Monad (void)
@@ -28,11 +27,6 @@ import Lib.Model.Column
 
 import Misc
 
-data ColumnConfig t = ColumnConfig
-  { _columnConfig_set :: Event t Column
-  , _columnConfig_initial :: Column
-  }
-
 inputTypeEntries :: Map InputType String
 inputTypeEntries = Map.fromList
   [ (ColumnInput, "Input")
@@ -49,8 +43,11 @@ dataTypeEntries = Map.fromList
 
 column :: forall t m. MonadWidget t m
        => Id Table -> Id Column
-       -> ColumnConfig t -> m (Event t Column)
-column tableId columnId (ColumnConfig set initial) = el "div" $ do
+       -> Dynamic t Column -> m (Event t Column, Event t ())
+column tableId columnId dynColumn = el "div" $ do
+
+  initial <- sample $ current dynColumn
+  let set = updated dynColumn
 
   let columnIdArg = constant $ Right columnId
 
@@ -81,7 +78,6 @@ column tableId columnId (ColumnConfig set initial) = el "div" $ do
   let inputType = _dropdown_value it
   trigger <- button "Set"
 
-  dynColumn <- holdDyn initial set
   sourceAttr <- forDyn dynColumn $ \col -> case columnInputType col of
     ColumnInput   -> "style" =: "display: none"
     ColumnDerived -> "style" =: "display: inherit"
@@ -116,4 +112,6 @@ column tableId columnId (ColumnConfig set initial) = el "div" $ do
                        <*> current source
                        <*> current compiledD
 
-  pure $ tag columnB $ leftmost [ nameSet, setDt, sourceSet ]
+  delete <- button "Delete"
+
+  pure (tag columnB $ leftmost [ nameSet, setDt, sourceSet ], delete)

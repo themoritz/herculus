@@ -7,5 +7,5 @@ import Lib.Types
 import Lib.Model.Types
 
 record :: MonadWidget t m
-       => Id Record -> m ()
-record recId = pure ()
+       => Id Record -> m (Event t ())
+record recId = button "-"

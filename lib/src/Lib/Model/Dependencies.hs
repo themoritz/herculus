@@ -2,6 +2,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE LambdaCase        #-}
 
 module Lib.Model.Dependencies
   ( DependencyGraph
@@ -17,11 +19,15 @@ module Lib.Model.Dependencies
   ) where
 
 import           Control.Lens
+import           Control.Monad.State
+import           Control.Monad.Trans.Maybe
+import           Control.Applicative
 
 import           Data.Aeson
 import           Data.Aeson.Bson
 import           Data.Bson       ((=:))
 import qualified Data.Bson       as Bson
+import           Data.Map        (Map)
 import qualified Data.Map        as Map
 import           Data.Monoid
 import           Data.Text       (pack)
@@ -70,6 +76,9 @@ instance FromDocument Dependencies where
       Error msg -> Left $ pack msg
       Success g -> pure $ Dependencies g
 
+transpose :: DependencyGraph -> DependencyGraph
+transpose (DependencyGraph d i) = DependencyGraph i d
+
 emptyDependencyGraph :: DependencyGraph
 emptyDependencyGraph = DependencyGraph (NamedMap Map.empty) (NamedMap Map.empty)
 
@@ -102,15 +111,22 @@ getChildren col graph = Map.toList $
 
 getDependentTopological :: [Id Column] -> DependencyGraph -> Maybe ColumnOrder
 getDependentTopological roots graph =
-    let ordering = bfs roots
-    in if length (roots `intersect` (drop (length roots) ordering)) == 0
-         then Just $ map (\c -> (c, getChildren c graph)) ordering
-         else Nothing
+    tail <$> evalState (runMaybeT $ topSort nullObjectId) Map.empty
   where
-    bfs :: [Id Column] -> [Id Column]
-    bfs [] = []
-    bfs cols = cols <> bfs (concatMap getChildren' cols)
+    topSort :: Id Column -> MaybeT (State (Map (Id Column) Bool)) ColumnOrder
+    topSort x = gets (Map.lookup x) >>= \case
+      Just False -> empty
+      Just True -> pure []
+      Nothing -> do
+        modify $ Map.insert x False
+        childOrders <- mapM topSort (getChildren' x)
+        modify $ Map.insert x True
+        pure $ (x, getChildren x graph) : join (reverse childOrders)
+
+    graph' = transpose .
+             setDependencies nullObjectId (map (, OneToOne) roots) .
+             transpose $ graph
 
     getChildren' :: Id Column -> [Id Column]
     getChildren' col = map fst . Map.toList $
-      graph ^. influencesColumns . namedMap . at col . non emptyNamedMap . namedMap
+      graph' ^. influencesColumns . namedMap . at col . non emptyNamedMap . namedMap

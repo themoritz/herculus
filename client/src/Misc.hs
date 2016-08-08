@@ -27,8 +27,13 @@ listWithKeyNoHold vals mkChild = do
   listWithKeyShallowDiff Map.empty changeVals mkChild
 
 dynMapEvents :: (Ord k, MonadWidget t m) => Dynamic t (Map k (Event t a)) -> m (Event t (k, a))
-dynMapEvents dynMap = do
-  dynEvent <- mapDyn (leftmost . map (\(k, e) -> (\ex -> (k, ex)) <$> e) . Map.toList) dynMap
+dynMapEvents = dynMapEventsWith id
+
+dynMapEventsWith :: (Ord k, MonadWidget t m)
+                 => (a -> Event t b) -> Dynamic t (Map k a)
+                 -> m (Event t (k, b))
+dynMapEventsWith f dynMap = do
+  dynEvent <- mapDyn (leftmost . map (\(k, a) -> (\ex -> (k, ex)) <$> f a) . Map.toList) dynMap
   pure $ switchPromptlyDyn dynEvent
 
 --

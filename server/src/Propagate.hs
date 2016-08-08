@@ -24,22 +24,24 @@ import           Monads
 import           Propagate.Monad
 
 data PropagationRoot
-  = RootCellChange (Id Column) (Id Record)
+  = RootCellChanges [(Id Column, Id Record)]
   | RootWholeColumns [Id Column]
 
 propagate :: MonadHexl m => PropagationRoot -> m ()
 propagate root = runPropagate $ case root of
   RootWholeColumns cs -> do
-    order <- lift $ getColumnOrder cs
     for_ cs $ \c -> addTargets c CompleteColumn
+    order <- lift $ getColumnOrder cs
     propagate' order
-  RootCellChange c r -> do
-    order <- lift $ getColumnOrder [c]
-    let ((_, children):rest) = order
-    for_ children $ \(child, depType) -> case depType of
-      OneToOne -> addTargets child (OneRecord r)
-      OneToAll -> addTargets child CompleteColumn
-    propagate' rest
+  RootCellChanges coords -> do
+    graph <- lift getDependencies
+    for_ coords $ \(c, r) ->
+      for_ (getChildren c graph) $ \(child, depType) -> case depType of
+        OneToOne -> addTargets child (OneRecord r)
+        OneToAll -> addTargets child CompleteColumn
+    order <- lift $ getColumnOrder $ map fst coords
+    -- Don't need to remove the root columns because they have no targets
+    propagate' order
 
 propagate' :: forall m. MonadPropagate m => ColumnOrder -> m ()
 propagate' [] = pure ()

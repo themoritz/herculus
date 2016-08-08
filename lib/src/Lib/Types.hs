@@ -41,6 +41,9 @@ toObjectId (Id x) = x
 fromObjectId :: ObjectId -> Id a
 fromObjectId = Id
 
+nullObjectId :: Id a
+nullObjectId = Id (Oid 0 0)
+
 instance ToJSON (Id a) where
   -- Ideally use show instance of ObjectId, but Read
   -- instance does not work :/
