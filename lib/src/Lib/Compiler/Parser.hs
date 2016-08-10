@@ -1,5 +1,6 @@
 module Lib.Compiler.Parser
   ( Expr (..)
+  , Name
   , Lit (..)
   , Binop (..)
   , parseExpr
@@ -47,8 +48,8 @@ data Binop = Add | Sub | Mul | Eql
 
 lexer :: P.TokenParser ()
 lexer = P.makeTokenParser emptyDef
-  { P.reservedOpNames = ["+", "-", "*", "/", "=="]
-  , P.reservedNames = ["if", "then", "else", "True", "False"]
+  { P.reservedOpNames = ["+", "-", "*", "/", "==", "="]
+  , P.reservedNames = ["if", "then", "else", "True", "False", "let", "in"]
   , P.identStart = letter
   , P.identLetter = alphaNum <|> oneOf "_"
   }
@@ -95,8 +96,8 @@ app = mkAppChain =<< many1 aExpr
 let' :: Parser Expr
 let' = Let
   <$> (P.reserved lexer "let" *> P.identifier lexer)
+  <*> (P.reservedOp lexer "=" *> expr <* P.lexeme lexer (char ';'))
   <*> expr
-  <*> (char '=' *> expr)
 
 lam :: Parser Expr
 lam = Lam
@@ -109,11 +110,12 @@ var = Var <$> P.identifier lexer
 lit :: Parser Expr
 lit = Lit <$> (stringLit <|> numberLit <|> boolLit)
   where
-    stringLit = LString . pack <$>
+    stringLit = P.lexeme lexer $ LString . pack <$>
                   P.lexeme lexer (char '"' *> many (noneOf "\"") <* char '"')
-    numberLit = do
-      raw <- many $ oneOf "0123456789-+."
-      case readMaybe raw of
+    numberLit = P.lexeme lexer $ do
+      pref <- many $ oneOf "+-"
+      raw <- many $ oneOf "0123456789."
+      case readMaybe (pref <> raw) of
         Nothing -> fail "expected number"
         Just dec -> pure $ LInt dec
     boolLit =
