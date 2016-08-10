@@ -15,6 +15,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     Lib
                      , Lib.Base64
+                     , Lib.Compiler.Parser
                      , Lib.Expression
                      , Lib.NamedMap
                      , Lib.Api.Rest
