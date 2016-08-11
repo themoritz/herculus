@@ -41,7 +41,7 @@ data Lit
   | LString Text
   deriving (Show, Eq, Ord)
 
-data Binop = Add | Sub | Mul | Eql
+data Binop = Add | Sub | Mul
   deriving (Eq, Ord, Show)
 
 --
@@ -63,7 +63,6 @@ expr = buildExpressionParser table terms
     table =
       [ [ binary "*" Mul ]
       , [ binary "+" Add, binary "-" Sub ]
-      , [ binary "==" Eql ]
       ]
     terms =
           try app
