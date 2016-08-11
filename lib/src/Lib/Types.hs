@@ -75,7 +75,7 @@ instance Serialize (Id a) where
 --
 
 newtype Ref a = Ref Text
-  deriving (Show, Generic, Eq, Val)
+  deriving (Show, Generic, Eq, Ord, Val)
 
 instance ToJSON (Ref a)
 instance FromJSON (Ref a)
@@ -83,7 +83,7 @@ instance FromJSON (Ref a)
 --
 
 data DataType
-  = DataBoolean
+  = DataBool
   | DataString
   | DataNumber
   | DataRecord

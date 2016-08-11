@@ -6,29 +6,33 @@ import           Data.Map                   (Map)
 import qualified Data.Map                   as Map
 import           Data.Text                  (Text, pack)
 
+import           Lib.Types hiding (Value)
+import           Lib.Model.Types
 import           Lib.Compiler.Parser
 import           Lib.Compiler.Typechecker
+import           Lib.Compiler.Typechecker.Types
 
-compile :: String -> Either Text (Expr, Type)
-compile inp = do
+compile :: String -> Id Table -> Either Text (Expr Id, Type)
+compile inp tblId = do
   expr <- parseExpr $ pack inp
-  typ <- runInfer expr
-  pure (expr, typ)
+  expr' ::: typ <- runInfer tblId expr
+  pure (expr', typ)
 
 -- Interpreter
 
 data Value
-  = VInt Int
+  = VNumber Number
   | VBool Bool
   | VString Text
-  | VClosure String Expr TermEnv
+  | VClosure String (Expr Id) TermEnv
+  | VList [Value]
   deriving (Show)
 
 type TermEnv = Map String Value
 
 type Interpret a = Identity a
 
-eval :: TermEnv -> Expr -> Interpret Value
+eval :: TermEnv -> (Expr Id) -> Interpret Value
 eval env expr = case expr of
   Lam x body -> do
     pure $ VClosure x body env
@@ -46,17 +50,31 @@ eval env expr = case expr of
     let Just v = Map.lookup x env
     pure v
   Lit l -> case l of
-    LInt v -> pure $ VInt v
+    LNumber v -> pure $ VNumber v
     LBool v -> pure $ VBool v
     LString v -> pure $ VString v
   Binop op l r -> do
-    VInt a <- eval env l
-    VInt b <- eval env r
+    VNumber a <- eval env l
+    VNumber b <- eval env r
     let res = case op of
           Add -> a + b
           Sub -> a - b
           Mul -> a * b
-    pure $ VInt res
+    pure $ VNumber res
+  PrjRecord e name -> do
+    undefined
+    -- e should evaluate to a record
+    -- get column by name
+    -- return value according to cell content
+  ColumnRef colId -> do
+    undefined
+    -- return value according to cell content
+  ColumnOfTableRef _ colId -> do
+    undefined
+    -- return list of values according to cell contents
+  TableRef tblId -> do
+    undefined
+    -- return list of records
 
 runEval :: String -> Either Text Value
 runEval inp = case compile inp of
