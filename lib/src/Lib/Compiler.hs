@@ -1,6 +1,6 @@
 module Lib.Compiler where
 
-import           Control.Monad.Trans.Reader
+import           Control.Monad.Identity
 
 import           Data.Map                   (Map)
 import qualified Data.Map                   as Map
@@ -26,33 +26,32 @@ data Value
 
 type TermEnv = Map String Value
 
-type Interpret a = Reader TermEnv a
+type Interpret a = Identity a
 
-eval :: Expr -> Interpret Value
-eval expr = case expr of
+eval :: TermEnv -> Expr -> Interpret Value
+eval env expr = case expr of
   Lam x body -> do
-    env <- ask
     pure $ VClosure x body env
   App f arg -> do
-    VClosure x body cl <- eval f
-    argVal <- eval arg
-    local (Map.insert x argVal) $ eval body
+    VClosure x body cl <- eval env f
+    argVal <- eval env arg
+    eval (Map.insert x argVal cl) body
   Let x e body -> do
-    eVal <- eval e
-    local (Map.insert x eVal) $ eval body
+    eVal <- eval env e
+    eval (Map.insert x eVal env) body
   If cond e1 e2 -> do
-    VBool bVal <- eval cond
-    if bVal then eval e1 else eval e2
+    VBool bVal <- eval env cond
+    if bVal then eval env e1 else eval env e2
   Var x -> do
-    Just v <- asks (Map.lookup x)
+    let Just v = Map.lookup x env
     pure v
   Lit l -> case l of
     LInt v -> pure $ VInt v
     LBool v -> pure $ VBool v
     LString v -> pure $ VString v
   Binop op l r -> do
-    VInt a <- eval l
-    VInt b <- eval r
+    VInt a <- eval env l
+    VInt b <- eval env r
     let res = case op of
           Add -> a + b
           Sub -> a - b
@@ -62,4 +61,4 @@ eval expr = case expr of
 runEval :: String -> Either Text Value
 runEval inp = case compile inp of
   Left e -> Left e
-  Right (expr, _) -> pure $ runReader (eval expr) Map.empty
+  Right (expr, _) -> pure $ runIdentity (eval Map.empty expr)
