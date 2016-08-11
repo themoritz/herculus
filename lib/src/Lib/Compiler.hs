@@ -8,4 +8,4 @@ import Lib.Compiler.Typechecker
 compile :: String -> Either Text Type
 compile inp = do
   expr <- parseExpr $ pack inp
-  typecheckExpr expr
+  runInfer expr

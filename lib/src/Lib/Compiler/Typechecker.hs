@@ -1,26 +1,25 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
 module Lib.Compiler.Typechecker
-  ( typecheckExpr
+  ( runInfer
   , Scheme (..)
   , Type (..)
   ) where
 
-import Control.Monad.Trans.RWS hiding (get, put)
-import Control.Monad.Trans.State hiding (get, put)
-import Control.Monad.State.Class
-import Control.Monad.Except
+import           Control.Lens              hiding (Context)
+import           Control.Monad.Except
+import           Control.Monad.State.Class
+import           Control.Monad.Trans.State (StateT, evalStateT)
 
-import Debug.Trace
-
-import Data.Text (Text, pack)
-import Data.Map (Map)
-import Data.Set (Set)
-import Data.Monoid
-import qualified Data.Map as Map
-import qualified Data.Set as Set
-import Data.List
-import Lib.Compiler.Parser
+import           Data.List                 (intercalate)
+import           Data.Map                  (Map)
+import qualified Data.Map                  as Map
+import           Data.Monoid
+import           Data.Set                  (Set)
+import qualified Data.Set                  as Set
+import           Data.Text                 (Text, pack)
+import           Lib.Compiler.Parser
 
 --
 
@@ -57,16 +56,20 @@ typeString = TCon "String"
 
 --
 
-newtype TypeEnv = TypeEnv (Map Name Scheme)
+newtype Context = Context (Map Name Scheme)
+  deriving (Show)
 
-emptyTypeEnv :: TypeEnv
-emptyTypeEnv = TypeEnv Map.empty
+emptyContext :: Context
+emptyContext = Context Map.empty
 
-extend :: (Name, Scheme) -> TypeEnv -> TypeEnv
-extend (x, s) (TypeEnv env) = TypeEnv $ Map.insert x s env
+extend :: (Name, Scheme) -> Context -> Context
+extend (x, s) (Context env) = Context $ Map.insert x s env
 
-remove :: Name -> TypeEnv -> TypeEnv
-remove x (TypeEnv env) = TypeEnv $ Map.delete x env
+remove :: Name -> Context -> Context
+remove x (Context env) = Context $ Map.delete x env
+
+getScheme :: Name -> Context -> Maybe Scheme
+getScheme x (Context env) = Map.lookup x env
 
 --
 
@@ -104,13 +107,34 @@ instance (Substitutable a, Substitutable b) => Substitutable (a, b) where
   apply s (a, b) = (apply s a, apply s b)
   ftv (a, b) = ftv a `Set.union` ftv b
 
-instance Substitutable TypeEnv where
-  apply s (TypeEnv env) = TypeEnv $ Map.map (apply s) env
-  ftv (TypeEnv env) = ftv $ Map.elems env
+instance Substitutable Context where
+  apply s (Context env) = Context $ Map.map (apply s) env
+  ftv (Context env) = ftv $ Map.elems env
+
+--
+
+data InferState = InferState
+  { _inferCount   :: Int
+  , _inferContext :: Context
+  }
+
+makeLenses ''InferState
+
+newInferState :: InferState
+newInferState = InferState 0 emptyContext
+
+type TypeError = Text
+
+type Infer a = StateT InferState (Either TypeError) a
+
+runInfer :: Expr -> Either TypeError Type
+runInfer expr = evalStateT (infer expr) newInferState
+
+--
 
 generalize :: Type -> Infer Scheme
 generalize t = do
-  env <- ask
+  env <- use inferContext
   let as = Set.toList $ ftv t `Set.difference` ftv env
   pure $ Forall as t
 
@@ -120,81 +144,60 @@ instantiate (Forall as t) = do
   let subst = Map.fromList $ zip as as'
   pure $ apply subst t
 
---
-
-data InferState = InferState Int
-
-newInferState :: InferState
-newInferState = InferState 0
-
-type TypeError = Text
-
-type Infer a = RWST TypeEnv [Constraint] InferState (Either TypeError) a
-
-runInfer :: Expr -> Either TypeError (Type, [Constraint])
-runInfer expr = do
-  (typ, _, cs) <- runRWST (infer expr)
-                             emptyTypeEnv
-                             newInferState
-  pure (typ, cs)
-
-letters :: [String]
-letters = [1..] >>= flip replicateM ['a'..'z']
-
 fresh :: Infer Type
 fresh = do
-  (InferState c) <- get
-  put $ InferState (c + 1)
-  return $ TVar $ TV (letters !! c)
+    c <- inferCount <+= 1
+    return $ TVar $ TV (letters !! c)
+  where
+    letters :: [String]
+    letters = [1..] >>= flip replicateM ['a'..'z']
 
-uni :: Type -> Type -> Infer ()
-uni t1 t2 = tell [(t1, t2)]
-
-inEnv :: (Name, Scheme) -> Infer a -> Infer a
+inEnv :: (Name, Scheme) -> Infer a -> Infer (a, Scheme)
 inEnv (x, sc) m = do
-  let scope = extend (x, sc) . remove x
-  local scope m
+  inferContext %= extend (x, sc) . remove x
+  res <- m
+  context <- use inferContext
+  let (Just sc') = getScheme x context
+  inferContext %= remove x
+  pure (res, sc')
 
 lookupEnv :: Name -> Infer Type
 lookupEnv x = do
-  TypeEnv env <- ask
-  case Map.lookup x env of
+  env <- use inferContext
+  case getScheme x env of
     Just scheme -> instantiate scheme
-    Nothing -> throwError "type not defined in env (not in scope?)"
+    Nothing -> throwError $ pack $ "not in scope: " <> x
 
 infer :: Expr -> Infer Type
 infer expr = case expr of
   Lam x e -> do
     tv <- fresh
-    t <- inEnv (x, Forall [] tv) (infer e)
-    pure $ TArr tv t
+    (t, Forall [] tv') <- inEnv (x, Forall [] tv) (infer e)
+    pure $ TArr tv' t
   App f arg -> do
     tf <- infer f
-    traceM "App"
-    traceShowM tf
     targ <- infer arg
     tres <- fresh
-    traceShowM (TArr targ tres)
-    uni tf (TArr targ tres)
-    pure tres
+    s <- unify [(tf, (TArr targ tres))]
+    pure (apply s tres)
   Let x e rest -> do
     te <- infer e
-    traceM "Let"
-    traceShowM te
     scheme <- generalize te
-    trest <- inEnv (x, scheme) (infer rest)
+    (trest, _) <- inEnv (x, scheme) (infer rest)
     pure trest
   If cond e1 e2 -> do
     tcond <- infer cond
     te1 <- infer e1
     te2 <- infer e2
-    uni tcond typeBool
-    uni te1 te2
-    pure te2
+    s <- unify
+      [ (tcond, typeBool)
+      , (te1, te2)
+      ]
+    pure $ apply s te2
   Var x -> lookupEnv x
   Lit l -> case l of
-    LInt _ -> pure $ typeInt
-    LBool _ -> pure $ typeBool
+    LInt _    -> pure $ typeInt
+    LBool _   -> pure $ typeBool
     LString _ -> pure $ typeString
   Binop op l r -> do
     tl <- infer l
@@ -202,60 +205,38 @@ infer expr = case expr of
     tres <- fresh
     let is     = tl      `TArr` (tr      `TArr` tres)
         should = typeInt `TArr` (typeInt `TArr` typeInt)
-    uni is should
-    pure tres
+    s <- unify [ (is, should) ]
+    pure $ apply s tres
 
 --
 
-type Constraint = (Type, Type)
+unify :: [(Type, Type)] -> Infer Subst
+unify cs = do
+    s <- unify' cs
+    inferContext %= apply s
+    pure s
+  where
+    unify' :: [(Type, Type)] -> Infer Subst
+    unify' [] = pure nullSubst
+    unify' ((t1, t2):cs) = do
+      s1 <- unifyOne t1 t2
+      s2 <- unify' (apply s1 cs)
+      pure $ s2 `compose` s1
 
-type Unifier = (Subst, [Constraint])
+    unifyOne :: Type -> Type -> Infer Subst
+    unifyOne (TVar a) t = bind a t
+    unifyOne t (TVar a) = bind a t
+    unifyOne (TArr l r) (TArr l' r') = do
+      s1 <- unifyOne l l'
+      s2 <- unifyOne (apply s1 r) (apply s1 r')
+      pure (s2 `compose` s1)
+    unifyOne (TCon a) (TCon b) | a == b = pure nullSubst
+    unifyOne t1 t2 = throwError $ pack $ "type mismatch: " <> show t1 <> ", " <> show t2
 
-emptyUnifier :: Unifier
-emptyUnifier = (nullSubst, [])
+    bind :: TVar -> Type -> Infer Subst
+    bind a t | t == TVar a     = pure nullSubst
+             | occursCheck a t = throwError "occurs check: infinite type"
+             | otherwise       = pure $ Map.singleton a t
 
-type Solve a = StateT Unifier (Either TypeError) a
-
-runSolve :: [Constraint] -> Type -> Either TypeError Type
-runSolve cs typ = do
-  traceM "runSolve"
-  traceShowM cs
-  subst <- evalStateT solver (nullSubst, cs)
-  traceShowM typ
-  traceShowM subst
-  pure $ apply subst typ
-
-occursCheck :: Substitutable a => TVar -> a -> Bool
-occursCheck a t = a `Set.member` ftv t
-
-bind :: TVar -> Type -> Solve Unifier
-bind a t | t == TVar a     = pure emptyUnifier
-         | occursCheck a t = throwError "occurs check: infinite type"
-         | otherwise       = pure (Map.singleton a t, [])
-
-unify :: Type -> Type -> Solve Unifier
-unify (TVar a) t = bind a t
-unify t (TVar a) = bind a t
-unify (TArr l r) (TArr l' r') = do
-  (s1, c1) <- unify l l'
-  (s2, c2) <- unify (apply s1 r) (apply s1 r')
-  pure (s2 `compose` s1, c1 <> c2)
-unify (TCon a) (TCon b) | a == b = pure emptyUnifier
-unify t1 t2 = throwError $ pack $ "type mismatch: " <> show t1 <> " and " <> show t2
-
-solver :: Solve Subst
-solver = do
-  (s, cs) <- get
-  case cs of
-    [] -> pure s
-    ((t1, t2): cs0) -> do
-      (s1, c1) <- unify t1 t2
-      put (s1 `compose` s, c1 <> apply s1 cs0)
-      solver
-
---
-
-typecheckExpr :: Expr -> Either TypeError Type
-typecheckExpr expr = do
-  (typ, cs) <- runInfer expr
-  runSolve cs typ
+    occursCheck :: Substitutable a => TVar -> a -> Bool
+    occursCheck a t = a `Set.member` ftv t
