@@ -140,7 +140,7 @@ table :: MonadWidget t m
       -> m ()
 table loadTable updateCells updateColumns = el "div" $ divClass "canvas" $ mdo
 
-  tableIdArg <- hold (Left "") (Right <$> loadTable)
+  tableIdArg <- holdDyn (Left "") (Right <$> loadTable)
 
   columnsRes <- loader (Api.columnList api tableIdArg) $
                        () <$ loadTable
@@ -171,59 +171,58 @@ table loadTable updateCells updateColumns = el "div" $ divClass "canvas" $ mdo
       cellHeight = 60
       recWidth = 50
 
-  columns <- mapDyn toColumns state
-  records <- mapDyn toRecords state
-  cells <- mapDyn toCellGrid state
+  let columns = toColumns <$> state
+      records = toRecords <$> state
+      cells = toCellGrid <$> state
 
   -- Columns
   colEvents <- listWithKey columns $ \colId colInfo -> do
-    posD <- mapDyn (\(i, _, _) -> i) colInfo
-    rect <- forDyn posD $ \i ->
-      Rectangle (i * cellWidth + recWidth) 0 cellWidth colHeight
-    columnD <- mapDyn (\(_, c, _) -> c) colInfo
-    tableD <- mapDyn (\(_, _, t) -> t) colInfo
+    let rect = ffor colInfo $ \(i, _, _) ->
+          Rectangle (i * cellWidth + recWidth) 0 cellWidth colHeight
+        columnD = (\(_, c, _) -> c) <$> colInfo
+        tableD = (\(_, _, t) -> t) <$> colInfo
     mTblId <- sample $ current tableD
     rectangleDyn rect $ case mTblId of
       Nothing -> pure (never, never)
       Just tblId -> column tblId colId columnD
-  colChanged <- dynMapEventsWith fst colEvents
-  deleteColumn <- dynMapEventsWith snd colEvents
-  delColArg <- hold (Left "") (Right . fst <$> deleteColumn)
+  let colChanged = dynMapEventsWith fst colEvents
+      deleteColumn = dynMapEventsWith snd colEvents
+  delColArg <- holdDyn (Left "") (Right . fst <$> deleteColumn)
   loader' (Api.columnDelete api delColArg) (() <$ deleteColumn)
 
-  addColRect <- forDyn columns $ \cols ->
-    Rectangle ((Map.size cols) * cellWidth + recWidth) 0 cellWidth colHeight
+  let addColRect = ffor columns $ \cols ->
+        Rectangle ((Map.size cols) * cellWidth + recWidth) 0 cellWidth colHeight
   addCol <- rectangleDyn addColRect $ button "+"
 
   -- Records
-  deleteRecord <- (>>= dynMapEvents) $ listWithKey records $ \recId recInfo -> do
-    rect <- forDyn recInfo $ \(i, _) ->
-      Rectangle 0 (i * cellHeight + colHeight) recWidth cellHeight
+  deleteRecord <- fmap dynMapEvents <$> listWithKey records $ \recId recInfo -> do
+    let rect = ffor recInfo $ \(i, _) ->
+          Rectangle 0 (i * cellHeight + colHeight) recWidth cellHeight
     rectangleDyn rect $ record recId
-  delRecArg <- hold (Left "") (Right . fst <$> deleteRecord)
+  delRecArg <- holdDyn (Left "") (Right . fst <$> deleteRecord)
   loader' (Api.recordDelete api delRecArg) (() <$ deleteRecord)
 
-  addRecRect <- forDyn records $ \recs ->
-    Rectangle 0 ((Map.size recs) * cellHeight + colHeight) recWidth cellHeight
+  let addRecRect = ffor records $ \recs ->
+        Rectangle 0 ((Map.size recs) * cellHeight + colHeight) recWidth cellHeight
   addRec <- rectangleDyn addRecRect $ button "+"
 
   -- Cells
-  cellChanged <- (>>= dynMapEvents) $ listWithKeyEq cells $ \(Coords colId recId) cellInfo -> do
-    rect <- forDyn cellInfo $ \ci ->
-      let (Position x y) = ciPos ci
-      in Rectangle (x * cellWidth + recWidth)
-                   (y * cellHeight + colHeight)
-                   cellWidth
-                   cellHeight
-    colD <- mapDyn ciCol cellInfo
-    content <- mapDyn ciContent cellInfo
+  cellChanged <- (fmap dynMapEvents) <$> listWithKeyEq cells $ \(Coords colId recId) cellInfo -> do
+    let rect = ffor cellInfo $ \ci ->
+          let (Position x y) = ciPos ci
+          in Rectangle (x * cellWidth + recWidth)
+                       (y * cellHeight + colHeight)
+                       cellWidth
+                       cellHeight
+        colD = ciCol <$> cellInfo
+        content = ciContent <$> cellInfo
     rectangleDyn rect $
       switchEvent $ dynWidget colD $ \col ->
         cell colId recId (CellConfig content col)
 
-  colArg <- hold (Left "") $ (\(Coords c _, _) -> Right c) <$> cellChanged
-  recArg <- hold (Left "") $ (\(Coords _ r, _) -> Right r) <$> cellChanged
-  valArg <- hold (Left "") $ (\(Coords _ _, v) -> Right v) <$> cellChanged
+  colArg <- holdDyn (Left "") $ (\(Coords c _, _) -> Right c) <$> cellChanged
+  recArg <- holdDyn (Left "") $ (\(Coords _ r, _) -> Right r) <$> cellChanged
+  valArg <- holdDyn (Left "") $ (\(Coords _ _, v) -> Right v) <$> cellChanged
   loader' (Api.cellSet api colArg recArg valArg) (() <$ cellChanged)
 
   addColResult <- loader (Api.columnCreate api tableIdArg) addCol

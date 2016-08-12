@@ -21,8 +21,10 @@ executable client
                      , Widgets.Canvas
                      , Widgets.Column
                      , Api.Rest
-  other-extensions:    TemplateHaskell
+  default-extensions:  TypeFamilies
+                     , FlexibleContexts
                      , OverloadedStrings
+  other-extensions:    TemplateHaskell
   build-depends:       base
                      , aeson
                      , bytestring

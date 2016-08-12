@@ -21,7 +21,7 @@ import Lib.Model.Column
 import Lib.Model.Cell
 import Lib.Api.Rest
 
-type Arg t a = Behavior t (Either String a)
+type Arg t a = Dynamic t (Either Text a)
 type Res t m a = Event t () -> m (Event t (ReqResult a))
 
 data RestApi t m = MonadWidget t m => RestApi
@@ -79,9 +79,9 @@ loader call trigger = el "div" $ do
     [ False <$ result
     , True <$ trigger'
     ]
-  spinAttrs <- flip mapDyn spin $ \v ->
-    "class" =: "spinner"
-    <> "style" =: (if v then "display:inherit" else "display:none")
+  let spinAttrs = ffor spin $ \v ->
+        "class" =: "spinner" <>
+        "style" =: (if v then "display:inherit" else "display:none")
   elDynAttr "div" spinAttrs $ pure ()
   let success = fmapMaybe reqSuccess result
   dynText =<< holdDyn "" (leftmost

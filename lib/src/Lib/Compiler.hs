@@ -12,11 +12,14 @@ import           Lib.Compiler.Parser
 import           Lib.Compiler.Typechecker
 import           Lib.Compiler.Typechecker.Types
 
-compile :: String -> Id Table -> Either Text (Expr Id, Type)
+compile :: MonadTypecheck m => String -> Id Table
+        -> m (Either Text TypedExpr)
 compile inp tblId = do
-  expr <- parseExpr $ pack inp
-  expr' ::: typ <- runInfer tblId expr
-  pure (expr', typ)
+  case parseExpr $ pack inp of
+    Left e -> pure $ Left e
+    Right expr -> do
+      expr' <- runInfer tblId expr
+      pure expr'
 
 -- Interpreter
 
@@ -76,7 +79,7 @@ eval env expr = case expr of
     undefined
     -- return list of records
 
-runEval :: String -> Either Text Value
-runEval inp = case compile inp of
-  Left e -> Left e
-  Right (expr, _) -> pure $ runIdentity (eval Map.empty expr)
+-- runEval :: String -> Either Text Value
+-- runEval inp = case compile inp of
+--   Left e -> Left e
+--   Right (expr, _) -> pure $ runIdentity (eval Map.empty expr)

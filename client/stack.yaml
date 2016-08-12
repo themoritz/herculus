@@ -15,17 +15,15 @@ packages:
 
 - location:
     git: https://github.com/reflex-frp/reflex.git
-    commit: 5b5a1c8d540ea9058988d4c564e2823aa099b840
+    commit: a06d50dedf9a705f9327bbe0a15c8131ad80b2f9
   extra-dep: true
 
 - location:
     git: https://github.com/reflex-frp/reflex-dom.git
-    commit: e8b7d31fd2b6a8173e51096b7591ec346e33ad85
+    commit: a2b76b1892549f1b6834b3d81bd9bec963aa2a6f
   extra-dep: true
 
-- location:
-    git: git@github.com:imalsogreg/servant-reflex.git
-    commit: master
+- location: ../../servant-reflex
   extra-dep: true
 
 - location: ../lib
@@ -34,3 +32,4 @@ packages:
 extra-deps:
 - ghcjs-dom-0.2.3.1
 - ref-tf-0.4
+- zenc-0.1.1

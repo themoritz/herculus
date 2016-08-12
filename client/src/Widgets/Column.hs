@@ -10,7 +10,7 @@ module Widgets.Column
 
 import Control.Monad (void)
 
-import Data.Text (unpack)
+import Data.Text (Text)
 import Data.Monoid
 
 import Reflex.Dom
@@ -27,15 +27,15 @@ import Lib.Model.Column
 
 import Misc
 
-inputTypeEntries :: Map InputType String
+inputTypeEntries :: Map InputType Text
 inputTypeEntries = Map.fromList
   [ (ColumnInput, "Input")
   , (ColumnDerived, "Derived")
   ]
 
-dataTypeEntries :: Map DataType String
+dataTypeEntries :: Map DataType Text
 dataTypeEntries = Map.fromList
- [ (DataBoolean, "Bool")
+ [ (DataBool, "Bool")
  , (DataString, "String")
  , (DataNumber, "Number")
  , (DataRecord, "Record")
@@ -49,14 +49,14 @@ column tableId columnId dynColumn = el "div" $ do
   initial <- sample $ current dynColumn
   let set = updated dynColumn
 
-  let columnIdArg = constant $ Right columnId
+  let columnIdArg = constDyn $ Right columnId
 
-  name <- textInputT def
-            { _textInputConfig_setValue = unpack . columnName <$> set
-            , _textInputConfig_initialValue = unpack . columnName $ initial
+  name <- _textInput_value <$> textInput def
+            { _textInputConfig_setValue = columnName <$> set
+            , _textInputConfig_initialValue = columnName $ initial
             }
   nameSet <- button "Set"
-  loader' (Api.columnSetName api columnIdArg (Right <$> current name)) nameSet
+  loader' (Api.columnSetName api columnIdArg (Right <$> name)) nameSet
 
   dt <- dropdown (columnDataType initial)
                  (constDyn dataTypeEntries)
@@ -66,7 +66,7 @@ column tableId columnId dynColumn = el "div" $ do
                    }
   setDt <- button "Set"
   let dataType = _dropdown_value dt
-  loader' (Api.columnSetDataType api columnIdArg (Right <$> current dataType))
+  loader' (Api.columnSetDataType api columnIdArg (Right <$> dataType))
           setDt
 
   it <- dropdown (columnInputType initial)
@@ -78,13 +78,13 @@ column tableId columnId dynColumn = el "div" $ do
   let inputType = _dropdown_value it
   trigger <- button "Set"
 
-  sourceAttr <- forDyn dynColumn $ \col -> case columnInputType col of
-    ColumnInput   -> "style" =: "display: none"
-    ColumnDerived -> "style" =: "display: inherit"
+  let sourceAttr = ffor dynColumn $ \col -> case columnInputType col of
+        ColumnInput   -> "style" =: "display: none"
+        ColumnDerived -> "style" =: "display: inherit"
 
   rec let inputArg = do
-            inputType' <- current inputType
-            source' <- current source
+            inputType' <- inputType
+            source' <- source
             pure $ Right (inputType', source')
 
       loader' (Api.columnSetInput api columnIdArg inputArg) sourceSet
@@ -92,16 +92,16 @@ column tableId columnId dynColumn = el "div" $ do
       compiledD <- holdDyn (columnCompileResult initial) $ columnCompileResult <$> set
 
       (source, sourceSet) <- elDynAttr "div" sourceAttr $ do
-        val <- textInputT (def :: TextInputConfig t)
-                 { _textInputConfig_setValue = unpack . columnSourceCode <$> set
-                 , _textInputConfig_initialValue = unpack . columnSourceCode $ initial
+        val <- _textInput_value <$> textInput (def :: TextInputConfig t)
+                 { _textInputConfig_setValue = columnSourceCode <$> set
+                 , _textInputConfig_initialValue = columnSourceCode $ initial
                  , _textInputConfig_attributes = constDyn ("style" =: "width: 160px")
                  }
 
         void $ dynWidget compiledD $ \case
           CompileResultCode _        -> text "Ok"
           CompileResultNone      -> pure ()
-          CompileResultError msg -> text $ "Error: " <> unpack msg
+          CompileResultError msg -> text $ "Error: " <> msg
 
         pure (val, trigger)
 

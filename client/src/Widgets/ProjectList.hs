@@ -5,7 +5,7 @@ module Widgets.ProjectList
   , projectList
   ) where
 
-import Data.Text (Text, pack, unpack)
+import Data.Text (Text)
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -14,6 +14,8 @@ import Reflex.Dom
 import Lib.Types
 import Lib.Model
 import Lib.Model.Types
+
+import Misc
 
 import Api.Rest (loader, api)
 import qualified Api.Rest as Api
@@ -38,10 +40,10 @@ projectList :: MonadWidget t m
 projectList newProject = divClass "container" $ do
   el "h5" $ text "Projects"
   createdProject <- divClass "row" $ do
-    name <- (fmap pack . current . _textInput_value) <$> textInput def
+    name <- _textInput_value <$> textInput def
     create <- button "Create"
     newProj <- loader (Api.projectCreate api (Right . Project <$> name)) create
-    pure $ attachWith (\n i -> Entity i (Project n)) name newProj
+    pure $ attachPromptlyDynWith (\n i -> Entity i (Project n)) name newProj
   listProjects <- getPostBuild
   listResult <- loader (Api.projectList api) listProjects
   projects <- foldDyn update Map.empty $ leftmost
@@ -53,6 +55,6 @@ projectList newProject = divClass "container" $ do
     el "ul" $ list projects $ \name ->
       el "li" $ do
         (proj, _) <- elAttr' "a" ("href" =: "#") $
-          dynText =<< mapDyn unpack name
+          dynText name
         pure $ domEvent Click proj
-  ProjectList . switchPromptlyDyn <$> mapDyn (leftmost . map (\(k, e) -> k <$ e) . Map.toList) projectSelect
+  pure $ ProjectList $ fst <$> dynMapEvents projectSelect

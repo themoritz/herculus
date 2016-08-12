@@ -6,7 +6,7 @@ module Widgets.TableList
   , tableList
   ) where
 
-import Data.Text (Text, pack, unpack)
+import Data.Text (Text)
 import Data.Map (Map)
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.Map as Map
@@ -16,6 +16,8 @@ import Reflex.Dom
 import Lib.Types
 import Lib.Model
 import Lib.Model.Types
+
+import Misc
 
 import Api.Rest (loader, api)
 import qualified Api.Rest as Api
@@ -51,18 +53,18 @@ tableList :: MonadWidget t m
 tableList newTable loadProject = divClass "container" $ mdo
   el "h5" $ text "Tables"
   createTable <- divClass "row" $ do
-    name <- (fmap pack . current . _textInput_value) <$> textInput def
+    name <- _textInput_value <$> textInput def
     create <- button "Create"
     let tableArg = do
-          (State _ mProjId) <- current state
+          (State _ mProjId) <- state
           case mProjId of
             Just projId -> Right <$> (Table <$> pure projId <*> name)
             Nothing     -> pure $ Left ""
     newTbl <- loader (Api.tableCreate api tableArg) create
-    pure $ fmapMaybe id $ attachWith (\crTbl i -> case crTbl of
+    pure $ fmapMaybe id $ attachPromptlyDynWith (\crTbl i -> case crTbl of
                Left _ -> Nothing
                Right (Table pri n) -> Just (Entity i (Table pri n))) tableArg newTbl
-  projectArg <- hold (Left "") (Right <$> loadProject)
+  projectArg <- holdDyn (Left "") (Right <$> loadProject)
   listResult <- loader (Api.tableList api projectArg) (() <$ loadProject)
   state <- foldDyn update (State Map.empty Nothing) $ mergeList
     [ New <$> newTable
@@ -70,11 +72,10 @@ tableList newTable loadProject = divClass "container" $ mdo
     , SetProject <$> loadProject
     , Set <$> listResult
     ]
-  tbls <- mapDyn tables state
   tableSelect <- divClass "row" $
-    el "ul" $ list tbls $ \name ->
+    el "ul" $ list (tables <$> state) $ \name ->
       el "li" $ do
         (tbl, _) <- elAttr' "a" ("href" =: "#") $
-          dynText =<< mapDyn unpack name
+          dynText name
         pure $ domEvent Click tbl
-  TableList . switchPromptlyDyn <$> mapDyn (leftmost . map (\(k, e) -> k <$ e) . Map.toList) tableSelect
+  pure $ TableList $ fst <$> dynMapEvents tableSelect

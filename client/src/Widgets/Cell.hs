@@ -9,7 +9,7 @@ module Widgets.Cell
 
 import Control.Monad
 
-import Data.Text (Text, unpack)
+import Data.Text (Text, pack)
 import Data.Monoid
 import Data.Maybe
 
@@ -53,7 +53,7 @@ cell colId recId (CellConfig content column) = el "div" $
         CellNothing ->
           text "Nothing"
         CellEvalError msg ->
-          text $ "Error: " <> unpack msg
+          text $ "Error: " <> msg
         CellValue val -> case columnDataType column of
             DataString ->
               cellResult $ fromMaybe "" (extractValue val :: Maybe Text)
@@ -70,28 +70,27 @@ class CellResult a where
 
 instance CellInput Text where
   cellInput val = do
-    new <- textInputT def
-             { _textInputConfig_initialValue = unpack val
+    new <- _textInput_value <$> textInput def
+             { _textInputConfig_initialValue = val
              }
     set <- button "Set"
-    pure $ tagDyn new set
+    pure $ tagPromptlyDyn new set
 
 instance CellResult Text where
-  cellResult = text . unpack
+  cellResult = text
 
 instance CellInput Number where
   cellInput :: forall t m. MonadWidget t m => Number -> m (Event t Number)
   cellInput val = mdo
-    txt <- textInputT (def :: TextInputConfig t)
-             { _textInputConfig_initialValue = show val
+    mNew <- (fmap parseValue . _textInput_value) <$> textInput (def :: TextInputConfig t)
+             { _textInputConfig_initialValue = pack $ show val
              , _textInputConfig_attributes = attrs
              }
-    mNew <- mapDyn parseValue txt
-    attrs <- forDyn mNew $ \case
-      Nothing -> "style" =: "border-color: red"
-      Just _  -> "style" =: "border-color: auto"
+    let attrs = ffor mNew $ \case
+          Nothing -> "style" =: "border-color: red"
+          Just _  -> "style" =: "border-color: auto"
     set <- button "Set"
-    pure $ fmapMaybe id $ tagDyn mNew set
+    pure $ fmapMaybe id $ tagPromptlyDyn mNew set
 
 instance CellResult Number where
-  cellResult = text . show
+  cellResult = text . pack . show

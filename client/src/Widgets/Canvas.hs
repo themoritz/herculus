@@ -3,6 +3,8 @@ module Widgets.Canvas
 
 import Reflex.Dom
 import qualified Data.Map as Map
+import Data.Text (pack)
+import Data.Monoid
 
 data Rectangle = Rectangle
   { rectLeft :: Int
@@ -13,15 +15,15 @@ data Rectangle = Rectangle
 
 rectangleDyn :: MonadWidget t m => Dynamic t Rectangle -> m a -> m a
 rectangleDyn dynRect child = do
-  attrs <- forDyn dynRect $ \(Rectangle left top width height) ->
-    Map.fromList
-      [ ("style", "left: " ++ show left ++
-                   "px; top: " ++ show top ++
-                   "px; width: " ++ show width ++
-                   "px; height: " ++ show height ++
-                   "px")
-      , ("class", "element")
-      ]
+  let attrs = ffor dynRect $ \(Rectangle left top width height) ->
+        Map.fromList
+          [ ("style", "left: " <> (pack . show) left <>
+                       "px; top: " <> (pack . show) top <>
+                       "px; width: " <> (pack . show) width <>
+                       "px; height: " <> (pack . show) height <>
+                       "px")
+          , ("class", "element")
+          ]
   elDynAttr "div" attrs child
 
 rectangle :: MonadWidget t m => Rectangle -> m a -> m a
