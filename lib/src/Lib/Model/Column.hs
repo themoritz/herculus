@@ -1,11 +1,10 @@
 {-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE ExistentialQuantification  #-}
-{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE FlexibleInstances          #-}
 
 module Lib.Model.Column where
 
@@ -27,6 +26,19 @@ import           Lib.Model.Class
 import           Lib.Model.Dependencies.Types
 import           Lib.Model.Types
 import           Lib.Types
+
+data DataType
+  = DataBool
+  | DataString
+  | DataNumber
+  | DataRecord
+  deriving (Eq, Ord, Show, Read, Generic)
+
+instance ToJSON DataType
+instance FromJSON DataType
+
+instance ToBSON DataType
+instance FromBSON DataType
 
 data Column = Column
   { columnTableId       :: Id Table
@@ -68,65 +80,20 @@ instance FromDocument Column where
       Left msg -> Left $ pack msg
 
 data CompileResult
-  = CompileResultCode ATExpr
+  = CompileResultCode (Expr Id)
   | CompileResultNone
   | CompileResultError Text
-  deriving (Show)
+  deriving (Eq, Show, Generic)
 
-instance ToJSON CompileResult where
-  toJSON (CompileResultCode atexpr) = object
-    [ "tag" .= ("CompileResultCode" :: String)
-    , "content" .= BS.unpack (Base64.encode $ encode atexpr)
-    ]
-  toJSON CompileResultNone = object
-    [ "tag" .= ("CompileResultNone" :: String)
-    ]
-  toJSON (CompileResultError e) = object
-    [ "tag" .= ("CompileResultError" :: String)
-    , "content" .= e
-    ]
+instance ToJSON CompileResult
+instance FromJSON CompileResult
 
-instance FromJSON CompileResult where
-  parseJSON (Object v) = do
-    (tag :: String) <- v .: "tag"
-    case tag of
-      "CompileResultCode" -> do
-        text <- v .: "content"
-        case Base64.decode (BS.pack text) >>= decode of
-          Left msg -> fail $ "could not decode atexpr" <> msg
-          Right atexpr -> pure $ CompileResultCode atexpr
-      "CompileResultNone" -> pure $ CompileResultNone
-      "CompileResultError" -> CompileResultError <$> v .: "content"
-      _ -> fail "unknown tag"
-
-instance Eq CompileResult where
-  CompileResultCode a == CompileResultCode b = encode a == encode b
-  CompileResultNone == CompileResultNone = True
-  CompileResultError a == CompileResultError b = a == b
-  _ == _ = False
+instance ToBSON CompileResult
+instance FromBSON CompileResult
 
 instance Val CompileResult where
-  val (CompileResultCode atexpr) = Bson.Doc
-    [ "tag" =: ("CompileResultCode" :: Text)
-    , "content" =: Bson.Bin (Bson.Binary $ encode atexpr)
-    ]
-  val CompileResultNone = Bson.Doc
-    [ "tag" =: ("CompileResultNone" :: Text) ]
-  val (CompileResultError msg) = Bson.Doc
-    [ "tag" =: ("CompileResultError" :: Text)
-    , "content" =: msg
-    ]
-  cast' (Bson.Doc doc) = do
-    (tag :: String) <- Bson.lookup "tag" doc
-    case tag of
-      "CompileResultCode" -> do
-        (Bson.Bin (Bson.Binary bs)) <- Bson.lookup "content" doc
-        case decode bs of
-          Left msg -> fail $ "could not decode atexpr" <> msg
-          Right atexpr -> pure $ CompileResultCode atexpr
-      "CompileResultError" -> CompileResultError <$> Bson.lookup "content" doc
-      "CompileResultNone" -> pure $ CompileResultNone
-      _ -> fail "unknown tag"
+  val = toValue
+  cast' = decodeValue
 
 data InputType
   = ColumnInput
@@ -145,82 +112,61 @@ instance Val InputType where
 
 --
 
-data TExpr a where
-  TExprLitString :: Text -> TExpr Text
-  TExprLitNumber :: Number -> TExpr Number
+type Name = String
 
-  TExprColumnRefString :: Id Column -> TExpr Text
-  TExprColumnRefNumber :: Id Column -> TExpr Number
+data Expr v
+  = Lam Name (Expr v)
+  | App (Expr v) (Expr v)
+  | Let Name (Expr v) (Expr v)
+  -- | Fix Expr
+  | If (Expr v) (Expr v) (Expr v)
+  | Var Name
+  | Lit Lit
+  | Binop Binop (Expr v) (Expr v)
+  | PrjRecord (Expr v) (Ref Column)
+  --
+  | ColumnRef (v Column)
+  | ColumnOfTableRef (v Table) (v Column)
+  | TableRef (v Table)
+  deriving (Generic)
 
-  TExprColumnRefStrings :: Id Column -> TExpr [Text]
-  TExprColumnRefNumbers :: Id Column -> TExpr [Number]
+deriving instance Eq (Expr Ref)
+deriving instance Eq (Expr Id)
 
-  TExprStringAppend :: TExpr Text -> TExpr Text -> TExpr Text
-  TExprNumberAdd :: TExpr Number -> TExpr Number -> TExpr Number
+deriving instance Show (Expr Ref)
+deriving instance Show (Expr Id)
 
-  TExprSum :: TExpr [Number] -> TExpr Number
+instance ToJSON (Expr Id)
+instance FromJSON (Expr Id)
 
-deriving instance Show (TExpr a)
+data Lit
+  = LNumber Number
+  | LBool Bool
+  | LString Text
+  deriving (Show, Eq, Ord, Generic)
 
-data ATExpr = forall a. MakeValue a => TExpr a ::: TType a
+instance ToJSON Lit
+instance FromJSON Lit
 
-deriving instance Show ATExpr
+data Binop = Add | Sub | Mul
+  deriving (Eq, Ord, Show, Generic)
 
-instance Serialize ATExpr where
-  put (texpr ::: _) = put' texpr
-    where
-      put' :: Putter (TExpr a)
-      put' e' = case e' of
-        TExprLitString t        -> putWord8 0 *> put (Utf8Text t)
-        TExprLitNumber n        -> putWord8 1 *> put n
-        TExprColumnRefString c  -> putWord8 2 *> put c
-        TExprColumnRefNumber c  -> putWord8 3 *> put c
-        TExprColumnRefStrings c -> putWord8 4 *> put c
-        TExprColumnRefNumbers c -> putWord8 5 *> put c
-        TExprStringAppend l r   -> putWord8 6 *> put' l *> put' r
-        TExprNumberAdd l r      -> putWord8 7 *> put' l *> put' r
-        TExprSum s              -> putWord8 8 *> put' s
+instance ToJSON Binop
+instance FromJSON Binop
 
-  get = getWord8 >>= \case
-    0 -> do
-      t <- get
-      pure $ TExprLitString (unUtf8Text t) ::: TypeString
-    1 -> do
-      n <- get
-      pure $ TExprLitNumber n ::: TypeNumber
-    2 -> do
-      c <- get
-      pure $ TExprColumnRefString c ::: TypeString
-    3 -> do
-      c <- get
-      pure $ TExprColumnRefNumber c ::: TypeNumber
-    4 -> do
-      c <- get
-      pure $ TExprColumnRefStrings c ::: TypeStringList
-    5 -> do
-      c <- get
-      pure $ TExprColumnRefNumbers c ::: TypeNumberList
-    6 -> do
-      (l ::: TypeString) <- get; (r ::: TypeString) <- get
-      pure $ TExprStringAppend l r ::: TypeString
-    7 -> do
-      (l ::: TypeNumber) <- get; (r ::: TypeNumber) <- get
-      pure $ TExprNumberAdd l r ::: TypeNumber
-    8 -> do
-      (s ::: TypeNumberList) <- get
-      pure $ TExprSum s ::: TypeNumber
+--
 
-collectDependencies :: ATExpr -> [(Id Column, DependencyType)]
-collectDependencies (texpr ::: _) = collectDependencies' texpr
-  where
-    collectDependencies' :: TExpr a -> [(Id Column, DependencyType)]
-    collectDependencies' expr = case expr of
-      TExprLitString _ -> []
-      TExprLitNumber _ -> []
-      TExprColumnRefString c -> [(c, OneToOne)]
-      TExprColumnRefNumber c -> [(c, OneToOne)]
-      TExprColumnRefStrings c -> [(c, OneToAll)]
-      TExprColumnRefNumbers c -> [(c, OneToAll)]
-      TExprStringAppend l r -> collectDependencies' l <> collectDependencies' r
-      TExprNumberAdd l r -> collectDependencies' l <> collectDependencies' r
-      TExprSum sub -> collectDependencies' sub
+collectDependencies :: Expr Id -> [(Id Column, DependencyType)]
+collectDependencies expr = go expr
+  where go e = case e of
+          Lam _ body           -> go body
+          App f e              -> go f <> go e
+          Let _ e body         -> go e <> go body
+          If c t e             -> go c <> go t <> go e
+          Var _                -> []
+          Lit _                -> []
+          Binop _ l r          -> go l <> go r
+          PrjRecord e _        -> go e
+          ColumnRef c          -> [(c, OneToOne)]
+          ColumnOfTableRef _ c -> [(c, OneToAll)]
+          TableRef t           -> undefined

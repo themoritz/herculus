@@ -82,90 +82,6 @@ instance FromJSON (Ref a)
 
 --
 
-data DataType
-  = DataBool
-  | DataString
-  | DataNumber
-  | DataRecord
-  deriving (Eq, Ord, Show, Read, Generic)
-
-instance ToJSON DataType
-instance FromJSON DataType
-
-instance ToBSON DataType
-instance FromBSON DataType
-
-data TType a where
-  TypeString :: TType Text
-  TypeNumber :: TType Number
-  TypeStringList :: TType [Text]
-  TypeNumberList :: TType [Number]
-
-deriving instance Show (TType a)
-
-data Equal a b where
-    Eq :: Equal a a
-
-checkEqual :: TType a -> TType b -> Maybe (Equal a b)
-checkEqual TypeNumber    TypeNumber    = Just Eq
-checkEqual TypeString    TypeString    = Just Eq
-checkEqual _             _             = Nothing
-
-data SigOk a where
-  Ok :: SigOk a
-
-checkSig :: DataType -> TType a -> Maybe (SigOk a)
-checkSig DataString TypeString = Just Ok
-checkSig DataNumber TypeNumber = Just Ok
-checkSig _          _          = Nothing
-
---
-
-data Value
-  = ValueString Text
-  | ValueNumber Number
-  deriving (Generic, Typeable, Show, Eq)
-
-instance ToJSON Value
-instance FromJSON Value
-
-class ParseValue a where
-  parseValue :: Text -> Maybe a
-
-instance ParseValue Text where
-  parseValue s = Just s
-
-instance ParseValue Number where
-  parseValue s = Number <$> (readMaybe $ unpack s)
-
-class ExtractValue a where
-  extractValue :: Value -> Maybe a
-
-instance ExtractValue Text where
-  extractValue (ValueString s) = Just s
-  extractValue _ = Nothing
-
-instance ExtractValue Number where
-  extractValue (ValueNumber n) = Just n
-  extractValue _ = Nothing
-
-class MakeValue a where
-  makeValue :: a -> Maybe Value
-
-instance MakeValue Text where
-  makeValue = Just . ValueString
-
-instance MakeValue Number where
-  makeValue = Just . ValueNumber
-
-instance MakeValue [a] where
-  makeValue = const Nothing
-
-extractValue' :: ExtractValue a => Value -> a
-extractValue' = fromMaybe (error "expexted certain value") . extractValue
-
---
-
 newtype Number = Number Decimal
   deriving (Num, Eq, Ord)
 
@@ -183,16 +99,8 @@ instance FromJSON Number where
       Just x' -> pure $ Number x'
 
 instance Serialize Number where
-  put (Number x) = put (BinaryDecimal x)
-  get = Number . unBinaryDecimal <$> get
-
---
-
-newtype BinaryDecimal = BinaryDecimal { unBinaryDecimal :: Decimal }
-
-instance Serialize BinaryDecimal where
-  put (BinaryDecimal (Decimal places mantissa)) = put places >> put mantissa
-  get = BinaryDecimal <$> (Decimal <$> get <*> get)
+  put (Number (Decimal places mantissa)) = put places >> put mantissa
+  get = Number <$> (Decimal <$> get <*> get)
 
 --
 

@@ -18,7 +18,6 @@ library
                      , Lib.Compiler
                      , Lib.Compiler.Parser
                      , Lib.Compiler.Typechecker
-                     , Lib.Expression
                      , Lib.NamedMap
                      , Lib.Api.Rest
                      , Lib.Api.WebSocket

@@ -17,49 +17,15 @@ import           Data.Text              (Text, pack, unpack)
 
 import           Text.Read              (readMaybe)
 
-import           Text.Parsec hiding (Column)
+import           Text.Parsec            hiding (Column)
 import           Text.Parsec.Expr
 import           Text.Parsec.Language   (emptyDef)
 import           Text.Parsec.String     (Parser)
 import qualified Text.Parsec.Token      as P
 
-import           Lib.Model.Types
 import           Lib.Model.Column
+import           Lib.Model.Types
 import           Lib.Types
-
---
-
-type Name = String
-
-data Expr v
-  = Lam Name (Expr v)
-  | App (Expr v) (Expr v)
-  | Let Name (Expr v) (Expr v)
-  -- | Fix Expr
-  | If (Expr v) (Expr v) (Expr v)
-  | Var Name
-  | Lit Lit
-  | Binop Binop (Expr v) (Expr v)
-  | PrjRecord (Expr v) Name
-  --
-  | ColumnRef (v Column)
-  | ColumnOfTableRef (v Table) (v Column)
-  | TableRef (v Table)
-
-deriving instance Eq (Expr Ref)
-deriving instance Eq (Expr Id)
-
-deriving instance Show (Expr Ref)
-deriving instance Show (Expr Id)
-
-data Lit
-  = LNumber Number
-  | LBool Bool
-  | LString Text
-  deriving (Show, Eq, Ord)
-
-data Binop = Add | Sub | Mul
-  deriving (Eq, Ord, Show)
 
 --
 
@@ -86,13 +52,13 @@ expr = buildExpressionParser table terms
       <|> try let'
       <|> try lam
       <|> try ifThenElse
+      <|> try prjRecord
       <|> try aExpr
       <?> "expression"
 
 aExpr :: Parser (Expr Ref)
 aExpr =
       try var
-  <|> try prjRecord
   <|> try tblRef
   <|> try colOfTblRef
   <|> try colRef
@@ -150,8 +116,8 @@ ifThenElse = If
 
 prjRecord :: Parser (Expr Ref)
 prjRecord = PrjRecord
-  <$> expr
-  <*> (char '.' *> P.identifier lexer)
+  <$> aExpr
+  <*> (char '.' *> ((Ref . pack) <$> P.identifier lexer))
 
 tblRef :: Parser (Expr Ref)
 tblRef = TableRef . Ref . pack <$> (char '#' *> P.identifier lexer)

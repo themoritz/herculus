@@ -8,8 +8,11 @@ import           Data.Aeson.Bson
 import           Data.Aeson.Bson  (FromBSON, ToBSON)
 import           Data.Bson        (Val, (=:))
 import qualified Data.Bson        as Bson
-import           Data.Text        (Text)
+import           Data.Maybe       (fromMaybe)
+import           Data.Text        (Text, unpack)
 import           Data.Typeable
+
+import           Text.Read        (readMaybe)
 
 import           GHC.Generics
 
@@ -34,6 +37,56 @@ instance FromBSON CellContent
 instance Val CellContent where
   val = toValue
   cast' = decodeValue
+
+--
+
+data Value
+  = VString Text
+  | VNumber Number
+  | VBool Bool
+  | VRecord (Id Record)
+  | VList [Value]
+  deriving (Generic, Typeable, Show, Eq)
+
+instance ToJSON Value
+instance FromJSON Value
+
+class ParseValue a where
+  parseValue :: Text -> Maybe a
+
+instance ParseValue Text where
+  parseValue s = Just s
+
+instance ParseValue Number where
+  parseValue s = Number <$> (readMaybe $ unpack s)
+
+class ExtractValue a where
+  extractValue :: Value -> Maybe a
+
+instance ExtractValue Text where
+  extractValue (VString s) = Just s
+  extractValue _ = Nothing
+
+instance ExtractValue Number where
+  extractValue (VNumber n) = Just n
+  extractValue _ = Nothing
+
+class MakeValue a where
+  makeValue :: a -> Maybe Value
+
+instance MakeValue Text where
+  makeValue = Just . VString
+
+instance MakeValue Number where
+  makeValue = Just . VNumber
+
+instance MakeValue [a] where
+  makeValue = const Nothing
+
+extractValue' :: ExtractValue a => Value -> a
+extractValue' = fromMaybe (error "expexted certain value") . extractValue
+
+--
 
 data Aspects = Aspects
   { aspectsTableId  :: Id Table

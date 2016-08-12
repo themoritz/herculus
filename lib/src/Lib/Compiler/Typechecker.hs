@@ -1,8 +1,8 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TemplateHaskell            #-}
 
 module Lib.Compiler.Typechecker
   ( runInfer
@@ -10,27 +10,25 @@ module Lib.Compiler.Typechecker
   , Type (..)
   ) where
 
-import           Control.Lens              hiding (Context)
+import           Control.Lens                   hiding (Context)
 import           Control.Monad.Except
-import           Control.Monad.State.Class
-import           Control.Monad.Trans.State (StateT, evalStateT)
-import           Control.Monad.Trans.Reader (ReaderT, runReaderT)
-import           Control.Monad.Reader.Class
+import           Control.Monad.Reader
+import           Control.Monad.State
 
-import           Data.List                 (intercalate)
-import           Data.Map                  (Map)
-import qualified Data.Map                  as Map
+import           Data.List                      (intercalate)
+import           Data.Map                       (Map)
+import qualified Data.Map                       as Map
 import           Data.Monoid
-import           Data.Set                  (Set)
-import qualified Data.Set                  as Set
-import           Data.Text                 (Text, pack)
+import           Data.Set                       (Set)
+import qualified Data.Set                       as Set
+import           Data.Text                      (Text, pack)
 
-import           Lib.Types
-import           Lib.Model
-import           Lib.Model.Types
-import           Lib.Model.Column hiding ((:::))
 import           Lib.Compiler.Parser
 import           Lib.Compiler.Typechecker.Types
+import           Lib.Model
+import           Lib.Model.Column
+import           Lib.Model.Types
+import           Lib.Types
 
 --
 
@@ -226,7 +224,9 @@ infer expr = case expr of
   TableRef tblRef -> do
     lift (resolveTableRef tblRef) >>= \case
       Nothing -> throwError $ pack $ "table not found: " <> show tblRef
-      Just (i, r) -> pure $ TableRef i ::: TList (TRecord r)
+      Just (i, r) -> do
+        trec <- fresh
+        pure $ TableRef i ::: TList trec
 
 --
 
@@ -246,11 +246,12 @@ unify cs = do
     unifyOne :: Type -> Type -> InferT m Subst
     unifyOne (TVar a) t = bind a t
     unifyOne t (TVar a) = bind a t
+    unifyOne (TBase a) (TBase b) | a == b = pure nullSubst
     unifyOne (TArr l r) (TArr l' r') = do
       s1 <- unifyOne l l'
       s2 <- unifyOne (apply s1 r) (apply s1 r')
       pure (s2 `compose` s1)
-    unifyOne (TBase a) (TBase b) | a == b = pure nullSubst
+    unifyOne (TList l) (TList r) = unifyOne l r
     unifyOne t1 t2 = throwError $ pack $ "type mismatch: " <> show t1 <> ", " <> show t2
 
     bind :: TVar -> Type -> InferT m Subst
