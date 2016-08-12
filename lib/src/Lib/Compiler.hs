@@ -1,26 +1,28 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Lib.Compiler where
 
 import           Control.Monad.Except
-import           Control.Monad.Reader
 import           Control.Monad.Identity
+import           Control.Monad.Reader
 
 import           Data.Traversable
 import           Data.Map                       (Map)
 import qualified Data.Map                       as Map
 import           Data.Text                      (Text, pack, unpack)
 
-import           Lib.Compiler.Parser
-import           Lib.Compiler.Typechecker
-import           Lib.Compiler.Typechecker.Types
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Types
 import           Lib.Types
+
+import           Lib.Compiler.Types
+import           Lib.Compiler.Parser
+import           Lib.Compiler.Typechecker
+import           Lib.Compiler.Typechecker.Types
 
 compile :: MonadTypecheck m => Text -> Id Table
         -> m (Either Text TypedExpr)
@@ -30,54 +32,40 @@ compile inp tblId = case parseExpr inp of
     expr' <- runInfer tblId expr
     pure expr'
 
+-- Prelude
+
+prelude :: Monad m => Map String (Result m)
+prelude = Map.fromList
+  [ ( "zero"
+    , RValue $ VNumber $ Number 0
+    )
+  , ( "double"
+    , RPrelude $ \_ (RValue (VNumber x)) -> pure $ RValue $ VNumber $ 2 * x
+    )
+  , ( "sum"
+    , RPrelude $ \_ (RValue (VList xs)) -> pure $
+        RValue $ VNumber $ sum $ map (\(VNumber v) -> v) xs
+    )
+  , ( "map"
+    , RPrelude $ \env arg -> pure $ RPrelude $ \env' (RValue (VList xs)) -> do
+        let f x = case arg of
+              RClosure name body cl -> eval (Map.insert name (RValue x) cl) body
+              RPrelude f' -> undefined
+        (RValue . VList) <$> traverse f xs
+    )
+  ]
+
 -- Interpreter
 
-data Prelude
-  = PreSum
-
-data Body
-  = BodyPrelude Prelude
-  | BodyExpr (Expr Id)
-
-data Result
-  = RValue Value
-  | RClosure String (Expr Id) TermEnv
-  deriving (Show)
-
-type TermEnv = Map String Result
-
-type EvalError = Text
-
-data EvalEnv m = EvalEnv
-  { getCellValue :: Id Column -> m (Maybe Value)
-  , getColumnValues :: Id Column -> m [(Maybe Value)]
-  , getTableRecords :: Id Table -> m [Id Record]
-  , getRecordValue :: Id Record -> Ref Column -> m (Maybe Value)
-  }
-
-newtype InterpretT m a = InterpretT
-  { unInterpretT :: ReaderT (EvalEnv m) (ExceptT EvalError m) a
-  } deriving ( Functor
-             , Applicative
-             , Monad
-             , MonadError EvalError
-             , MonadReader (EvalEnv m)
-             )
-
-instance MonadTrans InterpretT where
-  lift = InterpretT . lift . lift
-
-runInterpretT :: EvalEnv m -> InterpretT m a -> m (Either EvalError a)
-runInterpretT env action = runExceptT $ runReaderT (unInterpretT action) env
-
-eval :: Monad m => TermEnv -> Expr Id -> InterpretT m Result
+eval :: Monad m => TermEnv m -> Expr Id -> InterpretT m (Result m)
 eval env expr = case expr of
   Lam x body -> do
     pure $ RClosure x body env
   App f arg -> do
-    RClosure x body cl <- eval env f
     argVal <- eval env arg
-    eval (Map.insert x argVal cl) body
+    eval env f >>= \case
+      RClosure x body cl -> eval (Map.insert x argVal cl) body
+      RPrelude f -> f env argVal
   Let x e body -> do
     eVal <- eval env e
     eval (Map.insert x eVal env) body
@@ -125,11 +113,12 @@ eval env expr = case expr of
 
 interpret :: Monad m => Expr Id -> EvalEnv m -> m (Either Text Value)
 interpret expr env = do
-  result <- runInterpretT env (eval Map.empty expr)
+  result <- runInterpretT env (eval prelude expr)
   case result of
     Left e -> pure $ Left e
     Right (RValue v) -> pure $ Right v
     Right (RClosure _ _ _) -> pure $ Left "did not expect closure"
+    Right (RPrelude _) -> pure $ Left "did not expect prelude function"
 
 --
 
@@ -169,16 +158,10 @@ testEvalEnv = EvalEnv
   }
 
 test :: String -> IO ()
-test inp = do
-  let res = runTest $ do
-        compile (pack inp) nullObjectId >>= \case
-          Left e -> pure $ Left e
-          Right (expr ::: typ) ->
-            interpret expr testEvalEnv >>= \case
-              Left e -> pure $ Left e
-              Right val -> pure $ Right (val, typ)
-  case res of
-    Left e -> putStrLn $ unpack e
-    Right (val, typ) -> do
-      putStrLn $ "Type: " ++ show typ
-      putStrLn $ "Val: " ++ show val
+test inp = case runTest $ compile (pack inp) nullObjectId of
+  Left e -> putStrLn $ unpack e
+  Right (expr ::: typ) -> do
+    putStrLn $ "Type: " ++ show typ
+    case runTest $ interpret expr testEvalEnv of
+      Left e -> putStrLn $ unpack e
+      Right val -> putStrLn $ "Val: " ++ show val

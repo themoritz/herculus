@@ -32,6 +32,24 @@ import           Lib.Types
 
 --
 
+prelude :: Context
+prelude = Context $ Map.fromList
+  [ ( "zero"
+    , Forall [] $ TBase "Number"
+    )
+  , ( "double"
+    , Forall [] $ TBase "Number" `TArr` TBase "Number"
+    )
+  , ( "sum"
+    , Forall [] $ (TList $ TBase "Number") `TArr` TBase "Number"
+    )
+  , ( "map"
+    , Forall [TV "_a"] $ (TVar (TV "_a") `TArr` (TVar (TV "_a"))) `TArr` (TList (TVar (TV "_a")) `TArr` TList (TVar (TV "_a")))
+    )
+  ]
+
+--
+
 newtype Context = Context (Map Name Scheme)
   deriving (Show)
 
@@ -99,7 +117,7 @@ data InferState = InferState
 makeLenses ''InferState
 
 newInferState :: InferState
-newInferState = InferState 0 emptyContext
+newInferState = InferState 0 prelude
 
 type TypeError = Text
 
