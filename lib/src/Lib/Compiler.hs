@@ -47,10 +47,14 @@ prelude = Map.fromList
         RValue $ VNumber $ sum $ map (\(VNumber v) -> v) xs
     )
   , ( "map"
-    , RPrelude $ \env arg -> pure $ RPrelude $ \env' (RValue (VList xs)) -> do
+    , RPrelude $ \env arg -> pure $ RPrelude $ \_ (RValue (VList xs)) -> do
         let f x = case arg of
-              RClosure name body cl -> eval (Map.insert name (RValue x) cl) body
-              RPrelude f' -> undefined
+              RClosure name body cl -> do
+                RValue v <- eval (Map.insert name (RValue x) cl) body
+                pure v
+              RPrelude f' -> do
+                RValue v <- f' env (RValue x)
+                pure v
         (RValue . VList) <$> traverse f xs
     )
   ]
