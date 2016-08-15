@@ -13,14 +13,15 @@ import           Control.Monad.Except
 
 import           Data.Foldable
 
-import           Eval
 import           Lib.Model.Column
 import           Lib.Model.Cell
 import           Lib.Model.Dependencies
 import           Lib.Model.Types
 import           Lib.Types
-import           Monads
+import           Lib.Compiler.Interpreter
+import           Lib.Compiler.Interpreter.Types
 
+import           Monads
 import           Propagate.Monad
 
 data PropagationRoot
@@ -52,12 +53,16 @@ propagate' ((next, children):rest) = do
   let doTarget :: Id Record -> m ()
       doTarget r = do
         result <- case compileResult of
-          CompileResultCode (texpr ::: _) -> do
+          CompileResultCode expr -> do
             let env = EvalEnv
                         { envGetCellValue = flip getCellValue r
                         , envGetColumnValues = getColumnValues
+                        , envGetTableRecords = getTableRecords
+                        , envGetRecordValue = getRecordValue
                         }
-            eval env texpr
+            interpret expr env >>= \case
+              Left e -> pure $ CellEvalError e
+              Right v -> pure $ CellValue v
           CompileResultError _ -> pure $
             CellEvalError "Column not compiled"
           CompileResultNone -> throwError $

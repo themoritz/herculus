@@ -24,10 +24,10 @@ data Result m
 type EvalError = Text
 
 data EvalEnv m = EvalEnv
-  { getCellValue    :: Id Column -> m (Maybe Value)
-  , getColumnValues :: Id Column -> m [(Maybe Value)]
-  , getTableRecords :: Id Table -> m [Id Record]
-  , getRecordValue  :: Id Record -> Ref Column -> m (Maybe Value)
+  { envGetCellValue    :: Id Column -> m (Maybe Value)
+  , envGetColumnValues :: Id Column -> m [(Maybe Value)]
+  , envGetTableRecords :: Id Table -> m [Id Record]
+  , envGetRecordValue  :: Id Record -> Ref Column -> m (Maybe Value)
   }
 
 newtype InterpretT m a = InterpretT

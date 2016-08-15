@@ -18,10 +18,10 @@ library
                      , Lib.Compiler
                      , Lib.Compiler.Types
                      , Lib.Compiler.Parser
-                     , Lib.Compiler.Typechecker
-                     , Lib.Compiler.Typechecker.Types
                      , Lib.Compiler.Interpreter
                      , Lib.Compiler.Interpreter.Types
+                     , Lib.Compiler.Typechecker
+                     , Lib.Compiler.Typechecker.Types
                      , Lib.NamedMap
                      , Lib.Api.Rest
                      , Lib.Api.WebSocket

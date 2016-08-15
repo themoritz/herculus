@@ -106,23 +106,23 @@ eval env expr = case expr of
     pure $ RValue $ VNumber res
   PrjRecord e name -> do
     RValue (VRecord recId) <- eval env e
-    f <- asks getRecordValue
+    f <- asks envGetRecordValue
     lift (f recId name) >>= \case
       Nothing -> throwError "dependent cell not ready"
       Just val -> pure $ RValue val
   ColumnRef colId -> do
-    f <- asks getCellValue
+    f <- asks envGetCellValue
     lift (f colId) >>= \case
       Nothing -> throwError "dependent cell not ready"
       Just val -> pure $ RValue val
   ColumnOfTableRef _ colId -> do
-    f <- asks getColumnValues
+    f <- asks envGetColumnValues
     mVals <- lift $ f colId
     fmap (RValue . VList) $ for mVals $ \case
       Nothing -> throwError "dependent cell not ready"
       Just val -> pure val
   TableRef tblId -> do
-    f <- asks getTableRecords
+    f <- asks envGetTableRecords
     records <- lift $ f tblId
     pure $ RValue $ VList $ map VRecord records
 

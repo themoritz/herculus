@@ -7,7 +7,6 @@ import           Data.Aeson             (FromJSON, ToJSON)
 import           Data.Bson              ((=:))
 import qualified Data.Bson              as Bson
 import           Data.Monoid
-import           Data.Text              (Text)
 
 import           GHC.Generics
 

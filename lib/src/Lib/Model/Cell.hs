@@ -5,7 +5,6 @@ module Lib.Model.Cell where
 
 import           Data.Aeson       (FromJSON, ToJSON)
 import           Data.Aeson.Bson
-import           Data.Aeson.Bson  (FromBSON, ToBSON)
 import           Data.Bson        (Val, (=:))
 import qualified Data.Bson        as Bson
 import           Data.Maybe       (fromMaybe)
@@ -16,7 +15,6 @@ import           Text.Read        (readMaybe)
 
 import           GHC.Generics
 
-import           Lib.Model
 import           Lib.Model.Class
 import           Lib.Model.Column
 import           Lib.Model.Types

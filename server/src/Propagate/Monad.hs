@@ -10,7 +10,6 @@ module Propagate.Monad where
 
 import           Control.Lens
 import           Control.Monad.Except
-import           Control.Monad.Trans.Identity (liftCatch)
 import           Control.Monad.State  (MonadState, StateT, gets, runStateT)
 
 import           Data.Map             (Map)
@@ -33,9 +32,11 @@ data AddTarget
   | OneRecord (Id Record)
 
 class (MonadError AppError m, Monad m) => MonadPropagate m where
-  getCellValue :: ExtractValue a => Id Column -> Id Record -> m (Maybe a)
+  getCellValue :: Id Column -> Id Record -> m (Maybe Value)
   setCellContent :: Id Column -> Id Record -> CellContent -> m ()
-  getColumnValues :: ExtractValue a => Id Column -> m [Maybe a]
+  getColumnValues :: Id Column -> m [Maybe Value]
+  getTableRecords :: Id Table -> m [Id Record]
+  getRecordValue  :: Id Record -> Ref Column -> m (Maybe Value)
   addTargets :: Id Column -> AddTarget -> m ()
   getTargets :: Id Column -> m [Id Record]
   getCompileResult :: Id Column -> m CompileResult
@@ -87,9 +88,7 @@ instance MonadHexl m => MonadPropagate (PropT m) where
     case result of
       CellNothing -> pure Nothing
       CellEvalError _ -> pure Nothing
-      CellValue val -> case extractValue val of
-        Just x -> pure $ Just x
-        Nothing -> lift $ throwError $ ErrBug "wrong type in value"
+      CellValue val -> pure $ Just val
 
   setCellContent c r content = do
     cacheCellContent c r content
@@ -111,9 +110,7 @@ instance MonadHexl m => MonadPropagate (PropT m) where
     let go = \case
           CellNothing -> pure Nothing
           CellEvalError _ -> pure Nothing
-          CellValue val -> case extractValue val of
-            Just x -> pure $ Just x
-            Nothing -> lift $ throwError $ ErrBug "wrong type in value"
+          CellValue val -> pure $ Just val
     traverse go results
 
   addTargets c prop = stateTargets . at c . non (Just []) %=

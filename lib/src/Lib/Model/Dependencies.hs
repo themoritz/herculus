@@ -29,9 +29,7 @@ import           Data.Bson       ((=:))
 import qualified Data.Bson       as Bson
 import           Data.Map        (Map)
 import qualified Data.Map        as Map
-import           Data.Monoid
 import           Data.Text       (pack)
-import           Data.List       (intersect)
 
 import           GHC.Generics
 

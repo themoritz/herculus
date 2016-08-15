@@ -6,9 +6,9 @@
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TupleSections              #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
--- {-# LANGUAGE StandaloneDeriving #-}
 
 module Monads
   ( AppError (..)
@@ -19,7 +19,7 @@ module Monads
   , runHexl
   ) where
 
-import           Control.Concurrent.STM
+import           Control.Concurrent.STM as STM
 import           Control.Monad.Except
 import           Control.Monad.Logger
 import           Control.Monad.Reader
@@ -27,13 +27,13 @@ import           Control.Monad.Trans.Control
 -- import Control.Monad.Base
 
 import           Data.Aeson
-import qualified Data.ByteString.Char8       as B8
+import qualified Data.ByteString.Char8          as B8
+import           Data.Monoid
 import           Data.Proxy
 import           Data.Text
-import           Data.Monoid
-import           Database.MongoDB            ((=:))
+import           Database.MongoDB               ((=:))
 
-import qualified Database.MongoDB            as Mongo
+import qualified Database.MongoDB               as Mongo
 
 import           System.Log.FastLogger
 
@@ -83,7 +83,7 @@ class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m 
 data HexlEnv = HexlEnv
   { envPipe        :: Mongo.Pipe
   , envDatabase    :: Text
-  , envConnections :: TVar ConnectionManager
+  , envConnections :: STM.TVar ConnectionManager
   }
 
 newtype HexlT m a = HexlT
@@ -224,18 +224,3 @@ runMongo action = do
   pipe <- asks envPipe
   database <- asks envDatabase
   liftIO $ Mongo.access pipe Mongo.master database action
-
--- deriving instance (MonadBase b m) => MonadBase b (HexlT m)
-
--- instance MonadTrans HexlT where
---   lift = HexlT . lift
-
--- instance MonadTransControl HexlT where
---   type StT HexlT a = StT (ReaderT HexlEnv) a
---   liftWith f = HexlT $ liftWith $ \run -> f (run . unHexlT)
---   restoreT = HexlT . restoreT
-
--- instance MonadBaseControl b m => MonadBaseControl b (HexlT m) where
---   type StM (HexlT m) a = ComposeSt HexlT m a
---   liftBaseWith = defaultLiftBaseWith
---   restoreM     = defaultRestoreM

@@ -1,8 +1,7 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell     #-}
 
 module Lib.Compiler.Typechecker
   ( runInfer
@@ -15,18 +14,15 @@ import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 
-import           Data.Map                       (Map)
 import qualified Data.Map                       as Map
 import           Data.Monoid
-import           Data.Set                       (Set)
 import qualified Data.Set                       as Set
-import           Data.Text                      (Text, pack)
+import           Data.Text                      (pack)
 
 import           Lib.Compiler.Parser
 import           Lib.Compiler.Typechecker.Types
 import           Lib.Model
 import           Lib.Model.Column
-import           Lib.Model.Types
 import           Lib.Types
 
 --
@@ -59,98 +55,12 @@ prelude = Context $ Map.fromList
     )
   ]
 
---
-
-newtype Context = Context (Map Name Scheme)
-  deriving (Show)
-
-extend :: (Name, Scheme) -> Context -> Context
-extend (x, s) (Context env) = Context $ Map.insert x s env
-
-remove :: Name -> Context -> Context
-remove x (Context env) = Context $ Map.delete x env
-
-getScheme :: Name -> Context -> Maybe Scheme
-getScheme x (Context env) = Map.lookup x env
-
---
-
-type Subst = Map TVar Type
-
-nullSubst :: Subst
-nullSubst = Map.empty
-
-compose :: Subst -> Subst -> Subst
-compose s2 s1 = Map.map (apply s2) s1 `Map.union` s2
-
-class Substitutable a where
-  apply :: Subst -> a -> a
-  ftv :: a -> Set TVar
-
-instance Substitutable Type where
-  apply s t@(TVar a)      = Map.findWithDefault t a s
-  apply _ (TNullary s)    = TNullary s
-  apply s (TUnary n t)    = TUnary n (apply s t)
-  apply s (TArr t1 t2)    = TArr (apply s t1) (apply s t2)
-  apply s (TRecord r)     = TRecord (apply s r)
-  apply s (TRow name t r) = TRow name (apply s t) (apply s r)
-  apply _ (TNoRow)        = TNoRow
-
-  ftv (TVar a)     = Set.singleton a
-  ftv (TNullary _) = Set.empty
-  ftv (TUnary _ t) = ftv t
-  ftv (TArr t1 t2) = ftv t1 `Set.union` ftv t2
-  ftv (TRecord r)  = ftv r
-  ftv (TRow _ t r) = ftv t `Set.union` ftv r
-  ftv (TNoRow)     = Set.empty
-
-instance Substitutable Scheme where
-  apply s (Forall as t) = let s' = foldr Map.delete s as
-                          in Forall as (apply s' t)
-  ftv (Forall as t) = ftv t `Set.difference` Set.fromList as
-
-instance Substitutable a => Substitutable [a] where
-  apply s = map (apply s)
-  ftv = foldr (Set.union . ftv) Set.empty
-
-instance (Substitutable a, Substitutable b) => Substitutable (a, b) where
-  apply s (a, b) = (apply s a, apply s b)
-  ftv (a, b) = ftv a `Set.union` ftv b
-
-instance Substitutable Context where
-  apply s (Context env) = Context $ Map.map (apply s) env
-  ftv (Context env) = ftv $ Map.elems env
-
---
-
-data InferState = InferState
-  { _inferCount   :: Int
-  , _inferContext :: Context
-  }
-
-makeLenses ''InferState
-
 newInferState :: InferState
 newInferState = InferState 0 prelude
 
-type TypeError = Text
-
-newtype InferT m a = InferT
-  { unInferT :: ReaderT (Id Table) (StateT InferState (ExceptT TypeError m)) a
-  } deriving ( Functor
-             , Applicative
-             , Monad
-             , MonadReader (Id Table)
-             , MonadError TypeError
-             , MonadState InferState
-             )
-
-instance MonadTrans InferT where
-  lift = InferT . lift . lift . lift
-
-runInfer :: MonadTypecheck m => Id Table -> Expr Ref -> m (Either TypeError TypedExpr)
-runInfer tblId expr =
-  runExceptT $ evalStateT (runReaderT (unInferT $ infer expr) tblId) newInferState
+runInfer :: Monad m => TypecheckEnv m -> Expr Ref -> m (Either TypeError TypedExpr)
+runInfer env expr =
+  runExceptT $ evalStateT (runReaderT (unInferT $ infer expr) env) newInferState
 
 --
 
@@ -190,7 +100,7 @@ lookupEnv x = do
     Just scheme -> instantiate scheme
     Nothing -> throwError $ pack $ "not in scope: " <> x
 
-infer :: MonadTypecheck m => Expr Ref -> InferT m TypedExpr
+infer :: Monad m => Expr Ref -> InferT m TypedExpr
 infer expr = case expr of
   Lam x e -> do
     tv <- fresh
@@ -241,14 +151,15 @@ infer expr = case expr of
     s <- unify [ (te, TRecord $ TRow name tres trow) ]
     pure $ PrjRecord e' name ::: apply s tres
   ColumnRef colRef -> do
-    tblId <- ask
-    lift (resolveColumnRef tblId colRef) >>= \case
+    f <- asks envResolveColumnRef
+    lift (f colRef) >>= \case
       Nothing -> throwError $ pack $ "column not found: " <> show colRef
       Just (Entity i col) -> do
         let t = typeOfDataType $ columnDataType col
         pure $ ColumnRef i ::: t
   ColumnOfTableRef tblRef colRef -> do
-    lift (resolveColumnOfTableRef tblRef colRef) >>= \case
+    f <- asks envResolveColumnOfTableRef
+    lift (f tblRef colRef) >>= \case
       Nothing -> throwError $ pack $ "column not found: " <>
                                      show colRef <> " on table " <>
                                      show tblRef
@@ -256,7 +167,8 @@ infer expr = case expr of
         let t = typeOfDataType $ columnDataType col
         pure $ ColumnOfTableRef tblId colId ::: TUnary TList t
   TableRef tblRef -> do
-    lift (resolveTableRef tblRef) >>= \case
+    f <- asks envResolveTableRef
+    lift (f tblRef) >>= \case
       Nothing -> throwError $ pack $ "table not found: " <> show tblRef
       Just (i, r) -> do
         let toRow [] = TNoRow

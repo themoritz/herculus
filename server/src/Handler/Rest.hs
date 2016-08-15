@@ -1,25 +1,26 @@
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections     #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 module Handler.Rest where
 
-import           Control.Monad          (unless, void)
+import           Control.Monad                  (unless, void)
 
-import           Data.List              (union)
-import           Data.Maybe             (mapMaybe)
+import           Data.List                      (union)
+import           Data.Maybe                     (mapMaybe)
 import           Data.Monoid
-import           Data.Text              (Text)
+import           Data.Text                      (Text)
 import           Data.Traversable
 
 import           Servant
 
-import           Database.MongoDB       ((=:))
+import           Database.MongoDB               ((=:))
 
 import           Lib.Api.Rest
 import           Lib.Api.WebSocket
-import           Lib.Expression
+import           Lib.Compiler
+import           Lib.Compiler.Typechecker.Types
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
@@ -28,7 +29,6 @@ import           Lib.Model.Types
 import           Lib.Types
 import           Monads
 import           Propagate
-import           Typecheck
 
 handle :: MonadHexl m => ServerT Routes m
 handle =
@@ -201,17 +201,15 @@ compileColumn c = do
   let abort msg = do
         void $ modifyDependencies c []
         pure $ CompileResultError msg
-  compileResult <- case parseExpression (columnSourceCode col) of
-    Left msg -> abort $ "Parse error: " <> msg
-    Right expr -> do
-      atexprRes <- typecheck (columnTableId col) expr (columnDataType col)
-      case atexprRes of
-        Left msg -> abort $ "Type error: " <> msg
-        Right atexpr -> do
-          let deps = collectDependencies atexpr
-          cycles <- modifyDependencies c deps
-          if cycles then abort "Dependency graph has cycles"
-                    else pure $ CompileResultCode atexpr
+  res <- compile (columnSourceCode col) (mkTypecheckEnv $ columnTableId col)
+  compileResult <- case res of
+    Left msg -> abort $ "Compile error: " <> msg
+    Right (expr ::: typ) -> do
+      -- TODO: Compare inferred type with column
+      let deps = collectDependencies expr
+      cycles <- modifyDependencies c deps
+      if cycles then abort "Dependency graph has cycles"
+                else pure $ CompileResultCode expr
   update c $ \col' -> col' { columnCompileResult = compileResult }
   pure $ Entity c col { columnCompileResult = compileResult }
 
@@ -231,3 +229,33 @@ invalidateCells c = do
     let aspects = cellAspects $ entityVal e
     pure (aspectsColumnId aspects, aspectsRecordId aspects, CellNothing)
   sendWS $ WsDownCellsChanged changes
+
+--
+
+mkTypecheckEnv :: MonadHexl m => Id Table -> TypecheckEnv m
+mkTypecheckEnv tblId = TypecheckEnv
+    { envResolveColumnRef = resolveColumnRef tblId
+
+    , envResolveColumnOfTableRef = \tblName colName -> do
+        tableRes <- getOneByQuery [ "name" =: tblName ]
+        case tableRes of
+          Left _ -> pure Nothing
+          Right (Entity i _) -> (fmap.fmap) (i,) $ resolveColumnRef i colName
+
+    , envResolveTableRef = \tblName -> undefined -- Maybe (Id Table, Map (Ref Column) Type)
+
+    , envOwnTableId = tblId
+
+    }
+  where
+    resolveColumnRef tbl colName = do
+      let colQuery =
+            [ "name" =: colName
+            , "tableId" =: toObjectId tbl
+            ]
+      columnRes <- getOneByQuery colQuery
+      case columnRes of
+        Left _  -> pure Nothing
+        Right e -> pure $ Just e
+
+--

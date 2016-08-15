@@ -8,17 +8,12 @@
 
 module Lib.Model.Column where
 
-import           Data.Aeson                   (FromJSON (..), ToJSON (..),
-                                               Value (..), object, (.:), (.=))
+import           Data.Aeson                   (FromJSON (..), ToJSON (..))
 import           Data.Aeson.Bson
 import           Data.Bson                    (Val, (=:))
 import qualified Data.Bson                    as Bson
-import qualified Data.ByteString              as BS
-import qualified Data.ByteString.Base64       as Base64
 import           Data.Monoid                  ((<>))
-import           Data.Serialize
 import           Data.Text                    (Text, pack)
-import           Data.Text.Encoding
 
 import           GHC.Generics
 
@@ -158,7 +153,7 @@ instance FromJSON Binop
 
 collectDependencies :: Expr Id -> [(Id Column, DependencyType)]
 collectDependencies expr = go expr
-  where go e = case e of
+  where go e' = case e' of
           Lam _ body           -> go body
           App f e              -> go f <> go e
           Let _ e body         -> go e <> go body
@@ -169,4 +164,4 @@ collectDependencies expr = go expr
           PrjRecord e _        -> go e
           ColumnRef c          -> [(c, OneToOne)]
           ColumnOfTableRef _ c -> [(c, OneToAll)]
-          TableRef t           -> undefined
+          TableRef t           -> undefined -- TODO: refer to all columns

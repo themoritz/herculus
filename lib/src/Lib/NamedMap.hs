@@ -28,6 +28,6 @@ instance (ToName k, ToJSON v) => ToJSON (NamedMap k v) where
   toJSON = toJSON . Map.mapKeys toName . unNamedMap
 
 instance (Ord k, FromName k, FromJSON v) => FromJSON (NamedMap k v) where
-  parseJSON json = do
-    m <- parseJSON json
+  parseJSON jsn = do
+    m <- parseJSON jsn
     pure . NamedMap . Map.mapKeys fromName $ m

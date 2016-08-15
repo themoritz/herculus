@@ -9,20 +9,13 @@
 
 module Lib.Types where
 
-import           Data.Aeson         (FromJSON (..), ToJSON (..), object, (.:),
-                                     (.=))
-import qualified Data.Aeson         as Aeson
-import           Data.Aeson.Bson
-import           Data.Aeson.Types   (Parser)
-import           Data.Bson          (Document, ObjectId (..), Val (..), (=:))
+import           Data.Aeson         (FromJSON (..), ToJSON (..))
+import           Data.Bson          (ObjectId (..), Val (..))
 import           Data.Decimal
-import           Data.Maybe         (fromMaybe)
 import           Data.Monoid        ((<>))
 import           Data.Serialize
-import           Data.String
 import           Data.Text          (Text, pack, unpack)
 import           Data.Text.Encoding
-import           Data.Typeable
 
 import           Text.Read          (readMaybe)
 

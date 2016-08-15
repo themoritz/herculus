@@ -4,11 +4,9 @@
 module Lib.Model.Types where
 
 import           Data.Aeson      (FromJSON, ToJSON)
-import           Data.Aeson.Bson
-import           Data.Text       (Text, pack)
-import           Data.Typeable
+import           Data.Text       (Text)
 
-import           Data.Bson       (Val, (=:))
+import           Data.Bson       ((=:))
 import qualified Data.Bson       as Bson
 
 import           GHC.Generics
