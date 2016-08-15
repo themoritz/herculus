@@ -55,7 +55,33 @@ prelude = Map.fromList
               RPrelude f' -> do
                 RValue v <- f' env (RValue x)
                 pure v
-        (RValue . VList) <$> traverse f xs
+        RValue . VList <$> traverse f xs
+    )
+  , ( "filter"
+    , RPrelude $ \env arg -> pure $ RPrelude $ \_ (RValue (VList xs)) -> do
+        let p x = case arg of
+              RClosure name body cl -> do
+                RValue (VBool b) <- eval (Map.insert name (RValue x) cl) body
+                pure b
+              RPrelude f' -> do
+                RValue (VBool b) <- f' env (RValue x)
+                pure b
+        RValue . VList <$> filterM p xs
+    )
+  , ( "find"
+    , RPrelude $ \env arg -> pure $ RPrelude $ \_ (RValue (VList xs)) -> do
+        let p x = case arg of
+              RClosure name body cl -> do
+                RValue (VBool b) <- eval (Map.insert name (RValue x) cl) body
+                pure b
+              RPrelude f' -> do
+                RValue (VBool b) <- f' env (RValue x)
+                pure b
+            findM p [] = pure Nothing
+            findM p (x:xs) = do
+              b <- p x
+              if b then pure (Just x) else findM p xs
+        RValue . VMaybe <$> findM p xs
     )
   ]
 
@@ -150,7 +176,7 @@ instance MonadTypecheck Test where
   resolveColumnOfTableRef table c = pure $ Just (nullObjectId, testColumn)
   resolveTableRef table = pure $ Just ( nullObjectId
                                       , Map.singleton (Ref "A")
-                                                      (TBase "Number")
+                                                      (TNullary TNumber)
                                       )
 
 testEvalEnv :: EvalEnv Test

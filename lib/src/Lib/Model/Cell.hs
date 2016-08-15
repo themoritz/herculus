@@ -46,6 +46,7 @@ data Value
   | VBool Bool
   | VRecord (Id Record)
   | VList [Value]
+  | VMaybe (Maybe Value)
   deriving (Generic, Typeable, Show, Eq)
 
 instance ToJSON Value

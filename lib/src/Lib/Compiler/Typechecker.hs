@@ -35,16 +35,28 @@ import           Lib.Types
 prelude :: Context
 prelude = Context $ Map.fromList
   [ ( "zero"
-    , Forall [] $ TBase "Number"
+    , Forall [] $ TNullary TNumber
     )
   , ( "double"
-    , Forall [] $ TBase "Number" `TArr` TBase "Number"
+    , Forall [] $ TNullary TNumber `TArr` TNullary TNumber
     )
   , ( "sum"
-    , Forall [] $ (TList $ TBase "Number") `TArr` TBase "Number"
+    , Forall [] $ (TUnary TList $ TNullary TNumber) `TArr` TNullary TNumber
     )
   , ( "map"
-    , Forall [TV "_a", TV "_b"] $ (TVar (TV "_a") `TArr` (TVar (TV "_b"))) `TArr` (TList (TVar (TV "_a")) `TArr` TList (TVar (TV "_b")))
+    , Forall [TV "_a", TV "_b"] $
+        (TVar (TV "_a") `TArr` (TVar (TV "_b"))) `TArr`
+        (TUnary TList (TVar (TV "_a")) `TArr` TUnary TList (TVar (TV "_b")))
+    )
+  , ( "filter"
+    , Forall [TV "_a"] $
+        (TVar (TV "_a") `TArr` (TNullary TBool)) `TArr`
+        (TUnary TList (TVar (TV "_a")) `TArr` TUnary TList (TVar (TV "_a")))
+    )
+  , ( "find"
+    , Forall [TV "_a"] $
+        (TVar (TV "_a") `TArr` (TNullary TBool)) `TArr`
+        (TUnary TList (TVar (TV "_a")) `TArr` TUnary TMaybe (TVar (TV "_a")))
     )
   ]
 
@@ -81,20 +93,20 @@ class Substitutable a where
 
 instance Substitutable Type where
   apply s t@(TVar a)      = Map.findWithDefault t a s
-  apply _ (TBase s)       = TBase s
+  apply _ (TNullary s)    = TNullary s
+  apply s (TUnary n t)    = TUnary n (apply s t)
   apply s (TArr t1 t2)    = TArr (apply s t1) (apply s t2)
-  apply s (TList t)       = TList (apply s t)
   apply s (TRecord r)     = TRecord (apply s r)
   apply s (TRow name t r) = TRow name (apply s t) (apply s r)
   apply s (TNoRow)        = TNoRow
 
-  ftv (TVar a)           = Set.singleton a
-  ftv (TBase _)          = Set.empty
-  ftv (TArr t1 t2)       = ftv t1 `Set.union` ftv t2
-  ftv (TList t)          = ftv t
-  ftv (TRecord r)        = ftv r
-  ftv (TRow _ t r)       = ftv t `Set.union` ftv r
-  ftv (TNoRow)           = Set.empty
+  ftv (TVar a)     = Set.singleton a
+  ftv (TNullary _) = Set.empty
+  ftv (TUnary _ t) = ftv t
+  ftv (TArr t1 t2) = ftv t1 `Set.union` ftv t2
+  ftv (TRecord r)  = ftv r
+  ftv (TRow _ t r) = ftv t `Set.union` ftv r
+  ftv (TNoRow)     = Set.empty
 
 instance Substitutable Scheme where
   apply s (Forall as t) = let s' = foldr Map.delete s as
@@ -204,7 +216,7 @@ infer expr = case expr of
     e1' ::: te1 <- infer e1
     e2' ::: te2 <- infer e2
     s <- unify
-      [ (tcond, typeBool)
+      [ (tcond, TNullary TBool)
       , (te1, te2)
       ]
     pure $ If cond' e1' e2' ::: apply s te2
@@ -213,16 +225,17 @@ infer expr = case expr of
     pure $ Var x ::: t
   Lit l -> do
     let t = case l of
-          LNumber _ -> typeNumber
-          LBool _   -> typeBool
-          LString _ -> typeString
-    pure $ Lit l ::: t
+          LNumber _ -> TNumber
+          LBool _   -> TBool
+          LString _ -> TString
+    pure $ Lit l ::: (TNullary t)
   Binop op l r -> do
     l' ::: tl <- infer l
     r' ::: tr <- infer r
     tres <- fresh
-    let is     = tl         `TArr` (tr         `TArr` tres)
-        should = typeNumber `TArr` (typeNumber `TArr` typeNumber)
+    let num = TNullary TNumber
+        is     = tl  `TArr` (tr  `TArr` tres)
+        should = num `TArr` (num `TArr` num)
     s <- unify [ (is, should) ]
     pure $ Binop op l' r' ::: apply s tres
   PrjRecord e name -> do
@@ -245,14 +258,14 @@ infer expr = case expr of
                                      show tblRef
       Just (tblId, Entity colId col) -> do
         let t = typeOfDataType $ columnDataType col
-        pure $ ColumnOfTableRef tblId colId ::: TList t
+        pure $ ColumnOfTableRef tblId colId ::: TUnary TList t
   TableRef tblRef -> do
     lift (resolveTableRef tblRef) >>= \case
       Nothing -> throwError $ pack $ "table not found: " <> show tblRef
       Just (i, r) -> do
         let toRow [] = TNoRow
             toRow ((c, t):rest) = TRow c t (toRow rest)
-        pure $ TableRef i ::: TList (TRecord $ toRow $ Map.toList r)
+        pure $ TableRef i ::: TUnary TList (TRecord $ toRow $ Map.toList r)
 
 --
 
@@ -272,12 +285,12 @@ unify cs = do
     unifyOne :: Type -> Type -> InferT m Subst
     unifyOne (TVar a) t = bind a t
     unifyOne t (TVar a) = bind a t
-    unifyOne (TBase a) (TBase b) | a == b = pure nullSubst
+    unifyOne (TNullary a) (TNullary b) | a == b = pure nullSubst
+    unifyOne (TUnary n l) (TUnary m r) | n == m = unifyOne l r
     unifyOne (TArr l r) (TArr l' r') = do
       s1 <- unifyOne l l'
       s2 <- unifyOne (apply s1 r) (apply s1 r')
       pure (s2 `compose` s1)
-    unifyOne (TList l) (TList r) = unifyOne l r
     unifyOne (TRecord l) (TRecord r) = unifyOne l r
     unifyOne (TRow n1 t1 r1) (TRow n2 t2 r2)
       | n1 == n2 =  do s1 <- unifyOne t1 t2
