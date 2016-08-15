@@ -24,7 +24,6 @@ import           Text.Parsec.String     (Parser)
 import qualified Text.Parsec.Token      as P
 
 import           Lib.Model.Column
-import           Lib.Model.Types
 import           Lib.Types
 
 --
@@ -127,10 +126,8 @@ colRef = ColumnRef . Ref . pack <$> (char '$' *> P.identifier lexer)
 
 colOfTblRef :: Parser (Expr Ref)
 colOfTblRef = do
-  char '$'
-  tbl <- P.identifier lexer
-  char '.'
-  col <- P.identifier lexer
+  tbl <- char '$' *> P.identifier lexer
+  col <- char '.' *> P.identifier lexer
   pure $ ColumnOfTableRef (Ref $ pack tbl) (Ref $ pack col)
 
 parseExpr :: Text -> Either Text (Expr Ref)

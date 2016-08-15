@@ -3,17 +3,16 @@
 module Lib.Compiler.Typechecker.Types where
 
 import           Data.List           (intercalate)
+import           Data.Map            (Map)
 import           Data.Monoid         ((<>))
-import           Data.Text (Text, pack, unpack)
-import Data.Map (Map)
-import qualified Data.Map as Map
+import           Data.Text           (Text, unpack)
 
 import           Lib.Compiler.Parser
 import           Lib.Types
 
+import           Lib.Model
 import           Lib.Model.Column
 import           Lib.Model.Types
-import           Lib.Model
 
 --
 

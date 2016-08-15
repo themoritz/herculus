@@ -10,12 +10,11 @@ module Lib.Compiler.Typechecker
   , Type (..)
   ) where
 
-import           Control.Lens                   hiding (Context)
+import           Control.Lens                   hiding (Context, op)
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 
-import           Data.List                      (intercalate)
 import           Data.Map                       (Map)
 import qualified Data.Map                       as Map
 import           Data.Monoid
@@ -65,9 +64,6 @@ prelude = Context $ Map.fromList
 newtype Context = Context (Map Name Scheme)
   deriving (Show)
 
-emptyContext :: Context
-emptyContext = Context Map.empty
-
 extend :: (Name, Scheme) -> Context -> Context
 extend (x, s) (Context env) = Context $ Map.insert x s env
 
@@ -98,7 +94,7 @@ instance Substitutable Type where
   apply s (TArr t1 t2)    = TArr (apply s t1) (apply s t2)
   apply s (TRecord r)     = TRecord (apply s r)
   apply s (TRow name t r) = TRow name (apply s t) (apply s r)
-  apply s (TNoRow)        = TNoRow
+  apply _ (TNoRow)        = TNoRow
 
   ftv (TVar a)     = Set.singleton a
   ftv (TNullary _) = Set.empty
@@ -277,9 +273,9 @@ unify cs = do
   where
     unify' :: [(Type, Type)] -> InferT m Subst
     unify' [] = pure nullSubst
-    unify' ((t1, t2):cs) = do
+    unify' ((t1, t2):cs') = do
       s1 <- unifyOne t1 t2
-      s2 <- unify' (apply s1 cs)
+      s2 <- unify' (apply s1 cs')
       pure $ s2 `compose` s1
 
     unifyOne :: Type -> Type -> InferT m Subst
