@@ -149,8 +149,8 @@ instance MonadTypecheck Test where
   resolveColumnRef t c = pure $ Just testColumn
   resolveColumnOfTableRef table c = pure $ Just (nullObjectId, testColumn)
   resolveTableRef table = pure $ Just ( nullObjectId
-                                      , TR $ Map.singleton (Ref "A")
-                                                           (nullObjectId, TBase "Number")
+                                      , Map.singleton (Ref "A")
+                                                      (TBase "Number")
                                       )
 
 testEvalEnv :: EvalEnv Test

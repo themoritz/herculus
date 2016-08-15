@@ -44,7 +44,7 @@ prelude = Context $ Map.fromList
     , Forall [] $ (TList $ TBase "Number") `TArr` TBase "Number"
     )
   , ( "map"
-    , Forall [TV "_a"] $ (TVar (TV "_a") `TArr` (TVar (TV "_a"))) `TArr` (TList (TVar (TV "_a")) `TArr` TList (TVar (TV "_a")))
+    , Forall [TV "_a", TV "_b"] $ (TVar (TV "_a") `TArr` (TVar (TV "_b"))) `TArr` (TList (TVar (TV "_a")) `TArr` TList (TVar (TV "_b")))
     )
   ]
 
@@ -80,15 +80,21 @@ class Substitutable a where
   ftv :: a -> Set TVar
 
 instance Substitutable Type where
-  apply s t@(TVar a)   = Map.findWithDefault t a s
-  apply _ (TBase s)    = TBase s
-  apply s (TArr t1 t2) = TArr (apply s t1) (apply s t2)
-  apply s (TList t)    = TList (apply s t)
+  apply s t@(TVar a)      = Map.findWithDefault t a s
+  apply _ (TBase s)       = TBase s
+  apply s (TArr t1 t2)    = TArr (apply s t1) (apply s t2)
+  apply s (TList t)       = TList (apply s t)
+  apply s (TRecord r)     = TRecord (apply s r)
+  apply s (TRow name t r) = TRow name (apply s t) (apply s r)
+  apply s (TNoRow)        = TNoRow
 
-  ftv (TVar a)     = Set.singleton a
-  ftv (TBase _)    = Set.empty
-  ftv (TArr t1 t2) = Set.union (ftv t1) (ftv t2)
-  ftv (TList t)    = ftv t
+  ftv (TVar a)           = Set.singleton a
+  ftv (TBase _)          = Set.empty
+  ftv (TArr t1 t2)       = ftv t1 `Set.union` ftv t2
+  ftv (TList t)          = ftv t
+  ftv (TRecord r)        = ftv r
+  ftv (TRow _ t r)       = ftv t `Set.union` ftv r
+  ftv (TNoRow)           = Set.empty
 
 instance Substitutable Scheme where
   apply s (Forall as t) = let s' = foldr Map.delete s as
@@ -222,8 +228,9 @@ infer expr = case expr of
   PrjRecord e name -> do
     e' ::: te <- infer e
     tres <- fresh
-    -- TODO: unify
-    pure $ PrjRecord e' name ::: tres
+    trow <- fresh
+    s <- unify [ (te, TRecord $ TRow name tres trow) ]
+    pure $ PrjRecord e' name ::: apply s tres
   ColumnRef colRef -> do
     tblId <- ask
     lift (resolveColumnRef tblId colRef) >>= \case
@@ -243,8 +250,9 @@ infer expr = case expr of
     lift (resolveTableRef tblRef) >>= \case
       Nothing -> throwError $ pack $ "table not found: " <> show tblRef
       Just (i, r) -> do
-        trec <- fresh
-        pure $ TableRef i ::: TList trec
+        let toRow [] = TNoRow
+            toRow ((c, t):rest) = TRow c t (toRow rest)
+        pure $ TableRef i ::: TList (TRecord $ toRow $ Map.toList r)
 
 --
 
@@ -270,6 +278,15 @@ unify cs = do
       s2 <- unifyOne (apply s1 r) (apply s1 r')
       pure (s2 `compose` s1)
     unifyOne (TList l) (TList r) = unifyOne l r
+    unifyOne (TRecord l) (TRecord r) = unifyOne l r
+    unifyOne (TRow n1 t1 r1) (TRow n2 t2 r2)
+      | n1 == n2 =  do s1 <- unifyOne t1 t2
+                       s2 <- unifyOne (apply s1 r1) (apply s1 r2)
+                       pure (s2 `compose` s1)
+      | otherwise = do a <- fresh
+                       s1 <- unifyOne r1 (TRow n2 t2 a)
+                       s2 <- unifyOne (apply s1 r2) (TRow n1 (apply s1 t1) (apply s1 a))
+                       pure (s2 `compose` s1)
     unifyOne t1 t2 = throwError $ pack $ "type mismatch: " <> show t1 <> ", " <> show t2
 
     bind :: TVar -> Type -> InferT m Subst
