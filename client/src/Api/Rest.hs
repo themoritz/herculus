@@ -9,12 +9,12 @@ import Data.Proxy
 import Data.Text
 import Data.Monoid
 
-import Reflex.Dom
+import Reflex.Dom hiding (Value)
 
 import Servant.API
 import Servant.Reflex
 
-import Lib.Types as Lib
+import Lib.Types
 import Lib.Model
 import Lib.Model.Types
 import Lib.Model.Column
@@ -39,7 +39,7 @@ data RestApi t m = MonadWidget t m => RestApi
   , recordCreate  :: Arg t (Id Table) -> Res t m (Id Record, [Entity Cell])
   , recordDelete  :: Arg t (Id Record) -> Res t m ()
   , recordList    :: Arg t (Id Table) -> Res t m [Entity Record]
-  , cellSet       :: Arg t (Id Column) -> Arg t (Id Record) -> Arg t Lib.Value -> Res t m ()
+  , cellSet       :: Arg t (Id Column) -> Arg t (Id Record) -> Arg t Value -> Res t m ()
   }
 
 api :: forall t m. MonadWidget t m => RestApi t m

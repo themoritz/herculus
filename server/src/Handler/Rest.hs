@@ -1,16 +1,17 @@
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE TupleSections       #-}
-{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Handler.Rest where
 
 import           Control.Monad                  (unless, void)
 
 import           Data.List                      (union)
+import qualified Data.Map                       as Map
 import           Data.Maybe                     (mapMaybe)
 import           Data.Monoid
-import           Data.Text                      (Text)
+import           Data.Text                      (Text, pack)
 import           Data.Traversable
 
 import           Servant
@@ -19,14 +20,15 @@ import           Database.MongoDB               ((=:))
 
 import           Lib.Api.Rest
 import           Lib.Api.WebSocket
-import           Lib.Compiler
-import           Lib.Compiler.Typechecker.Types
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
 import           Lib.Model.Types
 import           Lib.Types
+import           Lib.Compiler
+import           Lib.Compiler.Typechecker.Types
+
 import           Monads
 import           Propagate
 
@@ -203,13 +205,18 @@ compileColumn c = do
         pure $ CompileResultError msg
   res <- compile (columnSourceCode col) (mkTypecheckEnv $ columnTableId col)
   compileResult <- case res of
-    Left msg -> abort $ "Compile error: " <> msg
+    Left msg -> abort msg
     Right (expr ::: typ) -> do
-      -- TODO: Compare inferred type with column
-      let deps = collectDependencies expr
-      cycles <- modifyDependencies c deps
-      if cycles then abort "Dependency graph has cycles"
-                else pure $ CompileResultCode expr
+      if typ /= typeOfDataType (columnDataType col)
+        then abort $ pack $
+               "Inferred type `" <> show typ <>
+               "` does not match column type `" <>
+               show (columnDataType col) <> "`"
+        else do
+          let deps = collectDependencies expr
+          cycles <- modifyDependencies c deps
+          if cycles then abort "Dependency graph has cycles"
+                    else pure $ CompileResultCode expr
   update c $ \col' -> col' { columnCompileResult = compileResult }
   pure $ Entity c col { columnCompileResult = compileResult }
 
@@ -233,8 +240,8 @@ invalidateCells c = do
 --
 
 mkTypecheckEnv :: MonadHexl m => Id Table -> TypecheckEnv m
-mkTypecheckEnv tblId = TypecheckEnv
-    { envResolveColumnRef = resolveColumnRef tblId
+mkTypecheckEnv ownTblId = TypecheckEnv
+    { envResolveColumnRef = resolveColumnRef ownTblId
 
     , envResolveColumnOfTableRef = \tblName colName -> do
         tableRes <- getOneByQuery [ "name" =: tblName ]
@@ -242,9 +249,20 @@ mkTypecheckEnv tblId = TypecheckEnv
           Left _ -> pure Nothing
           Right (Entity i _) -> (fmap.fmap) (i,) $ resolveColumnRef i colName
 
-    , envResolveTableRef = \tblName -> undefined -- Maybe (Id Table, Map (Ref Column) Type)
+    , envResolveTableRef = \tblName -> do
+        tableRes <- getOneByQuery [ "name" =: tblName ]
+        case tableRes of
+          Left _ -> pure Nothing
+          Right (Entity tblId _) -> do
+            cols <- listByQuery [ "tableId" =: toObjectId tblId ]
+            let l = map (\(Entity _ c) ->
+                           ( Ref $ columnName c
+                           , typeOfDataType $ columnDataType c
+                           )
+                        ) cols
+            pure $ Just (tblId, Map.fromList l)
 
-    , envOwnTableId = tblId
+    , envOwnTableId = ownTblId
 
     }
   where

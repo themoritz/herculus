@@ -113,6 +113,16 @@ instance MonadHexl m => MonadPropagate (PropT m) where
           CellValue val -> pure $ Just val
     traverse go results
 
+  getTableRecords t = do
+    -- TODO: cache
+    rs <- lift $ listByQuery [ "tableId" =: toObjectId t ]
+    pure $ map entityId rs
+
+  getRecordValue r colRef = do
+    -- TODO: cache
+    col <- lift $ getOneByQuery' [ "name" =: unRef colRef ]
+    getCellValue (entityId col) r
+
   addTargets c prop = stateTargets . at c . non (Just []) %=
     \col -> case (col, prop) of
       (Just rs, OneRecord r) -> Just $ r:rs

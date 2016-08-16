@@ -37,16 +37,16 @@ cell colId recId (CellConfig content column) = el "div" $
         case columnDataType column of
           DataString -> do
             let val = case c of
-                  CellValue (ValueString v) -> v
+                  CellValue (VString v) -> v
                   _                         -> ""
             inp <- cellInput val
-            pure $ (ValueString <$> inp)
+            pure $ (VString <$> inp)
           DataNumber -> do
             let val = case c of
-                  CellValue (ValueNumber v) -> v
+                  CellValue (VNumber v) -> v
                   _                         -> 0
             inp <- cellInput val
-            pure $ (ValueNumber <$> inp)
+            pure $ (VNumber <$> inp)
 
     ColumnDerived -> do
       void $ dynWidget content $ \case
