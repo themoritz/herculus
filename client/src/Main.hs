@@ -12,6 +12,7 @@ import Reflex.Dom
 
 import Lib.Api.WebSocket
 
+import Misc
 import Widgets.ProjectList
 import Widgets.TableList
 import Widgets.Table
@@ -30,16 +31,19 @@ main = mainWidget $ do
   divClass "container" $ do
     divClass "row" $ do
 
-      tList <- divClass "two columns" $ do
+      tSelect <- divClass "two columns" $ do
         divClass "container" $ do
           pList <- divClass "row" $
             divClass "twelve columns" $ projectList never
           divClass "row" $
-            divClass "twelve columns" $
-              tableList never $ _projectList_selectProject pList
+            divClass "twelve columns" $ do
+              currentProj <- holdDyn Nothing $ Just <$> (_projectList_selectProject pList)
+              switchEventWith _tableList_selectTable $ dynWidget currentProj $ \case
+                Nothing -> pure $ TableList never
+                Just projId -> tableList projId never
 
       divClass "ten columns" $ do
-        table (_tableList_selectTable tList) cellChanges columnChanges
+        table tSelect cellChanges columnChanges
 
 ws :: MonadWidget t m => Event t [WsUpMessage] -> m (Event t WsDownMessage)
 ws messages = do

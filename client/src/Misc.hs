@@ -24,9 +24,12 @@ dynWidget :: MonadWidget t m => Dynamic t a -> (a -> m b) -> m (Event t b)
 dynWidget d f = dyn $ f <$> d
 
 switchEvent :: MonadWidget t m => m (Event t (Event t a)) -> m (Event t a)
-switchEvent action = do
-  ee <- action
-  de <- holdDyn never ee
+switchEvent = switchEventWith id
+
+switchEventWith :: MonadWidget t m => (a -> Event t b) -> m (Event t a) -> m (Event t b)
+switchEventWith f action = do
+  e <- action
+  de <- holdDyn never $ f <$> e
   pure $ switchPromptlyDyn de
 
 --
