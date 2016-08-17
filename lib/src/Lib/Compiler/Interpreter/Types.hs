@@ -18,7 +18,7 @@ type TermEnv m = Map String (Result m)
 
 data Result m
   = RValue Value
-  | RClosure String (Expr Id) (TermEnv m)
+  | RClosure String TExpr (TermEnv m)
   | RPrelude (TermEnv m -> Result m -> InterpretT m (Result m))
 
 type EvalError = Text

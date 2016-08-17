@@ -68,7 +68,10 @@ instance Serialize (Id a) where
 --
 
 newtype Ref a = Ref { unRef :: Text }
-  deriving (Show, Generic, Eq, Ord, Val)
+  deriving (Generic, Eq, Ord, Val)
+
+instance Show (Ref a) where
+  show = unpack . unRef
 
 instance ToJSON (Ref a)
 instance FromJSON (Ref a)

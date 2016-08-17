@@ -4,10 +4,7 @@
 
 module Lib.Api.Rest where
 
-import           Data.Aeson      (FromJSON, ToJSON)
 import           Data.Text
-
-import           GHC.Generics
 
 import           Servant.API
 

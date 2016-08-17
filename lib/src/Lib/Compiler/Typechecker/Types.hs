@@ -17,7 +17,6 @@ import           Data.Set             (Set)
 import qualified Data.Set             as Set
 import           Data.Text            (Text, unpack)
 
-import           Lib.Compiler.Parser
 import           Lib.Types
 
 import           Lib.Model
@@ -33,34 +32,34 @@ instance Show TVar where
   show (TV a) = unpack a
 
 data TNullary
-  = TBool
-  | TNumber
-  | TString
+  = TyBool
+  | TyNumber
+  | TyString
   deriving (Show, Eq, Ord)
 
 data TUnary
-  = TList
-  | TMaybe
+  = TyList
+  | TyMaybe
   deriving (Show, Eq, Ord)
 
 data Type
-  = TVar TVar
-  | TNullary TNullary
-  | TUnary TUnary Type
-  | TArr Type Type
-  | TRecord Type
-  | TRow (Ref Column) Type Type
-  | TNoRow
+  = TyVar TVar
+  | TyNullary TNullary
+  | TyUnary TUnary Type
+  | TyArr Type Type
+  | TyRecord Type
+  | TyRow (Ref Column) Type Type
+  | TyNoRow
   deriving (Eq, Ord)
 
 instance Show Type where
-  show (TVar a) = show a
-  show (TNullary c) = show c
-  show (TUnary t t1) = show t <> " " <> show t1
-  show (TArr a b) = "(" <> show a <> " -> " <> show b <> ")"
-  show (TRecord r) = "{" <> show r <> "}"
-  show (TRow name t r) = show name <> " : " <> show t <> ", " <> show r
-  show (TNoRow) = "-"
+  show (TyVar a) = show a
+  show (TyNullary c) = show c
+  show (TyUnary t t1) = show t <> " " <> show t1
+  show (TyArr a b) = "(" <> show a <> " -> " <> show b <> ")"
+  show (TyRecord r) = "{" <> show r <> "}"
+  show (TyRow name t r) = show name <> " : " <> show t <> ", " <> show r
+  show (TyNoRow) = "-"
 
 data Scheme = Forall [TVar] Type
 
@@ -68,9 +67,9 @@ instance Show Scheme where
   show (Forall as t) = "forall " <> intercalate " " (map show as) <> ". " <> show t
 
 typeOfDataType :: DataType -> Type
-typeOfDataType DataString = TNullary TString
-typeOfDataType DataNumber = TNullary TNumber
-typeOfDataType DataBool = TNullary TBool
+typeOfDataType DataString = TyNullary TyString
+typeOfDataType DataNumber = TyNullary TyNumber
+typeOfDataType DataBool = TyNullary TyBool
 
 --
 
@@ -101,21 +100,21 @@ class Substitutable a where
   ftv :: a -> Set TVar
 
 instance Substitutable Type where
-  apply s t@(TVar a)      = Map.findWithDefault t a s
-  apply _ (TNullary s)    = TNullary s
-  apply s (TUnary n t)    = TUnary n (apply s t)
-  apply s (TArr t1 t2)    = TArr (apply s t1) (apply s t2)
-  apply s (TRecord r)     = TRecord (apply s r)
-  apply s (TRow name t r) = TRow name (apply s t) (apply s r)
-  apply _ (TNoRow)        = TNoRow
+  apply s t@(TyVar a)      = Map.findWithDefault t a s
+  apply _ (TyNullary s)    = TyNullary s
+  apply s (TyUnary n t)    = TyUnary n (apply s t)
+  apply s (TyArr t1 t2)    = TyArr (apply s t1) (apply s t2)
+  apply s (TyRecord r)     = TyRecord (apply s r)
+  apply s (TyRow name t r) = TyRow name (apply s t) (apply s r)
+  apply _ (TyNoRow)        = TyNoRow
 
-  ftv (TVar a)     = Set.singleton a
-  ftv (TNullary _) = Set.empty
-  ftv (TUnary _ t) = ftv t
-  ftv (TArr t1 t2) = ftv t1 `Set.union` ftv t2
-  ftv (TRecord r)  = ftv r
-  ftv (TRow _ t r) = ftv t `Set.union` ftv r
-  ftv (TNoRow)     = Set.empty
+  ftv (TyVar a)     = Set.singleton a
+  ftv (TyNullary _) = Set.empty
+  ftv (TyUnary _ t) = ftv t
+  ftv (TyArr t1 t2) = ftv t1 `Set.union` ftv t2
+  ftv (TyRecord r)  = ftv r
+  ftv (TyRow _ t r) = ftv t `Set.union` ftv r
+  ftv (TyNoRow)     = Set.empty
 
 instance Substitutable Scheme where
   apply s (Forall as t) = let s' = foldr Map.delete s as
@@ -136,14 +135,14 @@ instance Substitutable Context where
 
 --
 
-data TypedExpr = Expr Id ::: Type
+data TypedExpr = TExpr ::: Type
 
 --
 
 data TypecheckEnv m = TypecheckEnv
   { envResolveColumnRef        :: Ref Column -> m (Maybe (Entity Column))
-  , envResolveColumnOfTableRef :: Ref Table -> Ref Column -> m (Maybe (Id Table, Entity Column))
-  , envResolveTableRef         :: Ref Table -> m (Maybe (Id Table, Map (Ref Column) Type))
+  , envResolveColumnOfTableRef :: Ref Table -> Ref Column -> m (Maybe (Entity Column))
+  , envResolveTableRef         :: Ref Table -> m (Maybe (Id Table, [Entity Column]))
   , envOwnTableId              :: Id Table
   }
 

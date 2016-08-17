@@ -40,11 +40,18 @@ testColumn = Entity nullObjectId col
 testTypecheckEnv :: Monad m => TypecheckEnv m
 testTypecheckEnv = TypecheckEnv
   { envResolveColumnRef = \_ -> pure $ Just testColumn
-  , envResolveColumnOfTableRef = \_ _ -> pure $ Just (nullObjectId, testColumn)
-  , envResolveTableRef = \_ -> pure $ Just ( nullObjectId
-                                      , Map.singleton (Ref "A")
-                                                      (TNullary TNumber)
-                                      )
+  , envResolveColumnOfTableRef = \_ _ -> pure $ Just testColumn
+  , envResolveTableRef = \_ -> pure $ Just (nullObjectId
+                                           , [ Entity nullObjectId
+                                                      (Column nullObjectId
+                                                              "A"
+                                                              DataNumber
+                                                              ColumnInput
+                                                              ""
+                                                              CompileResultNone
+                                                      )
+                                             ]
+                                           )
   , envOwnTableId = nullObjectId
   }
 

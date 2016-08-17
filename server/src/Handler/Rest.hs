@@ -1,14 +1,14 @@
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections     #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 module Handler.Rest where
 
 import           Control.Monad                  (unless, void)
 
 import           Data.List                      (union)
-import qualified Data.Map                       as Map
 import           Data.Maybe                     (mapMaybe)
 import           Data.Monoid
 import           Data.Text                      (Text, pack)
@@ -20,14 +20,14 @@ import           Database.MongoDB               ((=:))
 
 import           Lib.Api.Rest
 import           Lib.Api.WebSocket
+import           Lib.Compiler
+import           Lib.Compiler.Typechecker.Types
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
 import           Lib.Model.Types
 import           Lib.Types
-import           Lib.Compiler
-import           Lib.Compiler.Typechecker.Types
 
 import           Monads
 import           Propagate
@@ -239,7 +239,7 @@ invalidateCells c = do
 
 --
 
-mkTypecheckEnv :: MonadHexl m => Id Table -> TypecheckEnv m
+mkTypecheckEnv :: forall m. MonadHexl m => Id Table -> TypecheckEnv m
 mkTypecheckEnv ownTblId = TypecheckEnv
     { envResolveColumnRef = resolveColumnRef ownTblId
 
@@ -247,7 +247,7 @@ mkTypecheckEnv ownTblId = TypecheckEnv
         tableRes <- getOneByQuery [ "name" =: tblName ]
         case tableRes of
           Left _ -> pure Nothing
-          Right (Entity i _) -> (fmap.fmap) (i,) $ resolveColumnRef i colName
+          Right (Entity i _) -> resolveColumnRef i colName
 
     , envResolveTableRef = \tblName -> do
         tableRes <- getOneByQuery [ "name" =: tblName ]
@@ -255,17 +255,13 @@ mkTypecheckEnv ownTblId = TypecheckEnv
           Left _ -> pure Nothing
           Right (Entity tblId _) -> do
             cols <- listByQuery [ "tableId" =: toObjectId tblId ]
-            let l = map (\(Entity _ c) ->
-                           ( Ref $ columnName c
-                           , typeOfDataType $ columnDataType c
-                           )
-                        ) cols
-            pure $ Just (tblId, Map.fromList l)
+            pure $ Just (tblId, cols)
 
     , envOwnTableId = ownTblId
 
     }
   where
+    resolveColumnRef :: Id Table -> Ref Column -> m (Maybe (Entity Column))
     resolveColumnRef tbl colName = do
       let colQuery =
             [ "name" =: colName

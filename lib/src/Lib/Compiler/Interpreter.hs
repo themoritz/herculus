@@ -72,31 +72,31 @@ prelude = Map.fromList
 
 -- Interpreter
 
-eval :: Monad m => TermEnv m -> Expr Id -> InterpretT m (Result m)
+eval :: Monad m => TermEnv m -> TExpr -> InterpretT m (Result m)
 eval env expr = case expr of
-  Lam x body -> do
+  TLam x body -> do
     pure $ RClosure x body env
-  App f arg -> do
+  TApp f arg -> do
     argVal <- eval env arg
     eval env f >>= \case
       RClosure x body cl -> eval (Map.insert x argVal cl) body
       RPrelude f' -> f' env argVal
-  Let x e body -> do
+  TLet x e body -> do
     eVal <- eval env e
     eval (Map.insert x eVal env) body
-  If cond e1 e2 -> do
+  TIf cond e1 e2 -> do
     RValue (VBool bVal) <- eval env cond
     if bVal then eval env e1 else eval env e2
-  Var x -> do
+  TVar x -> do
     let Just v = Map.lookup x env
     pure v
-  Lit l -> do
+  TLit l -> do
     let v = case l of
           LNumber v' -> VNumber v'
           LBool v' -> VBool v'
           LString v' -> VString v'
     pure $ RValue v
-  Binop op l r -> do
+  TBinop op l r -> do
     RValue (VNumber a) <- eval env l
     RValue (VNumber b) <- eval env r
     let res = case op of
@@ -104,29 +104,29 @@ eval env expr = case expr of
           Sub -> a - b
           Mul -> a * b
     pure $ RValue $ VNumber res
-  PrjRecord e name -> do
+  TPrjRecord e name -> do
     RValue (VRecord recId) <- eval env e
     f <- asks envGetRecordValue
     lift (f recId name) >>= \case
       Nothing -> throwError "dependent cell not ready"
       Just val -> pure $ RValue val
-  ColumnRef colId -> do
+  TColumnRef colId -> do
     f <- asks envGetCellValue
     lift (f colId) >>= \case
       Nothing -> throwError "dependent cell not ready"
       Just val -> pure $ RValue val
-  ColumnOfTableRef _ colId -> do
+  TWholeColumnRef colId -> do
     f <- asks envGetColumnValues
     mVals <- lift $ f colId
     fmap (RValue . VList) $ for mVals $ \case
       Nothing -> throwError "dependent cell not ready"
       Just val -> pure val
-  TableRef tblId -> do
+  TTableRef tblId _ -> do
     f <- asks envGetTableRecords
     records <- lift $ f tblId
     pure $ RValue $ VList $ map VRecord records
 
-interpret :: Monad m => Expr Id -> EvalEnv m -> m (Either Text Value)
+interpret :: Monad m => TExpr -> EvalEnv m -> m (Either Text Value)
 interpret expr env = do
   result <- runInterpretT env (eval prelude expr)
   case result of

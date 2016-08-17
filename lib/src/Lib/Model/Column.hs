@@ -1,10 +1,11 @@
 {-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE TupleSections              #-}
 
 module Lib.Model.Column where
 
@@ -75,7 +76,7 @@ instance FromDocument Column where
       Left msg -> Left $ pack msg
 
 data CompileResult
-  = CompileResultCode (Expr Id)
+  = CompileResultCode TExpr
   | CompileResultNone
   | CompileResultError Text
   deriving (Eq, Show, Generic)
@@ -109,31 +110,6 @@ instance Val InputType where
 
 type Name = String
 
-data Expr v
-  = Lam Name (Expr v)
-  | App (Expr v) (Expr v)
-  | Let Name (Expr v) (Expr v)
-  -- | Fix Expr
-  | If (Expr v) (Expr v) (Expr v)
-  | Var Name
-  | Lit Lit
-  | Binop Binop (Expr v) (Expr v)
-  | PrjRecord (Expr v) (Ref Column)
-  --
-  | ColumnRef (v Column)
-  | ColumnOfTableRef (v Table) (v Column)
-  | TableRef (v Table)
-  deriving (Generic)
-
-deriving instance Eq (Expr Ref)
-deriving instance Eq (Expr Id)
-
-deriving instance Show (Expr Ref)
-deriving instance Show (Expr Id)
-
-instance ToJSON (Expr Id)
-instance FromJSON (Expr Id)
-
 data Lit
   = LNumber Number
   | LBool Bool
@@ -149,19 +125,57 @@ data Binop = Add | Sub | Mul
 instance ToJSON Binop
 instance FromJSON Binop
 
+data PExpr
+  = PLam Name (PExpr)
+  | PApp (PExpr) (PExpr)
+  | PLet Name (PExpr) (PExpr)
+  -- | PFix Expr
+  | PIf (PExpr) (PExpr) (PExpr)
+  | PVar Name
+  | PLit Lit
+  | PBinop Binop (PExpr) (PExpr)
+  | PPrjRecord (PExpr) (Ref Column)
+  --
+  | PColumnRef (Ref Column)
+  | PColumnOfTableRef (Ref Table) (Ref Column)
+  | PTableRef (Ref Table)
+  deriving (Eq, Show, Generic)
+
+instance ToJSON PExpr
+instance FromJSON PExpr
+
+data TExpr
+  = TLam Name (TExpr)
+  | TApp (TExpr) (TExpr)
+  | TLet Name (TExpr) (TExpr)
+  --T | Fix Expr
+  | TIf (TExpr) (TExpr) (TExpr)
+  | TVar Name
+  | TLit Lit
+  | TBinop Binop (TExpr) (TExpr)
+  | TPrjRecord (TExpr) (Ref Column)
+  --
+  | TColumnRef (Id Column)
+  | TWholeColumnRef (Id Column)
+  | TTableRef (Id Table) [Id Column]
+  deriving (Eq, Show, Generic)
+
+instance ToJSON TExpr
+instance FromJSON TExpr
+
 --
 
-collectDependencies :: Expr Id -> [(Id Column, DependencyType)]
+collectDependencies :: TExpr -> [(Id Column, DependencyType)]
 collectDependencies expr = go expr
   where go e' = case e' of
-          Lam _ body           -> go body
-          App f e              -> go f <> go e
-          Let _ e body         -> go e <> go body
-          If c t e             -> go c <> go t <> go e
-          Var _                -> []
-          Lit _                -> []
-          Binop _ l r          -> go l <> go r
-          PrjRecord e _        -> go e
-          ColumnRef c          -> [(c, OneToOne)]
-          ColumnOfTableRef _ c -> [(c, OneToAll)]
-          TableRef t           -> undefined -- TODO: refer to all columns
+          TLam _ body       -> go body
+          TApp f e          -> go f <> go e
+          TLet _ e body     -> go e <> go body
+          TIf c t e         -> go c <> go t <> go e
+          TVar _            -> []
+          TLit _            -> []
+          TBinop _ l r      -> go l <> go r
+          TPrjRecord e _    -> go e
+          TColumnRef c      -> [(c, OneToOne)]
+          TWholeColumnRef c -> [(c, OneToAll)]
+          TTableRef _ cs    -> map (,OneToAll) cs

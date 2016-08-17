@@ -2,11 +2,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 
 module Lib.Compiler.Parser
-  ( Expr (..)
-  , Name
-  , Lit (..)
-  , Binop (..)
-  , parseExpr
+  ( parseExpr
   ) where
 
 import           Control.Monad.Identity
@@ -36,10 +32,10 @@ lexer = P.makeTokenParser emptyDef
   , P.identLetter = alphaNum <|> oneOf "_"
   }
 
-binary :: String -> Binop -> Operator String () Identity (Expr Ref)
-binary name op = Infix (P.reservedOp lexer name *> pure (Binop op)) AssocLeft
+binary :: String -> Binop -> Operator String () Identity PExpr
+binary name op = Infix (P.reservedOp lexer name *> pure (PBinop op)) AssocLeft
 
-expr :: Parser (Expr Ref)
+expr :: Parser PExpr
 expr = buildExpressionParser table terms
   where
     table =
@@ -55,7 +51,7 @@ expr = buildExpressionParser table terms
       <|> try aExpr
       <?> "expression"
 
-aExpr :: Parser (Expr Ref)
+aExpr :: Parser PExpr
 aExpr =
       try var
   <|> try tblRef
@@ -65,34 +61,34 @@ aExpr =
   <|> try (P.parens lexer expr)
   <?> "atomic expression"
 
-app :: Parser (Expr Ref)
+app :: Parser PExpr
 app = mkAppChain =<< many1 aExpr
   where mkAppChain exprs =
           let (h:t) = reverse exprs
           in case go t of
-            Just ex -> pure $ App ex h
+            Just ex -> pure $ PApp ex h
             Nothing -> fail "application"
         go [] = Nothing
         go (h:t) = case go t of
-          Just ex -> Just $ App ex h
+          Just ex -> Just $ PApp ex h
           Nothing -> Just h
 
-let' :: Parser (Expr Ref)
-let' = Let
+let' :: Parser PExpr
+let' = PLet
   <$> (P.reserved lexer "let" *> P.identifier lexer)
   <*> (P.reservedOp lexer "=" *> expr <* P.lexeme lexer (char ';'))
   <*> expr
 
-lam :: Parser (Expr Ref)
-lam = Lam
+lam :: Parser PExpr
+lam = PLam
   <$> (char '\\' *> P.identifier lexer)
   <*> (P.lexeme lexer (string "->") *> expr)
 
-var :: Parser (Expr Ref)
-var = Var <$> P.identifier lexer
+var :: Parser PExpr
+var = PVar <$> P.identifier lexer
 
-lit :: Parser (Expr Ref)
-lit = Lit <$> (stringLit <|> numberLit <|> boolLit)
+lit :: Parser PExpr
+lit = PLit <$> (stringLit <|> numberLit <|> boolLit)
   where
     stringLit = P.lexeme lexer $ LString . pack <$>
                   P.lexeme lexer (char '"' *> many (noneOf "\"") <* char '"')
@@ -107,30 +103,30 @@ lit = Lit <$> (stringLit <|> numberLit <|> boolLit)
       <|> try (P.reserved lexer "False" $> LBool False)
       <?> "True or False"
 
-ifThenElse :: Parser (Expr Ref)
-ifThenElse = If
+ifThenElse :: Parser PExpr
+ifThenElse = PIf
   <$> (P.reserved lexer "if"   *> expr)
   <*> (P.reserved lexer "then" *> expr)
   <*> (P.reserved lexer "else" *> expr)
 
-prjRecord :: Parser (Expr Ref)
-prjRecord = PrjRecord
+prjRecord :: Parser PExpr
+prjRecord = PPrjRecord
   <$> aExpr
   <*> (char '.' *> ((Ref . pack) <$> P.identifier lexer))
 
-tblRef :: Parser (Expr Ref)
-tblRef = TableRef . Ref . pack <$> (char '#' *> P.identifier lexer)
+tblRef :: Parser PExpr
+tblRef = PTableRef . Ref . pack <$> (char '#' *> P.identifier lexer)
 
-colRef :: Parser (Expr Ref)
-colRef = ColumnRef . Ref . pack <$> (char '$' *> P.identifier lexer)
+colRef :: Parser PExpr
+colRef = PColumnRef . Ref . pack <$> (char '$' *> P.identifier lexer)
 
-colOfTblRef :: Parser (Expr Ref)
+colOfTblRef :: Parser PExpr
 colOfTblRef = do
   tbl <- char '$' *> P.identifier lexer
   col <- char '.' *> P.identifier lexer
-  pure $ ColumnOfTableRef (Ref $ pack tbl) (Ref $ pack col)
+  pure $ PColumnOfTableRef (Ref $ pack tbl) (Ref $ pack col)
 
-parseExpr :: Text -> Either Text (Expr Ref)
+parseExpr :: Text -> Either Text PExpr
 parseExpr e =
   case parse (P.whiteSpace lexer *> expr <* eof) "" $ unpack e of
     Left msg -> Left $ pack $ show msg
