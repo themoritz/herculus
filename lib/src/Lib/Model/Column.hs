@@ -27,7 +27,9 @@ data DataType
   = DataBool
   | DataString
   | DataNumber
-  | DataRecord
+  | DataRecord (Id Table)
+  | DataList DataType
+  | DataMaybe DataType
   deriving (Eq, Ord, Show, Read, Generic)
 
 instance ToJSON DataType

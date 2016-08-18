@@ -61,10 +61,10 @@ propagate' ((next, children):rest) = do
                         , envGetRecordValue = getRecordValue
                         }
             interpret expr env >>= \case
-              Left e -> pure $ CellEvalError e
+              Left e -> pure $ CellError e
               Right v -> pure $ CellValue v
           CompileResultError _ -> pure $
-            CellEvalError "Column not compiled"
+            CellError "Column not compiled"
           CompileResultNone -> throwError $
             ErrBug "propagate: no compile result for column"
 

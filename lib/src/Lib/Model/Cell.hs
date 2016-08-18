@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase        #-}
 
 module Lib.Model.Cell where
 
@@ -7,11 +8,8 @@ import           Data.Aeson       (FromJSON, ToJSON)
 import           Data.Aeson.Bson
 import           Data.Bson        (Val, (=:))
 import qualified Data.Bson        as Bson
-import           Data.Maybe       (fromMaybe)
-import           Data.Text        (Text, unpack)
+import           Data.Text        (Text)
 import           Data.Typeable
-
-import           Text.Read        (readMaybe)
 
 import           GHC.Generics
 
@@ -21,9 +19,8 @@ import           Lib.Model.Types
 import           Lib.Types
 
 data CellContent
-  = CellNothing
-  | CellValue Value
-  | CellEvalError Text
+  = CellValue Value
+  | CellError Text
   deriving (Eq, Show, Typeable, Generic)
 
 instance ToJSON CellContent
@@ -50,40 +47,15 @@ data Value
 instance ToJSON Value
 instance FromJSON Value
 
-class ParseValue a where
-  parseValue :: Text -> Maybe a
-
-instance ParseValue Text where
-  parseValue s = Just s
-
-instance ParseValue Number where
-  parseValue s = Number <$> (readMaybe $ unpack s)
-
-class ExtractValue a where
-  extractValue :: Value -> Maybe a
-
-instance ExtractValue Text where
-  extractValue (VString s) = Just s
-  extractValue _ = Nothing
-
-instance ExtractValue Number where
-  extractValue (VNumber n) = Just n
-  extractValue _ = Nothing
-
-class MakeValue a where
-  makeValue :: a -> Maybe Value
-
-instance MakeValue Text where
-  makeValue = Just . VString
-
-instance MakeValue Number where
-  makeValue = Just . VNumber
-
-instance MakeValue [a] where
-  makeValue = const Nothing
-
-extractValue' :: ExtractValue a => Value -> a
-extractValue' = fromMaybe (error "expexted certain value") . extractValue
+-- TODO: configurable by user
+defaultContent :: DataType -> CellContent
+defaultContent = \case
+  DataBool     -> CellValue $ VBool False
+  DataString   -> CellValue $ VString ""
+  DataNumber   -> CellValue $ VNumber 0
+  DataRecord _ -> CellError "no default for records"
+  DataList _   -> CellValue $ VList []
+  DataMaybe _  -> CellValue $ VMaybe Nothing
 
 --
 
@@ -114,9 +86,9 @@ data Cell = Cell
   , cellAspects :: Aspects
   } deriving (Generic)
 
-emptyCell :: Id Table -> Id Column -> Id Record -> Cell
-emptyCell t c r = Cell
-  { cellContent = CellNothing
+newCell :: Id Table -> Id Column -> Id Record -> CellContent -> Cell
+newCell t c r content = Cell
+  { cellContent = content
   , cellAspects = Aspects t c r
   }
 

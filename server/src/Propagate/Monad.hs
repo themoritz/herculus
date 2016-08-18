@@ -86,8 +86,7 @@ instance MonadHexl m => MonadPropagate (PropT m) where
         cacheCellContent c r result
         pure result
     case result of
-      CellNothing -> pure Nothing
-      CellEvalError _ -> pure Nothing
+      CellError _ -> pure Nothing
       CellValue val -> pure $ Just val
 
   setCellContent c r content = do
@@ -108,8 +107,7 @@ instance MonadHexl m => MonadPropagate (PropT m) where
         stateCache %= storeColumn c results
         pure results
     let go = \case
-          CellNothing -> pure Nothing
-          CellEvalError _ -> pure Nothing
+          CellError _ -> pure Nothing
           CellValue val -> pure $ Just val
     traverse go results
 

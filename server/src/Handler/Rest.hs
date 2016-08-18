@@ -89,7 +89,7 @@ handleColumnCreate t = do
   c <- create $ Column t "" DataString ColumnInput "" CompileResultNone
   rs <- listByQuery [ "tableId" =: toObjectId t ]
   cells <- for rs $ \e -> do
-    let cell = emptyCell t c (entityId e)
+    let cell = newCell t c (entityId e) (defaultContent DataString)
     i <- create cell
     pure $ Entity i cell
   pure (c, cells)
@@ -152,7 +152,7 @@ handleRecordCreate t = do
   r <- create $ Record t
   cs <- listByQuery [ "tableId" =: toObjectId t ]
   maybes <- for cs $ \e -> do
-    let cell = emptyCell t (entityId e) r
+    let cell = newCell t (entityId e) r $ defaultContent $ columnDataType $ entityVal e
     i <- create cell
     pure $ case columnInputType $ entityVal e of
       ColumnInput -> Just $ Entity i cell
@@ -231,10 +231,12 @@ compileColumnChildren c = do
 invalidateCells :: MonadHexl m => Id Column -> m ()
 invalidateCells c = do
   cells <- listByQuery [ "aspects.columnId" =: toObjectId c]
+  col <- getById' c
   changes <- for cells $ \e -> do
-    update (entityId e) $ \cell -> cell { cellContent = CellNothing }
+    let defContent = defaultContent (columnDataType col)
+    update (entityId e) $ \cell -> cell { cellContent = defContent }
     let aspects = cellAspects $ entityVal e
-    pure (aspectsColumnId aspects, aspectsRecordId aspects, CellNothing)
+    pure (aspectsColumnId aspects, aspectsRecordId aspects, defContent)
   sendWS $ WsDownCellsChanged changes
 
 --

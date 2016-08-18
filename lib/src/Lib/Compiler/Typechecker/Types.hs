@@ -67,9 +67,12 @@ instance Show Scheme where
   show (Forall as t) = "forall " <> intercalate " " (map show as) <> ". " <> show t
 
 typeOfDataType :: DataType -> Type
-typeOfDataType DataString = TyNullary TyString
-typeOfDataType DataNumber = TyNullary TyNumber
-typeOfDataType DataBool = TyNullary TyBool
+typeOfDataType DataBool       = TyNullary TyBool
+typeOfDataType DataString     = TyNullary TyString
+typeOfDataType DataNumber     = TyNullary TyNumber
+typeOfDataType (DataRecord t) = TyRecord undefined -- TODO: get record info
+typeOfDataType (DataList t)   = TyUnary TyList (typeOfDataType t)
+typeOfDataType (DataMaybe t)  = TyUnary TyMaybe (typeOfDataType t)
 
 --
 

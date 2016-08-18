@@ -4,6 +4,8 @@
 
 module Misc where
 
+import Control.Monad (join)
+
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -29,8 +31,10 @@ switchEvent = switchEventWith id
 switchEventWith :: MonadWidget t m => (a -> Event t b) -> m (Event t a) -> m (Event t b)
 switchEventWith f action = do
   e <- action
-  de <- holdDyn never $ f <$> e
-  pure $ switchPromptlyDyn de
+  switchPromptly never (f <$> e)
+
+switcherDyn :: MonadWidget t m => Dynamic t a -> Event t (Dynamic t a) -> m (Dynamic t a)
+switcherDyn d ed = join <$> holdDyn d ed
 
 --
 
