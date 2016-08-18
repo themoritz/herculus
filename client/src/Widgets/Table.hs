@@ -167,9 +167,9 @@ table loadTable updateCells updateColumns = el "div" $ divClass "canvas" $ mdo
     , SetTableId  <$> loadTable
     ]
 
-  let colHeight = 200
-      cellWidth = 200
-      cellHeight = 60
+  let colHeight = 300
+      cellWidth = 300
+      cellHeight = 150
       recWidth = 50
 
   let columns = toColumns <$> state

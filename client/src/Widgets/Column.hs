@@ -79,10 +79,9 @@ column tableId columnId dynColumn = el "div" $ do
       compiledD <- holdDyn (columnCompileResult initial) $ columnCompileResult <$> set
 
       (source, sourceSet) <- elDynAttr "div" sourceAttr $ do
-        val <- _textInput_value <$> textInput (def :: TextInputConfig t)
-                 { _textInputConfig_setValue = columnSourceCode <$> set
-                 , _textInputConfig_initialValue = columnSourceCode $ initial
-                 , _textInputConfig_attributes = constDyn ("style" =: "width: 160px")
+        val <- _textArea_value <$> textArea (def :: TextAreaConfig t)
+                 { _textAreaConfig_setValue = columnSourceCode <$> set
+                 , _textAreaConfig_initialValue = columnSourceCode $ initial
                  }
 
         void $ dynWidget compiledD $ \case

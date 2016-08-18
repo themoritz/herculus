@@ -7,6 +7,7 @@
 module Widgets.Cell
   where
 
+import qualified Data.Map as Map
 import Data.Text (Text, pack, unpack)
 import Data.Monoid
 
@@ -61,7 +62,7 @@ value inpType datType val = case datType of
     _ -> pure never
   DataList t -> case val of
     VList xs -> do
-      inp <- cellList inpType xs
+      inp <- cellList inpType t xs
       pure (VList <$> inp)
     _ -> pure never
   DataMaybe t -> case val of
@@ -111,29 +112,38 @@ cellNumber inpType n = case inpType of
 cellRecord :: MonadWidget t m => InputType -> Id Record -> m ()
 cellRecord inpType r = pure ()
 
-cellList :: MonadWidget t m => InputType -> [Value] -> m (Event t [Value])
-cellList inpType vs = do
-  pure never
-
 --
 
-data MaybeAction
-  = MADelete
-  | MAPut
-  | MASet Value
-
-maybeUpdate :: DataType -> MaybeAction -> Maybe Value -> Maybe Value
-maybeUpdate datType a old = case a of
-  MADelete -> Nothing
-  MAPut    -> let (CellValue new) = defaultContent datType in Just new
-  MASet v  -> v <$ old
+cellList :: MonadWidget t m => InputType -> DataType -> [Value] -> m (Event t [Value])
+cellList inpType datType vs = case inpType of
+  ColumnInput -> do
+    new <- button "New"
+    let l = constDyn $ Map.fromList $ zip [0..] vs
+    updates <- fmap dynMapEvents $ el "ul" $ list l $ \dynV -> do
+      switchEvent $ dyn $ ffor dynV $ \v -> el "li" $ do
+        del <- button "Del"
+        upd <- value inpType datType v
+        pure $ leftmost [ Left <$> del, Right <$> upd ]
+    let (CellValue newV) = defaultContent datType
+    pure $ leftmost
+      [ (newV:vs) <$ new
+      , (\(i, e) -> either (\_ -> let (h, t) = splitAt i vs in h <> drop 1 t)
+                           (\v -> let (h, t) = splitAt i vs in h <> (v:drop 1 t)) e
+        ) <$> updates
+      ]
+  ColumnDerived -> do
+    _ <- el "ul" $ simpleList (constDyn vs) $ \dynV ->
+      dyn $ ffor dynV $ \v -> el "li" $
+        value inpType datType v
+    pure never
+--
 
 cellMaybe :: MonadWidget t m => InputType -> DataType -> Maybe Value -> m (Event t (Maybe Value))
 cellMaybe inpType datType mVal = case inpType of
   ColumnInput -> case mVal of
     Nothing -> do
       add <- button "Add"
-      pure $ (maybeUpdate datType MAPut Nothing) <$ add
+      pure $ (let (CellValue new) = defaultContent datType in Just new) <$ add
     Just val -> do
       del <- button "Del"
       edit <- value inpType datType val
@@ -143,5 +153,5 @@ cellMaybe inpType datType mVal = case inpType of
       text "Nothing"
       pure never
     Just val -> do
-      value inpType datType val
+      _ <- value inpType datType val
       pure never
