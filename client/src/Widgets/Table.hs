@@ -8,9 +8,10 @@ module Widgets.Table
 
 import Control.Lens
 
-import Data.Map (Map)
-import qualified Data.Map as Map
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 import Data.List.NonEmpty (NonEmpty)
+import Data.Foldable (foldl')
 
 import Reflex.Dom hiding (Value)
 
@@ -72,7 +73,7 @@ data Action
   | SetTableId (Id Table)
 
 update :: NonEmpty Action -> State -> State
-update actions state = foldl go state actions
+update actions state = foldl' go state actions
   where
     go st action = case action of
       SetColumns cols -> st & stateColumns .~
@@ -83,7 +84,7 @@ update actions state = foldl go state actions
 
       UpdateCells entries -> st & stateCells %~ fillEntries entries
       UpdateColumns entries -> st & stateColumns %~ \cols ->
-        foldl (\cols' (Entity i c) -> Map.insert i c cols') cols entries
+        foldl' (\cols' (Entity i c) -> Map.insert i c cols') cols entries
 
       AddColumn i -> case st ^. stateTableId of
         Nothing -> st
@@ -101,7 +102,7 @@ update actions state = foldl go state actions
                                              (\(Coords _ r) _ -> r /= i)
 
       SetTableId tblId -> st & stateTableId .~ Just tblId
-    fillEntries entries m = foldr (\(c, v) -> Map.insert c v) m $
+    fillEntries entries m = foldl' (\m' (c, v) -> Map.insert c v m') m $
         map (\(colId, recId, val) -> ((Coords colId recId), val)) entries
 
 toCellGrid :: State -> Map Coords CellInfo
@@ -110,7 +111,7 @@ toCellGrid (State _ cells columns records) =
       indexedRows = zip (Map.keys records) [0..]
       colMap = Map.fromList indexedCols
       rowMap = Map.fromList indexedRows
-      go (Coords colId recId, val) m =
+      go m (Coords colId recId) val =
         let may = do
               (col, x) <- Map.lookup colId colMap
               y <- Map.lookup recId rowMap
@@ -118,7 +119,7 @@ toCellGrid (State _ cells columns records) =
         in case may of
           Just (pos, col) -> Map.insert (Coords colId recId) (CellInfo pos col val) m
           Nothing         -> m
-  in foldr go Map.empty $ Map.toList cells
+  in Map.foldlWithKey' go Map.empty cells
 
 toColumns :: State -> Map (Id Column) (Int, Column, Maybe (Id Table))
 toColumns (State tblId _ columns _) =
