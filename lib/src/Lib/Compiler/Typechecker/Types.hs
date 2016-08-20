@@ -36,6 +36,7 @@ data TNullary
   = TyBool
   | TyNumber
   | TyString
+  | TyTime
   deriving (Show, Eq, Ord)
 
 data TUnary

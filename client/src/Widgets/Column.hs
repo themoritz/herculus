@@ -109,6 +109,7 @@ data Branch
   = BBool
   | BString
   | BNumber
+  | BTime
   | BRecord
   | BList
   | BMaybe
@@ -119,6 +120,7 @@ toBranch = \case
   DataBool     -> BBool
   DataString   -> BString
   DataNumber   -> BNumber
+  DataTime     -> BTime
   DataRecord _ -> BRecord
   DataList _   -> BList
   DataMaybe _  -> BMaybe
@@ -128,6 +130,7 @@ branchEntries = Map.fromList
  [ (BBool, "Bool")
  , (BString, "String")
  , (BNumber, "Number")
+ , (BTime, "Time")
  , (BRecord, "Record")
  , (BList, "List")
  , (BMaybe, "Maybe")
@@ -166,6 +169,7 @@ dataTypeDropdown input = do
         (BBool, _, _)        -> DataBool
         (BString, _, _)      -> DataString
         (BNumber, _, _)      -> DataNumber
+        (BTime, _, _)        -> DataTime
         (BRecord, _, Just t) -> DataRecord t
         (BList, s, _)        -> DataList $ fromMaybe DataNumber s
         (BMaybe, s, _)       -> DataMaybe $ fromMaybe DataNumber s

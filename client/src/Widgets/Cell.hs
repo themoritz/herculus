@@ -58,6 +58,11 @@ value inpType datType val = case datType of
       inp <- cellNumber inpType n
       pure (VNumber <$> inp)
     _ -> pure never
+  DataTime -> case val of
+    VTime n -> do
+      inp <- cellTime inpType n
+      pure (VTime <$> inp)
+    _ -> pure never
   DataRecord t -> case val of
     VRecord r -> do
       inp <- cellRecord inpType r t
@@ -105,11 +110,27 @@ cellNumber inpType n = case inpType of
               }
     let attrs = ffor mNew $ \case
           Nothing -> "style" =: "border-color: red"
-          Just _  -> "style" =: "border-color: auto"
+          Just _  -> mempty
     set <- button "Set"
     pure $ fmapMaybe id $ tagPromptlyDyn mNew set
   ColumnDerived -> do
     text $ pack $ show n
+    pure never
+
+cellTime :: forall t m. MonadWidget t m => InputType -> Time -> m (Event t Time)
+cellTime inpType t = case inpType of
+  ColumnInput -> mdo
+    raw <- textInput $ def { _textInputConfig_initialValue = formatTime "%F" t
+                           , _textInputConfig_attributes = attrs
+                           }
+    let time = parseTime "%F" <$> _textInput_value raw
+        attrs = ffor time $ \case
+          Nothing -> "style" =: "border-color: red"
+          Just _  -> mempty
+    set <- button "Set"
+    pure $ fmapMaybe id $ tagPromptlyDyn time set
+  ColumnDerived -> do
+    text $ pack $ show t
     pure never
 
 cellRecord :: MonadWidget t m => InputType -> Id Record -> Id Table -> m (Event t (Id Record))

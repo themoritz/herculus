@@ -16,6 +16,10 @@ import           Data.Monoid        ((<>))
 import           Data.Serialize
 import           Data.Text          (Text, pack, unpack)
 import           Data.Text.Encoding
+import           Data.Time.Clock (UTCTime (..))
+import           Data.Time.Calendar (Day (..))
+import           Data.Time.Format (defaultTimeLocale, parseTimeM)
+import qualified Data.Time.Format as T (formatTime)
 
 import           Text.Read          (readMaybe)
 
@@ -97,6 +101,21 @@ instance FromJSON Number where
 instance Serialize Number where
   put (Number (Decimal places mantissa)) = put places >> put mantissa
   get = Number <$> (Decimal <$> get <*> get)
+
+--
+
+newtype Time = Time UTCTime
+  deriving (Show, Eq, ToJSON, FromJSON)
+
+defaultTime :: Time
+defaultTime = Time $ UTCTime (ModifiedJulianDay 0) 0
+
+parseTime :: Text -> Text -> Maybe Time
+parseTime f str =
+  Time <$> parseTimeM True defaultTimeLocale (unpack f) (unpack str)
+
+formatTime :: Text -> Time -> Text
+formatTime f (Time t) = pack $ T.formatTime defaultTimeLocale (unpack f) t
 
 --
 

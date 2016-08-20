@@ -39,6 +39,7 @@ data Value
   = VBool Bool
   | VString Text
   | VNumber Number
+  | VTime Time
   | VRecord (Id Record)
   | VList [Value]
   | VMaybe (Maybe Value)
@@ -53,6 +54,7 @@ defaultContent = \case
   DataBool     -> CellValue $ VBool False
   DataString   -> CellValue $ VString ""
   DataNumber   -> CellValue $ VNumber 0
+  DataTime     -> CellValue $ VTime $ defaultTime
   DataRecord _ -> CellError "default for records not implemented"
   DataList _   -> CellValue $ VList []
   DataMaybe _  -> CellValue $ VMaybe Nothing

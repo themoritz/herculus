@@ -27,6 +27,7 @@ data DataType
   = DataBool
   | DataString
   | DataNumber
+  | DataTime
   | DataRecord (Id Table)
   | DataList DataType
   | DataMaybe DataType

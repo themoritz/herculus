@@ -50,6 +50,7 @@ library
                      , servant
                      , scientific
                      , text
+                     , time
                      , transformers
                      , unordered-containers
                      , vector
