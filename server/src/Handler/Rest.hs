@@ -151,6 +151,7 @@ handleRecord =
   :<|> handleRecordDelete
   :<|> handleRecordData
   :<|> handleRecordList
+  :<|> handleRecordListWithData
 
 handleRecordCreate :: MonadHexl m => Id Table -> m (Id Record, [Entity Cell])
 handleRecordCreate t = do
@@ -192,6 +193,14 @@ handleRecordData recId = do
 
 handleRecordList :: MonadHexl m => Id Table -> m [Entity Record]
 handleRecordList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
+
+handleRecordListWithData :: MonadHexl m => Id Table -> m [(Id Record, [(Text, CellContent)])]
+handleRecordListWithData tblId = do
+  recs <- listByQuery [ "tableId" =: toObjectId tblId ]
+  for recs $ \r -> do
+    dat <- handleRecordData (entityId r)
+    let entries = map (\(col, content) -> (columnName $ entityVal col, content)) dat
+    pure (entityId r, entries)
 
 --
 

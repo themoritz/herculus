@@ -41,6 +41,7 @@ data RestApi t m = MonadWidget t m => RestApi
   , recordDelete  :: Arg t (Id Record) -> Res t m ()
   , recordData    :: Arg t (Id Record) -> Res t m [(Entity Column, CellContent)]
   , recordList    :: Arg t (Id Table) -> Res t m [Entity Record]
+  , recordListWithData :: Arg t (Id Table) -> Res t m [(Id Record, [(Text, CellContent)])]
   , cellSet       :: Arg t (Id Column) -> Arg t (Id Record) -> Arg t Value -> Res t m ()
   }
 
@@ -53,7 +54,7 @@ api =
       (projectC :<|> projectL) = project
       (tableC :<|> tableL :<|> tableLG :<|> tableD) = table
       (columnC :<|> columnD :<|> columnSN :<|> columnSDT :<|> columnSI :<|> columnL) = column
-      (recordC :<|> recordD :<|> recordDat :<|> recordL) = record
+      (recordC :<|> recordD :<|> recordDat :<|> recordL :<|> recordLWD) = record
       cellS = cell
   in RestApi
        { projectCreate = projectC
@@ -72,6 +73,7 @@ api =
        , recordDelete  = recordD
        , recordData    = recordDat
        , recordList    = recordL
+       , recordListWithData = recordLWD
        , cellSet       = cellS
        }
 

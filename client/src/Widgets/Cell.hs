@@ -8,7 +8,7 @@ module Widgets.Cell
   where
 
 import qualified Data.Map as Map
-import Data.Text (Text, pack, unpack, append)
+import Data.Text (Text, pack, unpack, append, intercalate)
 import Data.Monoid
 
 import Text.Read (readMaybe)
@@ -85,7 +85,7 @@ cellBool inpType b = case inpType of
     inp <- checkbox b def
     pure $ _checkbox_change inp
   ColumnDerived -> do
-    text $ if b then "true" else "false"
+    text $ if b then "True" else "False"
     pure never
 
 cellString :: MonadWidget t m => InputType -> Text -> m (Event t Text)
@@ -136,8 +136,13 @@ cellTime inpType t = case inpType of
 cellRecord :: MonadWidget t m => InputType -> Id Record -> Id Table -> m (Event t (Id Record))
 cellRecord inpType r t = case inpType of
   ColumnInput -> do
-    text "not implemented"
-    pure never
+    postBuild <- getPostBuild
+    records <- loader (Api.recordListWithData api (constDyn $ Right t)) postBuild
+    recordsDyn <- holdDyn [] records
+    let showPairs ps = intercalate ", " $ map (\(n, v) -> n <> ": " <> (pack . show) v) ps
+        recordsMap = Map.fromList . map (\(r, pairs) -> (r, showPairs pairs)) <$> recordsDyn
+    dd <- dropdown r recordsMap def
+    pure $ updated $ _dropdown_value dd
   ColumnDerived -> do
     postBuild <- getPostBuild
     dat <- loader (Api.recordData api $ constDyn $ Right r) postBuild

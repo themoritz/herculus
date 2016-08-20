@@ -8,7 +8,7 @@ import           Data.Aeson       (FromJSON, ToJSON)
 import           Data.Aeson.Bson
 import           Data.Bson        (Val, (=:))
 import qualified Data.Bson        as Bson
-import           Data.Text        (Text)
+import           Data.Text        (Text, unpack)
 import           Data.Typeable
 
 import           GHC.Generics
@@ -21,7 +21,12 @@ import           Lib.Types
 data CellContent
   = CellValue Value
   | CellError Text
-  deriving (Eq, Show, Typeable, Generic)
+  deriving (Eq, Typeable, Generic)
+
+instance Show CellContent where
+  show = \case
+    CellValue v -> show v
+    CellError e -> "Error: " ++ unpack e
 
 instance ToJSON CellContent
 instance FromJSON CellContent
@@ -43,7 +48,17 @@ data Value
   | VRecord (Id Record)
   | VList [Value]
   | VMaybe (Maybe Value)
-  deriving (Generic, Typeable, Show, Eq)
+  deriving (Generic, Typeable, Eq)
+
+instance Show Value where
+  show = \case
+    VBool b -> show b
+    VString t -> show t
+    VNumber n -> show n
+    VTime t -> show t
+    VRecord i -> "Record " ++ show i
+    VList vs -> show vs
+    VMaybe m -> show m
 
 instance ToJSON Value
 instance FromJSON Value
@@ -55,7 +70,7 @@ defaultContent = \case
   DataString   -> CellValue $ VString ""
   DataNumber   -> CellValue $ VNumber 0
   DataTime     -> CellValue $ VTime $ defaultTime
-  DataRecord _ -> CellError "default for records not implemented"
+  DataRecord _ -> CellValue $ VRecord nullObjectId
   DataList _   -> CellValue $ VList []
   DataMaybe _  -> CellValue $ VMaybe Nothing
 

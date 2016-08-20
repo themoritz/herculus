@@ -48,6 +48,7 @@ type RecordRoutes =
  :<|> "delete" :> Capture "recordId" (Id Record) :> Get '[JSON] ()
  :<|> "data" :> Capture "recordId" (Id Record) :> Get '[JSON] [(Entity Column, CellContent)]
  :<|> "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [Entity Record]
+ :<|> "listWithData" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Record, [(Text, CellContent)])]
 
 type CellRoutes =
       "set" :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record)
