@@ -97,13 +97,29 @@ eval env expr = case expr of
           LString v' -> VString v'
     pure $ RValue v
   TBinop op l r -> do
-    RValue (VNumber a) <- eval env l
-    RValue (VNumber b) <- eval env r
-    let res = case op of
-          Add -> a + b
-          Sub -> a - b
-          Mul -> a * b
-    pure $ RValue $ VNumber res
+    let numOp o = do
+          RValue (VNumber a) <- eval env l
+          RValue (VNumber b) <- eval env r
+          pure $ RValue $ VNumber $ a `o` b
+        timOp o = do
+          RValue (VTime a) <- eval env l
+          RValue (VTime b) <- eval env r
+          pure $ RValue $ VBool $ a `o` b
+        bolOp o = do
+          RValue (VBool a) <- eval env l
+          RValue (VBool b) <- eval env r
+          pure $ RValue $ VBool $ a `o` b
+    case op of
+      Add       -> numOp (+)
+      Sub       -> numOp (-)
+      Mul       -> numOp (*)
+      -- Div TODO: catch div by 0 error
+      LessEq    -> timOp (<=)
+      GreaterEq -> timOp (>=)
+      Less      -> timOp (<)
+      Greater   -> timOp (>)
+      And       -> bolOp (&&)
+      Or        -> bolOp (||)
   TPrjRecord e name -> do
     RValue (VRecord recId) <- eval env e
     f <- asks envGetRecordValue

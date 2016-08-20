@@ -138,8 +138,21 @@ infer expr = case expr of
     r' ::: tr <- infer r
     tres <- fresh
     let num = TyNullary TyNumber
+        tim = TyNullary TyTime
+        bol = TyNullary TyBool
+        (arg, res) = case op of
+          Add       -> (num, num)
+          Sub       -> (num, num)
+          Mul       -> (num, num)
+          Div       -> (num, num)
+          LessEq    -> (tim, bol)
+          GreaterEq -> (tim, bol)
+          Less      -> (tim, bol)
+          Greater   -> (tim, bol)
+          And       -> (bol, bol)
+          Or        -> (bol, bol)
         is     = tl  `TyArr` (tr  `TyArr` tres)
-        should = num `TyArr` (num `TyArr` num)
+        should = arg `TyArr` (arg `TyArr` res)
     s <- unify [ (is, should) ]
     pure $ TBinop op l' r' ::: apply s tres
   PPrjRecord e name -> do

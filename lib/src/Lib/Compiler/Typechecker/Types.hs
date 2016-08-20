@@ -88,6 +88,7 @@ typeOfDataType f = \case
   DataBool       -> pure $ TyNullary TyBool
   DataString     -> pure $ TyNullary TyString
   DataNumber     -> pure $ TyNullary TyNumber
+  DataTime       -> pure $ TyNullary TyTime
   (DataRecord t) -> TyRecord <$> f t
   (DataList t)   -> TyUnary TyList <$> typeOfDataType f t
   (DataMaybe t)  -> TyUnary TyMaybe <$> typeOfDataType f t

@@ -26,7 +26,7 @@ import           Lib.Types
 
 lexer :: P.TokenParser ()
 lexer = P.makeTokenParser emptyDef
-  { P.reservedOpNames = ["+", "-", "*", "/", "==", "="]
+  { P.reservedOpNames = ["+", "-", "*", "/", "==", "=", "<=", ">=", "<", ">", "&&", "||"]
   , P.reservedNames = ["if", "then", "else", "True", "False", "let", "in"]
   , P.identStart = letter
   , P.identLetter = alphaNum <|> oneOf "_"
@@ -41,6 +41,9 @@ expr = buildExpressionParser table terms
     table =
       [ [ binary "*" Mul ]
       , [ binary "+" Add, binary "-" Sub ]
+      , [ binary "<=" LessEq, binary ">=" GreaterEq, binary "<" Less, binary ">" Greater]
+      , [ binary "&&" And ]
+      , [ binary "||" Or ]
       ]
     terms =
           try app

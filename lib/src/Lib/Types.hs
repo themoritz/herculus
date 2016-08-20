@@ -105,7 +105,7 @@ instance Serialize Number where
 --
 
 newtype Time = Time UTCTime
-  deriving (Show, Eq, ToJSON, FromJSON)
+  deriving (Show, Eq, Ord, ToJSON, FromJSON)
 
 defaultTime :: Time
 defaultTime = Time $ UTCTime (ModifiedJulianDay 0) 0

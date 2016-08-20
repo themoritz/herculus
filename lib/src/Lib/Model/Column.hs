@@ -122,7 +122,17 @@ data Lit
 instance ToJSON Lit
 instance FromJSON Lit
 
-data Binop = Add | Sub | Mul
+data Binop
+  = Add
+  | Sub
+  | Mul
+  | Div
+  | LessEq
+  | GreaterEq
+  | Less
+  | Greater
+  | And
+  | Or
   deriving (Eq, Ord, Show, Generic)
 
 instance ToJSON Binop
