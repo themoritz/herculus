@@ -22,7 +22,6 @@ import           Data.Text                      (pack)
 import           Lib.Compiler.Typechecker.Types
 import           Lib.Model
 import           Lib.Model.Column
-import           Lib.Types
 
 --
 
@@ -154,7 +153,8 @@ infer expr = case expr of
     lift (f colRef) >>= \case
       Nothing -> throwError $ pack $ "column not found: " <> show colRef
       Just (Entity i col) -> do
-        let t = typeOfDataType $ columnDataType col
+        getRows <- asks envGetTableRows
+        t <- lift $ typeOfDataType getRows $ columnDataType col
         pure $ TColumnRef i ::: t
   PColumnOfTableRef tblRef colRef -> do
     f <- asks envResolveColumnOfTableRef
@@ -163,18 +163,21 @@ infer expr = case expr of
                                      show colRef <> " on table " <>
                                      show tblRef
       Just (Entity colId col) -> do
-        let t = typeOfDataType $ columnDataType col
+        getRows <- asks envGetTableRows
+        t <- lift $ typeOfDataType getRows $ columnDataType col
         pure $ TWholeColumnRef colId ::: TyUnary TyList t
   PTableRef tblRef -> do
     f <- asks envResolveTableRef
     lift (f tblRef) >>= \case
       Nothing -> throwError $ pack $ "table not found: " <> show tblRef
       Just (i, cols) -> do
-        let toRow [] = TyNoRow
-            toRow ((Entity _ c):rest) = TyRow (Ref $ columnName c)
-                                              (typeOfDataType $ columnDataType c)
-                                              (toRow rest)
-        pure $ TTableRef i (map entityId cols) ::: TyUnary TyList (TyRecord $ toRow cols)
+        getRows <- asks envGetTableRows
+        tblRows <- lift $ getRows i
+        -- let toRow [] = TyNoRow
+        --     toRow ((Entity _ c):rest) = TyRow (Ref $ columnName c)
+        --                                       (typeOfDataType $ columnDataType c)
+        --                                       (toRow rest)
+        pure $ TTableRef i (map entityId cols) ::: TyUnary TyList (TyRecord $ tblRows)
 
 --
 

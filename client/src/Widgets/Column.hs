@@ -16,13 +16,14 @@ import Data.Maybe (fromMaybe)
 
 import Reflex.Dom
 
-import Api.Rest (loader', api)
+import Api.Rest (loader, loader', api)
 import qualified Api.Rest as Api
 
 import Data.Map (Map)
 import qualified Data.Map as Map
 
 import Lib.Types
+import Lib.Model
 import Lib.Model.Types
 import Lib.Model.Column
 
@@ -172,4 +173,13 @@ dataTypeDropdown input = do
 
 tableDropdown :: MonadWidget t m => Dynamic t (Id Table) -> m (Dynamic t (Id Table))
 tableDropdown input = do
-  pure $ constDyn nullObjectId
+  initial <- sample $ current input
+  postBuild <- getPostBuild
+  tables <- loader (Api.tableListGlobal api) postBuild
+  tablesDyn <- holdDyn [] tables
+  let tableMap = Map.fromList . map (\(Entity i (Table _ name)) -> (i, name)) <$> tablesDyn
+  dd <- dropdown initial
+                 tableMap
+                 def { _dropdownConfig_setValue = updated input
+                     }
+  pure $ _dropdown_value dd

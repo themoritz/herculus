@@ -4,7 +4,6 @@
 
 module Lib.Compiler where
 
-import qualified Data.Map                       as Map
 import           Data.Text                      (Text, pack, unpack)
 
 import           Lib.Model
@@ -52,6 +51,7 @@ testTypecheckEnv = TypecheckEnv
                                                       )
                                              ]
                                            )
+  , envGetTableRows = \_ -> pure $ TyRow (Ref "A") (TyNullary TyNumber) TyNoRow
   , envOwnTableId = nullObjectId
   }
 

@@ -8,18 +8,21 @@ module Widgets.Cell
   where
 
 import qualified Data.Map as Map
-import Data.Text (Text, pack, unpack)
+import Data.Text (Text, pack, unpack, append)
 import Data.Monoid
 
 import Text.Read (readMaybe)
 
-import Reflex.Dom hiding (Value, value)
+import Reflex.Dom hiding (Value, value, append)
 
 import Lib.Types
+import Lib.Model
 import Lib.Model.Types
 import Lib.Model.Cell
 import Lib.Model.Column
 
+import Api.Rest (loader, api)
+import qualified Api.Rest as Api
 import Misc
 
 data CellConfig t = CellConfig
@@ -57,8 +60,8 @@ value inpType datType val = case datType of
     _ -> pure never
   DataRecord t -> case val of
     VRecord r -> do
-      cellRecord inpType r
-      pure never
+      inp <- cellRecord inpType r t
+      pure (VRecord <$> inp)
     _ -> pure never
   DataList t -> case val of
     VList xs -> do
@@ -109,8 +112,23 @@ cellNumber inpType n = case inpType of
     text $ pack $ show n
     pure never
 
-cellRecord :: MonadWidget t m => InputType -> Id Record -> m ()
-cellRecord inpType r = pure ()
+cellRecord :: MonadWidget t m => InputType -> Id Record -> Id Table -> m (Event t (Id Record))
+cellRecord inpType r t = case inpType of
+  ColumnInput -> do
+    text "not implemented"
+    pure never
+  ColumnDerived -> do
+    postBuild <- getPostBuild
+    dat <- loader (Api.recordData api $ constDyn $ Right r) postBuild
+    res <- holdDyn Map.empty (Map.fromList . map (\(Entity i c, content) -> (i,(c,content)))<$> dat)
+    _ <- el "ul" $ listWithKey res $ \i v -> el "li" $ do
+      dynText (flip append ": " . columnName . fst <$> v)
+      dyn $ ffor v $ \(col, content) -> case content of
+        CellError e -> do
+          text e
+          pure never
+        CellValue val -> value inpType (columnDataType col) val
+    pure never
 
 --
 

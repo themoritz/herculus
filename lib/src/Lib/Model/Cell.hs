@@ -36,9 +36,9 @@ instance Val CellContent where
 --
 
 data Value
-  = VString Text
+  = VBool Bool
+  | VString Text
   | VNumber Number
-  | VBool Bool
   | VRecord (Id Record)
   | VList [Value]
   | VMaybe (Maybe Value)
@@ -53,7 +53,7 @@ defaultContent = \case
   DataBool     -> CellValue $ VBool False
   DataString   -> CellValue $ VString ""
   DataNumber   -> CellValue $ VNumber 0
-  DataRecord _ -> CellError "no default for records"
+  DataRecord _ -> CellError "default for records not implemented"
   DataList _   -> CellValue $ VList []
   DataMaybe _  -> CellValue $ VMaybe Nothing
 

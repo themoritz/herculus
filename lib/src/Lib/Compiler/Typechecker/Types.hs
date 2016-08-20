@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TemplateHaskell            #-}
 
@@ -50,7 +51,22 @@ data Type
   | TyRecord Type
   | TyRow (Ref Column) Type Type
   | TyNoRow
-  deriving (Eq, Ord)
+  deriving (Ord)
+
+instance Eq Type where
+  TyVar a == TyVar b = a == b
+  TyNullary a == TyNullary b = a == b
+  TyUnary a s == TyUnary b t = a == b && s == t
+  TyArr s t == TyArr s' t' = s == s' && t == t'
+  TyRecord s == TyRecord t = rowMap s == rowMap t
+    where rowMap :: Type -> Map (Ref Column) Type
+          rowMap = Map.fromList . go
+          go TyNoRow = []
+          go (TyVar _) = []
+          go (TyRow n t' rest) = (n,t') : go rest
+  TyNoRow == TyNoRow = True
+  _ == _ = False
+  
 
 instance Show Type where
   show (TyVar a) = show a
@@ -66,13 +82,14 @@ data Scheme = Forall [TVar] Type
 instance Show Scheme where
   show (Forall as t) = "forall " <> intercalate " " (map show as) <> ". " <> show t
 
-typeOfDataType :: DataType -> Type
-typeOfDataType DataBool       = TyNullary TyBool
-typeOfDataType DataString     = TyNullary TyString
-typeOfDataType DataNumber     = TyNullary TyNumber
-typeOfDataType (DataRecord t) = TyRecord undefined -- TODO: get record info
-typeOfDataType (DataList t)   = TyUnary TyList (typeOfDataType t)
-typeOfDataType (DataMaybe t)  = TyUnary TyMaybe (typeOfDataType t)
+typeOfDataType :: Applicative m => (Id Table -> m Type) -> DataType -> m Type
+typeOfDataType f = \case
+  DataBool       -> pure $ TyNullary TyBool
+  DataString     -> pure $ TyNullary TyString
+  DataNumber     -> pure $ TyNullary TyNumber
+  (DataRecord t) -> TyRecord <$> f t
+  (DataList t)   -> TyUnary TyList <$> typeOfDataType f t
+  (DataMaybe t)  -> TyUnary TyMaybe <$> typeOfDataType f t
 
 --
 
@@ -146,6 +163,7 @@ data TypecheckEnv m = TypecheckEnv
   { envResolveColumnRef        :: Ref Column -> m (Maybe (Entity Column))
   , envResolveColumnOfTableRef :: Ref Table -> Ref Column -> m (Maybe (Entity Column))
   , envResolveTableRef         :: Ref Table -> m (Maybe (Id Table, [Entity Column]))
+  , envGetTableRows            :: Id Table -> m Type
   , envOwnTableId              :: Id Table
   }
 

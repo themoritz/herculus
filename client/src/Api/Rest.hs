@@ -29,6 +29,7 @@ data RestApi t m = MonadWidget t m => RestApi
   , projectList   :: Res t m [Entity Project]
   , tableCreate   :: Arg t Table -> Res t m (Id Table)
   , tableList     :: Arg t (Id Project) -> Res t m [Entity Table]
+  , tableListGlobal :: Res t m [Entity Table]
   , tableData     :: Arg t (Id Table) -> Res t m [(Id Column, Id Record, CellContent)]
   , columnCreate  :: Arg t (Id Table) -> Res t m (Id Column, [Entity Cell])
   , columnDelete  :: Arg t (Id Column) -> Res t m ()
@@ -38,6 +39,7 @@ data RestApi t m = MonadWidget t m => RestApi
   , columnList    :: Arg t (Id Table) -> Res t m [Entity Column]
   , recordCreate  :: Arg t (Id Table) -> Res t m (Id Record, [Entity Cell])
   , recordDelete  :: Arg t (Id Record) -> Res t m ()
+  , recordData    :: Arg t (Id Record) -> Res t m [(Entity Column, CellContent)]
   , recordList    :: Arg t (Id Table) -> Res t m [Entity Record]
   , cellSet       :: Arg t (Id Column) -> Arg t (Id Record) -> Arg t Value -> Res t m ()
   }
@@ -49,15 +51,16 @@ api =
                    (Proxy :: Proxy m)
                    (constDyn (BasePath "/"))
       (projectC :<|> projectL) = project
-      (tableC :<|> tableL :<|> tableD) = table
+      (tableC :<|> tableL :<|> tableLG :<|> tableD) = table
       (columnC :<|> columnD :<|> columnSN :<|> columnSDT :<|> columnSI :<|> columnL) = column
-      (recordC :<|> recordD :<|> recordL) = record
+      (recordC :<|> recordD :<|> recordDat :<|> recordL) = record
       cellS = cell
   in RestApi
        { projectCreate = projectC
        , projectList   = projectL
        , tableCreate   = tableC
        , tableList     = tableL
+       , tableListGlobal = tableLG
        , tableData     = tableD
        , columnCreate  = columnC
        , columnDelete  = columnD
@@ -67,6 +70,7 @@ api =
        , columnList    = columnL
        , recordCreate  = recordC
        , recordDelete  = recordD
+       , recordData    = recordDat
        , recordList    = recordL
        , cellSet       = cellS
        }

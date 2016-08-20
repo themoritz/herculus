@@ -59,6 +59,7 @@ handleTable :: MonadHexl m => ServerT TableRoutes m
 handleTable =
        handleTableCreate
   :<|> handleTableList
+  :<|> handleTableListGlobal
   :<|> handleTableData
 
 handleTableCreate :: MonadHexl m => Table -> m (Id Table)
@@ -66,6 +67,9 @@ handleTableCreate = create
 
 handleTableList :: MonadHexl m => Id Project -> m [Entity Table]
 handleTableList projId = listByQuery [ "projectId" =: toObjectId projId ]
+
+handleTableListGlobal :: MonadHexl m => m [Entity Table]
+handleTableListGlobal = listByQuery [ ]
 
 handleTableData :: MonadHexl m => Id Table -> m [(Id Column, Id Record, CellContent)]
 handleTableData tblId = do
@@ -145,6 +149,7 @@ handleRecord :: MonadHexl m => ServerT RecordRoutes m
 handleRecord =
        handleRecordCreate
   :<|> handleRecordDelete
+  :<|> handleRecordData
   :<|> handleRecordList
 
 handleRecordCreate :: MonadHexl m => Id Table -> m (Id Record, [Entity Cell])
@@ -175,6 +180,15 @@ handleRecordDelete recId = do
                    filter (\(_, typ) -> typ == OneToAll) .
                    getChildren (entityId e) $ graph) cs
   propagate $ RootWholeColumns allChildren
+
+handleRecordData :: MonadHexl m => Id Record -> m [(Entity Column, CellContent)]
+handleRecordData recId = do
+  cells <- listByQuery
+    [ "aspects.recordId" =: toObjectId recId ]
+  for cells $ \(Entity _ cell) -> do
+    let i = aspectsColumnId $ cellAspects cell
+    col <- getById' i
+    pure (Entity i col, cellContent cell)
 
 handleRecordList :: MonadHexl m => Id Table -> m [Entity Record]
 handleRecordList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
@@ -207,11 +221,12 @@ compileColumn c = do
   compileResult <- case res of
     Left msg -> abort msg
     Right (expr ::: typ) -> do
-      if typ /= typeOfDataType (columnDataType col)
+      colTyp <- typeOfDataType getTableRows (columnDataType col)
+      if typ /= colTyp
         then abort $ pack $
                "Inferred type `" <> show typ <>
                "` does not match column type `" <>
-               show (columnDataType col) <> "`"
+               show colTyp <> "`."
         else do
           let deps = collectDependencies expr
           cycles <- modifyDependencies c deps
@@ -259,6 +274,8 @@ mkTypecheckEnv ownTblId = TypecheckEnv
             cols <- listByQuery [ "tableId" =: toObjectId tblId ]
             pure $ Just (tblId, cols)
 
+    , envGetTableRows = getTableRows
+
     , envOwnTableId = ownTblId
 
     }
@@ -273,5 +290,14 @@ mkTypecheckEnv ownTblId = TypecheckEnv
       case columnRes of
         Left _  -> pure Nothing
         Right e -> pure $ Just e
+
+getTableRows :: MonadHexl m => Id Table -> m Type
+getTableRows t = do
+  cols <- listByQuery [ "tableId" =: toObjectId t ]
+  let toRow [] = pure TyNoRow
+      toRow ((Entity _ c):rest) = TyRow (Ref $ columnName c)
+                                    <$> typeOfDataType getTableRows (columnDataType c)
+                                    <*> toRow rest
+  toRow cols
 
 --

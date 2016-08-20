@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Widgets.Table
   ( table
@@ -44,10 +45,10 @@ data CellInfo = CellInfo
   } deriving (Eq)
 
 data State = State
-  { _stateTableId :: Maybe (Id Table)
-  , _stateCells   :: Map Coords CellContent
-  , _stateColumns :: Map (Id Column) Column
-  , _stateRecords :: Map (Id Record) Record
+  { _stateTableId :: !(Maybe (Id Table))
+  , _stateCells   :: !(Map Coords CellContent)
+  , _stateColumns :: !(Map (Id Column) Column)
+  , _stateRecords :: !(Map (Id Record) Record)
   }
 
 makeLenses ''State
