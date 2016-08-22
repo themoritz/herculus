@@ -51,7 +51,7 @@ instance FromDocument Table where
 data Record = Record
   { recordTableId :: Id Table
   }
-  deriving (Generic)
+  deriving (Generic, Eq, Ord)
 
 instance ToJSON Record
 instance FromJSON Record

@@ -25,21 +25,22 @@ import Api.Rest (loader, api)
 import qualified Api.Rest as Api
 import Misc
 
-data CellConfig t = CellConfig
-  { _cellConfig_content :: Dynamic t CellContent
-  , _cellConfig_column :: Column
-  }
-
 cell :: MonadWidget t m
      => Id Column -> Id Record
-     -> CellConfig t -> m (Event t Value)
-cell colId recId (CellConfig content column) = el "div" $
+     -> Dynamic t Column
+     -> Dynamic t CellContent
+     -> m (Event t Value)
+cell colId recId column content = el "div" $
   switchEvent $ dynWidget content $ \case
     CellError msg -> do
       text $ "Error: " <> msg
       pure never
-    CellValue val -> value (columnInputType column)
-                           (columnDataType column) val
+    CellValue val -> do
+      let inpDatType = do
+            col <- column
+            pure (columnInputType col, columnDataType col)
+      switchEvent $ dynWidget (nubDyn inpDatType) $ \(inpType, datType) ->
+        value inpType datType val
 
 value :: MonadWidget t m => InputType -> DataType -> Value -> m (Event t Value)
 value inpType datType val = case datType of

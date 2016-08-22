@@ -171,7 +171,7 @@ table loadTable updateCells updateColumns = el "div" $ divClass "canvas" $ mdo
       cells = toCellGrid <$> state
 
   -- Columns
-  colEvents <- listWithKey columns $ \colId colInfo -> do
+  colEvents <- listWithKeyEq columns $ \colId colInfo -> do
     let rect = ffor colInfo $ \(i, _, _) ->
           Rectangle (i * cellWidth + recWidth) 0 cellWidth colHeight
         columnD = (\(_, c, _) -> c) <$> colInfo
@@ -190,7 +190,7 @@ table loadTable updateCells updateColumns = el "div" $ divClass "canvas" $ mdo
   addCol <- rectangleDyn addColRect $ button "+"
 
   -- Records
-  deleteRecord <- fmap dynMapEvents <$> listWithKey records $ \recId recInfo -> do
+  deleteRecord <- fmap dynMapEvents <$> listWithKeyEq records $ \recId recInfo -> do
     let rect = ffor recInfo $ \(i, _) ->
           Rectangle 0 (i * cellHeight + colHeight) recWidth cellHeight
     rectangleDyn rect $ record recId
@@ -209,11 +209,9 @@ table loadTable updateCells updateColumns = el "div" $ divClass "canvas" $ mdo
                        (y * cellHeight + colHeight)
                        cellWidth
                        cellHeight
-        colD = ciCol <$> cellInfo
+        col = ciCol <$> cellInfo
         content = ciContent <$> cellInfo
-    rectangleDyn rect $
-      switchEvent $ dynWidget colD $ \col ->
-        cell colId recId (CellConfig content col)
+    rectangleDyn rect $ cell colId recId col content
 
   colArg <- holdDyn (Left "") $ (\(Coords c _, _) -> Right c) <$> cellChanged
   recArg <- holdDyn (Left "") $ (\(Coords _ r, _) -> Right r) <$> cellChanged
