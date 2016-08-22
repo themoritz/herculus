@@ -85,7 +85,9 @@ update actions state = foldl' go state actions
 
       UpdateCells entries -> st & stateCells %~ fillEntries entries
       UpdateColumns entries -> st & stateColumns %~ \cols ->
-        foldl' (\cols' (Entity i c) -> Map.insert i c cols') cols entries
+        foldl' (\cols' (Entity i c) -> Map.insert i c cols') cols $
+        filter (\(Entity _ c) -> st ^. stateTableId == Just (columnTableId c)) $
+        entries
 
       AddColumn i -> case st ^. stateTableId of
         Nothing -> st
