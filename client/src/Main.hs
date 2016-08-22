@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
@@ -8,13 +6,10 @@ module Main where
 import Control.DeepSeq
 import Control.Monad
 
-import Debug.Trace
-
 import Data.Aeson
 import Data.Aeson.Types
 import Data.Proxy
 import Data.Typeable (Typeable)
-import Data.Foldable
 
 import GHC.Generics (Generic)
 
@@ -27,6 +22,8 @@ import Lib.Model
 import Lib.Model.Types
 
 import Lib.Api.Rest
+
+import WebSocket
 
 main :: IO ()
 main = do

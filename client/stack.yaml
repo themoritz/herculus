@@ -15,8 +15,5 @@ packages:
 - location: ../lib
   extra-dep: true
 
-- location: ../../react-flux-servant
-  extra-dep: true
-
 extra-deps:
 - react-flux-1.2.1

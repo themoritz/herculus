@@ -12,21 +12,25 @@ cabal-version:       >=1.10
 
 executable client
   main-is:             Main.hs
-  other-modules:
+  other-modules:       React.Flux.Addons.Servant
+                     , WebSocket
   default-extensions:  OverloadedStrings
+                     , TypeFamilies
+                     , LambdaCase
   build-depends:       base
                      , aeson
                      , bytestring
                      , containers
                      , deepseq
                      , ghcjs-dom
+                     , ghcjs-base
                      , lens
                      , lib
                      , mtl
                      , react-flux
-                     , react-flux-servant
                      , servant
                      , text
+                     , transformers
   hs-source-dirs:      src
   ghcjs-options:       -Wall -DGHCJS_BROWSER
   default-language:    Haskell2010
