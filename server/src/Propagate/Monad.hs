@@ -118,7 +118,11 @@ instance MonadHexl m => MonadPropagate (PropT m) where
 
   getRecordValue r colRef = do
     -- TODO: cache
-    col <- lift $ getOneByQuery' [ "name" =: unRef colRef ]
+    record <- lift $ getById' r
+    col <- lift $ getOneByQuery'
+      [ "name" =: unRef colRef
+      , "tableId" =: toObjectId (recordTableId record)
+      ]
     getCellValue (entityId col) r
 
   addTargets c prop = stateTargets . at c . non (Just []) %=
