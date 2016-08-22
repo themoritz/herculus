@@ -58,9 +58,7 @@ emptyState = State Nothing Map.empty Map.empty Map.empty
 
 data Action
   -- Initial
-  = SetColumns [Entity Column]
-  | SetRecords [Entity Record]
-  | SetCells [(Id Column, Id Record, CellContent)]
+  = Initialize ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
   --
   | UpdateCells [(Id Column, Id Record, CellContent)]
   | UpdateColumns [Entity Column]
@@ -77,11 +75,10 @@ update :: NonEmpty Action -> State -> State
 update actions state = foldl' go state actions
   where
     go st action = case action of
-      SetColumns cols -> st & stateColumns .~
-        (Map.fromList $ map (\(Entity i c) -> (i, c)) cols)
-      SetRecords recs -> st & stateRecords .~
-        (Map.fromList $ map (\(Entity i r) -> (i, r)) recs)
-      SetCells entries -> st & stateCells .~ fillEntries entries Map.empty
+      Initialize (cols, recs, entries) ->
+        st & stateColumns .~ (Map.fromList $ map (\(Entity i c) -> (i, c)) cols)
+           & stateRecords .~ (Map.fromList $ map (\(Entity i r) -> (i, r)) recs)
+           & stateCells .~ fillEntries entries Map.empty
 
       UpdateCells entries -> st & stateCells %~ fillEntries entries
       UpdateColumns entries -> st & stateColumns %~ \cols ->
@@ -146,17 +143,11 @@ table loadTable updateCells updateColumns = el "div" $ divClass "canvas" $ mdo
 
   tableIdArg <- holdDyn (Left "") (Right <$> loadTable)
 
-  columnsRes <- loader (Api.columnList api tableIdArg) $
-                       () <$ loadTable
-  recordsRes <- loader (Api.recordList api tableIdArg) $
-                       () <$ loadTable
-  dataRes <- loader (Api.tableData api tableIdArg) $
+  dataRes <- loader (Api.tableGetWhole api tableIdArg) $
                     () <$ loadTable
 
   state <- foldDyn update emptyState $ mergeList
-    [ SetColumns  <$> columnsRes
-    , SetRecords  <$> recordsRes
-    , SetCells    <$> dataRes
+    [ Initialize <$> dataRes
     , (\((Coords c r), val) -> UpdateCells [(c, r, CellValue val)]) <$> cellChanged
     , UpdateCells <$> updateCells
     , UpdateColumns <$> updateColumns

@@ -61,6 +61,7 @@ handleTable =
   :<|> handleTableList
   :<|> handleTableListGlobal
   :<|> handleTableData
+  :<|> handleTableGetWhole
 
 handleTableCreate :: MonadHexl m => Table -> m (Id Table)
 handleTableCreate = create
@@ -76,6 +77,12 @@ handleTableData tblId = do
   cells <- listByQuery [ "aspects.tableId" =: toObjectId tblId ]
   let go (Cell v (Aspects _ c r)) = (c, r, v)
   pure $ map (go . entityVal) cells
+
+handleTableGetWhole :: MonadHexl m => Id Table -> m ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
+handleTableGetWhole tblId = do
+  (,,) <$> handleColumnList tblId
+       <*> handleRecordList tblId
+       <*> handleTableData tblId
 
 --
 

@@ -31,6 +31,7 @@ data RestApi t m = MonadWidget t m => RestApi
   , tableList     :: Arg t (Id Project) -> Res t m [Entity Table]
   , tableListGlobal :: Res t m [Entity Table]
   , tableData     :: Arg t (Id Table) -> Res t m [(Id Column, Id Record, CellContent)]
+  , tableGetWhole :: Arg t (Id Table) -> Res t m ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
   , columnCreate  :: Arg t (Id Table) -> Res t m (Id Column, [Entity Cell])
   , columnDelete  :: Arg t (Id Column) -> Res t m ()
   , columnSetName :: Arg t (Id Column) -> Arg t Text -> Res t m ()
@@ -52,7 +53,7 @@ api =
                    (Proxy :: Proxy m)
                    (constDyn (BasePath "/"))
       (projectC :<|> projectL) = project
-      (tableC :<|> tableL :<|> tableLG :<|> tableD) = table
+      (tableC :<|> tableL :<|> tableLG :<|> tableD :<|> tableGW) = table
       (columnC :<|> columnD :<|> columnSN :<|> columnSDT :<|> columnSI :<|> columnL) = column
       (recordC :<|> recordD :<|> recordDat :<|> recordL :<|> recordLWD) = record
       cellS = cell
@@ -63,6 +64,7 @@ api =
        , tableList     = tableL
        , tableListGlobal = tableLG
        , tableData     = tableD
+       , tableGetWhole = tableGW
        , columnCreate  = columnC
        , columnDelete  = columnD
        , columnSetName = columnSN

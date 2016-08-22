@@ -31,6 +31,8 @@ type TableRoutes =
  :<|> "listGlobal" :> Get '[JSON] [Entity Table]
  :<|> "data" :> Capture "tableId" (Id Table)
              :> Get '[JSON] [(Id Column, Id Record, CellContent)]
+ :<|> "getWhole" :> Capture "tableId" (Id Table)
+                 :> Get '[JSON] ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
 
 type ColumnRoutes =
         "create"  :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Id Column, [Entity Cell])
