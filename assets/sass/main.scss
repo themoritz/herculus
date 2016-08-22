@@ -35,19 +35,9 @@
   }
 }
 
-// Overwrite Skeleton
-
 body {
   font-family: "Open Sans";
-}
-
-button {
-    line-height: 24px;
-    font-size: 11px;
-    height: 26px;
-    vertical-align: middle;
-    margin-bottom: 0.5rem;
-    padding: 0px 5px;
+  color: green;
 }
 
 textarea {
@@ -55,30 +45,4 @@ textarea {
     font-size: 10pt;
     height: 35px;
     width: 290px;
-}
-
-input[type="text"],
-select {
-    height: 26px;
-    padding: 0px 5px;
-    margin-bottom: 0.5rem;
-}
-
-input[type="text"] {
-    width: 120px;
-}
-
-.container {
-    margin: 0px 0px;
-    width: 100%;
-    max-width: inherit;
-}
-
-.columns {
-    padding: 3px;
-    margin-left: 0px;
-}
-
-li {
-    margin-bottom: 1px;
 }

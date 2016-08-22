@@ -12,23 +12,11 @@ require-stack-version: ">= 0.1.8"
 packages:
 - location: .
 
-- location:
-    git: https://github.com/reflex-frp/reflex.git
-    commit: a06d50dedf9a705f9327bbe0a15c8131ad80b2f9
-  extra-dep: true
-
-- location:
-    git: https://github.com/reflex-frp/reflex-dom.git
-    commit: a2b76b1892549f1b6834b3d81bd9bec963aa2a6f
-  extra-dep: true
-
-- location: ../../servant-reflex
-  extra-dep: true
-
 - location: ../lib
   extra-dep: true
 
+- location: ../../react-flux-servant
+  extra-dep: true
+
 extra-deps:
-- ghcjs-dom-0.2.3.1
-- ref-tf-0.4
-- zenc-0.1.1
+- react-flux-1.2.1

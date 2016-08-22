@@ -1,6 +1,5 @@
 client/.stack-work/
 server/.stack-work/
 lib/.stack-work/
-assets/public/js/
-assets/public/css/main.css
+assets/public/
 node_modules/

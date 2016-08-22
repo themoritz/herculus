@@ -1,7 +1,10 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module Lib.Model.Types where
+
+import Control.DeepSeq
 
 import           Data.Aeson      (FromJSON, ToJSON)
 import           Data.Text       (Text)
@@ -17,7 +20,7 @@ import           Lib.Types
 
 data Project = Project
   { projectName :: Text
-  } deriving (Generic)
+  } deriving (Generic, NFData)
 
 instance ToJSON Project
 instance FromJSON Project

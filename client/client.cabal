@@ -12,35 +12,21 @@ cabal-version:       >=1.10
 
 executable client
   main-is:             Main.hs
-  other-modules:       Misc
-                     , Widgets.ProjectList
-                     , Widgets.TableList
-                     , Widgets.Table
-                     , Widgets.Cell
-                     , Widgets.Record
-                     , Widgets.Canvas
-                     , Widgets.Column
-                     , Api.Rest
-  default-extensions:  TypeFamilies
-                     , FlexibleContexts
-                     , OverloadedStrings
-  other-extensions:    TemplateHaskell
+  other-modules:
+  default-extensions:  OverloadedStrings
   build-depends:       base
                      , aeson
                      , bytestring
                      , containers
-                     , data-default
+                     , deepseq
                      , ghcjs-dom
                      , lens
                      , lib
                      , mtl
-                     , reflex
-                     , reflex-dom
-                     , semigroups
+                     , react-flux
+                     , react-flux-servant
                      , servant
-                     , servant-reflex
                      , text
-                     , these
   hs-source-dirs:      src
-  ghcjs-options:       -Wall
+  ghcjs-options:       -Wall -DGHCJS_BROWSER
   default-language:    Haskell2010

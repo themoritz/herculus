@@ -42,6 +42,7 @@ library
                      , base64-bytestring
                      , cereal
                      , containers
+                     , deepseq
                      , Decimal
                      , http-api-data
                      , lens

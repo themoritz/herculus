@@ -34,18 +34,31 @@ import           Propagate
 
 handle :: MonadHexl m => ServerT Routes m
 handle =
-       handleProject
-  :<|> handleTable
-  :<|> handleColumn
-  :<|> handleRecord
-  :<|> handleCell
-
---
-
-handleProject :: MonadHexl m => ServerT ProjectRoutes m
-handleProject =
        handleProjectCreate
   :<|> handleProjectList
+
+  :<|> handleTableCreate
+  :<|> handleTableList
+  :<|> handleTableListGlobal
+  :<|> handleTableData
+  :<|> handleTableGetWhole
+
+  :<|> handleColumnCreate
+  :<|> handleColumnDelete
+  :<|> handleColumnSetName
+  :<|> handleColumnSetDataType
+  :<|> handleColumnSetInput
+  :<|> handleColumnList
+
+  :<|> handleRecordCreate
+  :<|> handleRecordDelete
+  :<|> handleRecordData
+  :<|> handleRecordList
+  :<|> handleRecordListWithData
+
+  :<|> handleCellSet
+
+--
 
 handleProjectCreate :: MonadHexl m => Project -> m (Id Project)
 handleProjectCreate = create
@@ -54,14 +67,6 @@ handleProjectList :: MonadHexl m => m [Entity Project]
 handleProjectList = listAll
 
 --
-
-handleTable :: MonadHexl m => ServerT TableRoutes m
-handleTable =
-       handleTableCreate
-  :<|> handleTableList
-  :<|> handleTableListGlobal
-  :<|> handleTableData
-  :<|> handleTableGetWhole
 
 handleTableCreate :: MonadHexl m => Table -> m (Id Table)
 handleTableCreate = create
@@ -85,15 +90,6 @@ handleTableGetWhole tblId = do
        <*> handleTableData tblId
 
 --
-
-handleColumn :: MonadHexl m => ServerT ColumnRoutes m
-handleColumn =
-       handleColumnCreate
-  :<|> handleColumnDelete
-  :<|> handleColumnSetName
-  :<|> handleColumnSetDataType
-  :<|> handleColumnSetInput
-  :<|> handleColumnList
 
 handleColumnCreate :: MonadHexl m => Id Table -> m (Id Column, [Entity Cell])
 handleColumnCreate t = do
@@ -152,14 +148,6 @@ handleColumnList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
 
 --
 
-handleRecord :: MonadHexl m => ServerT RecordRoutes m
-handleRecord =
-       handleRecordCreate
-  :<|> handleRecordDelete
-  :<|> handleRecordData
-  :<|> handleRecordList
-  :<|> handleRecordListWithData
-
 handleRecordCreate :: MonadHexl m => Id Table -> m (Id Record, [Entity Cell])
 handleRecordCreate t = do
   r <- create $ Record t
@@ -210,10 +198,6 @@ handleRecordListWithData tblId = do
     pure (entityId r, entries)
 
 --
-
-handleCell :: MonadHexl m => ServerT CellRoutes m
-handleCell =
-       handleCellSet
 
 handleCellSet :: MonadHexl m => Id Column -> Id Record -> Value -> m ()
 handleCellSet c r val = do

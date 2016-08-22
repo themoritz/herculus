@@ -1,12 +1,17 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Lib.Model where
+
+import Control.DeepSeq
 
 import           Data.Aeson             (FromJSON, ToJSON)
 import           Data.Bson              ((=:))
 import qualified Data.Bson              as Bson
 import           Data.Monoid
+import Data.Typeable (Typeable)
 
 import           GHC.Generics
 
@@ -23,7 +28,9 @@ instance Model Dependencies where collectionName = const "dependencies"
 data Entity a = Entity
   { entityId  :: Id a
   , entityVal :: a
-  } deriving (Generic)
+  } deriving (Typeable, Generic)
+
+deriving instance NFData a => NFData (Entity a)
 
 instance ToJSON a => ToJSON (Entity a)
 instance FromJSON a => FromJSON (Entity a)

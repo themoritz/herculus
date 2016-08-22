@@ -8,17 +8,10 @@ gulp.task('watch', function () {
         port: 3001,
         open: false
     })
-    gulp.watch('assets/public/js/main.js', browserSync.reload)
-    gulp.watch('assets/sass/**/*.scss', function () {
-        gulp.src('assets/sass/**/*.scss')
-            .pipe(sass({
-                errLogToConsole: true
-            })).on('error', function (err) {
-                console.log(err)
-                this.emit('end')
-            })
-            .pipe(gulp.dest('assets/public/css'))
-            .pipe(browserSync.stream())
+    // gulp.watch('assets/public/js/*', browserSync.reload)
+    gulp.watch('assets/public/css/*', function () {
+      gulp.src('assets/public/css/*')
+        .pipe(browserSync.stream())
     })
 })
 

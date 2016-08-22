@@ -15,43 +15,50 @@ import           Lib.Model.Cell
 import           Lib.Types
 
 type Routes =
-      "project" :> ProjectRoutes
- :<|> "table" :> TableRoutes
- :<|> "column" :> ColumnRoutes
- :<|> "record" :> RecordRoutes
- :<|> "cell" :> CellRoutes
+      ProjectCreate
+ :<|> ProjectList
 
-type ProjectRoutes =
-      "create" :> ReqBody '[JSON] Project :> Post '[JSON] (Id Project)
- :<|> "list" :> Get '[JSON] [Entity Project]
+ :<|> TableCreate
+ :<|> TableList
+ :<|> TableListGlobal
+ :<|> TableData
+ :<|> TableGetWhole
 
-type TableRoutes =
-      "create" :> ReqBody '[JSON] Table :> Post '[JSON] (Id Table)
- :<|> "list" :> Capture "projectId" (Id Project) :> Get '[JSON] [Entity Table]
- :<|> "listGlobal" :> Get '[JSON] [Entity Table]
- :<|> "data" :> Capture "tableId" (Id Table)
-             :> Get '[JSON] [(Id Column, Id Record, CellContent)]
- :<|> "getWhole" :> Capture "tableId" (Id Table)
-                 :> Get '[JSON] ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
+ :<|> ColumnCreate
+ :<|> ColumnDelete
+ :<|> ColumnSetName
+ :<|> ColumnSetDataType
+ :<|> ColumnSetInput
+ :<|> ColumnList
 
-type ColumnRoutes =
-        "create"  :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Id Column, [Entity Cell])
-  :<|>  "delete"  :> Capture "columnId" (Id Column) :> Get '[JSON] ()
-  :<|>  "setName" :> Capture "columnId" (Id Column)
-                  :> ReqBody '[JSON] Text :> Post '[JSON] ()
-  :<|>  "setDataType" :> Capture "columnId" (Id Column)
-                  :> ReqBody '[JSON] DataType :> Post '[JSON] ()
-  :<|>  "setInput" :> Capture "columnId" (Id Column)
-                  :> ReqBody '[JSON] (InputType, Text) :> Post '[JSON] ()
-  :<|>  "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [Entity Column]
+ :<|> RecordCreate
+ :<|> RecordDelete
+ :<|> RecordData
+ :<|> RecordList
+ :<|> RecordListWithData
 
-type RecordRoutes =
-      "create" :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Id Record, [Entity Cell])
- :<|> "delete" :> Capture "recordId" (Id Record) :> Get '[JSON] ()
- :<|> "data" :> Capture "recordId" (Id Record) :> Get '[JSON] [(Entity Column, CellContent)]
- :<|> "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [Entity Record]
- :<|> "listWithData" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Record, [(Text, CellContent)])]
+ :<|> CellSet
 
-type CellRoutes =
-      "set" :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record)
-            :> ReqBody '[JSON] Value :> Post '[JSON] ()
+type ProjectCreate = "project" :> "create" :> ReqBody '[JSON] Project :> Post '[JSON] (Id Project)
+type ProjectList   = "project" :> "list"   :> Get '[JSON] [Entity Project]
+
+type TableCreate     = "table" :> "create" :> ReqBody '[JSON] Table :> Post '[JSON] (Id Table)
+type TableList       = "table" :> "list" :> Capture "projectId" (Id Project) :> Get '[JSON] [Entity Table]
+type TableListGlobal = "table" :> "listGlobal" :> Get '[JSON] [Entity Table]
+type TableData       = "table" :> "data" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Column, Id Record, CellContent)]
+type TableGetWhole   = "table" :> "getWhole" :> Capture "tableId" (Id Table) :> Get '[JSON] ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
+
+type ColumnCreate      = "column" :> "create"  :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Id Column, [Entity Cell])
+type ColumnDelete      = "column" :> "delete"  :> Capture "columnId" (Id Column) :> Get '[JSON] ()
+type ColumnSetName     = "column" :> "setName" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] Text :> Post '[JSON] ()
+type ColumnSetDataType = "column" :> "setDataType" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] DataType :> Post '[JSON] ()
+type ColumnSetInput    = "column" :> "setInput" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] (InputType, Text) :> Post '[JSON] ()
+type ColumnList        = "column" :> "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [Entity Column]
+
+type RecordCreate       = "record" :> "create" :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Id Record, [Entity Cell])
+type RecordDelete       = "record" :> "delete" :> Capture "recordId" (Id Record) :> Get '[JSON] ()
+type RecordData         = "record" :> "data" :> Capture "recordId" (Id Record) :> Get '[JSON] [(Entity Column, CellContent)]
+type RecordList         = "record" :> "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [Entity Record]
+type RecordListWithData = "record" :> "listWithData" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Record, [(Text, CellContent)])]
+
+type CellSet = "cell" :> "set" :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record) :> ReqBody '[JSON] Value :> Post '[JSON] ()

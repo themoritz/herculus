@@ -1,102 +1,26 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ExistentialQuantification #-}
-
 module Api.Rest where
 
-import Control.Monad
-
 import Data.Proxy
-import Data.Text
-import Data.Monoid
 
-import Reflex.Dom hiding (Value)
+import React.Flux.Addons.Servant
 
 import Servant.API
-import Servant.Reflex
 
 import Lib.Types
-import Lib.Model
 import Lib.Model.Types
-import Lib.Model.Column
-import Lib.Model.Cell
 import Lib.Api.Rest
 
-type Arg t a = Dynamic t (Either Text a)
-type Res t m a = Event t () -> m (Event t (ReqResult a))
-
-data RestApi t m = MonadWidget t m => RestApi
-  { projectCreate :: Arg t Project -> Res t m (Id Project)
-  , projectList   :: Res t m [Entity Project]
-  , tableCreate   :: Arg t Table -> Res t m (Id Table)
-  , tableList     :: Arg t (Id Project) -> Res t m [Entity Table]
-  , tableListGlobal :: Res t m [Entity Table]
-  , tableData     :: Arg t (Id Table) -> Res t m [(Id Column, Id Record, CellContent)]
-  , tableGetWhole :: Arg t (Id Table) -> Res t m ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
-  , columnCreate  :: Arg t (Id Table) -> Res t m (Id Column, [Entity Cell])
-  , columnDelete  :: Arg t (Id Column) -> Res t m ()
-  , columnSetName :: Arg t (Id Column) -> Arg t Text -> Res t m ()
-  , columnSetDataType :: Arg t (Id Column) -> Arg t DataType -> Res t m ()
-  , columnSetInput :: Arg t (Id Column) -> Arg t (InputType, Text) -> Res t m ()
-  , columnList    :: Arg t (Id Table) -> Res t m [Entity Column]
-  , recordCreate  :: Arg t (Id Table) -> Res t m (Id Record, [Entity Cell])
-  , recordDelete  :: Arg t (Id Record) -> Res t m ()
-  , recordData    :: Arg t (Id Record) -> Res t m [(Entity Column, CellContent)]
-  , recordList    :: Arg t (Id Table) -> Res t m [Entity Record]
-  , recordListWithData :: Arg t (Id Table) -> Res t m [(Id Record, [(Text, CellContent)])]
-  , cellSet       :: Arg t (Id Column) -> Arg t (Id Record) -> Arg t Value -> Res t m ()
+data RestApi = RestApi
+  { projectCreate :: Project -> HandleResponse (Id Project) -> IO ()
   }
 
-api :: forall t m. MonadWidget t m => RestApi t m
+apiCfg :: ApiRequestConfig Routes
+apiCfg = ApiRequestConfig "/" 0
+
+api :: RestApi
 api =
-  let (project :<|> table :<|> column :<|> record :<|> cell) =
-            client (Proxy :: Proxy Routes)
-                   (Proxy :: Proxy m)
-                   (constDyn (BasePath "/"))
-      (projectC :<|> projectL) = project
-      (tableC :<|> tableL :<|> tableLG :<|> tableD :<|> tableGW) = table
-      (columnC :<|> columnD :<|> columnSN :<|> columnSDT :<|> columnSI :<|> columnL) = column
-      (recordC :<|> recordD :<|> recordDat :<|> recordL :<|> recordLWD) = record
-      cellS = cell
+  let (project :<|> _) = request apiCfg (Proxy :: Proxy Routes)
+      (projectC :<|> _) = project
   in RestApi
        { projectCreate = projectC
-       , projectList   = projectL
-       , tableCreate   = tableC
-       , tableList     = tableL
-       , tableListGlobal = tableLG
-       , tableData     = tableD
-       , tableGetWhole = tableGW
-       , columnCreate  = columnC
-       , columnDelete  = columnD
-       , columnSetName = columnSN
-       , columnSetDataType = columnSDT
-       , columnSetInput = columnSI
-       , columnList    = columnL
-       , recordCreate  = recordC
-       , recordDelete  = recordD
-       , recordData    = recordDat
-       , recordList    = recordL
-       , recordListWithData = recordLWD
-       , cellSet       = cellS
        }
-
-loader :: MonadWidget t m => Res t m a -> Event t () -> m (Event t a)
-loader call trigger = el "div" $ do
-  trigger' <- delay 0.001 trigger
-  result <- call trigger'
-  spin <- holdDyn False $ leftmost
-    [ False <$ result
-    , True <$ trigger'
-    ]
-  let spinAttrs = ffor spin $ \v ->
-        "class" =: "spinner" <>
-        "style" =: (if v then "display:inherit" else "display:none")
-  elDynAttr "div" spinAttrs $ pure ()
-  let success = fmapMaybe reqSuccess result
-  dynText =<< holdDyn "" (leftmost
-                [ fmapMaybe reqFailure result
-                , "" <$ success
-                ])
-  pure success
-
-loader' :: MonadWidget t m => Res t m a -> Event t () -> m ()
-loader' call trigger = void $ loader call trigger

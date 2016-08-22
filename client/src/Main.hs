@@ -1,52 +1,89 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module Main where
 
-import Control.Lens
+import Control.DeepSeq
+import Control.Monad
+
+import Debug.Trace
 
 import Data.Aeson
-import Data.ByteString.Lazy (toStrict)
+import Data.Aeson.Types
+import Data.Proxy
+import Data.Typeable (Typeable)
+import Data.Foldable
 
-import Reflex.Dom
+import GHC.Generics (Generic)
 
-import Lib.Api.WebSocket
+import React.Flux
+import React.Flux.Ajax
+import React.Flux.Addons.Servant
 
-import Misc
-import Widgets.ProjectList
-import Widgets.TableList
-import Widgets.Table
+import Lib.Types
+import Lib.Model
+import Lib.Model.Types
+
+import Lib.Api.Rest
 
 main :: IO ()
-main = mainWidget $ do
-  wsDown <- ws never
+main = do
+  initAjax
+  reactRender "app" test ()
 
-  let cellChanges = flip fmapMaybe wsDown $ \case
-        WsDownCellsChanged entries -> Just entries
-        _                          -> Nothing
-      columnChanges = flip fmapMaybe wsDown $ \case
-        WsDownColumnsChanged entries -> Just entries
-        _                            -> Nothing
+data RendererArgs = RendererArgs Int Bool
 
-  divClass "container" $ do
-    divClass "row" $ do
+instance FromJSON RendererArgs where
+  parseJSON (Object o) = RendererArgs <$> o .: "index"
+                                      <*> o .: "isScrolling"
+  parseJSON _ = mempty
 
-      tSelect <- divClass "two columns" $ do
-        divClass "container" $ do
-          pList <- divClass "row" $
-            divClass "twelve columns" $ projectList never
-          divClass "row" $
-            divClass "twelve columns" $ do
-              currentProj <- holdDyn Nothing $ Just <$> (_projectList_selectProject pList)
-              switchEventWith _tableList_selectTable $ dynWidget currentProj $ \case
-                Nothing -> pure $ TableList never
-                Just projId -> tableList projId never
+test :: ReactView ()
+test = defineControllerView "test" store $ \(State ps) () -> do
+  h1_ "Test"
+  button_ [ onClick $ \_ _ -> dispatch Load ] "Load"
+  let huge = join $ replicate 10000 ps
+      toProps :: Value -> ReturnProps (Project, Bool)
+      toProps v = case parseMaybe parseJSON v of
+        Nothing -> ReturnProps (entityVal $ huge !! 0, False)
+        Just (RendererArgs index scrolling) -> ReturnProps (entityVal $ huge !! index, scrolling)
+  foreign_ "VirtualScroll"
+    [ "width" &= (300 :: Int)
+    , "height" &= (300 :: Int)
+    , "rowCount" &= length huge
+    , "rowHeight" &= (60 :: Int)
+    , callbackViewWithProps "rowRenderer" project toProps
+    ] mempty
 
-      divClass "ten columns" $ do
-        table tSelect cellChanges columnChanges
+project :: ReactView (Project, Bool)
+project = defineView "project" $ \(p, b) -> do
+  if b then "scrolling" else ""
+  elemText (projectName p)
 
-ws :: MonadWidget t m => Event t [WsUpMessage] -> m (Event t WsDownMessage)
-ws messages = do
-  ws' <- webSocket "ws://localhost:3000/websocket" $
-    def & webSocketConfig_send .~ (fmap.fmap) (toStrict . encode) messages
-  pure $ fmapMaybe decodeStrict $ _webSocket_recv ws'
+data State = State [Entity Project]
+
+data Action
+  = Load
+  | Set [Entity Project]
+  deriving (Typeable, Generic, NFData)
+
+api :: ApiRequestConfig Routes
+api = ApiRequestConfig "" NoTimeout
+
+dispatch :: Action -> [SomeStoreAction]
+dispatch a = [SomeStoreAction store a]
+
+instance StoreData State where
+  type StoreAction State = Action
+  transform action st@(State _) = case action of
+    Load -> do
+      request api (Proxy :: Proxy ProjectList) $ \case
+        Left _ -> pure []
+        Right ps -> pure $ dispatch $ Set ps
+      pure st
+    Set ps -> pure $ State ps
+
+store :: ReactStore State
+store = mkStore $ State []

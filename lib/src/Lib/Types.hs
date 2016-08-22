@@ -9,6 +9,8 @@
 
 module Lib.Types where
 
+import Control.DeepSeq
+
 import           Data.Aeson         (FromJSON (..), ToJSON (..))
 import           Data.Bson          (ObjectId (..), Val (..))
 import           Data.Decimal
@@ -20,6 +22,7 @@ import           Data.Time.Clock (UTCTime (..))
 import           Data.Time.Calendar (Day (..))
 import           Data.Time.Format (defaultTimeLocale, parseTimeM)
 import qualified Data.Time.Format as T (formatTime)
+import Data.Typeable (Typeable)
 
 import           Text.Read          (readMaybe)
 
@@ -30,7 +33,7 @@ import           Web.HttpApiData
 import           Lib.NamedMap
 
 newtype Id a = Id ObjectId
-  deriving (Eq, Ord, Val, Show, Read, Generic)
+  deriving (Eq, Ord, Val, Show, Read, Generic, Typeable)
 
 toObjectId :: Id a -> ObjectId
 toObjectId (Id x) = x
@@ -40,6 +43,9 @@ fromObjectId = Id
 
 nullObjectId :: Id a
 nullObjectId = Id (Oid 0 0)
+
+instance NFData (Id a) where
+  rnf (Id (Oid a b)) = rnf a `seq` rnf b
 
 instance ToJSON (Id a) where
   -- Ideally use show instance of ObjectId, but Read
