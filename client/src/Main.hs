@@ -10,6 +10,7 @@ import Data.Aeson
 import Data.Aeson.Types
 import Data.Proxy
 import Data.Typeable (Typeable)
+import Data.Text (Text)
 
 import GHC.Generics (Generic)
 
@@ -22,12 +23,14 @@ import Lib.Model
 import Lib.Model.Types
 
 import Lib.Api.Rest
+import Lib.Api.WebSocket
 
 import WebSocket
 
 main :: IO ()
 main = do
   initAjax
+  executeAction $ SomeStoreAction store $ Init "ws://localhost:3000/websocket"
   reactRender "app" test ()
 
 data RendererArgs = RendererArgs Int Bool
@@ -38,9 +41,10 @@ instance FromJSON RendererArgs where
   parseJSON _ = mempty
 
 test :: ReactView ()
-test = defineControllerView "test" store $ \(State ps) () -> do
+test = defineControllerView "test" store $ \(State _ ps) () -> do
   h1_ "Test"
   button_ [ onClick $ \_ _ -> dispatch Load ] "Load"
+  button_ [ onClick $ \_ _ -> dispatch $ SendWebSocket $ WsUpGreet "foo" ] "Send"
   let huge = join $ replicate 10000 ps
       toProps :: Value -> ReturnProps (Project, Bool)
       toProps v = case parseMaybe parseJSON v of
@@ -59,10 +63,15 @@ project = defineView "project" $ \(p, b) -> do
   if b then "scrolling" else ""
   elemText (projectName p)
 
-data State = State [Entity Project]
+data State = State
+  { webSocket :: Maybe JSWebSocket
+  , ps :: [Entity Project]
+  }
 
 data Action
   = Load
+  | Init Text -- WebSocket URL
+  | SendWebSocket WsUpMessage
   | Set [Entity Project]
   deriving (Typeable, Generic, NFData)
 
@@ -74,13 +83,23 @@ dispatch a = [SomeStoreAction store a]
 
 instance StoreData State where
   type StoreAction State = Action
-  transform action st@(State _) = case action of
+  transform action st@(State mWS _) = case action of
+    Init wsUrl -> do
+      ws <- jsonWebSocketNew wsUrl $ \case
+        WsDownCellsChanged entries -> pure []
+        WsDownColumnsChanged entries -> pure []
+      pure $ st { webSocket = Just ws }
     Load -> do
       request api (Proxy :: Proxy ProjectList) $ \case
         Left _ -> pure []
         Right ps -> pure $ dispatch $ Set ps
       pure st
-    Set ps -> pure $ State ps
+    SendWebSocket msg -> case mWS of
+      Nothing -> pure st
+      Just ws -> do
+        jsonWebSocketSend msg ws
+        pure st
+    Set ps -> pure $ st { ps = ps }
 
 store :: ReactStore State
-store = mkStore $ State []
+store = mkStore $ State Nothing []

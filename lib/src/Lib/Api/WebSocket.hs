@@ -1,6 +1,9 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module Lib.Api.WebSocket where
+
+import Control.DeepSeq
 
 import Data.Aeson (ToJSON, FromJSON)
 import Data.Text (Text)
@@ -18,7 +21,7 @@ data WsUpMessage
   = WsUpGreet Text
   | WsUpStore Text
   | WsUpList
-  deriving (Generic, Show)
+  deriving (Generic, Show, NFData)
 
 instance ToJSON WsUpMessage
 instance FromJSON WsUpMessage

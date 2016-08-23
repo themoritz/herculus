@@ -22,10 +22,30 @@ import GHCJS.Marshal.Pure
 import GHCJS.Types
 import JavaScript.TypedArray.ArrayBuffer as JS
 
+import Data.Aeson hiding (String)
+import Data.Foldable
+import Data.ByteString.Lazy (toStrict)
+
+import React.Flux (SomeStoreAction, executeAction)
+
 data JSWebSocket = JSWebSocket { unWebSocket :: WebSocket }
 
-newWebSocket :: a -> Text -> (ByteString -> IO ()) -> IO () -> IO () -> IO JSWebSocket
-newWebSocket _ url onMessage onOpen onClose = do
+jsonWebSocketNew :: FromJSON a => Text -> (a -> IO [SomeStoreAction]) -> IO JSWebSocket
+jsonWebSocketNew url handler = do
+  let onMessage msg = case decodeStrict msg of
+        Nothing -> pure ()
+        Just a -> do
+          actions <- handler a
+          for_ actions executeAction
+  newWebSocket url onMessage (pure ()) (pure ())
+
+jsonWebSocketSend :: ToJSON a => a -> JSWebSocket -> IO ()
+jsonWebSocketSend a ws = webSocketSend ws $ toStrict $ encode a
+
+--
+
+newWebSocket :: Text -> (ByteString -> IO ()) -> IO () -> IO () -> IO JSWebSocket
+newWebSocket url onMessage onOpen onClose = do
   ws <- GD.newWebSocket url (Just [] :: Maybe [Text])
   _ <- on ws open $ liftIO onOpen
   GD.setBinaryType ws ("arraybuffer" :: String)
