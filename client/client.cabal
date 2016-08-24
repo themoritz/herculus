@@ -14,6 +14,8 @@ executable client
   main-is:             Main.hs
   other-modules:       React.Flux.Addons.Servant
                      , WebSocket
+                     , Store
+                     , Views
   default-extensions:  OverloadedStrings
                      , TypeFamilies
                      , LambdaCase
