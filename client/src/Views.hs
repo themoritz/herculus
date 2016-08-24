@@ -40,12 +40,13 @@ project_ !p !s = viewWithSKey project (toJSString $ show $ entityId p) (p, s) me
 
 project :: ReactView (Entity Project, Bool)
 project = defineView "project" $ \(Entity i p, selected) ->
-  li_ $ a_
-    [ "href" $= "#"
-    , onClick $ \e _ -> dispatch $ ProjectsLoadProject i
-    ] $ if selected
-           then b_ $ elemText $ projectName p
-           else elemText $ projectName p
+  li_ $ span_
+    [ classNames
+      [ ("link", True)
+      , ("active", selected)
+      ]
+    , onClick $ \_ _ -> dispatch $ ProjectsLoadProject i
+    ] $ elemText $ projectName p
 
 --
 
@@ -63,12 +64,13 @@ table'_ !t !s = viewWithSKey table (toJSString $ show $ entityId t) (t, s) mempt
 
 table :: ReactView (Entity Table, Bool)
 table = defineView "table" $ \(Entity i t, selected) ->
-  li_ $ a_
-    [ "href" $= "#"
-    , onClick $ \e _ -> dispatch $ TablesLoadTable i
-    ] $ if selected
-           then b_ $ elemText $ tableName t
-           else elemText $ tableName t
+  li_ $ span_
+    [ classNames
+      [ ("link", True)
+      , ("active", selected)
+      ]
+    , onClick $ \_ _ -> dispatch $ TablesLoadTable i
+    ] $ elemText $ tableName t
 
 --
 

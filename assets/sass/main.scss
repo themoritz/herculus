@@ -1,11 +1,11 @@
 .canvas {
-    width: 100%;
-    height: 100%;
-    position: relative;
+  width: 100%;
+  height: 100%;
+  position: relative;
 }
 
 .element {
-    position: absolute;
+  position: absolute;
 }
 
 // Own style
@@ -37,12 +37,23 @@
 
 body {
   font-family: "Open Sans";
-  color: green;
 }
 
 textarea {
-    font-family: "Courier New", Courier, monospace;
-    font-size: 10pt;
-    height: 35px;
-    width: 290px;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 10pt;
+  height: 35px;
+  width: 290px;
+}
+
+span.link {
+    color: green;
+    cursor: pointer;
+    &:hover {
+        color: darken(green, 10%);
+    }
+}
+
+span.active {
+    font-weight: bold;
 }
