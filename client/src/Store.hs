@@ -9,16 +9,15 @@ import Control.DeepSeq
 
 import           Data.Map.Strict           (Map)
 import qualified Data.Map.Strict           as Map
-import Data.Proxy
-import Data.Typeable (Typeable)
-import Data.Text (Text, pack)
-import Data.Foldable (foldl')
+import           Data.Proxy
+import           Data.Typeable (Typeable)
+import           Data.Text (Text, pack)
+import           Data.Foldable (foldl')
 
-import GHC.Generics
+import           GHC.Generics
 
 import           React.Flux
 import           React.Flux.Addons.Servant
-import           React.Flux.Ajax
 
 import           Lib.Model
 import           Lib.Model.Types
@@ -34,12 +33,8 @@ import WebSocket
 data Coords = Coords (Id Column) (Id Record)
   deriving (Eq, Ord, Show)
 
-data Position = Position Int Int
-  deriving (Eq, Ord)
-
 data CellInfo = CellInfo
-  { ciPos     :: Position
-  , ciCol     :: Column
+  { ciCol     :: Column
   , ciContent :: CellContent
   } deriving (Eq)
 
@@ -80,9 +75,11 @@ data Action
   | TableSet ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
   | TableUpdateCells [(Id Column, Id Record, CellContent)]
   | TableUpdateColumns [Entity Column]
-  | TableAddColumn (Id Column)
+  | TableAddColumn
+  | TableAddColumnDone (Entity Column, [Entity Cell])
   | TableDeleteColumn (Id Column)
-  | TableAddRecord (Id Record)
+  | TableAddRecord
+  | TableAddRecordDone (Entity Record, [Entity Cell])
   | TableDeleteRecord (Id Record)
   deriving (Typeable, Generic, NFData)
 
@@ -103,6 +100,8 @@ instance StoreData State where
         ws <- jsonWebSocketNew wsUrl $ \case
           WsDownCellsChanged cs -> pure $ dispatch $ TableUpdateCells cs
           WsDownColumnsChanged cs -> pure $ dispatch $ TableUpdateColumns cs
+          WsDownGreet _ -> pure []
+          WsDownList _ -> pure []
         request api (Proxy :: Proxy ProjectList) $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ps -> pure $ dispatch $ ProjectsSet ps
@@ -156,11 +155,6 @@ instance StoreData State where
 
       --
 
-      TablesLoadTable t -> do
-        request api (Proxy :: Proxy TableGetWhole) t $ \case
-          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
-          Right res -> pure $ dispatch $ TableSet res
-        pure st
       TableSet (cols, recs, entries) -> pure $
         st & stateColumns .~ (Map.fromList $ map (\(Entity i c) -> (i, c)) cols)
            & stateRecords .~ (Map.fromList $ map (\(Entity i r) -> (i, r)) recs)
@@ -168,28 +162,55 @@ instance StoreData State where
 
       TableUpdateCells entries -> pure $
         st & stateCells %~ fillEntries entries
+
       TableUpdateColumns entries -> pure $
         st & stateColumns %~ \cols ->
           foldl' (\cols' (Entity i c) -> Map.insert i c cols') cols $
           filter (\(Entity _ c) -> st ^. stateTableId == Just (columnTableId c)) $
           entries
 
-      TableAddColumn i -> pure $ case st ^. stateTableId of
-        Nothing -> st
-        Just t  -> st & stateColumns %~ Map.insert i
-          (Column t "" DataString ColumnInput "" CompileResultNone)
-      TableDeleteColumn i -> pure $
-        st & stateColumns %~ Map.delete i
-           & stateCells %~ Map.filterWithKey
+      TableAddColumn -> do
+        case st ^. stateTableId of
+          Nothing -> pure ()
+          Just t -> request api (Proxy :: Proxy ColumnCreate) t $ \case
+            Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+            Right res -> pure $ dispatch $ TableAddColumnDone res
+        pure st
+
+      TableAddColumnDone (Entity i c, cells) -> pure $
+        st & stateColumns %~ Map.insert i c
+           & stateCells %~ fillEntries (map toCellUpdate cells)
+
+      TableDeleteColumn i -> do
+        request api (Proxy :: Proxy ColumnDelete) i $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right () -> pure []
+        pure $ st & stateColumns %~ Map.delete i
+                  & stateCells %~ Map.filterWithKey
                              (\(Coords c _) _ -> c /= i)
 
-      TableAddRecord i -> pure $ case st ^. stateTableId of
-        Nothing -> st
-        Just t  -> st & stateRecords %~ Map.insert i (Record t)
-      TableDeleteRecord i -> pure $
-        st & stateRecords %~ Map.delete i
-           & stateCells %~ Map.filterWithKey
+      TableAddRecord -> do
+        case st ^. stateTableId of
+          Nothing -> pure ()
+          Just t -> request api (Proxy :: Proxy RecordCreate) t $ \case
+            Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+            Right res -> pure $ dispatch $ TableAddRecordDone res
+        pure st
+
+      TableAddRecordDone (Entity i r, cells) -> pure $
+        st & stateRecords %~ Map.insert i r
+           & stateCells %~ fillEntries (map toCellUpdate cells)
+
+      TableDeleteRecord i -> do
+        request api (Proxy :: Proxy RecordDelete) i $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right () -> pure []
+        pure $ st & stateRecords %~ Map.delete i
+                  & stateCells %~ Map.filterWithKey
                              (\(Coords _ r) _ -> r /= i)
     where
       fillEntries entries m = foldl' (\m' (c, v) -> Map.insert c v m') m $
         map (\(colId, recId, val) -> ((Coords colId recId), val)) entries
+
+toCellUpdate :: Entity Cell -> (Id Column, Id Record, CellContent)
+toCellUpdate (Entity _ (Cell content (Aspects _ c r))) = (c, r, content)

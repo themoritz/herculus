@@ -91,15 +91,16 @@ handleTableGetWhole tblId = do
 
 --
 
-handleColumnCreate :: MonadHexl m => Id Table -> m (Id Column, [Entity Cell])
+handleColumnCreate :: MonadHexl m => Id Table -> m (Entity Column, [Entity Cell])
 handleColumnCreate t = do
-  c <- create $ Column t "" DataString ColumnInput "" CompileResultNone
+  let newCol = Column t "" DataString ColumnInput "" CompileResultNone
+  c <- create newCol
   rs <- listByQuery [ "tableId" =: toObjectId t ]
   cells <- for rs $ \e -> do
     let cell = newCell t c (entityId e) (defaultContent DataString)
     i <- create cell
     pure $ Entity i cell
-  pure (c, cells)
+  pure (Entity c newCol, cells)
 
 handleColumnDelete :: MonadHexl m => Id Column -> m ()
 handleColumnDelete colId = do
@@ -148,9 +149,10 @@ handleColumnList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
 
 --
 
-handleRecordCreate :: MonadHexl m => Id Table -> m (Id Record, [Entity Cell])
+handleRecordCreate :: MonadHexl m => Id Table -> m (Entity Record, [Entity Cell])
 handleRecordCreate t = do
-  r <- create $ Record t
+  let newRec = Record t
+  r <- create newRec
   cs <- listByQuery [ "tableId" =: toObjectId t ]
   maybes <- for cs $ \e -> do
     let cell = newCell t (entityId e) r $ defaultContent $ columnDataType $ entityVal e
@@ -160,7 +162,7 @@ handleRecordCreate t = do
       ColumnDerived -> Nothing
   let cells = mapMaybe id maybes
   propagate $ RootCellChanges $ map (\e -> (aspectsColumnId $ cellAspects $ entityVal e, r)) cells
-  pure (r, cells)
+  pure (Entity r newRec, cells)
 
 handleRecordDelete :: MonadHexl m => Id Record -> m ()
 handleRecordDelete recId = do

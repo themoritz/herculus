@@ -16,6 +16,11 @@ executable client
                      , WebSocket
                      , Store
                      , Views
+                     , Views.Table
+                     , Views.Column
+                     , Views.Record
+                     , Views.Cell
+                     , Views.Foreign
   default-extensions:  OverloadedStrings
                      , TypeFamilies
                      , LambdaCase

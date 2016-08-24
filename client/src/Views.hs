@@ -13,16 +13,18 @@ import Lib.Model
 import Lib.Model.Types
 
 import Store
+import Views.Table
 
 app :: ReactView ()
 app = defineControllerView "app" store $ \st () ->
   cldiv_ "container" $ do
     cldiv_ "sidebar" $ do
+      h1_ "Hexl"
       projects_ (st ^. stateProjects) (st ^. stateProjectId)
       case st ^. stateProjectId of
         Nothing -> pure ()
         Just prjId -> tables_ (st ^. stateTables) (st ^. stateTableId) prjId
-    -- cldiv_ "table" $ do
+    cldiv_ "tableGrid" $ tableGrid_ st
 
 --
 
