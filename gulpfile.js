@@ -1,5 +1,4 @@
 var browserSync = require('browser-sync')
-var sass = require('gulp-sass')
 var gulp = require('gulp')
 
 gulp.task('watch', function () {

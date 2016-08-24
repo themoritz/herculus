@@ -2,6 +2,8 @@
 
 ## Preps
 
+Install globally
+
 ``` shell
 npm install -g webpack gulp
 ```
@@ -12,6 +14,7 @@ Run in background:
 
 ``` shell
 cd hexl
+npm install
 gulp
 webpack --progress --colors --watch
 ```
@@ -26,4 +29,4 @@ cd hexl
 ./build-client.sh
 ```
 
-Then go to [localhost:3000](http://localhost:3000).
+Then go to [localhost:3001](http://localhost:3001).
