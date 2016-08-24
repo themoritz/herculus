@@ -17,6 +17,7 @@ executable client
   default-extensions:  OverloadedStrings
                      , TypeFamilies
                      , LambdaCase
+                     , BangPatterns
   build-depends:       base
                      , aeson
                      , bytestring

@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass             #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -8,6 +9,8 @@
 {-# LANGUAGE TupleSections              #-}
 
 module Lib.Model.Column where
+
+import           Control.DeepSeq
 
 import           Data.Aeson                   (FromJSON (..), ToJSON (..))
 import           Data.Aeson.Bson
@@ -31,7 +34,7 @@ data DataType
   | DataRecord (Id Table)
   | DataList DataType
   | DataMaybe DataType
-  deriving (Eq, Ord, Show, Read, Generic)
+  deriving (Eq, Ord, Show, Read, Generic, NFData)
 
 instance ToJSON DataType
 instance FromJSON DataType
@@ -46,7 +49,7 @@ data Column = Column
   , columnInputType     :: InputType
   , columnSourceCode    :: Text
   , columnCompileResult :: CompileResult
-  } deriving (Eq, Generic)
+  } deriving (Eq, Generic, NFData)
 
 instance Model Column where
   collectionName = const "columns"
@@ -82,7 +85,7 @@ data CompileResult
   = CompileResultCode TExpr
   | CompileResultNone
   | CompileResultError Text
-  deriving (Eq, Show, Generic)
+  deriving (Eq, Show, Generic, NFData)
 
 instance ToJSON CompileResult
 instance FromJSON CompileResult
@@ -97,7 +100,7 @@ instance Val CompileResult where
 data InputType
   = ColumnInput
   | ColumnDerived
-  deriving (Eq, Ord, Show, Read, Generic)
+  deriving (Eq, Ord, Show, Read, Generic, NFData)
 
 instance ToJSON InputType
 instance FromJSON InputType
@@ -117,7 +120,7 @@ data Lit
   = LNumber Number
   | LBool Bool
   | LString Text
-  deriving (Show, Eq, Ord, Generic)
+  deriving (Show, Eq, Ord, Generic, NFData)
 
 instance ToJSON Lit
 instance FromJSON Lit
@@ -133,7 +136,7 @@ data Binop
   | Greater
   | And
   | Or
-  deriving (Eq, Ord, Show, Generic)
+  deriving (Eq, Ord, Show, Generic, NFData)
 
 instance ToJSON Binop
 instance FromJSON Binop
@@ -171,7 +174,7 @@ data TExpr
   | TColumnRef (Id Column)
   | TWholeColumnRef (Id Column)
   | TTableRef (Id Table) [Id Column]
-  deriving (Eq, Show, Generic)
+  deriving (Eq, Show, Generic, NFData)
 
 instance ToJSON TExpr
 instance FromJSON TExpr

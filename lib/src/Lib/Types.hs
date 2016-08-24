@@ -78,7 +78,7 @@ instance Serialize (Id a) where
 --
 
 newtype Ref a = Ref { unRef :: Text }
-  deriving (Generic, Eq, Ord, Val)
+  deriving (Generic, Eq, Ord, Val, NFData)
 
 instance Show (Ref a) where
   show = unpack . unRef
@@ -89,7 +89,7 @@ instance FromJSON (Ref a)
 --
 
 newtype Number = Number Decimal
-  deriving (Num, Eq, Ord)
+  deriving (Num, Eq, Ord, NFData)
 
 instance Show Number where
   show (Number x) = show x
@@ -111,7 +111,7 @@ instance Serialize Number where
 --
 
 newtype Time = Time UTCTime
-  deriving (Show, Eq, Ord, ToJSON, FromJSON)
+  deriving (Show, NFData, Eq, Ord, ToJSON, FromJSON)
 
 defaultTime :: Time
 defaultTime = Time $ UTCTime (ModifiedJulianDay 0) 0

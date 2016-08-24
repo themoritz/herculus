@@ -1,8 +1,11 @@
 {-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase        #-}
 
 module Lib.Model.Cell where
+
+import           Control.DeepSeq
 
 import           Data.Aeson       (FromJSON, ToJSON)
 import           Data.Aeson.Bson
@@ -21,7 +24,7 @@ import           Lib.Types
 data CellContent
   = CellValue Value
   | CellError Text
-  deriving (Eq, Typeable, Generic)
+  deriving (Eq, NFData, Typeable, Generic)
 
 instance Show CellContent where
   show = \case
@@ -48,7 +51,7 @@ data Value
   | VRecord (Id Record)
   | VList [Value]
   | VMaybe (Maybe Value)
-  deriving (Generic, Typeable, Eq)
+  deriving (Generic, NFData, Typeable, Eq)
 
 instance Show Value where
   show = \case
@@ -80,7 +83,7 @@ data Aspects = Aspects
   { aspectsTableId  :: Id Table
   , aspectsColumnId :: Id Column
   , aspectsRecordId :: Id Record
-  } deriving (Generic, Eq, Show, Typeable)
+  } deriving (Generic, NFData, Eq, Show, Typeable)
 
 instance ToJSON Aspects
 instance FromJSON Aspects
@@ -101,7 +104,7 @@ instance Val Aspects where
 data Cell = Cell
   { cellContent :: CellContent
   , cellAspects :: Aspects
-  } deriving (Generic)
+  } deriving (Generic, NFData)
 
 newCell :: Id Table -> Id Column -> Id Record -> CellContent -> Cell
 newCell t c r content = Cell

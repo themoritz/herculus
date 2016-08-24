@@ -3,103 +3,14 @@
 
 module Main where
 
-import Control.DeepSeq
-import Control.Monad
-
-import Data.Aeson
-import Data.Aeson.Types
-import Data.Proxy
-import Data.Typeable (Typeable)
-import Data.Text (Text)
-
-import GHC.Generics (Generic)
-
 import React.Flux
 import React.Flux.Ajax
-import React.Flux.Addons.Servant
 
-import Lib.Types
-import Lib.Model
-import Lib.Model.Types
-
-import Lib.Api.Rest
-import Lib.Api.WebSocket
-
-import WebSocket
+import Store
+import Views
 
 main :: IO ()
 main = do
   initAjax
-  executeAction $ SomeStoreAction store $ Init "ws://localhost:3000/websocket"
-  reactRender "app" test ()
-
-data RendererArgs = RendererArgs Int Bool
-
-instance FromJSON RendererArgs where
-  parseJSON (Object o) = RendererArgs <$> o .: "index"
-                                      <*> o .: "isScrolling"
-  parseJSON _ = mempty
-
-test :: ReactView ()
-test = defineControllerView "test" store $ \(State _ ps) () -> do
-  h1_ "Test"
-  button_ [ onClick $ \_ _ -> dispatch Load ] "Load"
-  button_ [ onClick $ \_ _ -> dispatch $ SendWebSocket $ WsUpGreet "foo" ] "Send"
-  let huge = join $ replicate 10000 ps
-      toProps :: Value -> ReturnProps (Project, Bool)
-      toProps v = case parseMaybe parseJSON v of
-        Nothing -> ReturnProps (entityVal $ huge !! 0, False)
-        Just (RendererArgs index scrolling) -> ReturnProps (entityVal $ huge !! index, scrolling)
-  foreign_ "VirtualScroll"
-    [ "width" &= (300 :: Int)
-    , "height" &= (300 :: Int)
-    , "rowCount" &= length huge
-    , "rowHeight" &= (60 :: Int)
-    , callbackViewWithProps "rowRenderer" project toProps
-    ] mempty
-
-project :: ReactView (Project, Bool)
-project = defineView "project" $ \(p, b) -> do
-  if b then "scrolling" else ""
-  elemText (projectName p)
-
-data State = State
-  { webSocket :: Maybe JSWebSocket
-  , ps :: [Entity Project]
-  }
-
-data Action
-  = Load
-  | Init Text -- WebSocket URL
-  | SendWebSocket WsUpMessage
-  | Set [Entity Project]
-  deriving (Typeable, Generic, NFData)
-
-api :: ApiRequestConfig Routes
-api = ApiRequestConfig "" NoTimeout
-
-dispatch :: Action -> [SomeStoreAction]
-dispatch a = [SomeStoreAction store a]
-
-instance StoreData State where
-  type StoreAction State = Action
-  transform action st@(State mWS _) = case action of
-    Init wsUrl -> do
-      ws <- jsonWebSocketNew wsUrl $ \case
-        WsDownCellsChanged entries -> pure []
-        WsDownColumnsChanged entries -> pure []
-      pure $ st { webSocket = Just ws }
-    Load -> do
-      request api (Proxy :: Proxy ProjectList) $ \case
-        Left _ -> pure []
-        Right ps -> pure $ dispatch $ Set ps
-      pure st
-    SendWebSocket msg -> case mWS of
-      Nothing -> pure st
-      Just ws -> do
-        jsonWebSocketSend msg ws
-        pure st
-    Set ps -> pure $ st { ps = ps }
-
-store :: ReactStore State
-store = mkStore $ State Nothing []
+  executeAction $ SomeStoreAction store $ GlobalInit "ws://localhost:3000/websocket"
+  reactRender "app" app ()

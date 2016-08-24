@@ -36,7 +36,7 @@ instance FromDocument Project where
 data Table = Table
   { tableProjectId :: Id Project
   , tableName      :: Text
-  } deriving (Generic)
+  } deriving (Generic, NFData)
 
 instance ToJSON Table
 instance FromJSON Table
@@ -53,8 +53,7 @@ instance FromDocument Table where
 
 data Record = Record
   { recordTableId :: Id Table
-  }
-  deriving (Generic, Eq, Ord)
+  } deriving (Generic, NFData, Eq, Ord)
 
 instance ToJSON Record
 instance FromJSON Record
