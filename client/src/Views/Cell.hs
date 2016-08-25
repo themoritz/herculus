@@ -43,30 +43,49 @@ cell = defineStatefulView "cell" Nothing $ \mTmpVal props ->
             Nothing -> ([], Nothing)
             Just tmpVal -> (dispatch $ CellSetValue c r tmpVal, Nothing)
         ] $ "Set"
-  where
 
-    value_ :: InputType -> DataType -> Value -> CellCallback Value
+--
+
+value_ :: InputType -> DataType -> Value -> CellCallback Value
+       -> ReactElementM CellEventHandler ()
+value_ !inpType !datType !val !cb =
+  case datType of
+    DataBool ->
+      let (VBool b) = val
+      in cellBool_ inpType b (cb . VBool)
+    DataString ->
+      let (VString s) = val
+      in cellString_ inpType s (cb . VString)
+
+cellBool_ :: InputType -> Bool -> CellCallback Bool
+          -> ReactElementM CellEventHandler ()
+cellBool_ !inpType !b !cb =
+  case inpType of
+    ColumnInput -> undefined
+
+cellString_ :: InputType -> Text -> CellCallback Text
+            -> ReactElementM CellEventHandler ()
+cellString_ !inpType !s !cb =
+  case inpType of
+    ColumnInput ->
+      input_
+        [ "value" &= s
+        , onChange $ \evt -> cb (target evt "value")
+        ]
+    ColumnDerived -> elemText s
+
+cellMaybe_ :: InputType -> DataType -> Maybe Value -> CellCallback (Maybe Value)
            -> ReactElementM CellEventHandler ()
-    value_ !inpType !datType !val !cb =
-      case datType of
-        DataBool ->
-          let (VBool b) = val
-          in cellBool_ inpType b (cb . VBool)
-        DataString ->
-          let (VString s) = val
-          in cellString_ inpType s (cb . VString)
-
-    cellBool_ :: InputType -> Bool -> CellCallback Bool -> ReactElementM CellEventHandler ()
-    cellBool_ !inpType !b !cb =
-      case inpType of
-        ColumnInput -> undefined
-
-    cellString_ :: InputType -> Text -> CellCallback Text -> ReactElementM CellEventHandler ()
-    cellString_ !inpType !s !cb =
-      case inpType of
-        ColumnInput ->
-          input_
-            [ "value" &= s
-            , onChange $ \evt -> cb (target evt "value")
-            ]
-        ColumnDerived -> elemText s
+cellMaybe_ !inpType !datType !mVal !cb =
+  case inpType of
+    ColumnInput -> case mVal of
+      Nothing -> do
+        let CellValue new = defaultContent datType
+        button_
+          [ onClick $ \_ _ -> cb (Just new)
+          ] "Add"
+      Just val -> do
+        button_
+          [ onClick $ \_ _ -> cb Nothing
+          ] "Del"
+        value_ inpType datType val (cb . Just)
