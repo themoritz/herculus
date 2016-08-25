@@ -15,6 +15,7 @@ Run in background:
 ``` shell
 cd hexl
 npm install
+# optional gulp for live css injection
 gulp
 webpack --progress --colors --watch
 ```
