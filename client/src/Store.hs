@@ -82,6 +82,8 @@ data Action
   | TableAddRecordDone (Entity Record, [Entity Cell])
   | TableDeleteRecord (Id Record)
   -- Column
+  | ColumnRename (Id Column) Text
+  | ColumnRenameDone (Id Column) Text
   -- Cell
   | CellSetValue (Id Column) (Id Record) Value
   deriving (Typeable, Generic, NFData)
@@ -213,6 +215,15 @@ instance StoreData State where
                              (\(Coords _ r) _ -> r /= i)
 
       -- Column
+
+      ColumnRename i n -> do
+        request api (Proxy :: Proxy ColumnSetName) i n $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right ()    -> pure $ dispatch $ ColumnRenameDone i n
+        pure st
+
+      ColumnRenameDone i n -> pure $
+        st & stateColumns . at i . _Just %~ \c -> c { columnName = n}
 
       -- Cell
 
