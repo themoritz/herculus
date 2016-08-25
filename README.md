@@ -2,6 +2,9 @@
 
 ## Preps
 
+Works with npm v2.15.1 and node v4.4.3.
+Use `nvm install v.4.4.3`.
+
 Install globally
 
 ``` shell
