@@ -22,6 +22,7 @@ executable client
                      , Views.Cell
                      , Views.Foreign
   default-extensions:  OverloadedStrings
+                     , OverloadedLists
                      , TypeFamilies
                      , LambdaCase
                      , BangPatterns
