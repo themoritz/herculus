@@ -2,16 +2,11 @@ module Views.Table where
 
 import Control.Lens hiding (view)
 
-import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
 import React.Flux
 
-import Lib.Model.Types
-import Lib.Model.Column
-import Lib.Model.Cell
 import Lib.Model
-import Lib.Types
 
 import Store
 import Views.Foreign
@@ -37,11 +32,11 @@ tableGrid = defineView "tableGrid" $ \st -> do
 
         getRecord y = let Just r = Map.lookup y recByIndex in uncurry Entity r
         getColumn x = let Just c = Map.lookup x colByIndex in uncurry Entity c
-        getCell x y = let Just cell = do
+        getCell x y = let Just cell' = do
                             (c, _) <- Map.lookup x colByIndex
                             (r, _) <- Map.lookup y recByIndex
                             Map.lookup (Coords c r) cells
-                      in cell
+                      in cell'
 
         renderer (GridRenderArgs x y _)
           | x == 0 && y == (numRecs + 1) =

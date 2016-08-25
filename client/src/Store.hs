@@ -81,6 +81,9 @@ data Action
   | TableAddRecord
   | TableAddRecordDone (Entity Record, [Entity Cell])
   | TableDeleteRecord (Id Record)
+  -- Column
+  -- Cell
+  | CellSetValue (Id Column) (Id Record) Value
   deriving (Typeable, Generic, NFData)
 
 api :: ApiRequestConfig Routes
@@ -113,7 +116,7 @@ instance StoreData State where
           Just ws -> jsonWebSocketSend msg ws
         pure st
 
-      --
+      -- Projects
 
       ProjectsSet ps -> pure $
         st & stateProjects .~ ps
@@ -133,7 +136,7 @@ instance StoreData State where
           Right ts -> pure $ dispatch $ TablesSet ts
         pure $ st & stateProjectId .~ Just i
 
-      --
+      -- Tables
 
       TablesSet ts ->  pure $
         st & stateTables .~ ts
@@ -153,7 +156,7 @@ instance StoreData State where
           Right res -> pure $ dispatch $ TableSet res
         pure $ st & stateTableId .~ Just i
 
-      --
+      -- Table
 
       TableSet (cols, recs, entries) -> pure $
         st & stateColumns .~ (Map.fromList $ map (\(Entity i c) -> (i, c)) cols)
@@ -208,7 +211,19 @@ instance StoreData State where
         pure $ st & stateRecords %~ Map.delete i
                   & stateCells %~ Map.filterWithKey
                              (\(Coords _ r) _ -> r /= i)
+
+      -- Column
+
+      -- Cell
+
+      CellSetValue c r val -> do
+        request api (Proxy :: Proxy CellSet) c r val $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right () -> pure []
+        pure $ st & stateCells %~ fillEntries [(c, r, CellValue val)]
+
     where
+
       fillEntries entries m = foldl' (\m' (c, v) -> Map.insert c v m') m $
         map (\(colId, recId, val) -> ((Coords colId recId), val)) entries
 
