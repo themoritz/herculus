@@ -83,7 +83,8 @@ handleTableData tblId = do
   let go (Cell v (Aspects _ c r)) = (c, r, v)
   pure $ map (go . entityVal) cells
 
-handleTableGetWhole :: MonadHexl m => Id Table -> m ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
+handleTableGetWhole :: MonadHexl m => Id Table
+                    -> m ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
 handleTableGetWhole tblId = do
   (,,) <$> handleColumnList tblId
        <*> handleRecordList tblId

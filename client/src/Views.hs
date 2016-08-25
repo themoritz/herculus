@@ -24,6 +24,11 @@ app = defineControllerView "app" store $ \st () ->
       case st ^. stateProjectId of
         Nothing -> pure ()
         Just prjId -> tables_ (st ^. stateTables) (st ^. stateTableId) prjId
+      case st ^. stateError of
+        Nothing -> pure ()
+        Just t -> do
+          h3_ "Error"
+          elemText t
     cldiv_ "tableGrid" $ tableGrid_ st
 
 --

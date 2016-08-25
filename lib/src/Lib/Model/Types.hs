@@ -53,7 +53,7 @@ instance FromDocument Table where
 
 data Record = Record
   { recordTableId :: Id Table
-  } deriving (Generic, NFData, Eq, Ord)
+  } deriving (Generic, NFData, Eq, Ord, Show)
 
 instance ToJSON Record
 instance FromJSON Record

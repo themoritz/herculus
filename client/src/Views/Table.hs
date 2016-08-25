@@ -35,8 +35,8 @@ tableGrid = defineView "tableGrid" $ \st -> do
         colByIndex = Map.fromList $ zip [0..] (Map.toList cols)
         recByIndex = Map.fromList $ zip [0..] (Map.toList recs)
 
-        getRecord y = let Just r = Map.lookup y recByIndex in snd r
-        getColumn x = let Just c = Map.lookup x colByIndex in snd c
+        getRecord y = let Just r = Map.lookup y recByIndex in uncurry Entity r
+        getColumn x = let Just c = Map.lookup x colByIndex in uncurry Entity c
         getCell x y = let Just cell = do
                             (c, _) <- Map.lookup x colByIndex
                             (r, _) <- Map.lookup y recByIndex

@@ -48,19 +48,19 @@ instance NFData (Id a) where
   rnf (Id (Oid a b)) = rnf a `seq` rnf b
 
 instance ToJSON (Id a) where
-  -- Ideally use show instance of ObjectId, but Read
-  -- instance does not work :/
-  toJSON (Id (Oid a b)) = toJSON (a, b)
+  toJSON (Id i) = toJSON $ show i
 
 instance FromJSON (Id a) where
   parseJSON json = do
-    (a, b) <- parseJSON json
-    pure $ Id $ Oid a b
+    str <- parseJSON json
+    case readMaybe str of
+      Nothing -> fail "could not read"
+      Just i -> pure (Id i)
 
 instance FromHttpApiData (Id a) where
   parseUrlPiece piece = case readMaybe $ unpack piece of
     Nothing -> Left $ "Expected 12 byte hex string, found " <> piece
-    Just i  -> Right $ Id i
+    Just i  -> Right (Id i)
 
 instance ToHttpApiData (Id a) where
   toUrlPiece (Id i) = pack $ show i
