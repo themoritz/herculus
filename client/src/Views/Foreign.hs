@@ -1,9 +1,10 @@
 module Views.Foreign where
 
-import Data.Aeson
-import Data.Aeson.Types
+import           Data.Aeson
+import           Data.Aeson.Types
+import           Data.Text
 
-import React.Flux
+import           React.Flux
 
 -- react-virtualized: AutoSizer
 
@@ -40,12 +41,12 @@ instance FromJSON GridRenderArgs where
 
 data GridProps = GridProps
   { gridCellRenderer :: ReactView GridRenderArgs
-  , gridWidth :: Int
-  , gridHeight :: Int
-  , gridColumnWidth :: Int
-  , gridColumnCount :: Int
-  , gridRowHeight :: Int
-  , gridRowCount :: Int
+  , gridWidth        :: Int
+  , gridHeight       :: Int
+  , gridColumnWidth  :: Int
+  , gridColumnCount  :: Int
+  , gridRowHeight    :: Int
+  , gridRowCount     :: Int
   }
 
 grid_ :: GridProps -> ReactElementM ViewEventHandler ()
@@ -63,4 +64,29 @@ grid = defineView "grid" $ \props -> do
     , "columnCount" &= gridColumnCount props
     , "rowHeight" &= gridRowHeight props
     , "rowCount" &= gridRowCount props
+    ] mempty
+
+-- react-ace
+
+data AceProps = AceProps
+  { aceName     :: Text
+  , aceMode     :: Text
+  , aceTheme    :: Text
+  , aceWidth    :: Text
+  , aceHeight   :: Text
+  , aceOnChange :: Text -> [SomeStoreAction]
+  }
+
+ace_ :: AceProps -> ReactElementM ViewEventHandler ()
+ace_ !props = view ace props mempty
+
+ace :: ReactView AceProps
+ace = defineView "ace" $ \props -> do
+  foreign_ "AceEditor"
+    [ "name" &= aceName props
+    , "mode" &= aceMode props
+    , "theme" &= aceTheme props
+    , "width" &= aceWidth props
+    , "height" &= aceHeight props
+    , callback "onChange" $ aceOnChange props
     ] mempty
