@@ -84,6 +84,8 @@ data Action
   -- Column
   | ColumnRename (Id Column) Text
   | ColumnRenameDone (Id Column) Text
+  | ColumnSetDt (Id Column) DataType
+  | ColumnSetDtDone (Id Column) DataType
   -- Cell
   | CellSetValue (Id Column) (Id Record) Value
   deriving (Typeable, Generic, NFData)
@@ -223,7 +225,16 @@ instance StoreData State where
         pure st
 
       ColumnRenameDone i n -> pure $
-        st & stateColumns . at i . _Just %~ \c -> c { columnName = n}
+        st & stateColumns . at i . _Just %~ \c -> c { columnName = n }
+
+      ColumnSetDt i dt -> do
+        request api (Proxy :: Proxy ColumnSetDataType) i dt $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right ()    -> pure $ dispatch $ ColumnSetDtDone i dt
+        pure st
+
+      ColumnSetDtDone i dt -> pure $
+        st & stateColumns . at i . _Just %~ \c -> c { columnDataType = dt }
 
       -- Cell
 

@@ -26,6 +26,7 @@ executable client
                      , TypeFamilies
                      , LambdaCase
                      , BangPatterns
+                     , RecordWildCards
   build-depends:       base
                      , aeson
                      , bytestring

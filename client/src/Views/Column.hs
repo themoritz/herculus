@@ -1,3 +1,6 @@
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
+
 module Views.Column where
 
 import           React.Flux
@@ -7,7 +10,11 @@ import qualified Data.Map         as Map
 import           Data.Map         (Map)
 import           Data.Maybe       (fromMaybe)
 import           Data.Text        (Text)
+import           Data.Tuple (swap)
 import qualified Data.Text        as Text
+import           Data.Typeable    (Typeable)
+import           GHC.Generics     (Generic)
+import           Control.DeepSeq  (NFData)
 
 import           Lib.Model
 import           Lib.Model.Column
@@ -15,8 +22,25 @@ import           Lib.Types
 
 import           Store
 
-type SelDtCallback     = DataType -> StatefulViewEventHandler (Maybe DataType)
-type SelDtEventHandler = StatefulViewEventHandler (Maybe DataType)
+type SelBranchCallback = DataType -> [SomeStoreAction]
+type SelDtEventHandler = StatefulViewEventHandler (Maybe Branch)
+
+newtype ColumnState = ColumnState (Map (Id Column) DataType)
+
+data ColumnAction
+  = ColumnSetTmpDataType (Id Column) DataType
+  | ColumnUnsetTmpDataType (Id Column)
+  deriving (Typeable, Generic, NFData)
+
+instance StoreData ColumnState where
+  type StoreAction ColumnState = ColumnAction
+  transform (ColumnSetTmpDataType i dt) (ColumnState columnMap) =
+    pure $ ColumnState $ Map.insert i dt columnMap
+  transform (ColumnUnsetTmpDataType i) (ColumnState columnMap) =
+    pure $ ColumnState $ Map.delete i columnMap
+
+columnStore :: ReactStore ColumnState
+columnStore = mkStore $ ColumnState Map.empty
 
 data Branch
   = BBool
@@ -26,7 +50,7 @@ data Branch
   | BRecord
   | BList
   | BMaybe
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Generic, NFData)
 
 toBranch :: DataType -> Branch
 toBranch = \case
@@ -48,13 +72,26 @@ branches = [ ("Bool"  , BBool  )
            , ("Maybe" , BMaybe )
            ]
 
+subType :: DataType -> Maybe DataType
+subType (DataList  a) = Just a
+subType (DataMaybe a) = Just a
+subType _             = Nothing
+
 column_ :: Entity Column -> ReactElementM eh ()
 column_ !c = view column c mempty
 
 column :: ReactView (Entity Column)
-column = defineView "column" $ \c -> do
+column = defineControllerView "column" columnStore $ \(ColumnState m) c@(Entity i _) -> do
   columnTitle_ c
-  selectDatatype_ c
+  selDatatype_ c
+  let mDt = Map.lookup i m
+  button_
+      [ onClick $ \_ _ -> case mDt of
+          Nothing -> []
+          Just dt -> [ SomeStoreAction columnStore $ ColumnUnsetTmpDataType i
+                     , SomeStoreAction store $ ColumnSetDt i dt
+                     ]
+      ] "OK"
 
 columnTitle_ :: Entity Column -> ReactElementM eh ()
 columnTitle_ !c = view columnTitle c mempty
@@ -77,21 +114,39 @@ columnTitle = defineStatefulView "columnTitle" Nothing $ \curText (Entity i col)
   br_ []
   span_ "Data type "
 
-selectDatatype_ :: Entity Column -> ReactElementM eh ()
-selectDatatype_  c = view selectDatatype c mempty
+selDatatype_ :: Entity Column -> ReactElementM eh ()
+selDatatype_  c = view selDatatype c mempty
 
-selectDatatype :: ReactView (Entity Column)
-selectDatatype = defineStatefulView "selectDataType" Nothing $ \curDt c -> do
-  dataType_ c (\dt -> (dispatch $ ColumnSetDataType i dt, Nothing))
+selDatatype :: ReactView (Entity Column)
+selDatatype = defineView "selectDataType" $ \(Entity i Column{..}) ->
+    selBranch_ (Just columnDataType) $
+      \dt -> [SomeStoreAction columnStore $ ColumnSetTmpDataType i dt]
 
-dataType_ :: Entity Column -> SelDtCallback -> ReactElementM SelDtEventHandler ()
-dataType_ !(Entity i _) !cb =
+selBranch_ :: Maybe DataType -> SelBranchCallback -> ReactElementM eh ()
+selBranch_ mDt cb = view selBranch (mDt, cb) mempty
+
+selBranch :: ReactView (Maybe DataType, SelBranchCallback)
+selBranch = defineStatefulView "branch" Nothing $ \curBranch (mDt, cb) -> do
+  let defDt = DataNumber
+      selectedBranch = fromMaybe (fromMaybe (toBranch defDt) $ toBranch <$> mDt) curBranch
   select_
-    [ onChange $ \evt curState -> case Map.lookup (target evt "value") branches of
-        Just BBool   -> cb DataBool
-        Just BString -> cb DataString
-        Just BNumber -> cb DataNumber
-        Just BTime   -> cb DataTime
-        Just BMaybe  ->
+    [ "defaultValue" &= fromMaybe "" (inverseLookup selectedBranch branches)
+    , onChange $ \evt _ -> case Map.lookup (target evt "value") branches of
+        Just BBool   -> (cb DataBool  , Just $ Just BBool  )
+        Just BString -> (cb DataString, Just $ Just BString)
+        Just BNumber -> (cb DataNumber, Just $ Just BNumber)
+        Just BTime   -> (cb DataTime  , Just $ Just BTime  )
+        Just BMaybe  -> (cb $ DataMaybe defDt, Just $ Just BMaybe)
+        Just BList   -> (cb $ DataList  defDt, Just $ Just BList)
+        Just BRecord -> undefined -- TODO
+        Nothing      -> error "Nothing" -- TODO
     ] $ forM_ (Map.toList branches) $ \(label, branch) -> do
           option_ $ elemText label
+  case selectedBranch of
+    BMaybe  -> selBranch_ (subType =<< mDt) (\dt -> cb (DataMaybe dt))
+    BList   -> selBranch_ (subType =<< mDt) (\dt -> cb (DataList  dt))
+    BRecord -> undefined -- TODO
+    _       -> pure ()
+
+inverseLookup :: Ord v => v -> Map k v -> Maybe k
+inverseLookup x m = Map.lookup x (Map.fromList $ map swap $ Map.toList m)
