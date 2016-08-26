@@ -1,8 +1,11 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Views.Foreign where
 
 import           Data.Aeson
 import           Data.Aeson.Types
 import           Data.Text
+import           Data.Typeable
 
 import           React.Flux
 
@@ -68,20 +71,22 @@ grid = defineView "grid" $ \props -> do
 
 -- react-ace
 
-data AceProps = AceProps
+data AceProps func = AceProps
   { aceName     :: Text
   , aceMode     :: Text
   , aceTheme    :: Text
   , aceWidth    :: Text
   , aceHeight   :: Text
-  , aceOnChange :: Text -> [SomeStoreAction]
+  , aceOnChange :: Text -> func
   }
 
-ace_ :: AceProps -> ReactElementM ViewEventHandler ()
+ace_ :: (CallbackFunction ViewEventHandler func, Typeable func)
+     => AceProps func -> ReactElementM ViewEventHandler ()
 ace_ !props = view ace props mempty
 
-ace :: ReactView AceProps
-ace = defineView "ace" $ \props -> do
+ace :: (CallbackFunction ViewEventHandler func, Typeable func)
+    => ReactView (AceProps func)
+ace = defineView "ace" $ \props ->
   foreign_ "AceEditor"
     [ "name" &= aceName props
     , "mode" &= aceMode props
