@@ -1,8 +1,22 @@
-module Views.Cell where
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+
+module Views.Cell
+  ( cell_
+  , CellProps (..)
+  ) where
+
+import Control.DeepSeq
+import Control.Monad (when)
 
 import Data.Maybe
 import Data.Monoid
 import Data.Text (Text, unpack)
+import Data.Typeable
+import Data.Map (Map)
+import qualified Data.Map as Map
+
+import GHC.Generics
 
 import Text.Read (readMaybe)
 
@@ -15,8 +29,8 @@ import Lib.Types
 
 import Store
 
-type CellCallback a = a -> StatefulViewEventHandler (Maybe Value)
-type CellEventHandler = StatefulViewEventHandler (Maybe Value)
+type CellCallback a = a -> [SomeStoreAction]
+type CellEventHandler = ViewEventHandler
 
 data CellProps = CellProps
   { cpColId :: !(Id Column)
@@ -25,26 +39,52 @@ data CellProps = CellProps
   , cpContent :: !CellContent
   }
 
+data CellState = CellState (Map (Id Column, Id Record) Value)
+
+data CellAction
+  = SetTmpValue (Id Column) (Id Record) Value
+  | UnsetTmpValue (Id Column) (Id Record)
+  deriving (Typeable, Generic, NFData)
+
+instance StoreData CellState where
+  type StoreAction CellState = CellAction
+  transform action (CellState m) = case action of
+    SetTmpValue c r v -> pure $ CellState $ Map.insert (c, r) v m
+    UnsetTmpValue c r -> pure $ CellState $ Map.delete (c, r) m
+
+cellStore :: ReactStore CellState
+cellStore = mkStore $ CellState Map.empty
+
 cell_ :: CellProps -> ReactElementM eh ()
 cell_ !props = view cell props mempty
 
 cell :: ReactView CellProps
-cell = defineStatefulView "cell" Nothing $ \mTmpVal props ->
+cell = defineControllerView "cell" cellStore $ \(CellState m) props ->
   case cpContent props of
     CellError msg -> elemText $ "Error: " <> msg
     CellValue val -> do
       let col = cpColumn props
           c = cpColId props
           r = cpRecId props
+          mTmpVal = Map.lookup (c, r) m
       value_ (columnInputType col)
              (columnDataType col)
              (fromMaybe val mTmpVal)
-             (\v _ -> ([], Just $ Just v))
+             (\v -> [SomeStoreAction cellStore $ SetTmpValue c r v])
       button_
-        [ onClick $ \_ _ -> \case
-            Nothing -> ([], Nothing)
-            Just tmpVal -> (dispatch $ CellSetValue c r tmpVal, Nothing)
-        ] $ "Set"
+        [ onClick $ \_ _ -> case mTmpVal of
+            Nothing -> []
+            Just tmpVal ->
+              [ SomeStoreAction store $ CellSetValue c r tmpVal
+              , SomeStoreAction cellStore $ UnsetTmpValue c r
+              ]
+        ] "Ok"
+      when (isJust mTmpVal) $
+        button_
+          [ onClick $ \_ _ ->
+              [ SomeStoreAction cellStore $ UnsetTmpValue c r
+              ]
+          ] "Cancel"
 
 --
 
@@ -98,17 +138,22 @@ cellString_ !inpType !s !cb = case inpType of
 
 cellNumber_ :: InputType -> Number -> CellCallback Number
             -> ReactElementM CellEventHandler ()
-cellNumber_ !inpType !n !cb = case inpType of
-  ColumnInput -> do
-    let parseNumber s = Number <$> (readMaybe $ unpack s)
-    input_
-      [ "value" &= show n
-      , onChange $ \evt -> case parseNumber $ target evt "value" of
-          Nothing -> const ([], Nothing)
-          Just n -> cb n
-      ]
-  ColumnDerived ->
-    elemString $ show n
+cellNumber_ !inpType !n !cb = view cellNumber (inpType, n, cb) mempty
+
+cellNumber :: ReactView (InputType, Number, CellCallback Number)
+cellNumber = defineStatefulView "cellNumber" True $ \valid (inpType, n, cb) ->
+  case inpType of
+    ColumnInput -> do
+      let parseNumber s = Number <$> (readMaybe $ unpack s)
+      input_
+        [ "value" &= show n
+        , classNames [ ("invalid", not valid) ]
+        , onChange $ \evt _ -> case parseNumber $ target evt "value" of
+            Nothing -> ([], Just False)
+            Just n -> (cb n, Just True)
+        ]
+    ColumnDerived ->
+      elemString $ show n
 
 cellTime_ :: InputType -> Time -> CellCallback Time
           -> ReactElementM CellEventHandler ()
@@ -117,7 +162,7 @@ cellTime_ !inpType !t !cb = case inpType of
     input_
       [ "value" &= formatTime "%F" t
       , onChange $ \evt -> case parseTime "%F" $ target evt "value" of
-          Nothing -> const ([], Nothing)
+          Nothing -> []
           Just t -> cb t
       ]
   ColumnDerived ->
@@ -130,7 +175,7 @@ cellRecord_ !inpType !r !t !cb = case inpType of
   ColumnDerived -> undefined
 
 cellList_ :: InputType -> DataType -> [Value] -> CellCallback [Value]
-          -> ReactElementM CellEventHandler ()
+          -> ReactElementM eh ()
 cellList_ !inpType !datType !vs !cb = case inpType of
   ColumnInput -> undefined
   ColumnDerived -> undefined
