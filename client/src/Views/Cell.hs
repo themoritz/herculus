@@ -13,8 +13,9 @@ import Data.Maybe
 import Data.Monoid
 import Data.Text (Text, unpack)
 import Data.Typeable
-import Data.Map (Map)
-import qualified Data.Map as Map
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
+import Data.Foldable
 
 import GHC.Generics
 
@@ -175,10 +176,23 @@ cellRecord_ !inpType !r !t !cb = case inpType of
   ColumnDerived -> undefined
 
 cellList_ :: InputType -> DataType -> [Value] -> CellCallback [Value]
-          -> ReactElementM eh ()
+          -> ReactElementM CellEventHandler ()
 cellList_ !inpType !datType !vs !cb = case inpType of
-  ColumnInput -> undefined
-  ColumnDerived -> undefined
+  ColumnInput -> do
+    button_
+      [ onClick $ \_ _ ->
+          let CellValue newV = defaultContent datType
+          in cb (newV : vs)
+      ] "New"
+    ul_ $ for_ (zip [0..] vs) $ \(i, v) -> do
+      let listMod ind x xs = let (h, t) = splitAt ind xs in h <> (x : drop 1 t)
+          listDel ind xs   = let (h, t) = splitAt ind xs in h <> drop 1 t
+      value_ inpType datType v (\nv -> cb (listMod i nv vs))
+      button_
+        [ onClick $ \_ _ -> cb (listDel i vs)
+        ] "Del"
+  ColumnDerived ->
+    ul_ $ for_ vs $ \v -> value_ inpType datType v (const [])
 
 cellMaybe_ :: InputType -> DataType -> Maybe Value -> CellCallback (Maybe Value)
            -> ReactElementM CellEventHandler ()
