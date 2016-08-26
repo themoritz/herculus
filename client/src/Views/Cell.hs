@@ -92,27 +92,27 @@ cell = defineControllerView "cell" cellStore $ \(CellState m) props ->
 value_ :: InputType -> DataType -> Value -> CellCallback Value
        -> ReactElementM CellEventHandler ()
 value_ !inpType !datType !val !cb = case datType of
-  DataBool ->
-    let (VBool b) = val
-    in cellBool_ inpType b (cb . VBool)
-  DataString ->
-    let (VString s) = val
-    in cellString_ inpType s (cb . VString)
-  DataNumber ->
-    let (VNumber n) = val
-    in cellNumber_ inpType n (cb . VNumber)
-  DataTime ->
-    let (VTime t) = val
-    in cellTime_ inpType t (cb . VTime)
-  DataRecord t ->
-    let (VRecord r) = val
-    in cellRecord_ inpType r t (cb . VRecord)
-  DataList t ->
-    let (VList vs) = val
-    in cellList_ inpType t vs (cb . VList)
-  DataMaybe t ->
-    let (VMaybe v) = val
-    in cellMaybe_ inpType t v (cb . VMaybe)
+  DataBool -> case val of
+    VBool b -> cellBool_ inpType b (cb . VBool)
+    _ -> mempty
+  DataString -> case val of
+    VString s -> cellString_ inpType s (cb . VString)
+    _ -> mempty
+  DataNumber -> case val of
+    VNumber n -> cellNumber_ inpType n (cb . VNumber)
+    _ -> mempty
+  DataTime -> case val of
+    VTime t -> cellTime_ inpType t (cb . VTime)
+    _ -> mempty
+  DataRecord t -> case val of
+    VRecord r -> cellRecord_ inpType r t (cb . VRecord)
+    _ -> mempty
+  DataList t -> case val of
+    VList vs -> cellList_ inpType t vs (cb . VList)
+    _ -> mempty
+  DataMaybe t -> case val of
+    VMaybe v -> cellMaybe_ inpType t v (cb . VMaybe)
+    _ -> mempty
 
 cellBool_ :: InputType -> Bool -> CellCallback Bool
           -> ReactElementM CellEventHandler ()
@@ -151,7 +151,7 @@ cellNumber = defineStatefulView "cellNumber" True $ \valid (inpType, n, cb) ->
         , classNames [ ("invalid", not valid) ]
         , onChange $ \evt _ -> case parseNumber $ target evt "value" of
             Nothing -> ([], Just False)
-            Just n -> (cb n, Just True)
+            Just n' -> (cb n', Just True)
         ]
     ColumnDerived ->
       elemString $ show n
@@ -164,7 +164,7 @@ cellTime_ !inpType !t !cb = case inpType of
       [ "value" &= formatTime "%F" t
       , onChange $ \evt -> case parseTime "%F" $ target evt "value" of
           Nothing -> []
-          Just t -> cb t
+          Just t' -> cb t'
       ]
   ColumnDerived ->
     elemString $ show t
@@ -184,7 +184,7 @@ cellList_ !inpType !datType !vs !cb = case inpType of
           let CellValue newV = defaultContent datType
           in cb (newV : vs)
       ] "New"
-    ul_ $ for_ (zip [0..] vs) $ \(i, v) -> do
+    ul_ $ for_ (zip [0..] vs) $ \(i, v) -> li_ $ do
       let listMod ind x xs = let (h, t) = splitAt ind xs in h <> (x : drop 1 t)
           listDel ind xs   = let (h, t) = splitAt ind xs in h <> drop 1 t
       value_ inpType datType v (\nv -> cb (listMod i nv vs))
@@ -192,7 +192,7 @@ cellList_ !inpType !datType !vs !cb = case inpType of
         [ onClick $ \_ _ -> cb (listDel i vs)
         ] "Del"
   ColumnDerived ->
-    ul_ $ for_ vs $ \v -> value_ inpType datType v (const [])
+    ul_ $ for_ vs $ \v -> li_ $ value_ inpType datType v (const [])
 
 cellMaybe_ :: InputType -> DataType -> Maybe Value -> CellCallback (Maybe Value)
            -> ReactElementM CellEventHandler ()
