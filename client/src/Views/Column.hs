@@ -88,8 +88,8 @@ column = defineControllerView "column" columnStore $ \(ColumnState m) c@(Entity 
   button_
       [ onClick $ \_ _ -> case mDt of
           Nothing -> []
-          Just dt -> [ SomeStoreAction columnStore $ ColumnUnsetTmpDataType i
-                     , SomeStoreAction store $ ColumnSetDt i dt
+          Just dt -> [ SomeStoreAction store $ ColumnSetDt i dt
+                     , SomeStoreAction columnStore $ ColumnUnsetTmpDataType i
                      ]
       ] "OK"
 
