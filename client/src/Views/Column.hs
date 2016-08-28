@@ -123,7 +123,7 @@ columnTitle_ !c = view columnTitle c mempty
 columnTitle :: ReactView (Entity Column)
 columnTitle = defineStatefulView "columnTitle" Nothing $ \curText (Entity i col) -> do
   input_
-    [ "placeholder" &= ("column name" :: Text)
+    [ "placeholder" &= ("Column name" :: Text)
     , "value" &= fromMaybe (columnName col) curText
     , onChange $ \evt _ -> ([], Just $ Just $ target evt "value")
     , onKeyDown $ \_ evt curState ->
@@ -212,3 +212,6 @@ selInputType = defineControllerView "selInputType" columnStore $
         , aceOnChange = \v ->
             [ SomeStoreAction columnStore $ ColumnSetTmpSource i v ]
         }
+    case columnCompileResult of
+      CompileResultError msg -> elemText msg
+      _                      -> mempty

@@ -9,29 +9,6 @@ import           Data.Typeable
 
 import           React.Flux
 
--- react-virtualized: AutoSizer
-
-data AutoSizerRenderArgs = AutoSizerRenderArgs Int Int -- width height
-
-instance FromJSON AutoSizerRenderArgs where
-  parseJSON (Object o) = AutoSizerRenderArgs <$> o .: "width"
-                                             <*> o .: "height"
-  parseJSON _ = mempty
-
-autoSizer_ :: (AutoSizerRenderArgs -> ReactElementM ViewEventHandler ())
-           -> ReactElementM ViewEventHandler ()
-autoSizer_ renderer =
-  let rendererView = defineView "rendererView" $ renderer
-  in view autoSizer rendererView mempty
-
-autoSizer :: ReactView (ReactView AutoSizerRenderArgs)
-autoSizer = defineView "autoSizer" $ \renderer -> do
-  let getArgs :: Value -> ReturnProps AutoSizerRenderArgs
-      getArgs v = let (Just args) = parseMaybe parseJSON v in ReturnProps args
-  foreign_ "AutoSizer"
-    [ callbackViewWithProps "renderChildren" renderer getArgs
-    ] mempty
-
 -- react-virtualized: Grid
 
 data GridRenderArgs = GridRenderArgs Int Int Bool -- col row scrolling
@@ -44,8 +21,6 @@ instance FromJSON GridRenderArgs where
 
 data GridProps = GridProps
   { gridCellRenderer :: ReactView GridRenderArgs
-  , gridWidth        :: Int
-  , gridHeight       :: Int
   , gridColumnWidth  :: Int
   , gridColumnCount  :: Int
   , gridRowHeight    :: Int
@@ -61,8 +36,6 @@ grid = defineView "grid" $ \props -> do
       getArgs v = let (Just args) = parseMaybe parseJSON v in ReturnProps args
   foreign_ "Grid"
     [ callbackViewWithProps "cellRenderer" (gridCellRenderer props) getArgs
-    , "width" &= gridWidth props
-    , "height" &= gridHeight props
     , "columnWidth" &= gridColumnWidth props
     , "columnCount" &= gridColumnCount props
     , "rowHeight" &= gridRowHeight props

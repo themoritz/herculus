@@ -14,7 +14,6 @@ import Lib.Model.Types
 
 import Store
 import Views.Table
-import Views.Foreign
 
 app :: ReactView ()
 app = defineControllerView "app" store $ \st () ->
