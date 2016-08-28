@@ -93,7 +93,8 @@ cell_ !props = view cell props mempty
 cell :: ReactView CellProps
 cell = defineControllerView "cell" cellStore $ \st props ->
   case cpContent props of
-    CellError msg -> elemText $ "Error: " <> msg
+    CellError msg ->
+      elemText $ "Error: " <> msg
     CellValue val -> do
       let col = cpColumn props
           c = cpColId props

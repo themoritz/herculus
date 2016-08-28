@@ -30,8 +30,6 @@ app = defineControllerView "app" store $ \st () ->
         Just t -> do
           h3_ "Error"
           elemText t
-      h3_ "Ace Test"
-      div_ $ ace_ $ AceProps "ace" "ocaml" "github" "100%" "200px" (dispatch . GlobalSetError)
     cldiv_ "tableGrid" $ tableGrid_ st
 
 --

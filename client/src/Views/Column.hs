@@ -1,17 +1,20 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Views.Column where
 
+import Control.Lens hiding (view)
 import           React.Flux
 
-import           Control.Monad    (forM_)
+import           Control.Monad    (forM_, when)
 import qualified Data.Map         as Map
 import           Data.Map         (Map)
 import           Data.Maybe       (fromMaybe)
-import           Data.Text        (Text)
+import           Data.Text        (Text, pack)
 import           Data.Tuple (swap)
 import qualified Data.Text        as Text
+import Data.Monoid ((<>))
 import           Data.Typeable    (Typeable)
 import           GHC.Generics     (Generic)
 import           Control.DeepSeq  (NFData)
@@ -21,26 +24,46 @@ import           Lib.Model.Column
 import           Lib.Types
 
 import           Store
+import           Views.Foreign
 
-type SelBranchCallback = DataType -> [SomeStoreAction]
-type SelDtEventHandler = StatefulViewEventHandler (Maybe Branch)
+data ColumnState = ColumnState
+  { _csTmpDataType :: Map (Id Column) DataType
+  , _csTmpInputType :: Map (Id Column) InputType
+  , _csTmpSource :: Map (Id Column) Text
+  }
 
-newtype ColumnState = ColumnState (Map (Id Column) DataType)
+makeLenses ''ColumnState
 
 data ColumnAction
   = ColumnSetTmpDataType (Id Column) DataType
   | ColumnUnsetTmpDataType (Id Column)
+  | ColumnSetTmpInputType (Id Column) InputType
+  | ColumnUnsetTmpInputType (Id Column)
+  | ColumnSetTmpSource (Id Column) Text
+  | ColumnUnsetTmpSource (Id Column)
   deriving (Typeable, Generic, NFData)
 
 instance StoreData ColumnState where
   type StoreAction ColumnState = ColumnAction
-  transform (ColumnSetTmpDataType i dt) (ColumnState columnMap) =
-    pure $ ColumnState $ Map.insert i dt columnMap
-  transform (ColumnUnsetTmpDataType i) (ColumnState columnMap) =
-    pure $ ColumnState $ Map.delete i columnMap
+  transform action st = case action of
+    ColumnSetTmpDataType i dt ->
+      pure $ st & csTmpDataType . at i .~ Just dt
+    ColumnUnsetTmpDataType i ->
+      pure $ st & csTmpDataType . at i .~ Nothing
+    ColumnSetTmpInputType i it ->
+      pure $ st & csTmpInputType . at i .~ Just it
+    ColumnUnsetTmpInputType i ->
+      pure $ st & csTmpInputType . at i .~ Nothing
+    ColumnSetTmpSource i s ->
+      pure $ st & csTmpSource . at i .~ Just s
+    ColumnUnsetTmpSource i ->
+      pure $ st & csTmpSource . at i .~ Nothing
 
 columnStore :: ReactStore ColumnState
-columnStore = mkStore $ ColumnState Map.empty
+columnStore = mkStore $ ColumnState Map.empty Map.empty Map.empty
+
+type SelBranchCallback = DataType -> [SomeStoreAction]
+type SelDtEventHandler = StatefulViewEventHandler (Maybe Branch)
 
 data Branch
   = BBool
@@ -81,10 +104,10 @@ column_ :: Entity Column -> ReactElementM eh ()
 column_ !c = view column c mempty
 
 column :: ReactView (Entity Column)
-column = defineControllerView "column" columnStore $ \(ColumnState m) c@(Entity i _) -> do
+column = defineControllerView "column" columnStore $ \st c@(Entity i _) -> do
   columnTitle_ c
   selDatatype_ c
-  let mDt = Map.lookup i m
+  let mDt = st ^. csTmpDataType . at i
   button_
       [ onClick $ \_ _ -> case mDt of
           Nothing -> []
@@ -92,6 +115,7 @@ column = defineControllerView "column" columnStore $ \(ColumnState m) c@(Entity 
                      , SomeStoreAction columnStore $ ColumnUnsetTmpDataType i
                      ]
       ] "OK"
+  selInputType_ c
 
 columnTitle_ :: Entity Column -> ReactElementM eh ()
 columnTitle_ !c = view columnTitle c mempty
@@ -150,3 +174,41 @@ selBranch = defineStatefulView "branch" Nothing $ \curBranch (mDt, cb) -> do
 
 inverseLookup :: Ord v => v -> Map k v -> Maybe k
 inverseLookup x m = Map.lookup x (Map.fromList $ map swap $ Map.toList m)
+
+--
+
+selInputType_ :: Entity Column -> ReactElementM eh ()
+selInputType_ !c = view selInputType c mempty
+
+
+selInputType :: ReactView (Entity Column)
+selInputType = defineControllerView "selInputType" columnStore $
+  \st (Entity i Column{..}) -> do
+    let inpTyp = fromMaybe columnInputType $ st ^. csTmpInputType . at i
+        src = fromMaybe columnSourceCode $ st ^. csTmpSource . at i
+    select_
+      [ "defaultValue" &= show inpTyp
+      , onChange $ \evt ->
+          [ SomeStoreAction columnStore $
+              ColumnSetTmpInputType i $ read $ target evt "value"
+          ]
+      ] $ do option_ [ "value" &= show ColumnInput ] "Input"
+             option_ [ "value" &= show ColumnDerived ] "Derived"
+    button_
+      [ onClick $ \_ _ ->
+          [ SomeStoreAction store $ ColumnSetInput i (inpTyp, src)
+          , SomeStoreAction columnStore $ ColumnUnsetTmpInputType i
+          , SomeStoreAction columnStore $ ColumnUnsetTmpSource i
+          ]
+      ] "Ok"
+    when (inpTyp == ColumnDerived) $
+      ace_ $ AceProps
+        { aceName = "ace-" <> (pack . show) i
+        , aceMode = "ocaml"
+        , aceTheme = "github"
+        , aceWidth = "100%"
+        , aceHeight = "100px"
+        , aceValue = src
+        , aceOnChange = \v ->
+            [ SomeStoreAction columnStore $ ColumnSetTmpSource i v ]
+        }

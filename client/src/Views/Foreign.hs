@@ -71,21 +71,20 @@ grid = defineView "grid" $ \props -> do
 
 -- react-ace
 
-data AceProps func = AceProps
+data AceProps = AceProps
   { aceName     :: Text
   , aceMode     :: Text
   , aceTheme    :: Text
   , aceWidth    :: Text
   , aceHeight   :: Text
-  , aceOnChange :: Text -> func
+  , aceValue    :: Text
+  , aceOnChange :: Text -> [SomeStoreAction]
   }
 
-ace_ :: (CallbackFunction ViewEventHandler func, Typeable func)
-     => AceProps func -> ReactElementM ViewEventHandler ()
+ace_ :: AceProps -> ReactElementM ViewEventHandler ()
 ace_ !props = view ace props mempty
 
-ace :: (CallbackFunction ViewEventHandler func, Typeable func)
-    => ReactView (AceProps func)
+ace :: ReactView AceProps
 ace = defineView "ace" $ \props ->
   foreign_ "AceEditor"
     [ "name" &= aceName props
@@ -93,6 +92,7 @@ ace = defineView "ace" $ \props ->
     , "theme" &= aceTheme props
     , "width" &= aceWidth props
     , "height" &= aceHeight props
+    , "value" &= aceValue props
     , callback "onChange" $ aceOnChange props
     ] mempty
 

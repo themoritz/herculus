@@ -66,31 +66,3 @@ tableGrid = defineView "tableGrid" $ \st -> do
           (numRecs + 2)
 
     grid_ props
-
---
-
--- toCellGrid :: State -> Map Coords CellInfo
--- toCellGrid (State _ cells columns records) =
---   let indexedCols = map (\((i, c), p) -> (i, (c, p))) $ zip (Map.toList columns) [0..]
---       indexedRows = zip (Map.keys records) [0..]
---       colMap = Map.fromList indexedCols
---       rowMap = Map.fromList indexedRows
---       go m (Coords colId recId) val =
---         let may = do
---               (col, x) <- Map.lookup colId colMap
---               y <- Map.lookup recId rowMap
---               pure (Position x y, col)
---         in case may of
---           Just (pos, col) -> Map.insert (Coords colId recId) (CellInfo pos col val) m
---           Nothing         -> m
---   in Map.foldlWithKey' go Map.empty cells
-
--- toColumns :: State -> Map (Id Column) (Int, Column, Maybe (Id Table))
--- toColumns (State tblId _ columns _) =
---   let indexedCols = zip (Map.toList columns) [0..]
---   in Map.fromList $ map (\((colId, col), i) -> (colId, (i, col, tblId))) indexedCols
-
--- toRecords :: State -> Map (Id Record) (Int, Record)
--- toRecords (State _ _ _ records) =
---   let indexedRecs = zip (Map.toList records) [0..]
---   in Map.fromList $ map (\((recId, reco), i) -> (recId, (i, reco))) indexedRecs
