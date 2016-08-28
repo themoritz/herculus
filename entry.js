@@ -21,5 +21,8 @@ require('brace/theme/github')
 
 global.AceEditor = AceEditor.default
 
+// Own components
+global.OnDidMount = require('./assets/components/OnDidMount.js')
+
 // GHCJS
 require('./client/.stack-work/dist/x86_64-linux/Cabal-1.22.8.0_ghcjs/build/client/client.jsexe/all.js')

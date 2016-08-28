@@ -49,30 +49,30 @@ body, html {
 }
 
 .sidebar {
-    position: absolute;
-    left: 0px;
-    top: 0px;
-    bottom: 0px;
-    width: 200px;
-    padding: 10px;
-    background-color: darken(white, 3%);
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  bottom: 0px;
+  width: 200px;
+  padding: 10px;
+  background-color: darken(white, 3%);
+  box-sizing: border-box;
+  input {
+    width: 180px;
     box-sizing: border-box;
-    input {
-        width: 180px;
-        box-sizing: border-box;
-    }
+  }
 }
 
 .tableGrid {
-    position: absolute;
-    left: 200px;
-    top: 0px;
-    right: 0px;
-    bottom: 0px;
+  position: absolute;
+  left: 200px;
+  top: 0px;
+  right: 0px;
+  bottom: 0px;
 }
 
 ul {
-    padding-left: 25px;
+  padding-left: 25px;
 }
 
 textarea {
@@ -83,13 +83,13 @@ textarea {
 }
 
 span.link {
-    color: green;
-    cursor: pointer;
-    &:hover {
-        color: darken(green, 10%);
-    }
+  color: green;
+  cursor: pointer;
+  &:hover {
+    color: darken(green, 10%);
+  }
 }
 
 span.active {
-    font-weight: bold;
+  font-weight: bold;
 }

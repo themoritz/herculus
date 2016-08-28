@@ -95,3 +95,16 @@ ace = defineView "ace" $ \props ->
     , "height" &= aceHeight props
     , callback "onChange" $ aceOnChange props
     ] mempty
+
+-- own: OnLoad
+
+onDidMount_ :: (CallbackFunction ViewEventHandler func, Typeable func)
+        => func -> ReactElementM ViewEventHandler () -> ReactElementM ViewEventHandler ()
+onDidMount_ !f = view onDidMount f
+
+onDidMount :: (CallbackFunction ViewEventHandler func, Typeable func)
+       => ReactView func
+onDidMount = defineView "onDidMount" $ \f ->
+  foreign_ "OnDidMount"
+    [ callback "onDidMount" f
+    ] childrenPassedToView

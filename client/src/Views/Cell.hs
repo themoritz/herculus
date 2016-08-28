@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Views.Cell
   ( cell_
@@ -8,10 +9,12 @@ module Views.Cell
 
 import Control.DeepSeq
 import Control.Monad (when)
+import Control.Lens hiding (view)
 
+import Data.Proxy
 import Data.Maybe
 import Data.Monoid
-import Data.Text (Text, unpack)
+import Data.Text (Text, unpack, pack, intercalate)
 import Data.Typeable
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -22,13 +25,16 @@ import GHC.Generics
 import Text.Read (readMaybe)
 
 import React.Flux
+import React.Flux.Addons.Servant
 
+import Lib.Api.Rest
 import Lib.Model.Column
 import Lib.Model.Cell
 import Lib.Model.Types
 import Lib.Types
 
 import Store
+import Views.Foreign
 
 type CellCallback a = a -> [SomeStoreAction]
 type CellEventHandler = ViewEventHandler
@@ -40,47 +46,72 @@ data CellProps = CellProps
   , cpContent :: !CellContent
   }
 
-data CellState = CellState (Map (Id Column, Id Record) Value)
+data CellState = CellState
+  { _csTmpValues :: Map (Id Column, Id Record) Value
+  , _csRecordCache :: Map (Id Table) (Map (Id Record) [(Text, CellContent)])
+  }
+
+makeLenses ''CellState
 
 data CellAction
   = SetTmpValue (Id Column) (Id Record) Value
   | UnsetTmpValue (Id Column) (Id Record)
+  | GetRecords (Id Table)
+  | SetRecords (Id Table) [(Id Record, [(Text, CellContent)])]
   deriving (Typeable, Generic, NFData)
 
 instance StoreData CellState where
   type StoreAction CellState = CellAction
-  transform action (CellState m) = case action of
-    SetTmpValue c r v -> pure $ CellState $ Map.insert (c, r) v m
-    UnsetTmpValue c r -> pure $ CellState $ Map.delete (c, r) m
+  transform action st = case action of
+
+    SetTmpValue c r v -> pure $
+      st & csTmpValues . at (c, r) .~ Just v
+
+    UnsetTmpValue c r -> pure $
+      st & csTmpValues . at (c, r) .~ Nothing
+
+    GetRecords t -> case st ^. csRecordCache . at t of
+      Just _  -> pure st
+      Nothing -> do
+        request api (Proxy :: Proxy RecordListWithData) t $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right res -> pure $ dispatchCell $ SetRecords t res
+        pure st
+
+    SetRecords t recs -> pure $
+      st & csRecordCache . at t .~ Just (Map.fromList recs)
 
 cellStore :: ReactStore CellState
-cellStore = mkStore $ CellState Map.empty
+cellStore = mkStore $ CellState Map.empty Map.empty
+
+dispatchCell :: CellAction -> [SomeStoreAction]
+dispatchCell a = [SomeStoreAction cellStore a]
 
 cell_ :: CellProps -> ReactElementM eh ()
 cell_ !props = view cell props mempty
 
 cell :: ReactView CellProps
-cell = defineControllerView "cell" cellStore $ \(CellState m) props ->
+cell = defineControllerView "cell" cellStore $ \st props ->
   case cpContent props of
     CellError msg -> elemText $ "Error: " <> msg
     CellValue val -> do
       let col = cpColumn props
           c = cpColId props
           r = cpRecId props
-          mTmpVal = Map.lookup (c, r) m
+          mTmpVal = st ^. csTmpValues . at (c, r)
       value_ (columnInputType col)
              (columnDataType col)
              (fromMaybe val mTmpVal)
              (\v -> [SomeStoreAction cellStore $ SetTmpValue c r v])
-      button_
-        [ onClick $ \_ _ -> case mTmpVal of
-            Nothing -> []
-            Just tmpVal ->
-              [ SomeStoreAction store $ CellSetValue c r tmpVal
-              , SomeStoreAction cellStore $ UnsetTmpValue c r
-              ]
-        ] "Ok"
-      when (isJust mTmpVal) $
+      when (isJust mTmpVal) $ do
+        button_
+          [ onClick $ \_ _ -> case mTmpVal of
+              Nothing -> []
+              Just tmpVal ->
+                [ SomeStoreAction store $ CellSetValue c r tmpVal
+                , SomeStoreAction cellStore $ UnsetTmpValue c r
+                ]
+          ] "Ok"
         button_
           [ onClick $ \_ _ ->
               [ SomeStoreAction cellStore $ UnsetTmpValue c r
@@ -174,6 +205,28 @@ cellRecord_ :: InputType -> Id Record -> Id Table -> CellCallback (Id Record)
 cellRecord_ !inpType !r !t !cb = case inpType of
   ColumnInput -> undefined
   ColumnDerived -> undefined
+
+cellRecord :: ReactView (InputType, Id Record, Id Table, CellCallback (Id Record))
+cellRecord = defineControllerView "cellRecord" cellStore $ \st (inpType, r, t, cb) -> do
+  onDidMount_ (dispatchCell $ GetRecords t) mempty
+  let records = fromMaybe Map.empty $ st ^. csRecordCache . at t
+      showPairs = intercalate ", " . map (\(n, v) -> n <> ": " <> (pack . show) v)
+  case inpType of
+    ColumnInput ->
+      select_
+        [ "defaultValue" &= show r
+        , onChange $ \evt -> case readMaybe $ target evt "value" of
+            Nothing -> []
+            Just newId -> cb newId
+        ] $ for_ (Map.toList records) $ \(i, record) -> option_
+              [ "value" &= show r
+              ] $ elemText $ showPairs record
+    ColumnDerived -> case Map.lookup r records of
+      Nothing -> mempty
+      Just fields ->
+        ul_ $ for_ fields $ \(k, content) -> li_ $ do
+          elemText $ k <> ": " <> (pack . show) content
+
 
 cellList_ :: InputType -> DataType -> [Value] -> CellCallback [Value]
           -> ReactElementM CellEventHandler ()
