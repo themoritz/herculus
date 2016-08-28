@@ -8,9 +8,7 @@ global.ReactDOM = ReactDOM
 // react-virtualized
 var ReactVR = require('react-virtualized')
 require('react-virtualized/styles.css')
-require('./assets/sass/main.scss')
 
-global.AutoSizer = ReactVR.AutoSizer
 global.Grid = ReactVR.Grid
 
 // react-ace
@@ -23,6 +21,10 @@ global.AceEditor = AceEditor.default
 
 // Own components
 global.OnDidMount = require('./assets/components/OnDidMount.js')
+global.AutoSizer = require('./assets/components/AutoSizer.js')
+
+// Styles
+require('./assets/sass/main.scss')
 
 // GHCJS
 require('./client/.stack-work/dist/x86_64-linux/Cabal-1.22.8.0_ghcjs/build/client/client.jsexe/all.js')

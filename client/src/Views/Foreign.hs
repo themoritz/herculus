@@ -29,7 +29,7 @@ autoSizer = defineView "autoSizer" $ \renderer -> do
   let getArgs :: Value -> ReturnProps AutoSizerRenderArgs
       getArgs v = let (Just args) = parseMaybe parseJSON v in ReturnProps args
   foreign_ "AutoSizer"
-    [ callbackViewWithProps "children" renderer getArgs
+    [ callbackViewWithProps "renderChildren" renderer getArgs
     ] mempty
 
 -- react-virtualized: Grid

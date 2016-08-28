@@ -19,7 +19,7 @@ tableGrid_ !st = view tableGrid st mempty
 
 tableGrid :: ReactView State
 tableGrid = defineView "tableGrid" $ \st -> do
-  -- autoSizer_ $ \(AutoSizerRenderArgs width height) -> do
+  autoSizer_ $ \(AutoSizerRenderArgs width height) -> do
     let cells = st ^. stateCells
         cols = st ^. stateColumns
         recs = st ^. stateRecords
@@ -58,8 +58,8 @@ tableGrid = defineView "tableGrid" $ \st -> do
 
         props = GridProps
           (defineView "cellRenderer" renderer)
-          900 -- width
-          900 -- height
+          width
+          height
           300
           (numCols + 2)
           300
