@@ -98,7 +98,8 @@ handleColumnCreate t = do
   c <- create newCol
   rs <- listByQuery [ "tableId" =: toObjectId t ]
   cells <- for rs $ \e -> do
-    let cell = newCell t c (entityId e) (defaultContent DataString)
+    defContent <- defaultContent newCol
+    let cell = newCell t c (entityId e) defContent
     i <- create cell
     pure $ Entity i cell
   pure (Entity c newCol, cells)
@@ -156,7 +157,8 @@ handleRecordCreate t = do
   r <- create newRec
   cs <- listByQuery [ "tableId" =: toObjectId t ]
   newCells <- for cs $ \(Entity c col) -> do
-    let cell = newCell t c r $ defaultContent $ columnDataType col
+    defContent <- defaultContent col
+    let cell = newCell t c r defContent
     i <- create cell
     pure $ case columnInputType col of
       ColumnInput -> Just $ Entity i cell
@@ -261,7 +263,7 @@ invalidateCells c = do
   cells <- listByQuery [ "aspects.columnId" =: toObjectId c]
   col <- getById' c
   changes <- for cells $ \e -> do
-    let defContent = defaultContent (columnDataType col)
+    defContent <- defaultContent col
     update (entityId e) $ \cell -> cell { cellContent = defContent }
     let aspects = cellAspects $ entityVal e
     pure (aspectsColumnId aspects, aspectsRecordId aspects, defContent)
@@ -312,5 +314,20 @@ getTableRows t = do
                                     <$> typeOfDataType getTableRows (columnDataType c)
                                     <*> toRow rest
   toRow cols
+
+-- TODO: configurable by user
+defaultContent :: MonadHexl m => Column -> m CellContent
+defaultContent col = case columnDataType col of
+  DataBool     -> pure . CellValue $ VBool False
+  DataString   -> pure . CellValue $ VString ""
+  DataNumber   -> pure . CellValue $ VNumber 0
+  DataTime     -> CellValue . VTime <$> getCurrentTime
+  DataRecord _ -> do
+    res <- getOneByQuery [ "tableId" =: toObjectId (columnTableId col) ]
+    case res of
+      Left _ -> pure . CellError $ "no record found"
+      Right (Entity i _) -> pure . CellValue . VRecord $ i
+  DataList _   -> pure . CellValue $ VList []
+  DataMaybe _  -> pure . CellValue $ VMaybe Nothing
 
 --

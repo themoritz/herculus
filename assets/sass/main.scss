@@ -162,3 +162,7 @@ span.active {
   height: auto !important;
   border: 1px solid $medium-gray;
 }
+
+.react-datepicker__day--selected {
+  background-color: $brand !important;
+}

@@ -35,6 +35,7 @@ library
                      , servant-server
                      , stm
                      , text
+                     , time
                      , transformers
                      , transformers-base
                      , websockets

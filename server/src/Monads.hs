@@ -19,7 +19,7 @@ module Monads
   , runHexl
   ) where
 
-import           Control.Concurrent.STM as STM
+import           Control.Concurrent.STM      as STM
 import           Control.Monad.Except
 import           Control.Monad.Logger
 import           Control.Monad.Reader
@@ -27,13 +27,14 @@ import           Control.Monad.Trans.Control
 -- import Control.Monad.Base
 
 import           Data.Aeson
-import qualified Data.ByteString.Char8          as B8
+import qualified Data.ByteString.Char8       as B8
 import           Data.Monoid
 import           Data.Proxy
 import           Data.Text
-import           Database.MongoDB               ((=:))
+import           Data.Time.Clock             as Clock (getCurrentTime)
+import           Database.MongoDB            ((=:))
 
-import qualified Database.MongoDB               as Mongo
+import qualified Database.MongoDB            as Mongo
 
 import           System.Log.FastLogger
 
@@ -69,6 +70,8 @@ class (Monad m, MonadLogger m, MonadError AppError m) => MonadDB m where
   upsert :: Model a => Mongo.Selector -> a -> (a -> a) -> m (Maybe (Id a))
   delete :: Model a => Id a -> m ()
   deleteByQuery :: Model a => Proxy a -> Mongo.Selector -> m ()
+  -- Other
+  getCurrentTime :: m Time
 
 -- Hexl layer: Business logic
 
@@ -183,6 +186,10 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
   deleteByQuery proxy query = do
     let collection = collectionName proxy
     runMongo $ Mongo.delete (Mongo.select query collection)
+
+  --
+
+  getCurrentTime = Time <$> liftIO Clock.getCurrentTime
 
 --
 

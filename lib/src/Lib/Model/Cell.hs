@@ -66,17 +66,6 @@ instance Show Value where
 instance ToJSON Value
 instance FromJSON Value
 
--- TODO: configurable by user
-defaultContent :: DataType -> CellContent
-defaultContent = \case
-  DataBool     -> CellValue $ VBool False
-  DataString   -> CellValue $ VString ""
-  DataNumber   -> CellValue $ VNumber 0
-  DataTime     -> CellValue $ VTime $ defaultTime
-  DataRecord _ -> CellValue $ VRecord nullObjectId
-  DataList _   -> CellValue $ VList []
-  DataMaybe _  -> CellValue $ VMaybe Nothing
-
 --
 
 data Aspects = Aspects
@@ -112,7 +101,7 @@ newCell t c r content = Cell
   , cellAspects = Aspects t c r
   }
 
-instance Model Cell         where collectionName = const "cells"
+instance Model Cell where collectionName = const "cells"
 
 instance ToJSON Cell
 instance FromJSON Cell
