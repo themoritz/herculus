@@ -33,7 +33,15 @@ import           Web.HttpApiData
 import           Lib.NamedMap
 
 newtype Id a = Id ObjectId
-  deriving (Eq, Ord, Val, Show, Read, Generic, Typeable)
+  deriving (Eq, Ord, Val, Generic, Typeable)
+
+instance Show (Id a) where
+  show (Id objectId) = show objectId
+
+instance Read (Id a) where
+  readsPrec d r = do
+    (v, r') <- readsPrec d r
+    pure $ (Id v, r')
 
 toObjectId :: Id a -> ObjectId
 toObjectId (Id x) = x
