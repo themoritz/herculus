@@ -123,7 +123,10 @@ cell = defineControllerView "cell" cellStore $ \st props ->
 
 value_ :: InputType -> DataType -> Value -> CellCallback Value
        -> ReactElementM CellEventHandler ()
-value_ !inpType !datType !val !cb = case datType of
+value_ !inpType !datType !val !cb = view value (inpType, datType, val, cb) mempty
+
+value :: ReactView (InputType, DataType, Value, CellCallback Value)
+value = defineView "value" $ \(inpType, datType, val, cb) -> case datType of
   DataBool -> case val of
     VBool b -> cellBool_ inpType b (cb . VBool)
     _ -> mempty
@@ -148,7 +151,10 @@ value_ !inpType !datType !val !cb = case datType of
 
 cellBool_ :: InputType -> Bool -> CellCallback Bool
           -> ReactElementM CellEventHandler ()
-cellBool_ !inpType !b !cb = case inpType of
+cellBool_ !inpType !b !cb = view cellBool (inpType, b, cb) mempty
+
+cellBool :: ReactView (InputType, Bool, CellCallback Bool)
+cellBool = defineView "cellBool" $ \(inpType, b, cb) -> case inpType of
   ColumnInput ->
     input_
       [ "type" $= "checkbox"
@@ -160,7 +166,10 @@ cellBool_ !inpType !b !cb = case inpType of
 
 cellString_ :: InputType -> Text -> CellCallback Text
             -> ReactElementM CellEventHandler ()
-cellString_ !inpType !s !cb = case inpType of
+cellString_ !inpType !s !cb = view cellString (inpType, s, cb) mempty
+
+cellString :: ReactView (InputType, Text, CellCallback Text)
+cellString = defineView "cellString" $ \(inpType, s, cb) -> case inpType of
   ColumnInput ->
     input_
       [ "value" &= s
@@ -190,7 +199,10 @@ cellNumber = defineStatefulView "cellNumber" True $ \valid (inpType, n, cb) ->
 
 cellTime_ :: InputType -> Time -> CellCallback Time
           -> ReactElementM CellEventHandler ()
-cellTime_ !inpType !t !cb = case inpType of
+cellTime_ !inpType !t !cb = view cellTime (inpType, t, cb) mempty
+
+cellTime :: ReactView (InputType, Time, CellCallback Time)
+cellTime = defineView "cellTime" $ \(inpType, t, cb) -> case inpType of
   ColumnInput ->
     input_
       [ "value" &= formatTime "%F" t
@@ -203,9 +215,7 @@ cellTime_ !inpType !t !cb = case inpType of
 
 cellRecord_ :: InputType -> Id Record -> Id Table -> CellCallback (Id Record)
             -> ReactElementM CellEventHandler ()
-cellRecord_ !inpType !r !t !cb = case inpType of
-  ColumnInput -> undefined
-  ColumnDerived -> undefined
+cellRecord_ !inpType !r !t !cb = view cellRecord (inpType, r, t, cb) mempty
 
 cellRecord :: ReactView (InputType, Id Record, Id Table, CellCallback (Id Record))
 cellRecord = defineControllerView "cellRecord" cellStore $ \st (inpType, r, t, cb) -> do
@@ -231,7 +241,10 @@ cellRecord = defineControllerView "cellRecord" cellStore $ \st (inpType, r, t, c
 
 cellList_ :: InputType -> DataType -> [Value] -> CellCallback [Value]
           -> ReactElementM CellEventHandler ()
-cellList_ !inpType !datType !vs !cb = case inpType of
+cellList_ !inpType !datType !vs !cb = view cellList (inpType, datType, vs, cb) mempty
+
+cellList :: ReactView (InputType, DataType, [Value], CellCallback [Value])
+cellList = defineView "cellList" $ \(inpType, datType, vs, cb) -> case inpType of
   ColumnInput -> do
     button_
       [ onClick $ \_ _ ->
@@ -250,7 +263,10 @@ cellList_ !inpType !datType !vs !cb = case inpType of
 
 cellMaybe_ :: InputType -> DataType -> Maybe Value -> CellCallback (Maybe Value)
            -> ReactElementM CellEventHandler ()
-cellMaybe_ !inpType !datType !mVal !cb = case inpType of
+cellMaybe_ !inpType !datType !mVal !cb = view cellMaybe (inpType, datType, mVal, cb) mempty
+
+cellMaybe :: ReactView (InputType, DataType, Maybe Value, CellCallback (Maybe Value))
+cellMaybe = defineView "cellMaybe" $ \(inpType, datType, mVal, cb) -> case inpType of
   ColumnInput -> case mVal of
     Nothing -> do
       let CellValue new = defaultContent datType

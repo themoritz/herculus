@@ -204,7 +204,7 @@ selInputType = defineControllerView "selInputType" columnStore $
     when (inpTyp == ColumnDerived) $
       codemirror_ $ CodemirrorProps
         { codemirrorMode = "text/x-ocaml"
-        , codemirrorTheme = "solarized"
+        , codemirrorTheme = "neat"
         , codemirrorValue = src
         , codemirrorOnChange = \v ->
             [ SomeStoreAction columnStore $ ColumnSetTmpSource i v ]

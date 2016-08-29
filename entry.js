@@ -12,7 +12,7 @@ require('react-virtualized/styles.css')
 var Codemirror = require('react-codemirror')
 require('codemirror/lib/codemirror.css')
 require('codemirror/mode/mllike/mllike')
-require('codemirror/theme/solarized.css')
+require('codemirror/theme/neat.css')
 
 global.Codemirror = Codemirror
 

@@ -112,14 +112,14 @@ handleColumnDelete colId = do
   newChilds <- compileColumnChildren colId
   void $ modifyDependencies colId []
   sendWS $ WsDownColumnsChanged newChilds
-  propagate $ RootWholeColumns $ map entityId newChilds
+  propagate [RootWholeColumns $ map entityId newChilds]
 
 handleColumnSetName :: MonadHexl m => Id Column -> Text -> m ()
 handleColumnSetName c name = do
   update c $ \col -> col { columnName = name }
   newChilds <- compileColumnChildren c
   sendWS $ WsDownColumnsChanged newChilds
-  propagate $ RootWholeColumns $ map entityId newChilds
+  propagate [RootWholeColumns $ map entityId newChilds]
 
 handleColumnSetDataType :: MonadHexl m => Id Column -> DataType -> m ()
 handleColumnSetDataType c typ = do
@@ -133,7 +133,7 @@ handleColumnSetDataType c typ = do
       ColumnDerived -> do newC <- compileColumn c
                           pure $ newC:newChilds
     sendWS $ WsDownColumnsChanged toUpdate
-    propagate $ RootWholeColumns $ map entityId toUpdate
+    propagate [RootWholeColumns $ map entityId toUpdate]
 
 handleColumnSetInput :: MonadHexl m => Id Column -> (InputType, Text) -> m ()
 handleColumnSetInput c (typ, code) = do
@@ -142,7 +142,7 @@ handleColumnSetInput c (typ, code) = do
   case typ of
     ColumnDerived -> do newCol <- compileColumn c
                         sendWS $ WsDownColumnsChanged [newCol]
-                        propagate $ RootWholeColumns [c]
+                        propagate [RootWholeColumns [c]]
     _             -> pure ()
 
 handleColumnList :: MonadHexl m => Id Table -> m [Entity Column]
@@ -155,15 +155,23 @@ handleRecordCreate t = do
   let newRec = Record t
   r <- create newRec
   cs <- listByQuery [ "tableId" =: toObjectId t ]
-  maybes <- for cs $ \e -> do
+  newCells <- for cs $ \e -> do
     let cell = newCell t (entityId e) r $ defaultContent $ columnDataType $ entityVal e
     i <- create cell
-    pure $ case columnInputType $ entityVal e of
-      ColumnInput -> Just $ Entity i cell
-      ColumnDerived -> Nothing
-  let cells = mapMaybe id maybes
-  propagate $ RootCellChanges $ map (\e -> (aspectsColumnId $ cellAspects $ entityVal e, r)) cells
-  pure (Entity r newRec, cells)
+    pure $ Entity i cell
+  propagate
+    [ RootCellChanges $
+        mapMaybe (\(Entity c col) -> case columnInputType col of
+                     ColumnInput -> Just (c, r)
+                     ColumnDerived -> Nothing
+                 ) cs
+    , RootSpecificCells $
+        mapMaybe (\(Entity c col) -> case columnInputType col of
+                     ColumnInput -> Nothing
+                     ColumnDerived -> Just (c, r)
+                 ) cs
+    ]
+  pure (Entity r newRec, newCells)
 
 handleRecordDelete :: MonadHexl m => Id Record -> m ()
 handleRecordDelete recId = do
@@ -178,7 +186,7 @@ handleRecordDelete recId = do
         map (\e -> map fst .
                    filter (\(_, typ) -> typ == OneToAll) .
                    getChildren (entityId e) $ graph) cs
-  propagate $ RootWholeColumns allChildren
+  propagate [RootWholeColumns allChildren]
 
 handleRecordData :: MonadHexl m => Id Record -> m [(Entity Column, CellContent)]
 handleRecordData recId = do
@@ -210,7 +218,7 @@ handleCellSet c r val = do
         ]
   updateByQuery' query $ \cell -> cell { cellContent = CellValue val }
   -- TODO: fork this
-  propagate $ RootCellChanges [(c, r)]
+  propagate [RootCellChanges [(c, r)]]
 
 -- Helper ----------------------------
 

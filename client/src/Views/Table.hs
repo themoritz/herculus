@@ -32,12 +32,11 @@ tableGrid = defineView "tableGrid" $ \st -> do
 
         getRecord y = let Just r = Map.lookup y recByIndex in uncurry Entity r
         getColumn x = let Just c = Map.lookup x colByIndex in uncurry Entity c
-        getCellProps x y = let Just res = do
-                                 (c, col) <- Map.lookup x colByIndex
-                                 (r, _)   <- Map.lookup y recByIndex
-                                 content  <- Map.lookup (Coords c r) cells
-                                 pure $ CellProps c r col content
-                           in res
+        getCellProps x y = do
+          (c, col) <- Map.lookup x colByIndex
+          (r, _)   <- Map.lookup y recByIndex
+          content  <- Map.lookup (Coords c r) cells
+          pure $ CellProps c r col content
 
         renderer (GridRenderArgs x y _)
           | x == 0 && y == (numRecs + 1) =
@@ -53,7 +52,9 @@ tableGrid = defineView "tableGrid" $ \st -> do
           | y == 0 && 0 < x && x <= numCols =
               column_ $ getColumn (x - 1)
           | 0 < x && x <= numCols && 0 < y && y <= numRecs =
-              cell_ $ getCellProps (x - 1) (y - 1)
+              case getCellProps (x - 1) (y - 1) of
+                Nothing -> "Error: cell not found!"
+                Just res -> cell_ res
           | otherwise = div_ mempty
 
         props = GridProps
