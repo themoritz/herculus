@@ -212,7 +212,7 @@ selTable :: ReactView (Maybe (Id Table), TableCache, SelTableCallback)
 selTable = defineView "selBranch" $ \(mTableId, tables, cb) -> do
   onDidMount_ (dispatchColumn ColumnGetTableCache) mempty
   select_
-    [ "defaultValue" &= fromMaybe "" mTableId
+    [ "defaultValue" &= fromMaybe "" (show <$> mTableId)
     , onChange $ \evt -> maybe [] cb $ readMaybe $ target evt "value"
     ] $ do option_ ""
            forM_ (Map.toList tables) $ \(tId, name) ->
