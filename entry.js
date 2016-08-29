@@ -20,6 +20,9 @@ global.Codemirror = Codemirror
 global.OnDidMount = require('./assets/components/OnDidMount.js')
 global.Grid = require('./assets/components/Grid.js')
 
+// font-awesome
+require('font-awesome-webpack!./font-awesome.config.js')
+
 // Styles
 require('./assets/sass/main.scss')
 

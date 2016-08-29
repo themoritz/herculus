@@ -11,6 +11,7 @@ import Lib.Model
 import Store
 import Views.Foreign
 import Views.Column
+import Views.Combinators
 import Views.Record
 import Views.Cell
 
@@ -19,50 +20,46 @@ tableGrid_ !st = view tableGrid st mempty
 
 tableGrid :: ReactView State
 tableGrid = defineView "tableGrid" $ \st -> do
-  -- autoSizer_ $ \(AutoSizerRenderArgs width height) -> do
-    let cells = st ^. stateCells
-        cols = st ^. stateColumns
-        recs = st ^. stateRecords
+  let cells = st ^. stateCells
+      cols = st ^. stateColumns
+      recs = st ^. stateRecords
 
-        numCols = Map.size cols
-        numRecs = Map.size recs
+      numCols = Map.size cols
+      numRecs = Map.size recs
 
-        colByIndex = Map.fromList $ zip [0..] (Map.toList cols)
-        recByIndex = Map.fromList $ zip [0..] (Map.toList recs)
+      colByIndex = Map.fromList $ zip [0..] (Map.toList cols)
+      recByIndex = Map.fromList $ zip [0..] (Map.toList recs)
 
-        getRecord y = let Just r = Map.lookup y recByIndex in uncurry Entity r
-        getColumn x = let Just c = Map.lookup x colByIndex in uncurry Entity c
-        getCellProps x y = do
-          (c, col) <- Map.lookup x colByIndex
-          (r, _)   <- Map.lookup y recByIndex
-          content  <- Map.lookup (Coords c r) cells
-          pure $ CellProps c r col content
+      getRecord y = let Just r = Map.lookup y recByIndex in uncurry Entity r
+      getColumn x = let Just c = Map.lookup x colByIndex in uncurry Entity c
+      getCellProps x y = do
+        (c, col) <- Map.lookup x colByIndex
+        (r, _)   <- Map.lookup y recByIndex
+        content  <- Map.lookup (Coords c r) cells
+        pure $ CellProps c r col content
 
-        renderer (GridRenderArgs x y _)
-          | x == 0 && y == (numRecs + 1) =
-              button_
-                [ onClick $ \_ _ -> dispatch TableAddRecord
-                ] "Add Record"
-          | x == 0 && 0 < y && y <= numRecs =
-              record_ $ getRecord (y - 1)
-          | y == 0 && x == (numCols + 1) =
-              button_
-                [ onClick $ \_ _ -> dispatch TableAddColumn
-                ] "New Column"
-          | y == 0 && 0 < x && x <= numCols =
-              column_ $ getColumn (x - 1)
-          | 0 < x && x <= numCols && 0 < y && y <= numRecs =
-              case getCellProps (x - 1) (y - 1) of
-                Nothing -> mempty
-                Just res -> cell_ res
-          | otherwise = div_ mempty
+      renderer (GridRenderArgs x y _)
+        | x == 0 && y == 0 = cldiv_ "origin" mempty
+        | x == 0 && y == (numRecs + 1) = cldiv_ "record-new" $
+            faButton_ "plus-square" $ dispatch TableAddRecord
+        | x == 0 && 0 < y && y <= numRecs = cldiv_ "record" $
+            record_ $ getRecord (y - 1)
+        | y == 0 && x == (numCols + 1) = cldiv_ "column-new" $
+            faButton_ "plus-square" $ dispatch TableAddColumn
+        | y == 0 && 0 < x && x <= numCols = cldiv_ "column" $
+            column_ $ getColumn (x - 1)
+        | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $
+            case getCellProps (x - 1) (y - 1) of
+              Nothing -> mempty
+              Just res -> cell_ res
+        | otherwise = cldiv_ "empty" mempty
 
-        props = GridProps
-          { gridCellRenderer = defineView "cellRenderer" renderer
-          , gridColumnWidth = 300
-          , gridColumnCount = numCols + 2
-          , gridRowHeight = 300
-          , gridRowCount = numRecs + 2
-          }
+      props = GridProps
+        { gridCellRenderer = defineView "cellRenderer" renderer
+        , gridColumnWidth = 300
+        , gridColumnCount = numCols + 2
+        , gridRowHeight = 300
+        , gridRowCount = numRecs + 2
+        }
 
-    grid_ props
+  grid_ props
