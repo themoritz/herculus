@@ -155,10 +155,12 @@ handleRecordCreate t = do
   let newRec = Record t
   r <- create newRec
   cs <- listByQuery [ "tableId" =: toObjectId t ]
-  newCells <- for cs $ \e -> do
-    let cell = newCell t (entityId e) r $ defaultContent $ columnDataType $ entityVal e
+  newCells <- for cs $ \(Entity c col) -> do
+    let cell = newCell t c r $ defaultContent $ columnDataType col
     i <- create cell
-    pure $ Entity i cell
+    pure $ case columnInputType col of
+      ColumnInput -> Just $ Entity i cell
+      ColumnDerived -> Nothing
   propagate
     [ RootCellChanges $
         mapMaybe (\(Entity c col) -> case columnInputType col of
@@ -171,7 +173,7 @@ handleRecordCreate t = do
                      ColumnDerived -> Just (c, r)
                  ) cs
     ]
-  pure (Entity r newRec, newCells)
+  pure (Entity r newRec, mapMaybe id newCells)
 
 handleRecordDelete :: MonadHexl m => Id Record -> m ()
 handleRecordDelete recId = do

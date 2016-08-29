@@ -60,6 +60,8 @@ codemirror = defineView "codemirror" $ \props ->
     [ nestedProperty "options"
       [ "mode" &= codemirrorMode props
       , "theme" &= codemirrorTheme props
+      , "lineWrapping" &= True
+      , "lineNumbers" &= True
       ]
     , "value" &= codemirrorValue props
     , callback "onChange" $ codemirrorOnChange props

@@ -53,7 +53,7 @@ tableGrid = defineView "tableGrid" $ \st -> do
               column_ $ getColumn (x - 1)
           | 0 < x && x <= numCols && 0 < y && y <= numRecs =
               case getCellProps (x - 1) (y - 1) of
-                Nothing -> "Error: cell not found!"
+                Nothing -> mempty
                 Just res -> cell_ res
           | otherwise = div_ mempty
 

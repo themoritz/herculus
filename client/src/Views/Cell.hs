@@ -230,7 +230,7 @@ cellRecord = defineControllerView "cellRecord" cellStore $ \st (inpType, r, t, c
             Nothing -> []
             Just newId -> cb newId
         ] $ for_ (Map.toList records) $ \(i, record) -> option_
-              [ "value" &= show r
+              [ "value" &= show i
               ] $ elemText $ showPairs record
     ColumnDerived -> case Map.lookup r records of
       Nothing -> mempty
