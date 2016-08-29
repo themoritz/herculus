@@ -8,11 +8,15 @@ module.exports = React.createClass({
       return React.createElement(ReactVR.Grid, {
         cellRenderer: self.props.cellRenderer,
         columnCount: self.props.columnCount,
-        columnWidth: self.props.columnWidth,
+        columnWidth: function (arg) {
+          return self.props.columnWidths[arg.index]
+        },
         height: arg.height,
         width: arg.width,
         rowCount: self.props.rowCount,
-        rowHeight: self.props.rowHeight
+        rowHeight: function (arg) {
+          return self.props.rowHeights[arg.index]
+        }
       })
     })
   }

@@ -21,9 +21,9 @@ instance FromJSON GridRenderArgs where
 
 data GridProps = GridProps
   { gridCellRenderer :: ReactView GridRenderArgs
-  , gridColumnWidth  :: Int
+  , gridColumnWidths :: [Int]
   , gridColumnCount  :: Int
-  , gridRowHeight    :: Int
+  , gridRowHeights   :: [Int]
   , gridRowCount     :: Int
   }
 
@@ -36,9 +36,9 @@ grid = defineView "grid" $ \props -> do
       getArgs v = let (Just args) = parseMaybe parseJSON v in ReturnProps args
   foreign_ "Grid"
     [ callbackViewWithProps "cellRenderer" (gridCellRenderer props) getArgs
-    , "columnWidth" &= gridColumnWidth props
+    , "columnWidths" &= gridColumnWidths props
     , "columnCount" &= gridColumnCount props
-    , "rowHeight" &= gridRowHeight props
+    , "rowHeights" &= gridRowHeights props
     , "rowCount" &= gridRowCount props
     ] mempty
 

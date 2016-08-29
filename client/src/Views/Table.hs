@@ -1,19 +1,20 @@
 module Views.Table where
 
-import Control.Lens hiding (view)
+import           Control.Lens      hiding (view)
 
-import qualified Data.Map.Strict as Map
+import qualified Data.Map.Strict   as Map
+import           Data.Monoid       ((<>))
 
-import React.Flux
+import           React.Flux
 
-import Lib.Model
+import           Lib.Model
 
-import Store
-import Views.Foreign
-import Views.Column
-import Views.Combinators
-import Views.Record
-import Views.Cell
+import           Store
+import           Views.Cell
+import           Views.Column
+import           Views.Combinators
+import           Views.Foreign
+import           Views.Record
 
 tableGrid_ :: State -> ReactElementM eh ()
 tableGrid_ !st = view tableGrid st mempty
@@ -56,9 +57,9 @@ tableGrid = defineView "tableGrid" $ \st -> do
 
       props = GridProps
         { gridCellRenderer = defineView "cellRenderer" renderer
-        , gridColumnWidth = 300
+        , gridColumnWidths = [50] <> replicate numCols 300 <> [50]
         , gridColumnCount = numCols + 2
-        , gridRowHeight = 300
+        , gridRowHeights = [300] <> replicate numRecs 50 <> [50]
         , gridRowCount = numRecs + 2
         }
 
