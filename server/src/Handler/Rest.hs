@@ -322,8 +322,8 @@ defaultContent col = case columnDataType col of
   DataString   -> pure . CellValue $ VString ""
   DataNumber   -> pure . CellValue $ VNumber 0
   DataTime     -> CellValue . VTime <$> getCurrentTime
-  DataRecord _ -> do
-    res <- getOneByQuery [ "tableId" =: toObjectId (columnTableId col) ]
+  DataRecord t -> do
+    res <- getOneByQuery [ "tableId" =: toObjectId t ]
     case res of
       Left _ -> pure . CellError $ "no record found"
       Right (Entity i _) -> pure . CellValue . VRecord $ i
