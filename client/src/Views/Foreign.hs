@@ -27,11 +27,8 @@ data GridProps = GridProps
   , gridRowCount     :: Int
   }
 
-grid_ :: GridProps -> ReactElementM ViewEventHandler ()
-grid_ !props = view grid props mempty
-
-grid :: ReactView GridProps
-grid = defineView "grid" $ \props -> do
+grid_ :: GridProps -> ReactElementM eh ()
+grid_ !props =  do
   let getArgs :: Value -> ReturnProps GridRenderArgs
       getArgs v = let (Just args) = parseMaybe parseJSON v in ReturnProps args
   foreign_ "Grid"
@@ -44,18 +41,16 @@ grid = defineView "grid" $ \props -> do
 
 -- react-ace
 
-data CodemirrorProps = CodemirrorProps
+data CodemirrorProps func = CodemirrorProps
   { codemirrorMode     :: Text
   , codemirrorTheme    :: Text
   , codemirrorValue    :: Text
-  , codemirrorOnChange :: Text -> [SomeStoreAction]
+  , codemirrorOnChange :: func
   }
 
-codemirror_ :: CodemirrorProps -> ReactElementM ViewEventHandler ()
-codemirror_ !props = view codemirror props mempty
-
-codemirror :: ReactView CodemirrorProps
-codemirror = defineView "codemirror" $ \props ->
+codemirror_ :: (CallbackFunction eh func, Typeable func)
+            => CodemirrorProps func -> ReactElementM eh ()
+codemirror_ !props =
   foreign_ "Codemirror"
     [ nestedProperty "options"
       [ "mode" &= codemirrorMode props
@@ -69,13 +64,9 @@ codemirror = defineView "codemirror" $ \props ->
 
 -- own: OnLoad
 
-onDidMount_ :: (CallbackFunction ViewEventHandler func, Typeable func)
-        => func -> ReactElementM ViewEventHandler () -> ReactElementM ViewEventHandler ()
-onDidMount_ !f = view onDidMount f
-
-onDidMount :: (CallbackFunction ViewEventHandler func, Typeable func)
-       => ReactView func
-onDidMount = defineView "onDidMount" $ \f ->
+onDidMount_ :: (CallbackFunction eh func, Typeable func)
+            => func -> ReactElementM eh a -> ReactElementM eh a
+onDidMount_ !f =
   foreign_ "OnDidMount"
     [ callback "onDidMount" f
-    ] childrenPassedToView
+    ]

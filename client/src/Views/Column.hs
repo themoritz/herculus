@@ -86,14 +86,15 @@ toBranch = \case
   DataMaybe  _ -> BMaybe
 
 branches :: Map Text Branch
-branches = [ ("Bool"  , BBool  )
-           , ("String", BString)
-           , ("Number", BNumber)
-           , ("Time"  , BTime  )
-           , ("Record", BRecord)
-           , ("List"  , BList  )
-           , ("Maybe" , BMaybe )
-           ]
+branches = Map.fromList
+  [ ("Bool"  , BBool  )
+  , ("String", BString)
+  , ("Number", BNumber)
+  , ("Time"  , BTime  )
+  , ("Record", BRecord)
+  , ("List"  , BList  )
+  , ("Maybe" , BMaybe )
+  ]
 
 subType :: DataType -> Maybe DataType
 subType (DataList  a) = Just a
