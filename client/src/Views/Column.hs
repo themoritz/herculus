@@ -22,6 +22,7 @@ import           GHC.Generics        (Generic)
 import           Control.DeepSeq     (NFData)
 import           Text.Read           (readMaybe)
 
+
 import           React.Flux.Addons.Servant (request)
 import           Lib.Api.Rest (TableListGlobal)
 import           Lib.Model
