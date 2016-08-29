@@ -1,35 +1,44 @@
 {-# LANGUAGE DeriveGeneric #-}
+
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Views.Column where
 
-import Control.Lens hiding (view)
+import           Control.Lens hiding (view)
 import           React.Flux
 
-import           Control.Monad    (forM_, when)
-import qualified Data.Map         as Map
-import           Data.Map         (Map)
-import           Data.Maybe       (fromMaybe)
-import           Data.Text        (Text, pack)
-import           Data.Tuple (swap)
-import qualified Data.Text        as Text
-import Data.Monoid ((<>))
-import           Data.Typeable    (Typeable)
-import           GHC.Generics     (Generic)
-import           Control.DeepSeq  (NFData)
+import           Control.Monad       (forM_, when)
+import           Control.Applicative ((<|>))
+import qualified Data.Map            as Map
+import           Data.Map            (Map)
+import           Data.Maybe          (fromMaybe)
+import           Data.Proxy
+import           Data.Text           (Text, pack)
+import           Data.Tuple          (swap)
+import qualified Data.Text           as Text
+import           Data.Typeable       (Typeable)
+import           GHC.Generics        (Generic)
+import           Control.DeepSeq     (NFData)
+import           Text.Read           (readMaybe)
 
+import           React.Flux.Addons.Servant (request)
+import           Lib.Api.Rest (TableListGlobal)
 import           Lib.Model
 import           Lib.Model.Column
+import           Lib.Model.Types (Table (..))
 import           Lib.Types
 
 import           Store
 import           Views.Foreign
 
+type TableCache = Map (Id Table) Text
+
 data ColumnState = ColumnState
-  { _csTmpDataType :: Map (Id Column) DataType
+  { _csTmpDataType  :: Map (Id Column) DataType
   , _csTmpInputType :: Map (Id Column) InputType
-  , _csTmpSource :: Map (Id Column) Text
+  , _csTmpSource    :: Map (Id Column) Text
+  , _csTableCache   :: TableCache
   }
 
 makeLenses ''ColumnState
@@ -41,6 +50,8 @@ data ColumnAction
   | ColumnUnsetTmpInputType (Id Column)
   | ColumnSetTmpSource (Id Column) Text
   | ColumnUnsetTmpSource (Id Column)
+  | ColumnGetTableCache
+  | ColumnSetTableCache (Map (Id Table) Text)
   deriving (Typeable, Generic, NFData)
 
 instance StoreData ColumnState where
@@ -59,10 +70,26 @@ instance StoreData ColumnState where
     ColumnUnsetTmpSource i ->
       pure $ st & csTmpSource . at i .~ Nothing
 
+    ColumnGetTableCache -> do
+      when (Map.null $ st ^. csTableCache) $
+        request api (Proxy :: Proxy TableListGlobal) $ pure . \case
+          Left (_, e) -> dispatch $ GlobalSetError $ pack e
+          Right ts    -> dispatchColumn $ ColumnSetTableCache $ toTableMap ts
+      pure st
+    ColumnSetTableCache m ->
+      pure $ st & csTableCache .~ m
+
 columnStore :: ReactStore ColumnState
-columnStore = mkStore $ ColumnState Map.empty Map.empty Map.empty
+columnStore = mkStore $ ColumnState Map.empty Map.empty Map.empty Map.empty
+
+dispatchColumn :: ColumnAction -> [SomeStoreAction]
+dispatchColumn x = [SomeStoreAction columnStore x]
+
+toTableMap :: [Entity Table] -> TableCache
+toTableMap = Map.fromList . map (\(Entity i Table{..}) -> (i, tableName))
 
 type SelBranchCallback = DataType -> [SomeStoreAction]
+type SelTableCallback  = Id Table -> [SomeStoreAction]
 type SelDtEventHandler = StatefulViewEventHandler (Maybe Branch)
 
 data Branch
@@ -101,13 +128,18 @@ subType (DataList  a) = Just a
 subType (DataMaybe a) = Just a
 subType _             = Nothing
 
+recordTableId :: DataType -> Maybe (Id Table)
+recordTableId (DataRecord tId) = Just tId
+recordTableId _                = Nothing
+
 column_ :: Entity Column -> ReactElementM eh ()
 column_ !c = view column c mempty
 
 column :: ReactView (Entity Column)
 column = defineControllerView "column" columnStore $ \st c@(Entity i _) -> do
   columnTitle_ c
-  selDatatype_ c
+  let tables = st ^. csTableCache
+  selDatatype_ c tables
   let mDt = st ^. csTmpDataType . at i
   button_
       [ onClick $ \_ _ -> case mDt of
@@ -139,39 +171,52 @@ columnTitle = defineStatefulView "columnTitle" Nothing $ \curText (Entity i col)
   br_ []
   span_ "Data type "
 
-selDatatype_ :: Entity Column -> ReactElementM eh ()
-selDatatype_  c = view selDatatype c mempty
+selDatatype_ :: Entity Column -> TableCache -> ReactElementM eh ()
+selDatatype_  c m = view selDatatype (c, m) mempty
 
-selDatatype :: ReactView (Entity Column)
-selDatatype = defineView "selectDataType" $ \(Entity i Column{..}) ->
-    selBranch_ (Just columnDataType) $
+selDatatype :: ReactView (Entity Column, TableCache)
+selDatatype = defineView "selectDataType" $ \(Entity i Column{..}, tables) ->
+    selBranch_ (Just columnDataType) tables $
       \dt -> [SomeStoreAction columnStore $ ColumnSetTmpDataType i dt]
 
-selBranch_ :: Maybe DataType -> SelBranchCallback -> ReactElementM eh ()
-selBranch_ mDt cb = view selBranch (mDt, cb) mempty
+selBranch_ :: Maybe DataType -> TableCache -> SelBranchCallback -> ReactElementM eh ()
+selBranch_ mDt tables cb = view selBranch (mDt, tables, cb) mempty
 
-selBranch :: ReactView (Maybe DataType, SelBranchCallback)
-selBranch = defineStatefulView "branch" Nothing $ \curBranch (mDt, cb) -> do
+selBranch :: ReactView (Maybe DataType, TableCache, SelBranchCallback)
+selBranch = defineStatefulView "selBranch" Nothing $ \curBranch (mDt, tables, cb) -> do
   let defDt = DataNumber
-      selectedBranch = fromMaybe (fromMaybe (toBranch defDt) $ toBranch <$> mDt) curBranch
+      Just selectedBranch = curBranch <|> toBranch <$> mDt <|> Just (toBranch defDt)
   select_
     [ "defaultValue" &= fromMaybe "" (inverseLookup selectedBranch branches)
-    , onChange $ \evt _ -> case Map.lookup (target evt "value") branches of
+    , onInput $ \evt _ -> case Map.lookup (target evt "value") branches of
         Just BBool   -> (cb DataBool  , Just $ Just BBool  )
         Just BString -> (cb DataString, Just $ Just BString)
         Just BNumber -> (cb DataNumber, Just $ Just BNumber)
         Just BTime   -> (cb DataTime  , Just $ Just BTime  )
         Just BMaybe  -> (cb $ DataMaybe defDt, Just $ Just BMaybe)
         Just BList   -> (cb $ DataList  defDt, Just $ Just BList)
-        Just BRecord -> undefined -- TODO
-        Nothing      -> error "Nothing" -- TODO
-    ] $ forM_ (Map.toList branches) $ \(label, branch) -> do
-          option_ $ elemText label
+        Just BRecord -> ([], Just $ Just BRecord)
+        Nothing      -> error "selBranch: unexpected: Nothing"
+    ] $ forM_ (Map.toList branches) $ \(label, _) ->
+          option_ [ "value" &= label ] $ elemText label
   case selectedBranch of
-    BMaybe  -> selBranch_ (subType =<< mDt) (\dt -> cb (DataMaybe dt))
-    BList   -> selBranch_ (subType =<< mDt) (\dt -> cb (DataList  dt))
-    BRecord -> undefined -- TODO
+    BMaybe  -> selBranch_ (subType =<< mDt) tables (\dt -> cb (DataMaybe dt))
+    BList   -> selBranch_ (subType =<< mDt) tables (\dt -> cb (DataList  dt))
+    BRecord -> selTable_  (recordTableId =<< mDt) tables (\i -> cb (DataRecord i))
     _       -> pure ()
+
+selTable_ :: Maybe (Id Table) -> TableCache -> SelTableCallback -> ReactElementM eh ()
+selTable_ mTableId tables cb = view selTable (mTableId, tables, cb) mempty
+
+selTable :: ReactView (Maybe (Id Table), TableCache, SelTableCallback)
+selTable = defineView "selBranch" $ \(mTableId, tables, cb) -> do
+  onDidMount_ (dispatchColumn ColumnGetTableCache) mempty
+  select_
+    [ "defaultValue" &= fromMaybe "" mTableId
+    , onChange $ \evt -> maybe [] cb $ readMaybe $ target evt "value"
+    ] $ do option_ ""
+           forM_ (Map.toList tables) $ \(tId, name) ->
+             option_ [ "value" &= show tId ] $ elemText name
 
 inverseLookup :: Ord v => v -> Map k v -> Maybe k
 inverseLookup x m = Map.lookup x (Map.fromList $ map swap $ Map.toList m)
