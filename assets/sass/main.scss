@@ -93,3 +93,8 @@ span.link {
 span.active {
   font-weight: bold;
 }
+
+.CodeMirror {
+  height: auto !important;
+  border: 1px solid #EEE;
+}

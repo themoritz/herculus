@@ -44,29 +44,25 @@ grid = defineView "grid" $ \props -> do
 
 -- react-ace
 
-data AceProps = AceProps
-  { aceName     :: Text
-  , aceMode     :: Text
-  , aceTheme    :: Text
-  , aceWidth    :: Text
-  , aceHeight   :: Text
-  , aceValue    :: Text
-  , aceOnChange :: Text -> [SomeStoreAction]
+data CodemirrorProps = CodemirrorProps
+  { codemirrorMode     :: Text
+  , codemirrorTheme    :: Text
+  , codemirrorValue    :: Text
+  , codemirrorOnChange :: Text -> [SomeStoreAction]
   }
 
-ace_ :: AceProps -> ReactElementM ViewEventHandler ()
-ace_ !props = view ace props mempty
+codemirror_ :: CodemirrorProps -> ReactElementM ViewEventHandler ()
+codemirror_ !props = view codemirror props mempty
 
-ace :: ReactView AceProps
-ace = defineView "ace" $ \props ->
-  foreign_ "AceEditor"
-    [ "name" &= aceName props
-    , "mode" &= aceMode props
-    , "theme" &= aceTheme props
-    , "width" &= aceWidth props
-    , "height" &= aceHeight props
-    , "value" &= aceValue props
-    , callback "onChange" $ aceOnChange props
+codemirror :: ReactView CodemirrorProps
+codemirror = defineView "codemirror" $ \props ->
+  foreign_ "Codemirror"
+    [ nestedProperty "options"
+      [ "mode" &= codemirrorMode props
+      , "theme" &= codemirrorTheme props
+      ]
+    , "value" &= codemirrorValue props
+    , callback "onChange" $ codemirrorOnChange props
     ] mempty
 
 -- own: OnLoad

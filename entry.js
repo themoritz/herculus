@@ -8,13 +8,13 @@ global.ReactDOM = ReactDOM
 // react-virtualized
 require('react-virtualized/styles.css')
 
-// react-ace
-var AceEditor = require('react-ace')
-var brace = require('brace')
-require('brace/mode/ocaml')
-require('brace/theme/github')
+// react-codemirror
+var Codemirror = require('react-codemirror')
+require('codemirror/lib/codemirror.css')
+require('codemirror/mode/mllike/mllike')
+require('codemirror/theme/solarized.css')
 
-global.AceEditor = AceEditor.default
+global.Codemirror = Codemirror
 
 // Own components
 global.OnDidMount = require('./assets/components/OnDidMount.js')

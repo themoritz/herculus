@@ -202,14 +202,11 @@ selInputType = defineControllerView "selInputType" columnStore $
           ]
       ] "Ok"
     when (inpTyp == ColumnDerived) $
-      ace_ $ AceProps
-        { aceName = "ace-" <> (pack . show) i
-        , aceMode = "ocaml"
-        , aceTheme = "github"
-        , aceWidth = "100%"
-        , aceHeight = "100px"
-        , aceValue = src
-        , aceOnChange = \v ->
+      codemirror_ $ CodemirrorProps
+        { codemirrorMode = "text/x-ocaml"
+        , codemirrorTheme = "solarized"
+        , codemirrorValue = src
+        , codemirrorOnChange = \v ->
             [ SomeStoreAction columnStore $ ColumnSetTmpSource i v ]
         }
     case columnCompileResult of
