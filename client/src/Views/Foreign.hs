@@ -39,13 +39,13 @@ grid_ !props =  do
     , "rowCount" &= gridRowCount props
     ] mempty
 
--- react-ace
+-- react-codemirror
 
 data CodemirrorProps func = CodemirrorProps
   { codemirrorMode     :: Text
   , codemirrorTheme    :: Text
   , codemirrorValue    :: Text
-  , codemirrorOnChange :: func
+  , codemirrorOnChange :: func -- JSString -> a
   }
 
 codemirror_ :: (CallbackFunction eh func, Typeable func)
@@ -60,6 +60,27 @@ codemirror_ !props =
       ]
     , "value" &= codemirrorValue props
     , callback "onChange" $ codemirrorOnChange props
+    ] mempty
+
+-- react-datepicker
+
+data DatePickerProps func = DatePickerProps
+  { datePickerSelected :: Text
+  , datePickerPlaceholderText :: Text
+  , datePickerDateFormat :: Text
+  , datePickerOnChange :: func -- JSString -> a
+  , datePickerClassNames :: [(Text, Bool)]
+  }
+
+datePicker_ :: (CallbackFunction eh func, Typeable func)
+            => DatePickerProps func -> ReactElementM eh ()
+datePicker_ !props =
+  foreign_ "DatePicker"
+    [ "selected" &= datePickerSelected props
+    , "placeholderText" &= datePickerPlaceholderText props
+    , "dateFormat" &= datePickerDateFormat props
+    , callback "onChange" $ datePickerOnChange props
+    , classNames $ datePickerClassNames props
     ] mempty
 
 -- own: OnLoad

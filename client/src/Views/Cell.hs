@@ -183,16 +183,17 @@ cellNumber_ :: InputType -> Number -> CellCallback Number
 cellNumber_ !inpType !n !cb = view cellNumber (inpType, n, cb) mempty
 
 cellNumber :: ReactView (InputType, Number, CellCallback Number)
-cellNumber = defineStatefulView "cellNumber" True $ \valid (inpType, n, cb) ->
+cellNumber = defineStatefulView "cellNumber" Nothing $ \invalidTmp (inpType, n, cb) ->
   case inpType of
     ColumnInput -> do
-      let parseNumber s = Number <$> (readMaybe $ unpack s)
+      let curN = fromMaybe (show n) invalidTmp
+          parseNumber s = Number <$> (readMaybe $ unpack s)
       input_
-        [ "value" &= show n
-        , classNames [ ("invalid", not valid) ]
+        [ "value" &= curN
+        , classNames [ ("invalid", isJust invalidTmp) ]
         , onChange $ \evt _ -> case parseNumber $ target evt "value" of
-            Nothing -> ([], Just False)
-            Just n' -> (cb n', Just True)
+            Nothing -> ([], Just $ Just $ target evt "value")
+            Just n' -> (cb n', Just Nothing)
         ]
     ColumnDerived ->
       elemString $ show n
@@ -202,14 +203,20 @@ cellTime_ :: InputType -> Time -> CellCallback Time
 cellTime_ !inpType !t !cb = view cellTime (inpType, t, cb) mempty
 
 cellTime :: ReactView (InputType, Time, CellCallback Time)
-cellTime = defineView "cellTime" $ \(inpType, t, cb) -> case inpType of
-  ColumnInput ->
-    input_
-      [ "value" &= formatTime "%F" t
-      , onChange $ \evt -> case parseTime "%F" $ target evt "value" of
-          Nothing -> []
-          Just t' -> cb t'
-      ]
+cellTime = defineStatefulView "cellTime" Nothing $ \invalidTmp (inpType, t, cb) -> case inpType of
+  ColumnInput -> do
+    let curT = fromMaybe (formatTime "%F" t) invalidTmp
+        handleChange :: Text -> StatefulViewEventHandler (Maybe Text)
+        handleChange x _ = case parseTime "%F" x of
+          Nothing -> ([], Just $ Just x)
+          Just t' -> (cb t', Just Nothing)
+    datePicker_ $ DatePickerProps
+      { datePickerSelected = curT
+      , datePickerPlaceholderText = "Please select a day"
+      , datePickerDateFormat = "YYYY-MM-DD"
+      , datePickerOnChange = handleChange
+      , datePickerClassNames = [("invalid", isJust invalidTmp)]
+      }
   ColumnDerived ->
     elemString $ show t
 
