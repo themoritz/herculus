@@ -240,11 +240,13 @@ handleRecordListWithData tblId = do
 
 handleCellSet :: MonadHexl m => Id Column -> Id Record -> Value -> m ()
 handleCellSet c r val = do
-  let query =
-        [ "aspects.columnId" =: toObjectId c
-        , "aspects.recordId" =: toObjectId r
-        ]
-  updateByQuery' query $ \cell -> cell { cellContent = CellValue val }
+  Entity i cell <- getOneByQuery'
+    [ "aspects.columnId" =: toObjectId c
+    , "aspects.recordId" =: toObjectId r
+    ]
+  let changedCell = cell { cellContent = CellValue val }
+  update i $ const changedCell
+  sendWS $ WsDownCellsChanged [changedCell]
   -- TODO: fork this
   propagate [RootCellChanges [(c, r)]]
 

@@ -11,7 +11,6 @@ import Control.DeepSeq
 import Control.Monad (when)
 import Control.Lens hiding (view)
 
-import Data.Proxy
 import Data.Maybe
 import Data.Monoid
 import Data.Text (Text, unpack, pack, intercalate)
@@ -25,9 +24,7 @@ import GHC.Generics
 import Text.Read (readMaybe)
 
 import React.Flux
-import React.Flux.Addons.Servant
 
-import Lib.Api.Rest
 import Lib.Model.Column
 import Lib.Model.Cell
 import Lib.Model.Types
@@ -48,7 +45,6 @@ data CellProps = CellProps
 
 data CellState = CellState
   { _csTmpValues :: Map (Id Column, Id Record) Value
-  , _csRecordCache :: Map (Id Table) (Map (Id Record) [(Text, CellContent)])
   }
 
 makeLenses ''CellState
@@ -56,8 +52,6 @@ makeLenses ''CellState
 data CellAction
   = SetTmpValue (Id Column) (Id Record) Value
   | UnsetTmpValue (Id Column) (Id Record)
-  | GetRecords (Id Table)
-  | SetRecords (Id Table) [(Id Record, [(Text, CellContent)])]
   deriving (Typeable, Generic, NFData)
 
 instance StoreData CellState where
@@ -70,19 +64,8 @@ instance StoreData CellState where
     UnsetTmpValue c r -> pure $
       st & csTmpValues . at (c, r) .~ Nothing
 
-    GetRecords t -> case st ^. csRecordCache . at t of
-      Just _  -> pure st
-      Nothing -> do
-        request api (Proxy :: Proxy RecordListWithData) t $ \case
-          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
-          Right res -> pure $ dispatchCell $ SetRecords t res
-        pure st
-
-    SetRecords t recs -> pure $
-      st & csRecordCache . at t .~ Just (Map.fromList recs)
-
 cellStore :: ReactStore CellState
-cellStore = mkStore $ CellState Map.empty Map.empty
+cellStore = mkStore $ CellState Map.empty
 
 dispatchCell :: CellAction -> [SomeStoreAction]
 dispatchCell a = [SomeStoreAction cellStore a]
@@ -103,7 +86,7 @@ cell = defineControllerView "cell" cellStore $ \st props ->
       value_ (columnInputType col)
              (columnDataType col)
              (fromMaybe val mTmpVal)
-             (\v -> [SomeStoreAction cellStore $ SetTmpValue c r v])
+             (\v -> dispatchCell $ SetTmpValue c r v)
       when (isJust mTmpVal) $ do
         button_
           [ onClick $ \_ _ -> case mTmpVal of
@@ -114,9 +97,7 @@ cell = defineControllerView "cell" cellStore $ \st props ->
                 ]
           ] "Ok"
         button_
-          [ onClick $ \_ _ ->
-              [ SomeStoreAction cellStore $ UnsetTmpValue c r
-              ]
+          [ onClick $ \_ _ -> dispatchCell $ UnsetTmpValue c r
           ] "Cancel"
 
 --
@@ -140,7 +121,7 @@ value = defineView "value" $ \(inpType, datType, val, cb) -> case datType of
     VTime t -> cellTime_ inpType t (cb . VTime)
     _ -> mempty
   DataRecord t -> case val of
-    VRecord r -> cellRecord_ inpType r t (cb . VRecord)
+    VRecord mr -> cellRecord_ inpType mr t (cb . VRecord)
     _ -> mempty
   DataList t -> case val of
     VList vs -> cellList_ inpType t vs (cb . VList)
@@ -220,30 +201,42 @@ cellTime = defineStatefulView "cellTime" Nothing $ \invalidTmp (inpType, t, cb) 
   ColumnDerived ->
     elemString $ show t
 
-cellRecord_ :: InputType -> Id Record -> Id Table -> CellCallback (Id Record)
+cellRecord_ :: InputType -> Maybe (Id Record) -> Id Table -> CellCallback (Maybe (Id Record))
             -> ReactElementM CellEventHandler ()
-cellRecord_ !inpType !r !t !cb = view cellRecord (inpType, r, t, cb) mempty
+cellRecord_ !inpType !mr !t !cb = view cellRecord (inpType, mr, t, cb) mempty
 
-cellRecord :: ReactView (InputType, Id Record, Id Table, CellCallback (Id Record))
-cellRecord = defineControllerView "cellRecord" cellStore $ \st (inpType, r, t, cb) -> do
-  onDidMount_ (dispatchCell $ GetRecords t) mempty
-  let records = fromMaybe Map.empty $ st ^. csRecordCache . at t
-      showPairs = intercalate ", " . map (\(n, v) -> n <> ": " <> (pack . show) v)
+cellRecord :: ReactView (InputType, Maybe (Id Record), Id Table, CellCallback (Maybe (Id Record)))
+cellRecord = defineControllerView "cellRecord" store $ \st (inpType, mr, t, cb) -> do
+  onDidMount_ (dispatch $ CacheRecordsGet t) mempty
+  let records = fromMaybe Map.empty $ st ^. stateCacheRecords . at t
+      showPairs = intercalate ", " . map (\(n, v) -> n <> ": " <> (pack . show) v) . Map.elems
   case inpType of
     ColumnInput ->
       select_
-        [ "defaultValue" &= show r
-        , onChange $ \evt -> case readMaybe $ target evt "value" of
-            Nothing -> []
-            Just newId -> cb newId
-        ] $ for_ (Map.toList records) $ \(i, record) -> option_
-              [ "value" &= show i
-              ] $ elemText $ showPairs record
-    ColumnDerived -> case Map.lookup r records of
-      Nothing -> mempty
-      Just fields ->
-        ul_ $ for_ fields $ \(k, content) -> li_ $ do
-          elemText $ k <> ": " <> (pack . show) content
+        [ "defaultValue" &= case mr of
+            Nothing -> ""
+            Just r  -> show r
+        , classNames [("invalid", isNothing mr)]
+        , onChange $ \evt ->
+            let val = target evt "value"
+            in if val == ""
+                  then cb Nothing
+                  else case readMaybe val of
+                         Nothing -> []
+                         Just newId -> cb $ Just newId
+        ] $ do when (isNothing mr) $ option_
+                 [ "value" $= ""
+                 ] $ ""
+               for_ (Map.toList records) $ \(i, record) -> option_
+                 [ "value" &= show i
+                 ] $ elemText $ showPairs record
+    ColumnDerived -> case mr of
+      Nothing -> "impossible: invalid record in derived cell"
+      Just r -> case Map.lookup r records of
+        Nothing -> mempty
+        Just fields ->
+          ul_ $ for_ fields $ \(k, content) -> li_ $ do
+            elemText $ k <> ": " <> (pack . show) content
 
 
 cellList_ :: InputType -> DataType -> [Value] -> CellCallback [Value]

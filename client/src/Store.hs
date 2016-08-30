@@ -6,6 +6,7 @@ module Store where
 
 import           Control.Lens
 import Control.DeepSeq
+import Control.Arrow ((***))
 
 import           Data.Map.Strict           (Map)
 import qualified Data.Map.Strict           as Map
@@ -41,6 +42,7 @@ data CellInfo = CellInfo
 data State = State
   { _stateError     :: Maybe Text
   , _stateWebSocket :: Maybe JSWebSocket
+  , _stateCacheRecords :: Map (Id Table) (Map (Id Record) (Map (Id Column) (Text, CellContent)))
   , _stateProjects  :: [Entity Project]
   , _stateProjectId :: Maybe (Id Project)
   , _stateTables    :: [Entity Table]
@@ -53,7 +55,7 @@ data State = State
 makeLenses ''State
 
 store :: ReactStore State
-store = mkStore $ State Nothing Nothing [] Nothing [] Nothing
+store = mkStore $ State Nothing Nothing Map.empty [] Nothing [] Nothing
   Map.empty Map.empty Map.empty
 
 data Action
@@ -61,6 +63,11 @@ data Action
   = GlobalSetError Text
   | GlobalInit Text -- WebSocket URL
   | GlobalSendWebSocket WsUpMessage
+  -- Cache
+  | CacheRecordAdd (Id Table) (Id Record) [(Entity Column, CellContent)]
+  | CacheRecordDelete (Id Table) (Id Record)
+  | CacheRecordsGet (Id Table)
+  | CacheRecordsSet (Id Table) [(Id Record, [(Entity Column, CellContent)])]
   -- Projects
   | ProjectsSet [Entity Project]
   | ProjectsCreate Project
@@ -73,7 +80,7 @@ data Action
   | TablesLoadTable (Id Table)
   -- Table
   | TableSet ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
-  | TableUpdateCells [(Id Column, Id Record, CellContent)]
+  | TableUpdateCells [Cell]
   | TableUpdateColumns [Entity Column]
   | TableAddColumn
   | TableAddColumnDone (Entity Column, [Entity Cell])
@@ -104,10 +111,10 @@ instance StoreData State where
 
       GlobalInit wsUrl -> do
         ws <- jsonWebSocketNew wsUrl $ \case
-          WsDownCellsChanged cs -> pure $ dispatch $ TableUpdateCells cs
-          WsDownColumnsChanged cs -> pure $ dispatch $ TableUpdateColumns cs
-          WsDownGreet _ -> pure []
-          WsDownList _ -> pure []
+          WsDownCellsChanged cs       -> pure $ dispatch $ TableUpdateCells cs
+          WsDownColumnsChanged cs     -> pure $ dispatch $ TableUpdateColumns cs
+          WsDownRecordCreated t r dat -> pure $ dispatch $ CacheRecordAdd t r dat
+          WsDownRecordDeleted t r     -> pure $ dispatch $ CacheRecordDelete t r
         request api (Proxy :: Proxy ProjectList) $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ps -> pure $ dispatch $ ProjectsSet ps
@@ -118,6 +125,29 @@ instance StoreData State where
           Nothing -> pure ()
           Just ws -> jsonWebSocketSend msg ws
         pure st
+
+      -- Cache
+
+      CacheRecordAdd t r record -> do
+        let toCol (Entity c col, content) = (c, (columnName col, content))
+            recMap = Map.fromList . map toCol $ record
+        pure $ st & stateCacheRecords . at t . _Just . at r .~ Just recMap
+
+      CacheRecordDelete t r ->
+        pure $ st & stateCacheRecords . at t . _Just . at r .~ Nothing
+
+      CacheRecordsGet t -> case st ^. stateCacheRecords . at t of
+        Just _  -> pure st
+        Nothing -> do
+          request api (Proxy :: Proxy RecordListWithData) t $ \case
+            Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+            Right res -> pure $ dispatch $ CacheRecordsSet t res
+          pure st
+
+      CacheRecordsSet t recs -> do
+        let toCol (Entity c col, content) = (c, (columnName col, content))
+            recMaps = map (id *** Map.fromList . map toCol) recs
+        pure $ st & stateCacheRecords . at t .~ Just (Map.fromList recMaps)
 
       -- Projects
 
@@ -166,8 +196,12 @@ instance StoreData State where
            & stateRecords .~ (Map.fromList $ map (\(Entity i r) -> (i, r)) recs)
            & stateCells .~ fillEntries entries Map.empty
 
-      TableUpdateCells entries -> pure $
-        st & stateCells %~ fillEntries entries
+      TableUpdateCells cells -> pure $
+        let toEntry (Cell content (Aspects _ c r)) = (c, r, content)
+            setRecordInCache st'' (Cell content (Aspects t c r)) =
+              st'' & stateCacheRecords . at t . _Just . at r . _Just . at c . _Just . _2 .~ content
+            st' = foldl' setRecordInCache st cells
+        in st' & stateCells %~ fillEntries (map toEntry cells)
 
       TableUpdateColumns entries -> pure $
         st & stateColumns %~ \cols ->
