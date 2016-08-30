@@ -91,7 +91,7 @@ data Action
   -- Column
   | ColumnRename (Id Column) Text
   | ColumnSetDt (Id Column) DataType
-  | ColumnSetInput (Id Column) (InputType, Text)
+  | ColumnSetFormula (Id Column) (InputType, Text)
   -- Cell
   | CellSetValue (Id Column) (Id Record) Value
   deriving (Typeable, Generic, NFData)
@@ -263,7 +263,7 @@ instance StoreData State where
           Right ()    -> pure $ []
         pure $ st & stateColumns . at i . _Just %~ \c -> c { columnDataType = dt }
 
-      ColumnSetInput i payload@(inpTyp, src) -> do
+      ColumnSetFormula i payload@(inpTyp, src) -> do
         request api (Proxy :: Proxy ColumnSetInput) i payload $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ()    -> pure $ []

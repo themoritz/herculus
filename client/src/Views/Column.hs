@@ -11,9 +11,11 @@ import           Control.Monad       (forM_, when)
 import           Control.Applicative ((<|>))
 import qualified Data.Map            as Map
 import           Data.Map            (Map)
+import qualified Data.Set            as Set
+import           Data.Set            (Set)
 import           Data.Maybe          (fromMaybe)
 import           Data.Proxy
-import           Data.Text           (Text, pack)
+import           Data.Text           (Text)
 import           Data.Tuple          (swap)
 import qualified Data.Text           as Text
 import           Data.Typeable       (Typeable)
@@ -32,61 +34,74 @@ import           Store
 import           Views.Common (editBox_, EditBoxProps (..))
 import           Views.Foreign
 
+-- state of column controller view
+
 type TableCache = Map (Id Table) Text
 
-data ColumnState = ColumnState
-  { _csTmpDataType  :: Map (Id Column) DataType
-  , _csTmpInputType :: Map (Id Column) InputType
-  , _csTmpSource    :: Map (Id Column) Text
-  , _csTableCache   :: TableCache
+data ColConfState = ColConfState
+  { _ccsTmpDataType  :: Map (Id Column) DataType
+  , _ccsTmpIsFormula :: Map (Id Column) InputType
+  , _ccsTmpFormula   :: Map (Id Column) Text
+  , _ccsVisible      :: Set (Id Column) -- not in set === false
+  , _ccsTableCache   :: TableCache
   }
 
-makeLenses ''ColumnState
+makeLenses ''ColConfState
 
 data ColumnAction
-  = ColumnSetTmpDataType (Id Column) DataType
-  | ColumnUnsetTmpDataType (Id Column)
-  | ColumnSetTmpInputType (Id Column) InputType
-  | ColumnUnsetTmpInputType (Id Column)
-  | ColumnSetTmpSource (Id Column) Text
-  | ColumnUnsetTmpSource (Id Column)
+  = ColumnSetTmpDataType    (Id Column) DataType
+  | ColumnUnsetTmpDataType  (Id Column)
+  | ColumnSetTmpIsFormula   (Id Column) InputType
+  | ColumnUnsetTmpIsFormula (Id Column)
+  | ColumnSetTmpFormula     (Id Column) Text
+  | ColumnUnsetTmpFormula   (Id Column)
+  | ColumnSetVisibility     (Id Column) Bool
   | ColumnGetTableCache
-  | ColumnSetTableCache (Map (Id Table) Text)
+  | ColumnSetTableCache     (Map (Id Table) Text)
   deriving (Typeable, Generic, NFData)
 
-instance StoreData ColumnState where
-  type StoreAction ColumnState = ColumnAction
+instance StoreData ColConfState where
+  type StoreAction ColConfState = ColumnAction
   transform action st = case action of
     ColumnSetTmpDataType i dt ->
-      pure $ st & csTmpDataType . at i .~ Just dt
+      pure $ st & ccsTmpDataType . at i .~ Just dt
     ColumnUnsetTmpDataType i ->
-      pure $ st & csTmpDataType . at i .~ Nothing
-    ColumnSetTmpInputType i it ->
-      pure $ st & csTmpInputType . at i .~ Just it
-    ColumnUnsetTmpInputType i ->
-      pure $ st & csTmpInputType . at i .~ Nothing
-    ColumnSetTmpSource i s ->
-      pure $ st & csTmpSource . at i .~ Just s
-    ColumnUnsetTmpSource i ->
-      pure $ st & csTmpSource . at i .~ Nothing
+      pure $ st & ccsTmpDataType . at i .~ Nothing
+    ColumnSetTmpIsFormula i it ->
+      pure $ st & ccsTmpIsFormula . at i .~ Just it
+    ColumnUnsetTmpIsFormula i ->
+      pure $ st & ccsTmpIsFormula . at i .~ Nothing
+    ColumnSetTmpFormula i s ->
+      pure $ st & ccsTmpFormula . at i .~ Just s
+    ColumnUnsetTmpFormula i ->
+      pure $ st & ccsTmpFormula . at i .~ Nothing
+
+    ColumnSetVisibility i b -> pure $ case b of
+      True  -> st & ccsVisible %~ Set.insert i
+      False -> st & ccsVisible %~ Set.delete i
 
     ColumnGetTableCache -> do
-      when (Map.null $ st ^. csTableCache) $
+      when (Map.null $ st ^. ccsTableCache) $
         request api (Proxy :: Proxy TableListGlobal) $ pure . \case
-          Left (_, e) -> dispatch $ GlobalSetError $ pack e
-          Right ts    -> dispatchColumn $ ColumnSetTableCache $ toTableMap ts
+          Left (_, e) -> dispatch $ GlobalSetError $ Text.pack e
+          Right ts    -> [SomeStoreAction colConfStore $ ColumnSetTableCache $ toTableMap ts]
       pure st
     ColumnSetTableCache m ->
-      pure $ st & csTableCache .~ m
+      pure $ st & ccsTableCache .~ m
 
-columnStore :: ReactStore ColumnState
-columnStore = mkStore $ ColumnState Map.empty Map.empty Map.empty Map.empty
+colConfStore :: ReactStore ColConfState
+colConfStore = mkStore $ ColConfState Map.empty Map.empty Map.empty Set.empty Map.empty
 
-dispatchColumn :: ColumnAction -> [SomeStoreAction]
-dispatchColumn x = [SomeStoreAction columnStore x]
+-- helper
 
 toTableMap :: [Entity Table] -> TableCache
 toTableMap = Map.fromList . map (\(Entity i Table{..}) -> (i, tableName))
+
+--
+
+-- branch selection types
+
+--
 
 type SelBranchCallback = DataType -> [SomeStoreAction]
 type SelTableCallback  = Id Table -> [SomeStoreAction]
@@ -132,50 +147,84 @@ recordTableId :: DataType -> Maybe (Id Table)
 recordTableId (DataRecord tId) = Just tId
 recordTableId _                = Nothing
 
+--
+
+-- views
+
+--
+
 column_ :: Entity Column -> ReactElementM eh ()
 column_ !c = view column c mempty
 
 column :: ReactView (Entity Column)
-column = defineControllerView "column" columnStore $ \st c@(Entity i col) -> do
-  -- columnTitle_ c
+column = defineView "column" $ \c@(Entity i col) -> do
   editBox_ EditBoxProps
     { editBoxValue = columnName col
     , editBoxPlaceholder = "Column name..."
     , editBoxClassName = "columnName"
     , editBoxOnSave = dispatch . ColumnRename i
     }
-  let tables = st ^. csTableCache
-  selDatatype_ c tables
-  let mDt = st ^. csTmpDataType . at i
-  button_
-      [ onClick $ \_ _ -> case mDt of
-          Nothing -> []
-          Just dt -> [ SomeStoreAction store $ ColumnSetDt i dt
-                     , SomeStoreAction columnStore $ ColumnUnsetTmpDataType i
-                     ]
-      ] "OK"
-  selInputType_ c
+  -- TODO: summary of datatype and isFormula
+  columnConfig_ c
 
-columnTitle_ :: Entity Column -> ReactElementM eh ()
-columnTitle_ !c = view columnTitle c mempty
+-- configure column
 
-columnTitle :: ReactView (Entity Column)
-columnTitle = defineStatefulView "columnTitle" Nothing $ \curText (Entity i col) -> do
-  input_
-    [ "placeholder" &= ("Column name" :: Text)
-    , "value" &= fromMaybe (columnName col) curText
-    , onChange $ \evt _ -> ([], Just $ Just $ target evt "value")
-    , onKeyDown $ \_ evt curState ->
-        let txt = fromMaybe "" curState
-        in  if keyCode evt == 13 && not (Text.null txt) -- 13 = Enter
-              then (dispatch $ ColumnRename i txt, Just curState)
-              else ([], Nothing)
-    ]
-  button_
-    [ onClick $ \_ _ _ -> (dispatch $ TableDeleteColumn i, Nothing)
-    ] $ "-"
-  br_ []
-  span_ "Data type "
+columnConfig_ :: Entity Column -> ReactElementM eh ()
+columnConfig_ !c = view columnConfig c mempty
+
+columnConfig :: ReactView (Entity Column)
+columnConfig = defineControllerView "column configuration" colConfStore $
+  \state c@(Entity i Column{..}) -> do
+    cldiv_ "columnConfigOpen" $ do
+      case columnCompileResult of
+        CompileResultError msg -> div_
+                                    [ "className" &= ("columnConfigError" :: Text)
+                                    , "title" &= msg
+                                    ] $ elemText "Err"
+        _                      -> pure ()
+      cldiv_ "columnConfigOpenIcon" $ elemText "Conf"
+    when (Set.member i $ state ^. ccsVisible) $ do
+      cldiv_ "columnConfigDialog" $ do
+        cldiv_ "columnConfigDatatype" $
+          selDatatype_ c (state ^. ccsTableCache)
+        cldiv_ "columnConfigFormula" $ do
+          checkIsFormula_ c Nothing
+          -- input field for formula
+          case state ^. ccsTmpIsFormula . at i ?: columnInputType of
+            ColumnDerived -> inputFormula_ c Nothing
+            ColumnInput   -> pure ()
+      cldiv_ "columnConfigButtons" $ do
+        a_
+          [ onClick $ \_ _ ->
+              [ SomeStoreAction colConfStore $ ColumnSetVisibility i False
+              , SomeStoreAction colConfStore $ ColumnUnsetTmpDataType i
+              , SomeStoreAction colConfStore $ ColumnUnsetTmpFormula i
+              , SomeStoreAction colConfStore $ ColumnUnsetTmpIsFormula i
+              ]
+          ] "cancel"
+        -- TODO: figure out what changed before initiating ajax
+        -- in the Nothing case: nothing has changed
+        let inpTyp = (state ^. ccsTmpIsFormula . at i) ?: columnInputType
+            formula = (state ^. ccsTmpFormula . at i)  ?: columnSourceCode
+            dataTypeActions = case state ^. ccsTmpDataType . at i of
+              Nothing -> []
+              Just dt -> [ SomeStoreAction store        $ ColumnSetDt i dt
+                         , SomeStoreAction colConfStore $ ColumnUnsetTmpDataType i
+                         ]
+            saveActions =
+              -- hide dialog
+              [ SomeStoreAction colConfStore $ ColumnSetVisibility i False
+              -- is formula and formula
+              , SomeStoreAction store        $ ColumnSetFormula i (inpTyp, formula)
+              , SomeStoreAction colConfStore $ ColumnUnsetTmpIsFormula i
+              , SomeStoreAction colConfStore $ ColumnUnsetTmpFormula i
+              -- datatype selection
+              ] ++ dataTypeActions
+        button_
+          [ onClick $ \_ _ -> saveActions
+          ] "OK"
+
+-- select datatype
 
 selDatatype_ :: Entity Column -> TableCache -> ReactElementM eh ()
 selDatatype_  c m = view selDatatype (c, m) mempty
@@ -183,7 +232,7 @@ selDatatype_  c m = view selDatatype (c, m) mempty
 selDatatype :: ReactView (Entity Column, TableCache)
 selDatatype = defineView "selectDataType" $ \(Entity i Column{..}, tables) ->
     selBranch_ (Just columnDataType) tables $
-      \dt -> [SomeStoreAction columnStore $ ColumnSetTmpDataType i dt]
+      \dt -> [SomeStoreAction colConfStore $ ColumnSetTmpDataType i dt]
 
 selBranch_ :: Maybe DataType -> TableCache -> SelBranchCallback -> ReactElementM eh ()
 selBranch_ mDt tables cb = view selBranch (mDt, tables, cb) mempty
@@ -191,8 +240,8 @@ selBranch_ mDt tables cb = view selBranch (mDt, tables, cb) mempty
 selBranch :: ReactView (Maybe DataType, TableCache, SelBranchCallback)
 selBranch = defineStatefulView "selBranch" Nothing $ \curBranch (mDt, tables, cb) -> do
   let defDt = DataNumber
-      Just selectedBranch = curBranch <|> toBranch <$> mDt <|> Just (toBranch defDt)
-  select_
+      selectedBranch = curBranch <|> toBranch <$> mDt ?: toBranch defDt
+  cldiv_ "selBranch" $ select_
     [ "defaultValue" &= fromMaybe "" (inverseLookup selectedBranch branches)
     , onInput $ \evt _ -> case Map.lookup (target evt "value") branches of
         Just BBool   -> (cb DataBool  , Just $ Just BBool  )
@@ -216,7 +265,7 @@ selTable_ mTableId tables cb = view selTable (mTableId, tables, cb) mempty
 
 selTable :: ReactView (Maybe (Id Table), TableCache, SelTableCallback)
 selTable = defineView "selBranch" $ \(mTableId, tables, cb) -> do
-  onDidMount_ (dispatchColumn ColumnGetTableCache) mempty
+  onDidMount_ ([SomeStoreAction colConfStore ColumnGetTableCache]) mempty
   select_
     [ "defaultValue" &= fromMaybe "" (show <$> mTableId)
     , onChange $ \evt -> maybe [] cb $ readMaybe $ target evt "value"
@@ -224,43 +273,50 @@ selTable = defineView "selBranch" $ \(mTableId, tables, cb) -> do
            forM_ (Map.toList tables) $ \(tId, name) ->
              option_ [ "value" &= show tId ] $ elemText name
 
-inverseLookup :: Ord v => v -> Map k v -> Maybe k
-inverseLookup x m = Map.lookup x (Map.fromList $ map swap $ Map.toList m)
+-- checkbox for "is formula"
 
---
-
-selInputType_ :: Entity Column -> ReactElementM eh ()
-selInputType_ !c = view selInputType c mempty
+checkIsFormula_ :: Entity Column -> Maybe InputType -> ReactElementM eh ()
+checkIsFormula_ !c !i = view checkIsFormula (c, i) mempty
 
 
-selInputType :: ReactView (Entity Column)
-selInputType = defineControllerView "selInputType" columnStore $
-  \st (Entity i Column{..}) -> do
-    let inpTyp = fromMaybe columnInputType $ st ^. csTmpInputType . at i
-        src = fromMaybe columnSourceCode $ st ^. csTmpSource . at i
-    select_
-      [ "defaultValue" &= show inpTyp
-      , onChange $ \evt ->
-          [ SomeStoreAction columnStore $
-              ColumnSetTmpInputType i $ read $ target evt "value"
+checkIsFormula :: ReactView (Entity Column, Maybe InputType)
+checkIsFormula = defineView "checkIsFormula" $ \(Entity i Column{..}, mIsFormula) ->
+    input_
+      [ "type"    &= ("checkbox"    :: Text)
+      , "value"   &= ("use formula" :: Text)
+      , "checked" &= case mIsFormula ?: columnInputType of
+          ColumnDerived -> True
+          ColumnInput   -> False
+      , onClick $ \evt _ ->
+          [ SomeStoreAction colConfStore $ ColumnSetTmpIsFormula i $ read $ target evt "value"
           ]
-      ] $ do option_ [ "value" &= show ColumnInput ] "Input"
-             option_ [ "value" &= show ColumnDerived ] "Derived"
-    button_
-      [ onClick $ \_ _ ->
-          [ SomeStoreAction store $ ColumnSetInput i (inpTyp, src)
-          , SomeStoreAction columnStore $ ColumnUnsetTmpInputType i
-          , SomeStoreAction columnStore $ ColumnUnsetTmpSource i
-          ]
-      ] "Ok"
-    when (inpTyp == ColumnDerived) $
+      ]
+
+-- input field for formula (i.a.)
+
+inputFormula_ :: Entity Column -> Maybe Text -> ReactElementM eh ()
+inputFormula_ !c !f = view inputFormula (c, f) mempty
+
+inputFormula :: ReactView (Entity Column, Maybe Text)
+inputFormula = defineView "input formula" $ \(Entity i Column{..}, mFormula) -> do
       codemirror_ $ CodemirrorProps
         { codemirrorMode = "text/x-ocaml"
         , codemirrorTheme = "neat"
-        , codemirrorValue = src
+        , codemirrorValue = mFormula ?: columnSourceCode
         , codemirrorOnChange = \v ->
-            [ SomeStoreAction columnStore $ ColumnSetTmpSource i v ]
+            [ SomeStoreAction colConfStore $ ColumnSetTmpFormula i v ]
         }
-    case columnCompileResult of
-      CompileResultError msg -> elemText msg
-      _                      -> mempty
+
+--
+
+-- util
+
+--
+
+inverseLookup :: Ord v => v -> Map k v -> Maybe k
+inverseLookup x m = Map.lookup x (Map.fromList $ map swap $ Map.toList m)
+
+(?:) :: Maybe a -> a -> a
+(?:) = flip fromMaybe
+
+infixl 3 ?:
