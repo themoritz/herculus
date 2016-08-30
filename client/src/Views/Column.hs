@@ -182,7 +182,11 @@ columnConfig = defineControllerView "column configuration" colConfStore $
                                     , "title" &= msg
                                     ] $ elemText "Err"
         _                      -> pure ()
-      cldiv_ "columnConfigOpenIcon" $ elemText "Conf"
+      div_
+        [ "className" &= ("columnConfigOpenIcon" :: Text)
+        , onClick $ \_ _ ->
+            [ SomeStoreAction colConfStore $ ColumnSetVisibility i True ]
+        ] $ elemText "Conf"
     when (Set.member i $ state ^. ccsVisible) $ do
       cldiv_ "columnConfigDialog" $ do
         cldiv_ "columnConfigDatatype" $
@@ -280,17 +284,19 @@ checkIsFormula_ !c !i = view checkIsFormula (c, i) mempty
 
 
 checkIsFormula :: ReactView (Entity Column, Maybe InputType)
-checkIsFormula = defineView "checkIsFormula" $ \(Entity i Column{..}, mIsFormula) ->
+checkIsFormula = defineView "checkIsFormula" $ \(Entity i Column{..}, mIsFormula) -> do
     input_
-      [ "type"    &= ("checkbox"    :: Text)
-      , "value"   &= ("use formula" :: Text)
+      [ "type"    &= ("checkbox" :: Text)
       , "checked" &= case mIsFormula ?: columnInputType of
           ColumnDerived -> True
           ColumnInput   -> False
-      , onClick $ \evt _ ->
-          [ SomeStoreAction colConfStore $ ColumnSetTmpIsFormula i $ read $ target evt "value"
-          ]
+      , onChange $ \evt ->
+          let isFormula = case target evt "value" of
+                  True  -> ColumnDerived
+                  False -> ColumnInput
+          in  [ SomeStoreAction colConfStore $ ColumnSetTmpIsFormula i isFormula ]
       ]
+    span_ [] $ elemText "Use formula"
 
 -- input field for formula (i.a.)
 
