@@ -23,7 +23,7 @@ import           Lib.Model.Types
 import           Lib.Types
 
 data Cache = Cache
-  { _cacheCell          :: Map (Id Column, Id Record) CellContent
+  { _cacheCell          :: Map (Id Column, Id Record) Cell
   , _cacheColumn        :: Map (Id Column) [CellContent]
   , _cacheCompileResult :: Map (Id Column) CompileResult
   }
@@ -35,14 +35,14 @@ empty = Cache Map.empty Map.empty Map.empty
 
 --
 
-storeCell :: Id Column -> Id Record -> CellContent -> Cache -> Cache
+storeCell :: Id Column -> Id Record -> Cell -> Cache -> Cache
 storeCell c r v = set (cacheCell . at (c, r)) (Just v)
 
-getCell :: Id Column -> Id Record -> Cache -> Maybe CellContent
+getCell :: Id Column -> Id Record -> Cache -> Maybe Cell
 getCell c r = view (cacheCell . at (c, r))
 
-getAllCells :: Cache -> [(Id Column, Id Record, CellContent)]
-getAllCells = map (\((c, r), v) -> (c, r, v)) . Map.toList . _cacheCell
+getAllCells :: Cache -> [Cell]
+getAllCells = Map.elems . _cacheCell
 
 --
 

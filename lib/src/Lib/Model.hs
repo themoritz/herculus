@@ -16,14 +16,7 @@ import Data.Typeable (Typeable)
 import           GHC.Generics
 
 import           Lib.Model.Class
-import           Lib.Model.Dependencies
-import           Lib.Model.Types
 import           Lib.Types
-
-instance Model Project      where collectionName = const "projects"
-instance Model Table        where collectionName = const "tables"
-instance Model Record       where collectionName = const "records"
-instance Model Dependencies where collectionName = const "dependencies"
 
 data Entity a = Entity
   { entityId  :: Id a

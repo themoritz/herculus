@@ -7,6 +7,7 @@
 module Handler.Rest where
 
 import           Control.Monad                  (unless, void)
+import           Control.Arrow                  ((***))
 
 import           Data.List                      (union)
 import           Data.Maybe                     (mapMaybe)
@@ -26,6 +27,7 @@ import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
+import           Lib.Model.References
 import           Lib.Model.Types
 import           Lib.Types
 
@@ -112,6 +114,7 @@ handleColumnDelete colId = do
     ]
   newChilds <- compileColumnChildren colId
   void $ modifyDependencies colId []
+  modifyReferences $ removeReference colId
   sendWS $ WsDownColumnsChanged newChilds
   propagate [RootWholeColumns $ map entityId newChilds]
 
@@ -130,6 +133,7 @@ handleColumnSetDataType c typ = do
     newChilds <- compileColumnChildren c
     toUpdate <- case columnInputType oldCol of
       ColumnInput   -> do invalidateCells c
+                          updateReference c typ
                           pure newChilds
       ColumnDerived -> do newC <- compileColumn c
                           pure $ newC:newChilds
@@ -138,13 +142,15 @@ handleColumnSetDataType c typ = do
 
 handleColumnSetInput :: MonadHexl m => Id Column -> (InputType, Text) -> m ()
 handleColumnSetInput c (typ, code) = do
-  update c $ \col -> col { columnInputType = typ
-                         , columnSourceCode = code }
+  oldCol <- getById' c
+  update c $ const $ oldCol { columnInputType = typ
+                            , columnSourceCode = code
+                            }
   case typ of
     ColumnDerived -> do newCol <- compileColumn c
                         sendWS $ WsDownColumnsChanged [newCol]
                         propagate [RootWholeColumns [c]]
-    _             -> pure ()
+    ColumnInput   -> updateReference c (columnDataType oldCol)
 
 handleColumnList :: MonadHexl m => Id Table -> m [Entity Column]
 handleColumnList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
@@ -156,12 +162,12 @@ handleRecordCreate t = do
   let newRec = Record t
   r <- create newRec
   cs <- listByQuery [ "tableId" =: toObjectId t ]
-  newCells <- for cs $ \(Entity c col) -> do
+  newCells <- for cs $ \e@(Entity c col) -> do
     defContent <- defaultContent col
     let cell = newCell t c r defContent
     i <- create cell
     pure $ case columnInputType col of
-      ColumnInput -> Just $ Entity i cell
+      ColumnInput -> Just (e, Entity i cell)
       ColumnDerived -> Nothing
   propagate
     [ RootCellChanges $
@@ -175,12 +181,15 @@ handleRecordCreate t = do
                      ColumnDerived -> Just (c, r)
                  ) cs
     ]
-  pure (Entity r newRec, mapMaybe id newCells)
+  sendWS $ WsDownRecordCreated t r $
+    map (id *** cellContent . entityVal) $ mapMaybe id newCells
+  pure (Entity r newRec, map snd $ mapMaybe id newCells)
 
 handleRecordDelete :: MonadHexl m => Id Record -> m ()
 handleRecordDelete recId = do
   record <- getById' recId
   delete recId
+  sendWS $ WsDownRecordDeleted (recordTableId record) recId
   deleteByQuery (Proxy :: Proxy Cell)
     [ "aspects.recordId" =: toObjectId recId
     ]
@@ -190,7 +199,25 @@ handleRecordDelete recId = do
         map (\e -> map fst .
                    filter (\(_, typ) -> typ == OneToAll) .
                    getChildren (entityId e) $ graph) cs
-  propagate [RootWholeColumns allChildren]
+  -- Invalidate references
+  refGraph <- getReferences
+  let refingCols = getReferringColumns (recordTableId record) refGraph
+  mCellChanges <- for refingCols $ \c -> do
+    cells <- listByQuery [ "aspects.columnId" =: toObjectId c ]
+    for cells $ \(Entity i cell) -> case cellContent cell of
+      CellError _ -> pure Nothing
+      CellValue val -> case invalidateRecord recId val of
+        Nothing -> pure Nothing
+        Just newVal -> do
+          let updatedCell = cell { cellContent = CellValue newVal }
+          update i $ const updatedCell
+          pure $ Just updatedCell
+  let cellChanges = concat $ map (mapMaybe id) mCellChanges
+  sendWS $ WsDownCellsChanged cellChanges
+  propagate
+    [ RootWholeColumns allChildren
+    , RootCellChanges $ map (\(Cell _ (Aspects _ c r)) -> (c, r)) cellChanges
+    ]
 
 handleRecordData :: MonadHexl m => Id Record -> m [(Entity Column, CellContent)]
 handleRecordData recId = do
@@ -204,13 +231,10 @@ handleRecordData recId = do
 handleRecordList :: MonadHexl m => Id Table -> m [Entity Record]
 handleRecordList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
 
-handleRecordListWithData :: MonadHexl m => Id Table -> m [(Id Record, [(Text, CellContent)])]
+handleRecordListWithData :: MonadHexl m => Id Table -> m [(Id Record, [(Entity Column, CellContent)])]
 handleRecordListWithData tblId = do
   recs <- listByQuery [ "tableId" =: toObjectId tblId ]
-  for recs $ \r -> do
-    dat <- handleRecordData (entityId r)
-    let entries = map (\(col, content) -> (columnName $ entityVal col, content)) dat
-    pure (entityId r, entries)
+  for recs $ \r -> (entityId r,) <$> handleRecordData (entityId r)
 
 --
 
@@ -262,12 +286,17 @@ invalidateCells :: MonadHexl m => Id Column -> m ()
 invalidateCells c = do
   cells <- listByQuery [ "aspects.columnId" =: toObjectId c]
   col <- getById' c
-  changes <- for cells $ \e -> do
+  changes <- for cells $ \(Entity i cell) -> do
     defContent <- defaultContent col
-    update (entityId e) $ \cell -> cell { cellContent = defContent }
-    let aspects = cellAspects $ entityVal e
-    pure (aspectsColumnId aspects, aspectsRecordId aspects, defContent)
+    let invalidatedCell = Cell defContent (cellAspects cell)
+    update i $ const invalidatedCell
+    pure invalidatedCell
   sendWS $ WsDownCellsChanged changes
+
+updateReference :: MonadHexl m => Id Column -> DataType -> m ()
+updateReference c dataType = case getReference dataType of
+  Nothing -> modifyReferences $ removeReference c
+  Just t  -> modifyReferences $ setReference t c
 
 --
 
@@ -324,9 +353,9 @@ defaultContent col = case columnDataType col of
   DataTime     -> CellValue . VTime <$> getCurrentTime
   DataRecord t -> do
     res <- getOneByQuery [ "tableId" =: toObjectId t ]
-    case res of
-      Left _ -> pure . CellError $ "no record found"
-      Right (Entity i _) -> pure . CellValue . VRecord $ i
+    pure $ CellValue $ VRecord $ case res of
+      Left _ -> Nothing
+      Right (Entity i _) -> Just i
   DataList _   -> pure . CellValue $ VList []
   DataMaybe _  -> pure . CellValue $ VMaybe Nothing
 

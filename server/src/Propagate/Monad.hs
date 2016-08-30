@@ -69,33 +69,31 @@ runPropagate action = do
   sendWS $ WsDownCellsChanged $ getAllCells $ _stateCache st
   pure a
 
-cacheCellContent :: Monad m => Id Column -> Id Record -> CellContent -> PropT m ()
-cacheCellContent c r result = stateCache %= storeCell c r result
+cacheCell :: Monad m => Id Column -> Id Record -> Cell -> PropT m ()
+cacheCell c r result = stateCache %= storeCell c r result
 
 instance MonadHexl m => MonadPropagate (PropT m) where
   getCellValue c r = do
     result <- gets (getCell c r . _stateCache) >>= \case
-      Just result -> pure result
+      Just cell -> pure $ cellContent cell
       Nothing -> do
-        let cellQuery =
-              [ "aspects.columnId" =: toObjectId c
-              , "aspects.recordId" =: toObjectId r
-              ]
-        cell <- lift $ getOneByQuery' cellQuery
-        let result = cellContent $ entityVal cell
-        cacheCellContent c r result
-        pure result
+        Entity _ cell <- lift $ getOneByQuery'
+          [ "aspects.columnId" =: toObjectId c
+          , "aspects.recordId" =: toObjectId r
+          ]
+        cacheCell c r cell
+        pure $ cellContent cell
     case result of
       CellError _ -> pure Nothing
       CellValue val -> pure $ Just val
 
   setCellContent c r content = do
-    cacheCellContent c r content
-    let query =
-          [ "aspects.columnId" =: toObjectId c
-          , "aspects.recordId" =: toObjectId r
-          ]
-    lift $ updateByQuery' query $ \cell -> cell { cellContent = content }
+    Entity i cell <- lift $ getOneByQuery'
+      [ "aspects.columnId" =: toObjectId c
+      , "aspects.recordId" =: toObjectId r
+      ]
+    cacheCell c r cell
+    lift $ update i $ const cell { cellContent = content }
 
   getColumnValues c = do
     results <- gets (getColumn c . _stateCache) >>= \case

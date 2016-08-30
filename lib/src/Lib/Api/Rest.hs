@@ -59,6 +59,6 @@ type RecordCreate       = "record" :> "create" :> ReqBody '[JSON] (Id Table) :> 
 type RecordDelete       = "record" :> "delete" :> Capture "recordId" (Id Record) :> Get '[JSON] ()
 type RecordData         = "record" :> "data" :> Capture "recordId" (Id Record) :> Get '[JSON] [(Entity Column, CellContent)]
 type RecordList         = "record" :> "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [Entity Record]
-type RecordListWithData = "record" :> "listWithData" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Record, [(Text, CellContent)])]
+type RecordListWithData = "record" :> "listWithData" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Record, [(Entity Column, CellContent)])]
 
 type CellSet = "cell" :> "set" :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record) :> ReqBody '[JSON] Value :> Post '[JSON] ()

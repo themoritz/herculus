@@ -62,6 +62,8 @@ data Dependencies = Dependencies
   { dependenciesGraph :: DependencyGraph
   }
 
+instance Model Dependencies where collectionName = const "dependencies"
+
 instance ToDocument Dependencies where
   toDocument (Dependencies graph) =
     [ "graph" =: toValue graph
@@ -78,7 +80,7 @@ transpose :: DependencyGraph -> DependencyGraph
 transpose (DependencyGraph d i) = DependencyGraph i d
 
 emptyDependencyGraph :: DependencyGraph
-emptyDependencyGraph = DependencyGraph (NamedMap Map.empty) (NamedMap Map.empty)
+emptyDependencyGraph = DependencyGraph emptyNamedMap emptyNamedMap
 
 setDependency :: Id Column -> Id Column -> DependencyType
               -> DependencyGraph -> DependencyGraph

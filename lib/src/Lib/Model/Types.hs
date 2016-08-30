@@ -22,6 +22,9 @@ data Project = Project
   { projectName :: Text
   } deriving (Generic, NFData)
 
+instance Model Project where
+  collectionName = const "projects"
+
 instance ToJSON Project
 instance FromJSON Project
 
@@ -37,6 +40,9 @@ data Table = Table
   { tableProjectId :: Id Project
   , tableName      :: Text
   } deriving (Generic, NFData)
+
+instance Model Table where
+  collectionName = const "tables"
 
 instance ToJSON Table
 instance FromJSON Table
@@ -54,6 +60,9 @@ instance FromDocument Table where
 data Record = Record
   { recordTableId :: Id Table
   } deriving (Generic, NFData, Eq, Ord, Show)
+
+instance Model Record where
+  collectionName = const "records"
 
 instance ToJSON Record
 instance FromJSON Record

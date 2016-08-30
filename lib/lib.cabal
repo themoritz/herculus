@@ -33,6 +33,7 @@ library
                      , Lib.Model.Class
                      , Lib.Model.Dependencies
                      , Lib.Model.Dependencies.Types
+                     , Lib.Model.References
                      , Data.Aeson.Bson
   build-depends:       base >= 4.7 && < 5
                      , aeson

@@ -46,6 +46,7 @@ import           Lib.Model
 import           Lib.Model.Class
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
+import           Lib.Model.References
 import           Lib.Types
 
 data AppError
@@ -80,6 +81,9 @@ class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m 
 
   getDependencies :: m DependencyGraph
   modifyDependencies :: Id Column -> [(Id Column, DependencyType)] -> m Bool
+
+  getReferences :: m ReferenceGraph
+  modifyReferences :: (ReferenceGraph -> ReferenceGraph) -> m ()
 
   getColumnOrder :: [Id Column] -> m ColumnOrder
 
@@ -212,6 +216,14 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
         void $ upsert [] (Dependencies emptyDependencyGraph) $ \deps ->
           deps { dependenciesGraph = setDependencies c newDeps $ dependenciesGraph deps }
         pure False
+
+  getReferences = getOneByQuery [] >>= \case
+    Right e -> pure $ referenceGraph $ entityVal e
+    Left _  -> pure emptyReferenceGraph
+
+  modifyReferences f =
+    void $ upsert [] (References emptyReferenceGraph) $ \refs ->
+      refs { referenceGraph = f (referenceGraph refs) }
 
   getColumnOrder cs = do
     graph <- getDependencies

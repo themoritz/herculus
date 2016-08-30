@@ -121,11 +121,14 @@ eval env expr = case expr of
       And       -> bolOp (&&)
       Or        -> bolOp (||)
   TPrjRecord e name -> do
-    RValue (VRecord recId) <- eval env e
-    f <- asks envGetRecordValue
-    lift (f recId name) >>= \case
-      Nothing -> throwError "dependent cell not ready"
-      Just val -> pure $ RValue val
+    RValue (VRecord mRecId) <- eval env e
+    case mRecId of
+      Nothing -> throwError "dependent cell not ready (invalid reference))"
+      Just recId -> do
+        f <- asks envGetRecordValue
+        lift (f recId name) >>= \case
+          Nothing -> throwError "dependent cell not ready"
+          Just val -> pure $ RValue val
   TColumnRef colId -> do
     f <- asks envGetCellValue
     lift (f colId) >>= \case
@@ -140,7 +143,7 @@ eval env expr = case expr of
   TTableRef tblId _ -> do
     f <- asks envGetTableRecords
     records <- lift $ f tblId
-    pure $ RValue $ VList $ map VRecord records
+    pure $ RValue $ VList $ map (VRecord . Just) records
 
 interpret :: Monad m => TExpr -> EvalEnv m -> m (Either Text Value)
 interpret expr env = do

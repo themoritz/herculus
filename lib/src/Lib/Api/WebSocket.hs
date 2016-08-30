@@ -6,7 +6,6 @@ module Lib.Api.WebSocket where
 import Control.DeepSeq
 
 import Data.Aeson (ToJSON, FromJSON)
-import Data.Text (Text)
 
 import GHC.Generics
 
@@ -17,22 +16,17 @@ import Lib.Model.Column
 import Lib.Model.Cell
 
 data WsUpMessage
-  -- Play
-  = WsUpGreet Text
-  | WsUpStore Text
-  | WsUpList
+  = WsUpDummy
   deriving (Generic, Show, NFData)
 
 instance ToJSON WsUpMessage
 instance FromJSON WsUpMessage
 
 data WsDownMessage
-  -- Play
-  = WsDownGreet Text
-  | WsDownList [Text]
-  -- Updates
-  | WsDownCellsChanged [(Id Column, Id Record, CellContent)]
+  = WsDownCellsChanged [Cell]
   | WsDownColumnsChanged [Entity Column]
+  | WsDownRecordCreated (Id Table) (Id Record) [(Entity Column, CellContent)]
+  | WsDownRecordDeleted (Id Table) (Id Record)
   deriving (Generic)
 
 instance ToJSON WsDownMessage

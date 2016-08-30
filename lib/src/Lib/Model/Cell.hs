@@ -6,6 +6,7 @@
 module Lib.Model.Cell where
 
 import           Control.DeepSeq
+import           Control.Monad.Writer
 
 import           Data.Aeson       (FromJSON, ToJSON)
 import           Data.Aeson.Bson
@@ -48,7 +49,7 @@ data Value
   | VString Text
   | VNumber Number
   | VTime Time
-  | VRecord (Id Record)
+  | VRecord (Maybe (Id Record))
   | VList [Value]
   | VMaybe (Maybe Value)
   deriving (Generic, NFData, Typeable, Eq)
@@ -78,13 +79,34 @@ defaultContentPure = \case
   DataList   _ -> CellValue $ VList []
   DataMaybe  _ -> CellValue $ VMaybe Nothing--
 
+-- | Returns `Nothing` if no record had to be invalidated
+invalidateRecord :: Id Record -> Value -> Maybe Value
+invalidateRecord r old =
+    let (new, invalidated) = runWriter (go old)
+    in if length invalidated == 0
+         then Nothing
+         else Just new
+  where
+    go :: Value -> Writer [()] Value
+    go = \case
+      VBool b    -> pure $ VBool b
+      VString s  -> pure $ VString s
+      VNumber n  -> pure $ VNumber n
+      VTime t    -> pure $ VTime t
+      VRecord mr -> VRecord <$> if mr == Just r
+                                  then do tell [()]
+                                          pure Nothing
+                                  else pure mr
+      VList vs   -> VList <$> mapM go vs
+      VMaybe mv  -> VMaybe <$> mapM go mv
+
 --
 
 data Aspects = Aspects
   { aspectsTableId  :: Id Table
   , aspectsColumnId :: Id Column
   , aspectsRecordId :: Id Record
-  } deriving (Generic, NFData, Eq, Show, Typeable)
+  } deriving (Generic, NFData, Eq, Ord, Show, Typeable)
 
 instance ToJSON Aspects
 instance FromJSON Aspects

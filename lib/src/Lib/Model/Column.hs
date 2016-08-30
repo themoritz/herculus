@@ -42,6 +42,16 @@ instance FromJSON DataType
 instance ToBSON DataType
 instance FromBSON DataType
 
+getReference :: DataType -> Maybe (Id Table)
+getReference = \case
+  DataBool -> Nothing
+  DataString -> Nothing
+  DataNumber -> Nothing
+  DataTime -> Nothing
+  DataRecord t -> Just t
+  DataList sub -> getReference sub
+  DataMaybe sub -> getReference sub
+
 data Column = Column
   { columnTableId       :: Id Table
   , columnName          :: Text
