@@ -92,8 +92,9 @@ instance MonadHexl m => MonadPropagate (PropT m) where
       [ "aspects.columnId" =: toObjectId c
       , "aspects.recordId" =: toObjectId r
       ]
-    cacheCell c r cell
-    lift $ update i $ const cell { cellContent = content }
+    let updatedCell = cell { cellContent = content }
+    cacheCell c r updatedCell
+    lift $ update i $ const updatedCell
 
   getColumnValues c = do
     results <- gets (getColumn c . _stateCache) >>= \case
