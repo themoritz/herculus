@@ -138,7 +138,7 @@ column_ !c = view column c mempty
 column :: ReactView (Entity Column)
 column = defineControllerView "column" columnStore $ \st c@(Entity i col) -> do
   -- columnTitle_ c
-  editBox_ "column title" $ EditBoxProps (columnName col)
+  editBox_ "Column name..." $ EditBoxProps (columnName col)
                                          (dispatch . ColumnRename i)
   let tables = st ^. csTableCache
   selDatatype_ c tables

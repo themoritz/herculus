@@ -36,7 +36,7 @@ editBox_ name props = view (editBox name) props mempty
 editBox :: Text -> ReactView EditBoxProps
 editBox name = defineStatefulView (textToJS name) emptyEditBox $ \state props -> do
   let value = state ^. ebsValue ?: props ^. ebpValue
-  div_ [ "class" &= ("editBox" :: Text) ] $ case state ^. ebsIsEditing of
+  cldiv_ "editBox" $ case state ^. ebsIsEditing of
     True  -> input_
       [ "placeholder" &= name
       , "value"       &= value
@@ -57,8 +57,9 @@ editBox name = defineStatefulView (textToJS name) emptyEditBox $ \state props ->
                                              & ebsValue     .~ Just (props ^. ebpValue))
       ]
     False -> div_
-      [ onClick $ \_ _ st -> ([], Just $ st & ebsIsEditing .~ True)
-      ] $ elemText value
+      [ classNames [("placeholder", value == "")]
+      , onClick $ \_ _ st -> ([], Just $ st & ebsIsEditing .~ True)
+      ] $ if value == "" then elemText name else elemText value
 
 textToJS :: Text -> JSString
 textToJS = toJSString . Text.unpack
