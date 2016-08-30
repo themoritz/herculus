@@ -32,6 +32,7 @@ import Lib.Types
 
 import Store
 import Views.Foreign
+import Views.Common
 
 type CellCallback a = a -> [SomeStoreAction]
 type CellEventHandler = ViewEventHandler
@@ -152,10 +153,14 @@ cellString_ !inpType !s !cb = view cellString (inpType, s, cb) mempty
 cellString :: ReactView (InputType, Text, CellCallback Text)
 cellString = defineView "cellString" $ \(inpType, s, cb) -> case inpType of
   ColumnInput ->
-    input_
-      [ "value" &= s
-      , onChange $ \evt -> cb (target evt "value")
-      ]
+    editBox_ EditBoxProps
+      { editBoxValue = s
+      , editBoxPlaceholder = ""
+      , editBoxClassName = "string"
+      , editBoxShow = id
+      , editBoxValidator = Just
+      , editBoxOnSave = cb
+      }
   ColumnDerived ->
     elemText s
 
@@ -164,18 +169,17 @@ cellNumber_ :: InputType -> Number -> CellCallback Number
 cellNumber_ !inpType !n !cb = view cellNumber (inpType, n, cb) mempty
 
 cellNumber :: ReactView (InputType, Number, CellCallback Number)
-cellNumber = defineStatefulView "cellNumber" Nothing $ \invalidTmp (inpType, n, cb) ->
+cellNumber = defineView "cellNumber" $ \(inpType, n, cb) ->
   case inpType of
-    ColumnInput -> do
-      let curN = fromMaybe (show n) invalidTmp
-          parseNumber s = Number <$> (readMaybe $ unpack s)
-      input_
-        [ "value" &= curN
-        , classNames [ ("invalid", isJust invalidTmp) ]
-        , onChange $ \evt _ -> case parseNumber $ target evt "value" of
-            Nothing -> ([], Just $ Just $ target evt "value")
-            Just n' -> (cb n', Just Nothing)
-        ]
+    ColumnInput ->
+      editBox_ EditBoxProps
+        { editBoxValue = n
+        , editBoxPlaceholder = "0"
+        , editBoxClassName = "number"
+        , editBoxShow = pack . show
+        , editBoxValidator = \s -> Number <$> (readMaybe $ unpack s)
+        , editBoxOnSave = cb
+        }
     ColumnDerived ->
       elemString $ show n
 

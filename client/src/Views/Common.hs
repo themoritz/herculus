@@ -2,70 +2,85 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Views.Common where
+module Views.Common
+  ( EditBoxProps(..)
+  , editBox_
+  ) where
 
-import           Control.Lens hiding (view)
+import           Control.Applicative ((<|>))
 import           Control.DeepSeq     (NFData)
-import           Data.Maybe (fromMaybe)
-import Data.Monoid
-import           Data.Text (Text)
-import qualified Data.Text as Text
+import           Control.Lens        hiding (view)
+
+import           Data.Maybe          (fromMaybe, isJust)
+import           Data.Text           (Text)
+import           Data.Typeable       (Typeable)
+
 import           GHC.Generics        (Generic)
 
-import React.Flux
-import React.Flux.Internal (toJSString, JSString)
+import           React.Flux
 
-data EditBoxProps = EditBoxProps
-  { editBoxValue       :: Text
+data EditBoxProps a = EditBoxProps
+  { editBoxValue       :: a
   , editBoxPlaceholder :: Text
   , editBoxClassName   :: Text
-  , editBoxOnSave      :: Text -> [SomeStoreAction]
+  , editBoxShow        :: a -> Text
+  , editBoxValidator   :: Text -> Maybe a
+  , editBoxOnSave      :: a -> [SomeStoreAction]
   }
 
-data EditBoxState = EditBoxState
-  { _ebsValue :: Maybe Text
-  , _ebsIsEditing :: Bool
+data EditBoxState a = EditBoxState
+  { _ebsValue       :: Maybe a
+  , _ebsInvalidText :: Maybe Text
+  , _ebsIsEditing   :: Bool
   } deriving (Generic, NFData)
 
 makeLenses ''EditBoxProps
 makeLenses ''EditBoxState
 
-emptyEditBox :: EditBoxState
-emptyEditBox = EditBoxState Nothing False
+emptyEditBox :: EditBoxState a
+emptyEditBox = EditBoxState Nothing Nothing False
 
-editBox_ :: EditBoxProps -> ReactElementM eh ()
+editBox_ :: (NFData a, Typeable a) => EditBoxProps a -> ReactElementM eh ()
 editBox_ props = view editBox props mempty
 
-editBox :: ReactView EditBoxProps
-editBox = defineStatefulView "editBox" emptyEditBox $ \state EditBoxProps{..} -> do
-  let value = state ^. ebsValue ?: editBoxValue
-  cldiv_ ("editBox " <> textToJS editBoxClassName) $ case state ^. ebsIsEditing of
-    True  -> input_
-      [ "placeholder" &= editBoxPlaceholder
-      , "value"       &= value
-      , "autoFocus"   &= True
-      , onChange $ \evt st -> let v = Just $ target evt "value"
-                              in  ([], Just $ st & ebsValue .~ v)
-      , onKeyDown $ \_ evt _ ->
-          let v = state ^. ebsValue ?: ""
-          in  if keyCode evt == 13 && not (Text.null v) -- 13 = Enter
-                then (editBoxOnSave v, Nothing)
-                else ([], Nothing)
-      -- the keyUp event, unlike keydown, is consistently handled among browsers
-      , onKeyUp $ \_ evt st -> case keyCode evt of
-          27 -> ([], Just $ st & ebsIsEditing .~ False
-                               & ebsValue     .~ Just editBoxValue)
-          _  -> ([], Nothing)
-      , onBlur  $ \_ _ st  -> ([], Just $ st & ebsIsEditing .~ False
-                                             & ebsValue     .~ Just editBoxValue)
-      ]
-    False -> div_
-      [ classNames [("placeholder", value == "")]
-      , onClick $ \_ _ st -> ([], Just $ st & ebsIsEditing .~ True)
-      ] $ if value == "" then elemText editBoxPlaceholder else elemText value
-
-textToJS :: Text -> JSString
-textToJS = toJSString . Text.unpack
+editBox :: (NFData a, Typeable a) => ReactView (EditBoxProps a)
+editBox = defineStatefulView "editBox" emptyEditBox $
+  \state EditBoxProps{..} -> do
+    let text = editBoxShow <$> state ^. ebsValue
+           <|> state ^. ebsInvalidText
+            ?: editBoxShow editBoxValue
+    div_
+      [ classNames
+          [ ("editBox", True)
+          , (editBoxClassName, True)
+          , ("invalid", isJust $ state ^. ebsInvalidText)
+          ]
+      ] $ case state ^. ebsIsEditing of
+        True -> input_
+          [ "placeholder" &= editBoxPlaceholder
+          , "value"       &= text
+          , "autoFocus"   &= True
+          , onChange $ \evt st ->
+              let v = target evt "value"
+              in  case editBoxValidator v of
+                    Nothing -> ([], Just $ st & ebsValue .~ Nothing
+                                              & ebsInvalidText .~ Just v)
+                    Just a ->  ([], Just $ st & ebsValue .~ Just a
+                                              & ebsInvalidText .~ Nothing)
+          , onKeyDown $ \_ evt _ ->
+              case (keyCode evt, state ^. ebsValue) of
+                (13, Just a) -> (editBoxOnSave a, Nothing)
+                _            -> ([],              Nothing)
+          -- the keyUp event, unlike keydown, is consistently handled among browsers
+          , onKeyUp $ \_ evt _ -> case keyCode evt of
+              27 -> ([], Just emptyEditBox)
+              _  -> ([], Nothing)
+          , onBlur  $ \_ _ _  -> ([], Just emptyEditBox)
+          ]
+        False -> div_
+          [ classNames [("placeholder", text == "")]
+          , onClick $ \_ _ st -> ([], Just $ st & ebsIsEditing .~ True)
+          ] $ if text == "" then elemText editBoxPlaceholder else elemText text
 
 (?:) :: Maybe a -> a -> a
 (?:) = flip fromMaybe

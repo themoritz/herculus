@@ -162,6 +162,8 @@ column = defineView "column" $ \c@(Entity i col) -> do
     { editBoxValue = columnName col
     , editBoxPlaceholder = "Column name..."
     , editBoxClassName = "columnName"
+    , editBoxShow = id
+    , editBoxValidator = Just
     , editBoxOnSave = dispatch . ColumnRename i
     }
   -- TODO: summary of datatype and isFormula

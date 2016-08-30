@@ -70,11 +70,6 @@ body, html {
   }
 }
 
-input.invalid {
-  background-color: lighten(red, 40%);
-  border: 1px solid lighten(red, 20%);
-}
-
 .tableGrid {
   position: absolute;
   left: 200px;
@@ -156,6 +151,17 @@ span.active {
 
 .editBox.columnName {
   font-weight: bold;
+}
+
+.editBox.string {
+  height: 22px;
+}
+
+.editBox.invalid {
+  input {
+    background-color: lighten(red, 40%);
+    border: 1px solid lighten(red, 20%);
+  }
 }
 
 .editBox {
