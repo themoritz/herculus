@@ -154,9 +154,11 @@ span.active {
   font-weight: bold;
 }
 
-.editBox {
-  height: 25px;
+.editBox.columnName {
   font-weight: bold;
+}
+
+.editBox {
   div {
     position: relative;
     border: 1px solid white;
@@ -181,11 +183,11 @@ span.active {
   }
   input {
     outline: none;
-    font-weight: bold;
+    font-weight: inherit;
     height: 100%;
     width: 100%;
     box-sizing: border-box;
-    font-family: "Open Sans";
+    font-family: inherit;
     font-size: inherit;
     border: 1px solid darken($medium-gray, 20%);
     padding: 1px;
