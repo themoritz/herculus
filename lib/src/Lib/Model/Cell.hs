@@ -66,6 +66,18 @@ instance Show Value where
 instance ToJSON Value
 instance FromJSON Value
 
+-- TODO: delete in favor of ajax calls to the server version of defaultContent
+
+defaultContentPure :: DataType -> CellContent
+defaultContentPure = \case
+  DataBool     -> CellValue $ VBool False
+  DataString   -> CellValue $ VString ""
+  DataNumber   -> CellValue $ VNumber 0
+  DataTime     -> CellValue $ VTime $ defaultTime
+  DataRecord _ -> CellError "no default for records"
+  DataList   _ -> CellValue $ VList []
+  DataMaybe  _ -> CellValue $ VMaybe Nothing--
+
 --
 
 data Aspects = Aspects

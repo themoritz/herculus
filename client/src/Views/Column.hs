@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveGeneric #-}
-
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -22,7 +21,6 @@ import           GHC.Generics        (Generic)
 import           Control.DeepSeq     (NFData)
 import           Text.Read           (readMaybe)
 
-
 import           React.Flux.Addons.Servant (request)
 import           Lib.Api.Rest (TableListGlobal)
 import           Lib.Model
@@ -31,6 +29,7 @@ import           Lib.Model.Types (Table (..))
 import           Lib.Types
 
 import           Store
+import           Views.Common (editBox_, EditBoxProps (..))
 import           Views.Foreign
 
 type TableCache = Map (Id Table) Text
@@ -137,8 +136,10 @@ column_ :: Entity Column -> ReactElementM eh ()
 column_ !c = view column c mempty
 
 column :: ReactView (Entity Column)
-column = defineControllerView "column" columnStore $ \st c@(Entity i _) -> do
-  columnTitle_ c
+column = defineControllerView "column" columnStore $ \st c@(Entity i col) -> do
+  -- columnTitle_ c
+  editBox_ "column title" $ EditBoxProps (columnName col)
+                                         (dispatch . ColumnRename i)
   let tables = st ^. csTableCache
   selDatatype_ c tables
   let mDt = st ^. csTmpDataType . at i

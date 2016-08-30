@@ -255,8 +255,8 @@ cellList = defineView "cellList" $ \(inpType, datType, vs, cb) -> case inpType o
   ColumnInput -> do
     button_
       [ onClick $ \_ _ ->
-          let CellValue newV = defaultContent datType
-          in cb (newV : vs)
+          let CellValue newV = defaultContentPure datType
+          in  cb (newV : vs)
       ] "New"
     ul_ $ for_ (zip [0..] vs) $ \(i, v) -> li_ $ do
       let listMod ind x xs = let (h, t) = splitAt ind xs in h <> (x : drop 1 t)
@@ -276,7 +276,7 @@ cellMaybe :: ReactView (InputType, DataType, Maybe Value, CellCallback (Maybe Va
 cellMaybe = defineView "cellMaybe" $ \(inpType, datType, mVal, cb) -> case inpType of
   ColumnInput -> case mVal of
     Nothing -> do
-      let CellValue new = defaultContent datType
+      let CellValue new = defaultContentPure datType
       button_
         [ onClick $ \_ _ -> cb (Just new)
         ] "Add"
