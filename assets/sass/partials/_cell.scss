@@ -1,0 +1,31 @@
+.maybe {
+    $buttonWidth: 24px;
+    position: relative;
+    .button {
+        position: absolute;
+        width: $buttonWidth;
+        top: 0;
+        bottom: 0;
+        display: inline-block;
+        button {
+            background-color: white;
+            color: lighten(black, 30%);
+            border: none;
+        }
+    }
+    .content {
+        position: absolute;
+        left: $buttonWidth;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        display: inline-block;
+    }
+
+    &.nothing {
+        color: gray;
+        font-style: italic;
+    }
+    &.just {
+    }
+}

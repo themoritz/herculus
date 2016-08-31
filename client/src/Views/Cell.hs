@@ -298,16 +298,18 @@ cellMaybe :: ReactView (Mode, InputType, DataType, Maybe Value, CellCallback (Ma
 cellMaybe = defineView "cellMaybe" $ \(mode, inpType, datType, mVal, cb) ->
   case (mode, inpType) of
     (Full, ColumnInput) -> case mVal of
-      Nothing -> do
+      Nothing -> cldiv_ "maybe nothing" $ do
         let CellValue new = defaultContentPure datType
-        button_
-          [ onClick $ \_ _ -> cb (Just new)
-          ] "Add"
-      Just val -> do
-        button_
+        cldiv_ "button" $ button_
+          [ onClick $ \_ _ -> cb $ Just new
+          ] $ faIcon_ "plus-circle"
+        cldiv_ "content" "Nothing"
+      Just val -> cldiv_ "maybe just" $ do
+        cldiv_ "button" $ button_
           [ onClick $ \_ _ -> cb Nothing
-          ] "Del"
-        value_ mode inpType datType val (cb . Just)
+          ] $ faIcon_ "minus-circle"
+        cldiv_ "content" $
+          value_ mode inpType datType val (cb . Just)
     _ -> case mVal of
       Nothing -> "Nothing"
       Just val -> value_ mode inpType datType val (cb . Just)
