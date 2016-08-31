@@ -167,7 +167,7 @@ column = defineView "column" $ \c@(Entity i Column{..}) -> do
     , editBoxValidator   = Just
     , editBoxOnSave      = dispatch . ColumnRename i
     }
-  dataTypeInfo_ columnDataType
+  columnInfo_ c
   columnConfig_ c
 
 -- column info, a summary of datatype and isFormula
@@ -180,7 +180,7 @@ columnInfo = defineView "column info" $ \(Entity _ Column{..}) ->
     cldiv_ "columnInfo" $ do
       dataTypeInfo_ columnDataType
       case columnInputType of
-        ColumnDerived -> span_ [] $ elemText "Sigma" -- formula symbol
+        ColumnDerived -> faIcon_ "superscript"
         ColumnInput   -> pure () -- alternatively: an input symbol
 
 dataTypeInfo_ :: DataType -> ReactElementM eh ()
