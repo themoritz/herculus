@@ -11,6 +11,7 @@ import           Control.Monad       (forM_, when)
 import           Control.Applicative ((<|>))
 import qualified Data.Map            as Map
 import           Data.Map            (Map)
+import           Data.Monoid         ((<>))
 import qualified Data.Set            as Set
 import           Data.Set            (Set)
 import           Data.Maybe          (fromMaybe)
@@ -157,17 +158,52 @@ column_ :: Entity Column -> ReactElementM eh ()
 column_ !c = view column c mempty
 
 column :: ReactView (Entity Column)
-column = defineView "column" $ \c@(Entity i col) -> do
+column = defineView "column" $ \c@(Entity i Column{..}) -> do
   editBox_ EditBoxProps
-    { editBoxValue       = columnName col
+    { editBoxValue       = columnName
     , editBoxPlaceholder = "Column name..."
     , editBoxClassName   = "columnName"
     , editBoxShow        = id
     , editBoxValidator   = Just
     , editBoxOnSave      = dispatch . ColumnRename i
     }
-  -- TODO: summary of datatype and isFormula
+  dataTypeInfo_ columnDataType
   columnConfig_ c
+
+-- column info, a summary of datatype and isFormula
+
+columnInfo_ :: Entity Column -> ReactElementM eh ()
+columnInfo_ !c = view column c mempty
+
+columnInfo :: ReactView (Entity Column)
+columnInfo = defineView "column info" $ \(Entity _ Column{..}) ->
+    cldiv_ "columnInfo" $ do
+      dataTypeInfo_ columnDataType
+      case columnInputType of
+        ColumnDerived -> span_ [] $ elemText "Sigma" -- formula symbol
+        ColumnInput   -> pure () -- alternatively: an input symbol
+
+dataTypeInfo_ :: DataType -> ReactElementM eh ()
+dataTypeInfo_ !dt = view dataTypeInfo dt mempty
+
+dataTypeInfo :: ReactView DataType
+dataTypeInfo = defineControllerView "datatype info" colConfStore $ \state dt -> do
+  let dataType_ = span_ [ "className" &= ("dataType" :: Text) ] . elemText
+  case dt of
+    DataBool     -> dataType_ "Bool"
+    DataString   -> dataType_ "String"
+    DataNumber   -> dataType_ "Number"
+    DataTime     -> dataType_ "Time"
+    DataRecord t -> do onDidMount_ ([SomeStoreAction colConfStore ColumnGetTableCache]) mempty
+                       let tableName = Map.lookup t (state ^. ccsTableCache)
+                                    ?: "missing table"
+                       dataType_ $ "Records of " <> tableName
+    DataList   d -> do dataType_ "List ("
+                       dataTypeInfo_ d
+                       elemText ")"
+    DataMaybe  d -> do dataType_ "Maybe ("
+                       dataTypeInfo_ d
+                       elemText ")"
 
 -- configure column
 
@@ -196,9 +232,8 @@ columnConfig = defineControllerView "column configuration" colConfStore $
         cldiv_ "columnConfigFormula" $ do
           checkIsFormula_ c (state ^. ccsTmpIsFormula . at i)
           -- input field for formula
-          case state ^. ccsTmpIsFormula . at i ?: columnInputType of
-            ColumnDerived -> inputFormula_ c Nothing
-            ColumnInput   -> pure ()
+          let isFormula = state ^. ccsTmpIsFormula . at i ?: columnInputType
+          inputFormula_ c (state ^. ccsTmpFormula . at i) isFormula
       cldiv_ "columnConfigButtons" $ do
         a_
           [ onClick $ \_ _ ->
@@ -301,18 +336,24 @@ checkIsFormula = defineView "checkIsFormula" $ \(Entity i Column{..}, mIsFormula
 
 -- input field for formula (i.a.)
 
-inputFormula_ :: Entity Column -> Maybe Text -> ReactElementM eh ()
-inputFormula_ !c !f = view inputFormula (c, f) mempty
+inputFormula_ :: Entity Column -> Maybe Text -> InputType -> ReactElementM eh ()
+inputFormula_ !c !f !i = view inputFormula (c, f, i) mempty
 
-inputFormula :: ReactView (Entity Column, Maybe Text)
-inputFormula = defineView "input formula" $ \(Entity i Column{..}, mFormula) ->
-  codemirror_ $ CodemirrorProps
-    { codemirrorMode = "text/x-ocaml"
-    , codemirrorTheme = "neat"
-    , codemirrorValue = mFormula ?: columnSourceCode
-    , codemirrorOnChange = \v ->
-        [ SomeStoreAction colConfStore $ ColumnSetTmpFormula i v ]
-    }
+inputFormula :: ReactView (Entity Column, Maybe Text, InputType)
+inputFormula = defineView "input formula" $ \(Entity i Column{..}, mFormula, inpTyp) -> do
+  let isActive = case inpTyp of
+        ColumnDerived -> True
+        ColumnInput   -> False
+  div_
+    [ "className" &= ("inputFormula" :: Text)
+    , classNames [ ( "active", isActive ) ]
+    ] $ codemirror_ $ CodemirrorProps
+          { codemirrorMode = "text/x-ocaml"
+          , codemirrorTheme = "neat"
+          , codemirrorValue = mFormula ?: columnSourceCode
+          , codemirrorOnChange = \v ->
+              [ SomeStoreAction colConfStore $ ColumnSetTmpFormula i v ]
+          }
 
 --
 
