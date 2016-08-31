@@ -1,0 +1,127 @@
+@import "../modules/colors";
+
+.column {
+  position: relative;
+  $openWidth: 49px;
+  .head {
+    position: absolute;
+    left: 0px;
+    right: $openWidth;
+    top: 0px;
+    bottom: 0px;
+    padding: 5px;
+    .info {
+      color: gray;
+      font-size: smaller;
+      .fa {
+        margin-right: 5px;
+      }
+    }
+  }
+  .config {
+    position: absolute;
+    right: 0px;
+    top: 0px;
+    bottom: 0px;
+    width: $openWidth;
+    box-sizing: border-box;
+    padding: 10px;
+    padding-top: 13px;
+    .openIcon {
+      color: $brand;
+      padding: 0px;
+    }
+    .error {
+      color: desaturate(red, 40%);
+    }
+    $diagLeft: 190px;
+    .dialog {
+      position: absolute;
+      width: 480px;
+      left: -$diagLeft;
+      top: 60px;
+      z-index: 10;
+      background-color: white;
+      border-radius: 4px;
+      border: 1px solid lightgray;
+      box-shadow: 0px 0px 20px 0px lightgray;
+      &:before {
+        content: "";
+        position: absolute;
+        background-color: white;
+        width: 20px;
+        height: 20px;
+        -webkit-transform: rotate(45deg);
+        border-top: 1px solid lightgray;
+        border-left: 1px solid lightgray;
+        left: $diagLeft + 10px;
+        top: -11px;
+        box-shadow: 0px 0px 20px 0px lightgray;
+        z-index: -1;
+      }
+      .bodyWrapper {
+        z-index: 20;
+        max-height: 500px;
+        overflow-y: auto;
+        background-color: white;
+        .body {
+          display: table;
+          width: 100%;
+          box-sizing: border-box;
+          .datatype {
+            height: 100%;
+            width: 25%;
+            border-right: 1px solid $medium-gray;
+            box-sizing: border-box;
+            display: table-cell;
+            padding: 5px 5px 0px 5px;
+            select {
+              margin-bottom: 5px;
+              width: 100%;
+              font-size: inherit;
+              background-color: $light-gray;
+              border-radius: 2px;
+              outline: none;
+            }
+          }
+          .formula {
+            padding: 5px;
+            box-sizing: border-box;
+            height: 100%;
+            width: 75%;
+            display: table-cell;
+          }
+        }
+      }
+      .buttons {
+        padding: 5px;
+        background-color: $light-gray;
+        .left {
+          display: inline-block;
+          width: 50%;
+          font-size: smaller;
+          padding-left: 3px;
+          box-sizing: border-box;
+        }
+        .right {
+          display: inline-block;
+          width: 50%;
+          text-align: right;
+          .button {
+            font-weight: bold;
+            .fa {
+              color: $brand;
+              margin-right: 5px;
+            }
+          }
+          .delete {
+            margin-right: 5px;
+            .fa {
+              color: desaturate(red, 40%);
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,49 @@
+@import "../modules/colors";
+
+.tableGrid {
+  position: absolute;
+  left: 200px;
+  top: 0px;
+  right: 0px;
+  bottom: 0px;
+
+  .cell {
+    border-right: 1px solid $medium-gray;
+    border-bottom: 1px solid $medium-gray;
+    padding: 5px;
+    box-sizing: border-box;
+    height: 100%;
+    overflow-y: auto;
+  }
+  .record {
+    border-right: 1px solid $medium-gray;
+    border-bottom: 1px solid $medium-gray;
+    padding: 5px;
+    box-sizing: border-box;
+    height: 100%;
+    text-align: center;
+  }
+  .column {
+    border-right: 1px solid $medium-gray;
+    border-bottom: 1px solid $medium-gray;
+    padding: 5px;
+    box-sizing: border-box;
+    height: 100%;
+  }
+  .record-new {
+    padding: 5px;
+    box-sizing: border-box;
+    text-align: center;
+  }
+  .column-new {
+    padding: 5px;
+    box-sizing: border-box;
+    text-align: center;
+  }
+  .origin {
+    border-right: 1px solid $medium-gray;
+    border-bottom: 1px solid $medium-gray;
+    box-sizing: border-box;
+    height: 100%;
+  }
+}

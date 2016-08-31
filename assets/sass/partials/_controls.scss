@@ -1,0 +1,26 @@
+@import "../modules/colors";
+
+button.pure {
+  border: none;
+  background: none;
+  outline: none;
+  color: $link;
+  padding: 3px;
+  line-height: 15px;
+  &:hover {
+    color: $link-hover;
+  }
+  cursor: pointer;
+}
+
+span.link {
+  color: $link;
+  cursor: pointer;
+  &:hover {
+    color: $link-hover;
+  }
+}
+
+span.active {
+  font-weight: bold;
+}

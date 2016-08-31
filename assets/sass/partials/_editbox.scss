@@ -1,0 +1,55 @@
+@import "../modules/colors";
+
+.editBox.columnName {
+  font-weight: bold;
+}
+
+.editBox.string {
+  height: 26px;
+}
+
+.editBox.invalid {
+  input {
+    background-color: lighten(red, 40%);
+    border: 1px solid lighten(red, 20%);
+  }
+}
+
+.editBox {
+  div {
+    position: relative;
+    border: 1px solid white;
+    box-sizing: border-box;
+    height: 100%;
+    padding: 1px;
+    cursor: pointer;
+    &:hover {
+      border: 1px solid darken($medium-gray, 5%);
+      &:after {
+        position: absolute;
+        right: 0px;
+        top: 0px;
+        font-size: 8pt;
+        background-color: darken($medium-gray, 5%);
+        color: white;
+        padding: 2px 3px;
+        font-family: "FontAwesome";
+        content: "\f040"; // fa-pencil
+      }
+    }
+  }
+  input {
+    outline: none;
+    font-weight: inherit;
+    height: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    font-family: inherit;
+    font-size: inherit;
+    border: 1px solid darken($medium-gray, 20%);
+    padding: 1px;
+  }
+  .placeholder {
+    color: gray;
+  }
+}
