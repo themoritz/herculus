@@ -159,12 +159,12 @@ column_ !c = view column c mempty
 column :: ReactView (Entity Column)
 column = defineView "column" $ \c@(Entity i col) -> do
   editBox_ EditBoxProps
-    { editBoxValue = columnName col
+    { editBoxValue       = columnName col
     , editBoxPlaceholder = "Column name..."
-    , editBoxClassName = "columnName"
-    , editBoxShow = id
-    , editBoxValidator = Just
-    , editBoxOnSave = dispatch . ColumnRename i
+    , editBoxClassName   = "columnName"
+    , editBoxShow        = id
+    , editBoxValidator   = Just
+    , editBoxOnSave      = dispatch . ColumnRename i
     }
   -- TODO: summary of datatype and isFormula
   columnConfig_ c
@@ -194,7 +194,7 @@ columnConfig = defineControllerView "column configuration" colConfStore $
         cldiv_ "columnConfigDatatype" $
           selDatatype_ c (state ^. ccsTableCache)
         cldiv_ "columnConfigFormula" $ do
-          checkIsFormula_ c Nothing
+          checkIsFormula_ c (state ^. ccsTmpIsFormula . at i)
           -- input field for formula
           case state ^. ccsTmpIsFormula . at i ?: columnInputType of
             ColumnDerived -> inputFormula_ c Nothing
@@ -284,19 +284,18 @@ selTable = defineView "selBranch" $ \(mTableId, tables, cb) -> do
 checkIsFormula_ :: Entity Column -> Maybe InputType -> ReactElementM eh ()
 checkIsFormula_ !c !i = view checkIsFormula (c, i) mempty
 
-
 checkIsFormula :: ReactView (Entity Column, Maybe InputType)
 checkIsFormula = defineView "checkIsFormula" $ \(Entity i Column{..}, mIsFormula) -> do
-    input_
-      [ "type"    &= ("checkbox" :: Text)
-      , "checked" &= case mIsFormula ?: columnInputType of
+    let checked = case mIsFormula ?: columnInputType of
           ColumnDerived -> True
           ColumnInput   -> False
-      , onChange $ \evt ->
-          let isFormula = case target evt "value" of
-                  True  -> ColumnDerived
-                  False -> ColumnInput
-          in  [ SomeStoreAction colConfStore $ ColumnSetTmpIsFormula i isFormula ]
+    input_
+      [ "type"    &= ("checkbox" :: Text)
+      , "checked" &= checked
+      , onChange $ \_ ->
+          -- flip the checked status
+          let newInpType = if checked then ColumnInput else ColumnDerived
+          in  [ SomeStoreAction colConfStore $ ColumnSetTmpIsFormula i newInpType ]
       ]
     span_ [] $ elemText "Use formula"
 
@@ -306,14 +305,14 @@ inputFormula_ :: Entity Column -> Maybe Text -> ReactElementM eh ()
 inputFormula_ !c !f = view inputFormula (c, f) mempty
 
 inputFormula :: ReactView (Entity Column, Maybe Text)
-inputFormula = defineView "input formula" $ \(Entity i Column{..}, mFormula) -> do
-      codemirror_ $ CodemirrorProps
-        { codemirrorMode = "text/x-ocaml"
-        , codemirrorTheme = "neat"
-        , codemirrorValue = mFormula ?: columnSourceCode
-        , codemirrorOnChange = \v ->
-            [ SomeStoreAction colConfStore $ ColumnSetTmpFormula i v ]
-        }
+inputFormula = defineView "input formula" $ \(Entity i Column{..}, mFormula) ->
+  codemirror_ $ CodemirrorProps
+    { codemirrorMode = "text/x-ocaml"
+    , codemirrorTheme = "neat"
+    , codemirrorValue = mFormula ?: columnSourceCode
+    , codemirrorOnChange = \v ->
+        [ SomeStoreAction colConfStore $ ColumnSetTmpFormula i v ]
+    }
 
 --
 
