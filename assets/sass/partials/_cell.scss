@@ -1,31 +1,102 @@
-.maybe {
-    $buttonWidth: 24px;
-    position: relative;
-    .button {
-        position: absolute;
-        width: $buttonWidth;
-        top: 0;
-        bottom: 0;
-        display: inline-block;
-        button {
-            background-color: white;
-            color: lighten(black, 30%);
-            border: none;
-        }
-    }
-    .content {
-        position: absolute;
-        left: $buttonWidth;
-        right: 0;
-        top: 0;
-        bottom: 0;
-        display: inline-block;
+.compactWrapper {
+  height: 100%;
+  width: 100%;
+  position: relative;
+
+  $expandWidth: 21px;
+
+  .compact {
+    position: absolute;
+    left: 0px;
+    right: $expandWidth;
+    bottom: 0px;
+    top: 0px;
+
+    ul {
+      display: inline-block;
     }
 
-    &.nothing {
-        color: gray;
-        font-style: italic;
+    li {
+      display: inline-block;
     }
-    &.just {
+
+  }
+
+  .expand {
+    position: absolute;
+    right: 0px;
+    top: 0px;
+    bottom: 0px;
+    width: $expandWidth;
+
+    $expandLeft: 100px;
+    .expanded {
+      position: absolute;
+      z-index: 10;
+      width: 400px;
+      top: 40px;
+      left: -$expandLeft;
+      background-color: white;
+      border: 1px solid lightgray;
+      box-shadow: 0px 0px 20px 0px lightgray;
+      border-radius: 4px;
+      &:before {
+        content: "";
+        position: absolute;
+        background-color: white;
+        width: 20px;
+        height: 20px;
+        -webkit-transform: rotate(45deg);
+        border-top: 1px solid lightgray;
+        border-left: 1px solid lightgray;
+        left: $expandLeft;
+        top: -11px;
+        box-shadow: 0px 0px 20px 0px lightgray;
+        z-index: -1;
+      }
+      .body {
+        border-radius: 4px;
+        z-index: 20;
+        max-height: 600px;
+        overflow-y: auto;
+        background-color: white;
+      }
     }
+
+  }
+
+}
+
+.maybe {
+  $buttonWidth: 24px;
+  position: relative;
+  .button {
+    position: absolute;
+    width: $buttonWidth;
+    top: 0;
+    bottom: 0;
+    display: inline-block;
+    button {
+      cursor: pointer;
+      outline: none;
+      background-color: white;
+      color: lighten(black, 30%);
+      border: none;
+    }
+  }
+  .content {
+    position: absolute;
+    left: $buttonWidth;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    display: inline-block;
+  }
+
+  &.nothing {
+    color: gray;
+    font-style: italic;
+  }
+  &.just {
+  }
 }

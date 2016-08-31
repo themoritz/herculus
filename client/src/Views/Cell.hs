@@ -63,24 +63,29 @@ cell = defineControllerView "cell" cellStore $ \(CellState m) CellProps{..} ->
   case cellContent of
     CellError msg ->
       elemText $ "Error: " <> msg
-    CellValue val -> do
+    CellValue val ->
       let open = fromMaybe False $ Map.lookup (cellColId, cellRecId) m
           inpType = columnInputType cellColumn
           datType = columnDataType cellColumn
           needsEx = needsExpand (datType, inpType)
-      value_ (if needsEx then Compact else Full)
-             inpType
-             datType
-             val
-             (\v -> dispatch $ CellSetValue cellColId cellRecId v)
-      when needsEx $ do
-        faButton_ "expand" [SomeStoreAction cellStore $ Toggle (cellColId, cellRecId)]
-        when open $ cldiv_ "expanded" $
-          value_ Full
-                 inpType
-                 datType
-                 val
-                 (\v -> dispatch $ CellSetValue cellColId cellRecId v)
+          inline = value_ (if needsEx then Compact else Full)
+                          inpType
+                          datType
+                          val
+                          (\v -> dispatch $ CellSetValue cellColId cellRecId v)
+      in
+      case needsEx of
+        True -> cldiv_ "compactWrapper" $ do
+          cldiv_ "compact" inline
+          cldiv_ "expand" $ do
+            faButton_ "expand" [SomeStoreAction cellStore $ Toggle (cellColId, cellRecId)]
+            when open $ cldiv_ "expanded" $ cldiv_ "body" $
+              value_ Full
+                     inpType
+                     datType
+                     val
+                     (\v -> dispatch $ CellSetValue cellColId cellRecId v)
+        False -> inline
 
 needsExpand :: (DataType, InputType) -> Bool
 needsExpand = \case
