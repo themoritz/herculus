@@ -70,7 +70,8 @@ editBox = defineStatefulView "editBox" emptyEditBox $
           , onKeyDown $ \_ evt _ ->
               case (keyCode evt, state ^. ebsValue) of
                 (13, Just a)  -> (editBoxOnSave a, Nothing)
-                (13, Nothing) -> ([],              Just $ state & ebsIsEditing .~ False)
+                (13, Nothing) -> ([],              Just $ state & ebsIsEditing   .~ False
+                                                                & ebsInvalidText .~ Nothing)
                 _             -> ([],              Nothing)
           -- the keyUp event, unlike keydown, is consistently handled among browsers
           , onKeyUp $ \_ evt _ -> case keyCode evt of
