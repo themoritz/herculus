@@ -1,25 +1,16 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE TemplateHaskell #-}
-
 module Views.Cell
   ( cell_
   , CellProps (..)
   ) where
 
-import Control.DeepSeq
 import Control.Monad (when)
 import Control.Lens hiding (view)
 
 import Data.Maybe
 import Data.Monoid
 import Data.Text (Text, unpack, pack, intercalate)
-import Data.Typeable
-import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Foldable
-
-import GHC.Generics
 
 import Text.Read (readMaybe)
 
@@ -35,76 +26,32 @@ import Views.Foreign
 import Views.Common
 
 type CellCallback a = a -> [SomeStoreAction]
-type CellEventHandler = ViewEventHandler
 
 data CellProps = CellProps
-  { cpColId :: !(Id Column)
-  , cpRecId :: !(Id Record)
-  , cpColumn :: !Column
-  , cpContent :: !CellContent
+  { cellColId   :: !(Id Column)
+  , cellRecId   :: !(Id Record)
+  , cellColumn  :: !Column
+  , cellContent :: !CellContent
   }
-
-data CellState = CellState
-  { _csTmpValues :: Map (Id Column, Id Record) Value
-  }
-
-makeLenses ''CellState
-
-data CellAction
-  = SetTmpValue (Id Column) (Id Record) Value
-  | UnsetTmpValue (Id Column) (Id Record)
-  deriving (Typeable, Generic, NFData)
-
-instance StoreData CellState where
-  type StoreAction CellState = CellAction
-  transform action st = case action of
-
-    SetTmpValue c r v -> pure $
-      st & csTmpValues . at (c, r) .~ Just v
-
-    UnsetTmpValue c r -> pure $
-      st & csTmpValues . at (c, r) .~ Nothing
-
-cellStore :: ReactStore CellState
-cellStore = mkStore $ CellState Map.empty
-
-dispatchCell :: CellAction -> [SomeStoreAction]
-dispatchCell a = [SomeStoreAction cellStore a]
 
 cell_ :: CellProps -> ReactElementM eh ()
 cell_ !props = view cell props mempty
 
 cell :: ReactView CellProps
-cell = defineControllerView "cell" cellStore $ \st props ->
-  case cpContent props of
+cell = defineStatefulView "cell" False $ \open CellProps{..} ->
+  case cellContent of
     CellError msg ->
       elemText $ "Error: " <> msg
-    CellValue val -> do
-      let col = cpColumn props
-          c = cpColId props
-          r = cpRecId props
-          mTmpVal = st ^. csTmpValues . at (c, r)
-      value_ (columnInputType col)
-             (columnDataType col)
-             (fromMaybe val mTmpVal)
-             (\v -> dispatchCell $ SetTmpValue c r v)
-      when (isJust mTmpVal) $ do
-        button_
-          [ onClick $ \_ _ -> case mTmpVal of
-              Nothing -> []
-              Just tmpVal ->
-                [ SomeStoreAction store $ CellSetValue c r tmpVal
-                , SomeStoreAction cellStore $ UnsetTmpValue c r
-                ]
-          ] "Ok"
-        button_
-          [ onClick $ \_ _ -> dispatchCell $ UnsetTmpValue c r
-          ] "Cancel"
+    CellValue val ->
+      value_ (columnInputType cellColumn)
+             (columnDataType cellColumn)
+             val
+             (\v -> dispatch $ CellSetValue cellColId cellRecId v)
 
 --
 
 value_ :: InputType -> DataType -> Value -> CellCallback Value
-       -> ReactElementM CellEventHandler ()
+       -> ReactElementM eh ()
 value_ !inpType !datType !val !cb = view value (inpType, datType, val, cb) mempty
 
 value :: ReactView (InputType, DataType, Value, CellCallback Value)
@@ -132,7 +79,7 @@ value = defineView "value" $ \(inpType, datType, val, cb) -> case datType of
     _ -> mempty
 
 cellBool_ :: InputType -> Bool -> CellCallback Bool
-          -> ReactElementM CellEventHandler ()
+          -> ReactElementM ViewEventHandler ()
 cellBool_ !inpType !b !cb = view cellBool (inpType, b, cb) mempty
 
 cellBool :: ReactView (InputType, Bool, CellCallback Bool)
@@ -147,7 +94,7 @@ cellBool = defineView "cellBool" $ \(inpType, b, cb) -> case inpType of
     elemText $ if b then "True" else "False"
 
 cellString_ :: InputType -> Text -> CellCallback Text
-            -> ReactElementM CellEventHandler ()
+            -> ReactElementM ViewEventHandler ()
 cellString_ !inpType !s !cb = view cellString (inpType, s, cb) mempty
 
 cellString :: ReactView (InputType, Text, CellCallback Text)
@@ -165,7 +112,7 @@ cellString = defineView "cellString" $ \(inpType, s, cb) -> case inpType of
     elemText s
 
 cellNumber_ :: InputType -> Number -> CellCallback Number
-            -> ReactElementM CellEventHandler ()
+            -> ReactElementM ViewEventHandler ()
 cellNumber_ !inpType !n !cb = view cellNumber (inpType, n, cb) mempty
 
 cellNumber :: ReactView (InputType, Number, CellCallback Number)
@@ -184,7 +131,7 @@ cellNumber = defineView "cellNumber" $ \(inpType, n, cb) ->
       elemString $ show n
 
 cellTime_ :: InputType -> Time -> CellCallback Time
-          -> ReactElementM CellEventHandler ()
+          -> ReactElementM ViewEventHandler ()
 cellTime_ !inpType !t !cb = view cellTime (inpType, t, cb) mempty
 
 cellTime :: ReactView (InputType, Time, CellCallback Time)
@@ -206,7 +153,7 @@ cellTime = defineStatefulView "cellTime" Nothing $ \invalidTmp (inpType, t, cb) 
     elemString $ show t
 
 cellRecord_ :: InputType -> Maybe (Id Record) -> Id Table -> CellCallback (Maybe (Id Record))
-            -> ReactElementM CellEventHandler ()
+            -> ReactElementM ViewEventHandler ()
 cellRecord_ !inpType !mr !t !cb = view cellRecord (inpType, mr, t, cb) mempty
 
 cellRecord :: ReactView (InputType, Maybe (Id Record), Id Table, CellCallback (Maybe (Id Record)))
@@ -244,7 +191,7 @@ cellRecord = defineControllerView "cellRecord" store $ \st (inpType, mr, t, cb) 
 
 
 cellList_ :: InputType -> DataType -> [Value] -> CellCallback [Value]
-          -> ReactElementM CellEventHandler ()
+          -> ReactElementM ViewEventHandler ()
 cellList_ !inpType !datType !vs !cb = view cellList (inpType, datType, vs, cb) mempty
 
 cellList :: ReactView (InputType, DataType, [Value], CellCallback [Value])
@@ -266,7 +213,7 @@ cellList = defineView "cellList" $ \(inpType, datType, vs, cb) -> case inpType o
     ul_ $ for_ vs $ \v -> li_ $ value_ inpType datType v (const [])
 
 cellMaybe_ :: InputType -> DataType -> Maybe Value -> CellCallback (Maybe Value)
-           -> ReactElementM CellEventHandler ()
+           -> ReactElementM ViewEventHandler ()
 cellMaybe_ !inpType !datType !mVal !cb = view cellMaybe (inpType, datType, mVal, cb) mempty
 
 cellMaybe :: ReactView (InputType, DataType, Maybe Value, CellCallback (Maybe Value))
