@@ -147,10 +147,13 @@ handleColumnSetInput c (typ, code) = do
                             , columnSourceCode = code
                             }
   case typ of
-    ColumnDerived -> do newCol <- compileColumn c
-                        sendWS $ WsDownColumnsChanged [newCol]
-                        propagate [RootWholeColumns [c]]
-    ColumnInput   -> updateReference c (columnDataType oldCol)
+    ColumnDerived -> do
+      newCol <- compileColumn c
+      sendWS $ WsDownColumnsChanged [newCol]
+      propagate [RootWholeColumns [c]]
+    ColumnInput -> do
+      renewErrorCells c
+      updateReference c (columnDataType oldCol)
 
 handleColumnList :: MonadHexl m => Id Table -> m [Entity Column]
 handleColumnList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
@@ -294,6 +297,24 @@ invalidateCells c = do
     update i $ const invalidatedCell
     pure invalidatedCell
   sendWS $ WsDownCellsChanged changes
+
+renewErrorCells :: MonadHexl m => Id Column -> m ()
+renewErrorCells c = do
+  cells <- listByQuery [ "aspects.columnId" =: toObjectId c]
+  col <- getById' c
+  changes <- for cells $ \(Entity i cell) ->
+    case cellContent cell of
+      CellError _ -> do
+        defContent <- defaultContent col
+        let renewedCell = Cell defContent (cellAspects cell)
+        update i $ const renewedCell
+        pure $ Just renewedCell
+      CellValue _ -> pure Nothing
+  sendWS $ WsDownCellsChanged $ mapMaybe id changes
+  propagate [ RootCellChanges $
+                map (\(Cell _ (Aspects _ c' r')) -> (c', r')) $
+                mapMaybe id changes
+            ]
 
 updateReference :: MonadHexl m => Id Column -> DataType -> m ()
 updateReference c dataType = case getReference dataType of
