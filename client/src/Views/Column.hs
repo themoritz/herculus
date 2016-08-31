@@ -173,7 +173,7 @@ column = defineView "column" $ \c@(Entity i Column{..}) -> do
 -- column info, a summary of datatype and isFormula
 
 columnInfo_ :: Entity Column -> ReactElementM eh ()
-columnInfo_ !c = view column c mempty
+columnInfo_ !c = view columnInfo c mempty
 
 columnInfo :: ReactView (Entity Column)
 columnInfo = defineView "column info" $ \(Entity _ Column{..}) ->
