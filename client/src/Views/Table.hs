@@ -47,7 +47,7 @@ tableGrid = defineView "tableGrid" $ \st -> do
             record_ $ getRecord (y - 1)
         | y == 0 && x == (numCols + 1) = cldiv_ "column-new" $
             faButton_ "plus-square" $ dispatch TableAddColumn
-        | y == 0 && 0 < x && x <= numCols = cldiv_ "column" $
+        | y == 0 && 0 < x && x <= numCols =
             column_ $ getColumn (x - 1)
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $
             case getCellProps (x - 1) (y - 1) of
@@ -57,9 +57,9 @@ tableGrid = defineView "tableGrid" $ \st -> do
 
       props = GridProps
         { gridCellRenderer = defineView "cellRenderer" renderer
-        , gridColumnWidths = [50] <> replicate numCols 300 <> [50]
+        , gridColumnWidths = [37] <> replicate numCols 250 <> [37]
         , gridColumnCount = numCols + 2
-        , gridRowHeights = [300] <> replicate numRecs 50 <> [50]
+        , gridRowHeights = [54] <> replicate numRecs 37 <> [37]
         , gridRowCount = numRecs + 2
         }
 

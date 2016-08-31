@@ -14,7 +14,7 @@ import           Data.Map            (Map)
 import           Data.Monoid         ((<>))
 import qualified Data.Set            as Set
 import           Data.Set            (Set)
-import           Data.Maybe          (fromMaybe)
+import           Data.Maybe          (fromMaybe, isJust)
 import           Data.Proxy
 import           Data.Text           (Text)
 import           Data.Tuple          (swap)
@@ -158,16 +158,17 @@ column_ :: Entity Column -> ReactElementM eh ()
 column_ !c = view column c mempty
 
 column :: ReactView (Entity Column)
-column = defineView "column" $ \c@(Entity i Column{..}) -> do
-  editBox_ EditBoxProps
-    { editBoxValue       = columnName
-    , editBoxPlaceholder = "Column name..."
-    , editBoxClassName   = "columnName"
-    , editBoxShow        = id
-    , editBoxValidator   = Just
-    , editBoxOnSave      = dispatch . ColumnRename i
-    }
-  columnInfo_ c
+column = defineView "column" $ \c@(Entity i Column{..}) -> cldiv_ "column" $ do
+  cldiv_ "head" $ do
+    editBox_ EditBoxProps
+      { editBoxValue       = columnName
+      , editBoxPlaceholder = "Column name..."
+      , editBoxClassName   = "columnName"
+      , editBoxShow        = id
+      , editBoxValidator   = Just
+      , editBoxOnSave      = dispatch . ColumnRename i
+      }
+    columnInfo_ c
   columnConfig_ c
 
 -- column info, a summary of datatype and isFormula
@@ -177,33 +178,33 @@ columnInfo_ !c = view columnInfo c mempty
 
 columnInfo :: ReactView (Entity Column)
 columnInfo = defineView "column info" $ \(Entity _ Column{..}) ->
-    cldiv_ "columnInfo" $ do
-      dataTypeInfo_ columnDataType
-      case columnInputType of
-        ColumnDerived -> faIcon_ "superscript"
-        ColumnInput   -> pure () -- alternatively: an input symbol
+  cldiv_ "info" $ do
+    case columnInputType of
+      ColumnDerived -> faIcon_ "superscript fa-fw"
+      ColumnInput   -> faIcon_ "i-cursor fa-fw"
+    dataTypeInfo_ columnDataType
 
 dataTypeInfo_ :: DataType -> ReactElementM eh ()
 dataTypeInfo_ !dt = view dataTypeInfo dt mempty
 
 dataTypeInfo :: ReactView DataType
-dataTypeInfo = defineControllerView "datatype info" colConfStore $ \state dt -> do
-  let dataType_ = span_ [ "className" &= ("dataType" :: Text) ] . elemText
-  case dt of
-    DataBool     -> dataType_ "Bool"
-    DataString   -> dataType_ "String"
-    DataNumber   -> dataType_ "Number"
-    DataTime     -> dataType_ "Time"
-    DataRecord t -> do onDidMount_ ([SomeStoreAction colConfStore ColumnGetTableCache]) mempty
-                       let tableName = Map.lookup t (state ^. ccsTableCache)
-                                    ?: "missing table"
-                       dataType_ $ "Records of " <> tableName
-    DataList   d -> do dataType_ "List ("
-                       dataTypeInfo_ d
-                       elemText ")"
-    DataMaybe  d -> do dataType_ "Maybe ("
-                       dataTypeInfo_ d
-                       elemText ")"
+dataTypeInfo = defineControllerView "datatype info" colConfStore $
+  \state dt -> span_ [ "className" $= "dataType" ] $
+    case dt of
+      DataBool     -> "Bool"
+      DataString   -> "String"
+      DataNumber   -> "Number"
+      DataTime     -> "Time"
+      DataRecord t -> do onDidMount_ ([SomeStoreAction colConfStore ColumnGetTableCache]) mempty
+                         let tableName = Map.lookup t (state ^. ccsTableCache)
+                                      ?: "missing table"
+                         elemText $ "Records of " <> tableName
+      DataList   d -> do "List ("
+                         dataTypeInfo_ d
+                         ")"
+      DataMaybe  d -> do "Maybe ("
+                         dataTypeInfo_ d
+                         ")"
 
 -- configure column
 
@@ -212,37 +213,39 @@ columnConfig_ !c = view columnConfig c mempty
 
 columnConfig :: ReactView (Entity Column)
 columnConfig = defineControllerView "column configuration" colConfStore $
-  \state c@(Entity i Column{..}) -> do
-    cldiv_ "columnConfigOpen" $ do
-      case columnCompileResult of
-        CompileResultError msg -> div_
-                                    [ "className" &= ("columnConfigError" :: Text)
-                                    , "title" &= msg
-                                    ] $ elemText "Err"
-        _                      -> pure ()
-      div_
-        [ "className" &= ("columnConfigOpenIcon" :: Text)
-        , onClick $ \_ _ ->
-            [ SomeStoreAction colConfStore $ ColumnSetVisibility i True ]
-        ] $ elemText "Conf"
-    when (Set.member i $ state ^. ccsVisible) $ do
-      cldiv_ "columnConfigDialog" $ do
-        cldiv_ "columnConfigDatatype" $
+  \state c@(Entity i Column{..}) -> cldiv_ "config" $ do
+    let mError = case columnCompileResult of
+          CompileResultError msg -> Just msg
+          _                      -> Nothing
+    button_ (
+      maybe [] (\msg -> [ "title" &= msg ]) mError <>
+      [ classNames
+          [ ("openIcon", True)
+          , ("pure", True)
+          , ("error", isJust mError)
+          ]
+      , onClick $ \_ _ ->
+          [ SomeStoreAction colConfStore $ ColumnSetVisibility i True ]
+      ] ) $ faIcon_ "gears fa-2x"
+    when (Set.member i $ state ^. ccsVisible) $ cldiv_ "dialog" $ do
+      cldiv_ "bodyWrapper" $ cldiv_ "body" $ do
+        cldiv_ "datatype" $
           selDatatype_ c (state ^. ccsTableCache)
-        cldiv_ "columnConfigFormula" $ do
+        cldiv_ "formula" $ do
           checkIsFormula_ c (state ^. ccsTmpIsFormula . at i)
           -- input field for formula
           let isFormula = state ^. ccsTmpIsFormula . at i ?: columnInputType
           inputFormula_ c (state ^. ccsTmpFormula . at i) isFormula
-      cldiv_ "columnConfigButtons" $ do
-        a_
-          [ onClick $ \_ _ ->
+      cldiv_ "buttons" $ do
+        cldiv_ "left" $ span_
+          [ "className" $= "link"
+          , onClick $ \_ _ ->
               [ SomeStoreAction colConfStore $ ColumnSetVisibility i False
               , SomeStoreAction colConfStore $ ColumnUnsetTmpDataType i
               , SomeStoreAction colConfStore $ ColumnUnsetTmpFormula i
               , SomeStoreAction colConfStore $ ColumnUnsetTmpIsFormula i
               ]
-          ] "cancel"
+          ] "Cancel"
         -- TODO: figure out what changed before initiating ajax
         -- in the Nothing case: nothing has changed
         let inpTyp = (state ^. ccsTmpIsFormula . at i) ?: columnInputType
@@ -261,9 +264,13 @@ columnConfig = defineControllerView "column configuration" colConfStore $
               , SomeStoreAction colConfStore $ ColumnUnsetTmpFormula i
               -- datatype selection
               ] ++ dataTypeActions
-        button_
-          [ onClick $ \_ _ -> saveActions
-          ] "OK"
+        cldiv_ "right" $ do
+          clbutton_ "button delete" [ SomeStoreAction store $ TableDeleteColumn i ] $ do
+            faIcon_ "close"
+            "Delete column"
+          clbutton_ "button" saveActions $ do
+            faIcon_ "check"
+            "Save"
 
 -- select datatype
 
