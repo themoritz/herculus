@@ -214,9 +214,9 @@ columnConfig_ !c = view columnConfig c mempty
 columnConfig :: ReactView (Entity Column)
 columnConfig = defineControllerView "column configuration" colConfStore $
   \state c@(Entity i Column{..}) -> cldiv_ "config" $ do
-    let mError = case columnCompileResult of
-          CompileResultError msg -> Just msg
-          _                      -> Nothing
+    let mError = case (columnInputType, columnCompileResult) of
+          (ColumnDerived, CompileResultError msg) -> Just msg
+          _                                       -> Nothing
     button_ (
       maybe [] (\msg -> [ "title" &= msg ]) mError <>
       [ classNames
@@ -332,14 +332,14 @@ checkIsFormula = defineView "checkIsFormula" $ \(Entity i Column{..}, mIsFormula
           ColumnDerived -> True
           ColumnInput   -> False
     input_
-      [ "type"    &= ("checkbox" :: Text)
+      [ "type"    $= "checkbox"
       , "checked" &= checked
       , onChange $ \_ ->
           -- flip the checked status
           let newInpType = if checked then ColumnInput else ColumnDerived
           in  [ SomeStoreAction colConfStore $ ColumnSetTmpIsFormula i newInpType ]
       ]
-    span_ [] $ elemText "Use formula"
+    span_ [] "Use formula"
 
 -- input field for formula (i.a.)
 
@@ -352,7 +352,7 @@ inputFormula = defineView "input formula" $ \(Entity i Column{..}, mFormula, inp
         ColumnDerived -> True
         ColumnInput   -> False
   div_
-    [ "className" &= ("inputFormula" :: Text)
+    [ "className" $= "inputFormula"
     , classNames [ ( "active", isActive ) ]
     ] $ codemirror_ $ CodemirrorProps
           { codemirrorMode = "text/x-ocaml"
