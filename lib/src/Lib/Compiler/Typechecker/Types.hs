@@ -37,12 +37,24 @@ data TNullary
   | TyNumber
   | TyString
   | TyTime
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord)
+
+instance Show TNullary where
+  show = \case
+    TyBool   -> "Bool"
+    TyNumber -> "Number"
+    TyString -> "String"
+    TyTime   -> "Time"
 
 data TUnary
   = TyList
   | TyMaybe
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord)
+
+instance Show TUnary where
+  show = \case
+    TyList  -> "List"
+    TyMaybe -> "Maybe"
 
 data Type
   = TyVar TVar
@@ -72,7 +84,7 @@ instance Eq Type where
 instance Show Type where
   show (TyVar a) = show a
   show (TyNullary c) = show c
-  show (TyUnary t t1) = show t <> " " <> show t1
+  show (TyUnary t t1) = show t <> " (" <> show t1 <> ")"
   show (TyArr a b) = "(" <> show a <> " -> " <> show b <> ")"
   show (TyRecord r) = "{" <> show r <> "}"
   show (TyRow name t r) = show name <> " : " <> show t <> ", " <> show r
