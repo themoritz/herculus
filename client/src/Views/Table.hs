@@ -42,11 +42,11 @@ tableGrid = defineView "tableGrid" $ \st -> do
       renderer (GridRenderArgs x y _)
         | x == 0 && y == 0 = cldiv_ "origin" mempty
         | x == 0 && y == (numRecs + 1) = cldiv_ "record-new" $
-            faButton_ "plus-square" $ dispatch TableAddRecord
+            faButton_ "plus-circle" $ dispatch TableAddRecord
         | x == 0 && 0 < y && y <= numRecs = cldiv_ "record" $
             record_ $ getRecord (y - 1)
         | y == 0 && x == (numCols + 1) = cldiv_ "column-new" $
-            faButton_ "plus-square" $ dispatch TableAddColumn
+            faButton_ "plus-circle" $ dispatch TableAddColumn
         | y == 0 && 0 < x && x <= numCols =
             column_ $ getColumn (x - 1)
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $

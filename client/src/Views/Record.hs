@@ -13,4 +13,4 @@ record_ !c = view record c mempty
 
 record :: ReactView (Entity Record)
 record = defineView "record" $ \(Entity i _) -> do
-  faButton_ "minus-square" $ dispatch $ TableDeleteRecord i
+  faButton_ "minus-circle" $ dispatch $ TableDeleteRecord i

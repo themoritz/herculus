@@ -1,0 +1,10 @@
+@import "../modules/colors";
+
+.record {
+  .fa {
+    color: lightgray;
+    &:hover {
+      color: desaturate(red, 20%);
+    }
+  }
+}
