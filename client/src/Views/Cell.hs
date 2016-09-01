@@ -61,8 +61,9 @@ cell_ !props = view cell props mempty
 cell :: ReactView CellProps
 cell = defineControllerView "cell" cellStore $ \(CellState m) CellProps{..} ->
   case cellContent of
-    CellError msg ->
-      elemText $ "Error: " <> msg
+    CellError _ ->
+      clspan_ "error" "Error" -- TODO: what to do with the error message here?
+                              --       putting it in every row seems unnecessary
     CellValue val ->
       let open = fromMaybe False $ Map.lookup (cellColId, cellRecId) m
           inpType = columnInputType cellColumn

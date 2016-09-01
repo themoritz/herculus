@@ -118,3 +118,11 @@
   &.just {
   }
 }
+
+.cell {
+  .error {
+    font-size: smaller;
+    font-style: italic;
+    color: lighten(black, 30%);
+  }
+}
