@@ -94,6 +94,19 @@
           }
         }
       }
+      .error {
+        background-color: lighten(red, 40%);
+        margin: 5px;
+        padding: 5px;
+        font-size: small;
+        .title {
+          color: desaturate(red,20%);
+          font-weight: bold;
+        }
+        .body {
+          color: black;
+        }
+      }
       .buttons {
         padding: 5px;
         background-color: $light-gray;

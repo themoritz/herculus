@@ -9,12 +9,13 @@ import           React.Flux
 
 import           Control.Monad       (forM_, when)
 import           Control.Applicative ((<|>))
+import           Data.Foldable       (for_)
 import qualified Data.Map            as Map
 import           Data.Map            (Map)
+import           Data.Maybe          (fromMaybe, isJust)
 import           Data.Monoid         ((<>))
 import qualified Data.Set            as Set
 import           Data.Set            (Set)
-import           Data.Maybe          (fromMaybe, isJust)
 import           Data.Proxy
 import           Data.Text           (Text)
 import           Data.Tuple          (swap)
@@ -34,6 +35,7 @@ import           Lib.Types
 import           Store
 import           Views.Common (editBox_, EditBoxProps (..))
 import           Views.Foreign
+import           Views.Combinators
 
 -- state of column controller view
 
@@ -236,6 +238,9 @@ columnConfig = defineControllerView "column configuration" colConfStore $
           -- input field for formula
           let isFormula = state ^. ccsTmpIsFormula . at i ?: columnInputType
           inputFormula_ c (state ^. ccsTmpFormula . at i) isFormula
+      for_ mError $ \errMsg -> cldiv_ "error" $ do
+        clspan_ "title" "Error"
+        cldiv_  "body" $ elemText errMsg
       cldiv_ "buttons" $ do
         cldiv_ "left" $ span_
           [ "className" $= "link"
