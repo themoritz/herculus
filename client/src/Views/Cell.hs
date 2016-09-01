@@ -259,7 +259,7 @@ cellRecord = defineControllerView "cellRecord" store $
                      [ "value" &= show i
                      ] $ elemText $ showPairs record
         ColumnDerived -> case mr of
-          Nothing -> "impossible: invalid record in derived cell"
+          Nothing -> "Impossible: invalid record in derived cell"
           Just r -> case Map.lookup r records of
             Nothing -> mempty
             Just fields ->
