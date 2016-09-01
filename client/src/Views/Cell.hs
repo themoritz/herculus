@@ -78,7 +78,8 @@ cell = defineControllerView "cell" cellStore $ \(CellState m) CellProps{..} ->
         True -> cldiv_ "compactWrapper" $ do
           cldiv_ "compact" inline
           cldiv_ "expand" $ do
-            faButton_ "expand" [SomeStoreAction cellStore $ Toggle (cellColId, cellRecId)]
+            let buttonCls = "expand" <> if open then " open" else ""
+            faButton_ buttonCls [SomeStoreAction cellStore $ Toggle (cellColId, cellRecId)]
             when open $ cldiv_ "expanded" $ cldiv_ "body" $
               value_ Full
                      inpType
@@ -88,7 +89,7 @@ cell = defineControllerView "cell" cellStore $ \(CellState m) CellProps{..} ->
         False -> inline
 
 needsExpand :: (DataType, InputType) -> Bool
-needsExpand = \case
+needsExpand (dt, it) = case (dt, it) of
   (DataBool,     _)             -> False
   (DataString,   _)             -> False
   (DataNumber,   _)             -> False
@@ -96,7 +97,7 @@ needsExpand = \case
   (DataRecord _, ColumnInput)   -> False
   (DataRecord _, ColumnDerived) -> True
   (DataList _,   _)             -> True
-  (DataMaybe _,  _)             -> False
+  (DataMaybe sub,  _)           -> needsExpand (sub, it)
 
 data Mode
   = Compact
@@ -269,7 +270,7 @@ cellList_ !mode !inpType !datType !vs !cb =
   view cellList (mode, inpType, datType, vs, cb) mempty
 
 cellList :: ReactView (Mode, InputType, DataType, [Value], CellCallback [Value])
-cellList = defineView "cellList" $ \(mode, inpType, datType, vs, cb) ->
+cellList = defineView "cellList" $ \(mode, inpType, datType, vs, cb) -> cldiv_ "list" $
   case mode of
     Compact -> do
       elemShow $ length vs
