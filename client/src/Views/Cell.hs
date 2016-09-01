@@ -226,10 +226,12 @@ cellRecord :: ReactView ( Mode, InputType, Maybe (Id Record), Id Table
                         , CellCallback (Maybe (Id Record))
                         )
 cellRecord = defineControllerView "cellRecord" store $
-  \st (mode, inpType, mr, t, cb) -> do
+  \st (mode, inpType, mr, t, cb) -> cldiv_ "record" $ do
     onDidMount_ (dispatch $ CacheRecordsGet t) mempty
     let records = fromMaybe Map.empty $ st ^. stateCacheRecords . at t
-        showPairs = intercalate ", " . map (\(n, v) -> n <> ": " <> (pack . show) v) . Map.elems
+        showPairs = intercalate ", " .
+                    map (\(c, v) -> columnName c <> ": " <> (pack . show) v) .
+                    Map.elems
     case mode of
       Compact -> case mr of
         Nothing -> "impossible: invalid record in derived cell"
@@ -261,8 +263,11 @@ cellRecord = defineControllerView "cellRecord" store $
           Just r -> case Map.lookup r records of
             Nothing -> mempty
             Just fields ->
-              ul_ $ for_ fields $ \(k, content) -> li_ $ do
-                elemText $ k <> ": " <> (pack . show) content
+              for_ fields $ \(c, content) -> cldiv_ "field" $ do
+                cldiv_ "key" $ elemText $ columnName c
+                cldiv_ "content" $ case content of
+                  CellError _ -> clspan_ "error" "Error"
+                  CellValue v -> value_ mode inpType (columnDataType c) v (const [])
 
 
 cellList_ :: Mode -> InputType -> DataType -> [Value] -> CellCallback [Value]

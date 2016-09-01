@@ -95,6 +95,36 @@
   text-align: right;
 }
 
+// Record
+
+.record {
+  select {
+    width: 100%;
+  }
+}
+
+.expanded .record {
+  background-color: lightgray;
+  border-spacing: 1px;
+  border-collapse: separate;
+  display: table;
+  width: 100%;
+  box-sizing: border-box;
+  .field {
+    display: table-row;
+    .key {
+      display: table-cell;
+      padding: 5px;
+      background-color: $light-gray;
+    }
+    .content {
+      display: table-cell;
+      padding: 5px;
+      background-color: white;
+    }
+  }
+}
+
 // List
 
 .expanded .list {

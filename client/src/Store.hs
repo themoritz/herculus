@@ -42,7 +42,7 @@ data CellInfo = CellInfo
 data State = State
   { _stateError     :: Maybe Text
   , _stateWebSocket :: Maybe JSWebSocket
-  , _stateCacheRecords :: Map (Id Table) (Map (Id Record) (Map (Id Column) (Text, CellContent)))
+  , _stateCacheRecords :: Map (Id Table) (Map (Id Record) (Map (Id Column) (Column, CellContent)))
   , _stateProjects  :: [Entity Project]
   , _stateProjectId :: Maybe (Id Project)
   , _stateTables    :: [Entity Table]
@@ -129,7 +129,7 @@ instance StoreData State where
       -- Cache
 
       CacheRecordAdd t r record -> do
-        let toCol (Entity c col, content) = (c, (columnName col, content))
+        let toCol (Entity c col, content) = (c, (col, content))
             recMap = Map.fromList . map toCol $ record
         pure $ st & stateCacheRecords . at t . _Just . at r .~ Just recMap
 
@@ -145,7 +145,7 @@ instance StoreData State where
           pure st
 
       CacheRecordsSet t recs -> do
-        let toCol (Entity c col, content) = (c, (columnName col, content))
+        let toCol (Entity c col, content) = (c, (col, content))
             recMaps = map (id *** Map.fromList . map toCol) recs
         pure $ st & stateCacheRecords . at t .~ Just (Map.fromList recMaps)
 

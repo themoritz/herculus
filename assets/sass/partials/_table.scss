@@ -14,7 +14,7 @@
     box-sizing: border-box;
     height: 100%;
   }
-  .record {
+  .Grid__cell > .record {
     border-right: 1px solid $medium-gray;
     border-bottom: 1px solid $medium-gray;
     padding: 5px;
