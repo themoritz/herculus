@@ -119,7 +119,10 @@ instance Serialize Number where
 --
 
 newtype Time = Time UTCTime
-  deriving (Show, NFData, Eq, Ord, ToJSON, FromJSON)
+  deriving (NFData, Eq, Ord, ToJSON, FromJSON)
+
+instance Show Time where
+  show = unpack . formatTime "%F"
 
 defaultTime :: Time
 defaultTime = Time $ UTCTime (ModifiedJulianDay 0) 0

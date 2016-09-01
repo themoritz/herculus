@@ -190,7 +190,7 @@ cellNumber = defineView "cellNumber" $ \(mode, inpType, n, cb) ->
         , editBoxOnSave = cb
         }
     _ ->
-      elemString $ show n
+      cldiv_ "number" $ elemString $ show n
 
 cellTime_ :: Mode -> InputType -> Time -> CellCallback Time
           -> ReactElementM ViewEventHandler ()
@@ -214,7 +214,7 @@ cellTime = defineStatefulView "cellTime" Nothing $
         , datePickerClassNames = [("invalid", isJust invalidTmp)]
         }
     _ ->
-      elemText $ formatTime "%F" t
+      elemShow t
 
 cellRecord_ :: Mode -> InputType -> Maybe (Id Record) -> Id Table
             -> CellCallback (Maybe (Id Record))

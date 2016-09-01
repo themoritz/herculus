@@ -1,15 +1,6 @@
 @import "../modules/colors";
 
-.cell button {
-  cursor: pointer;
-  outline: none;
-  background-color: transparent;
-  color: lighten(black, 30%);
-  border: none;
-  &:hover {
-    color: lighten(black, 10%);
-  }
-}
+// Compact/expanded logic
 
 .compactWrapper {
   height: 100%;
@@ -42,7 +33,8 @@
     top: 0px;
     bottom: 0px;
     width: $expandWidth;
-    text-align: right;
+    box-sizing: border-box;
+    padding-left: 3px;
 
     .fa-expand {
       color: lightgray;
@@ -96,6 +88,8 @@
   }
 
 }
+
+// List
 
 .expanded .list {
   border: 1px solid lightgray;
@@ -156,6 +150,8 @@
   }
 }
 
+// Maybe
+
 .maybe {
   $buttonWidth: 24px;
   position: relative;
@@ -179,6 +175,19 @@
     height: 26px;
   }
   &.just {
+  }
+}
+
+// General stuff
+
+.cell button {
+  cursor: pointer;
+  outline: none;
+  background-color: transparent;
+  color: lighten(black, 30%);
+  border: none;
+  &:hover {
+    color: lighten(black, 10%);
   }
 }
 
