@@ -115,9 +115,10 @@
     .key {
       display: table-cell;
       padding: 5px;
-      background-color: $light-gray;
+      font-weight: bold;
+      background-color: white;
     }
-    .content {
+    & > .content {
       display: table-cell;
       padding: 5px;
       background-color: white;
@@ -128,36 +129,41 @@
 // List
 
 .expanded .list {
-  border: 1px solid lightgray;
-  display: table;
   width: 100%;
   box-sizing: border-box;
   $buttonWidth: 24px;
-  .new-row {
-    display: table-row;
+  .new {
     background-color: $light-gray;
-    .new-cell {
-      display: table-cell;
-      width: $buttonWidth;
-      padding: 5px;
-    }
-    .new-content {
-      display: table-cell;
-    }
+    padding: 5px;
+    border-radius: 4px;
+    margin: 4px 2px;
   }
-  .element {
-    display: table-row;
-    .delete {
+  .element-wrapper {
+    width: 100%;
+    padding: 4px 2px;
+    box-sizing: border-box;
+    .element.input > .content {
       display: table-cell;
-      width: $buttonWidth;
-      padding: 5px;
-      border-bottom: 1px solid lightgray;
-      border-right: 1px solid lightgray;
     }
-    & > .content {
-      display: table-cell;
-      padding: 5px;
-      border-bottom: 1px solid lightgray;
+    .element {
+      display: table;
+      width: 100%;
+      border: 1px solid lightgray;
+      box-shadow: 0px 0px 3px 0px lightgray;
+      box-sizing: border-box;
+      background-color: $light-gray;
+      border-radius: 4px;
+      .delete {
+        width: $buttonWidth;
+        display: table-cell;
+        padding: 5px;
+        border-right: 1px solid lightgray;
+      }
+      & > .content {
+        box-sizing: border-box;
+        width: 100%;
+        padding: 5px;
+      }
     }
   }
 }

@@ -284,22 +284,20 @@ cellList = defineView "cellList" $ \(mode, inpType, datType, vs, cb) -> cldiv_ "
         value_ mode inpType datType v (const [])
     Full -> case inpType of
       ColumnInput -> do
-        for_ (zip [0..] vs) $ \(i, v) -> cldiv_ "element" $ do
+        for_ (zip [0..] vs) $ \(i, v) -> cldiv_ "element-wrapper" $ cldiv_ "element input" $ do
           let listMod ind x xs = let (h, t) = splitAt ind xs in h <> (x : drop 1 t)
               listDel ind xs   = let (h, t) = splitAt ind xs in h <> drop 1 t
           cldiv_ "delete" $ button_
             [ onClick $ \_ _ -> cb (listDel i vs)
             ] $ faIcon_ "minus-circle"
           cldiv_ "content" $ value_ mode inpType datType v (\nv -> cb (listMod i nv vs))
-        cldiv_ "new-row" $ do
-          cldiv_ "new-cell" $ button_
-            [ onClick $ \_ _ ->
-                let CellValue newV = defaultContentPure datType
-                in  cb (vs <> [newV])
-            ] $ faIcon_ "plus-circle"
-          cldiv_ "new-content" mempty
+        cldiv_ "new" $ button_
+          [ onClick $ \_ _ ->
+              let CellValue newV = defaultContentPure datType
+              in  cb (vs <> [newV])
+          ] $ faIcon_ "plus-circle"
       ColumnDerived ->
-        for_ vs $ \v -> cldiv_ "element" $ cldiv_ "content" $
+        for_ vs $ \v -> cldiv_ "element-wrapper" $ cldiv_ "element" $ cldiv_ "content" $
           value_ mode inpType datType v (const [])
 
 cellMaybe_ :: Mode -> InputType -> DataType -> Maybe Value
