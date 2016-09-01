@@ -274,26 +274,28 @@ cellList :: ReactView (Mode, InputType, DataType, [Value], CellCallback [Value])
 cellList = defineView "cellList" $ \(mode, inpType, datType, vs, cb) -> cldiv_ "list" $
   case mode of
     Compact -> do
-      elemShow $ length vs
-      " elems: "
-      ul_ ["className" $= "compact"] $ for_ (take 4 vs) $ \v ->
-        li_ $ value_ mode inpType datType v (const [])
+      clspan_ "info" $ elemShow $ length vs
+      for_ (take 4 vs) $ \v -> cldiv_ "element" $
+        value_ mode inpType datType v (const [])
     Full -> case inpType of
       ColumnInput -> do
-        button_
-          [ onClick $ \_ _ ->
-              let CellValue newV = defaultContentPure datType
-              in  cb (newV : vs)
-          ] "New"
-        ul_ $ for_ (zip [0..] vs) $ \(i, v) -> li_ $ do
+        for_ (zip [0..] vs) $ \(i, v) -> cldiv_ "element" $ do
           let listMod ind x xs = let (h, t) = splitAt ind xs in h <> (x : drop 1 t)
               listDel ind xs   = let (h, t) = splitAt ind xs in h <> drop 1 t
-          value_ mode inpType datType v (\nv -> cb (listMod i nv vs))
-          button_
+          cldiv_ "delete" $ button_
             [ onClick $ \_ _ -> cb (listDel i vs)
-            ] "Del"
+            ] $ faIcon_ "minus-circle"
+          cldiv_ "content" $ value_ mode inpType datType v (\nv -> cb (listMod i nv vs))
+        cldiv_ "new-row" $ do
+          cldiv_ "new-cell" $ button_
+            [ onClick $ \_ _ ->
+                let CellValue newV = defaultContentPure datType
+                in  cb (vs <> [newV])
+            ] $ faIcon_ "plus-circle"
+          cldiv_ "new-content" mempty
       ColumnDerived ->
-        ul_ $ for_ vs $ \v -> li_ $ value_ mode inpType datType v (const [])
+        for_ vs $ \v -> cldiv_ "element" $ cldiv_ "content" $
+          value_ mode inpType datType v (const [])
 
 cellMaybe_ :: Mode -> InputType -> DataType -> Maybe Value
            -> CellCallback (Maybe Value)

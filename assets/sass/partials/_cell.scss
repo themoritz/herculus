@@ -1,11 +1,22 @@
 @import "../modules/colors";
 
+.cell button {
+  cursor: pointer;
+  outline: none;
+  background-color: transparent;
+  color: lighten(black, 30%);
+  border: none;
+  &:hover {
+    color: lighten(black, 10%);
+  }
+}
+
 .compactWrapper {
   height: 100%;
   width: 100%;
   position: relative;
 
-  $expandWidth: 21px;
+  $expandWidth: 24px;
 
   .compact {
     position: absolute;
@@ -13,6 +24,7 @@
     right: $expandWidth;
     bottom: 0px;
     top: 0px;
+    overflow: hidden;
 
     ul {
       display: inline-block;
@@ -30,6 +42,7 @@
     top: 0px;
     bottom: 0px;
     width: $expandWidth;
+    text-align: right;
 
     .fa-expand {
       color: lightgray;
@@ -84,6 +97,65 @@
 
 }
 
+.expanded .list {
+  border: 1px solid lightgray;
+  display: table;
+  width: 100%;
+  box-sizing: border-box;
+  $buttonWidth: 24px;
+  .new-row {
+    display: table-row;
+    background-color: $light-gray;
+    .new-cell {
+      display: table-cell;
+      width: $buttonWidth;
+      padding: 5px;
+    }
+    .new-content {
+      display: table-cell;
+    }
+  }
+  .element {
+    display: table-row;
+    .delete {
+      display: table-cell;
+      width: $buttonWidth;
+      padding: 5px;
+      border-bottom: 1px solid lightgray;
+      border-right: 1px solid lightgray;
+    }
+    & > .content {
+      display: table-cell;
+      padding: 5px;
+      border-bottom: 1px solid lightgray;
+    }
+  }
+}
+
+.compact .list {
+  display: inline-block;
+  white-space: nowrap;
+  .info {
+    color: gray;
+    font-size: smaller;
+    &:after {
+      content: " items";
+    }
+  }
+  .element {
+    vertical-align: middle;
+    margin-left: 5px;
+    display: inline-block;
+    border: 1px solid lightgray;
+    padding: 0px 3px;
+    overflow: hidden;
+    border-radius: 3px;
+    background-color: $light-gray;
+    max-width: 60px;
+    white-space: nowrap;
+  }
+}
+
 .maybe {
   $buttonWidth: 24px;
   position: relative;
@@ -93,16 +165,6 @@
     display: table-cell;
     width: $buttonWidth;
     height: 100%;
-    button {
-      cursor: pointer;
-      outline: none;
-      background-color: white;
-      color: lighten(black, 30%);
-      border: none;
-      &:hover {
-        color: lighten(black, 10%);
-      }
-    }
   }
   .content {
     display: table-cell;
@@ -114,6 +176,7 @@
   &.nothing {
     color: gray;
     font-style: italic;
+    height: 26px;
   }
   &.just {
   }
