@@ -6,8 +6,8 @@
 
 module Handler.Rest where
 
-import           Control.Monad                  (unless, void)
 import           Control.Arrow                  ((***))
+import           Control.Monad                  (unless, void)
 
 import           Data.List                      (union)
 import           Data.Maybe                     (mapMaybe)
@@ -87,7 +87,7 @@ handleTableData tblId = do
 
 handleTableGetWhole :: MonadHexl m => Id Table
                     -> m ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
-handleTableGetWhole tblId = do
+handleTableGetWhole tblId =
   (,,) <$> handleColumnList tblId
        <*> handleRecordList tblId
        <*> handleTableData tblId

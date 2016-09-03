@@ -1,37 +1,37 @@
 {-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric  #-}
 
 module Views.Cell
   ( cell_
   , CellProps (..)
   ) where
 
-import Control.Monad (when)
-import Control.Lens hiding (view)
-import Control.DeepSeq
+import           Control.DeepSeq
+import           Control.Lens      hiding (view)
+import           Control.Monad     (when)
 
-import Data.Maybe
-import Data.Monoid
-import Data.Text (Text, unpack, pack, intercalate)
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
-import Data.Foldable
+import           Data.Foldable
+import           Data.Map.Strict   (Map)
+import qualified Data.Map.Strict   as Map
+import           Data.Maybe
+import           Data.Monoid
+import           Data.Text         (Text, intercalate, pack, unpack)
 
-import GHC.Generics
+import           GHC.Generics
 
-import Text.Read (readMaybe)
+import           Text.Read         (readMaybe)
 
-import React.Flux
+import           React.Flux
 
-import Lib.Model.Column
-import Lib.Model.Cell
-import Lib.Model.Types
-import Lib.Types
+import           Lib.Model.Cell
+import           Lib.Model.Column
+import           Lib.Model.Types
+import           Lib.Types
 
-import Store
-import Views.Foreign
-import Views.Common
-import Views.Combinators
+import           Store
+import           Views.Combinators
+import           Views.Common
+import           Views.Foreign
 
 type CellCallback a = a -> [SomeStoreAction]
 

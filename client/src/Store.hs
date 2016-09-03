@@ -1,19 +1,19 @@
+{-# LANGUAGE DeriveAnyClass  #-}
+{-# LANGUAGE DeriveGeneric   #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveAnyClass #-}
 
 module Store where
 
+import           Control.Arrow             (second)
+import           Control.DeepSeq
 import           Control.Lens
-import Control.DeepSeq
-import Control.Arrow ((***))
 
+import           Data.Foldable             (foldl')
 import           Data.Map.Strict           (Map)
 import qualified Data.Map.Strict           as Map
 import           Data.Proxy
-import           Data.Typeable (Typeable)
-import           Data.Text (Text, pack)
-import           Data.Foldable (foldl')
+import           Data.Text                 (Text, pack)
+import           Data.Typeable             (Typeable)
 
 import           GHC.Generics
 
@@ -21,15 +21,15 @@ import           React.Flux
 import           React.Flux.Addons.Servant
 
 import           Lib.Model
-import           Lib.Model.Types
-import           Lib.Model.Column
 import           Lib.Model.Cell
+import           Lib.Model.Column
+import           Lib.Model.Types
 import           Lib.Types
 
 import           Lib.Api.Rest
 import           Lib.Api.WebSocket
 
-import WebSocket
+import           WebSocket
 
 data Coords = Coords (Id Column) (Id Record)
   deriving (Eq, Ord, Show)
@@ -40,16 +40,16 @@ data CellInfo = CellInfo
   } deriving (Eq)
 
 data State = State
-  { _stateError     :: Maybe Text
-  , _stateWebSocket :: Maybe JSWebSocket
+  { _stateError        :: Maybe Text
+  , _stateWebSocket    :: Maybe JSWebSocket
   , _stateCacheRecords :: Map (Id Table) (Map (Id Record) (Map (Id Column) (Column, CellContent)))
-  , _stateProjects  :: [Entity Project]
-  , _stateProjectId :: Maybe (Id Project)
-  , _stateTables    :: [Entity Table]
-  , _stateTableId   :: Maybe (Id Table)
-  , _stateCells     :: Map Coords CellContent
-  , _stateColumns   :: Map (Id Column) Column
-  , _stateRecords   :: Map (Id Record) Record
+  , _stateProjects     :: [Entity Project]
+  , _stateProjectId    :: Maybe (Id Project)
+  , _stateTables       :: [Entity Table]
+  , _stateTableId      :: Maybe (Id Table)
+  , _stateCells        :: Map Coords CellContent
+  , _stateColumns      :: Map (Id Column) Column
+  , _stateRecords      :: Map (Id Record) Record
   }
 
 makeLenses ''State
@@ -146,7 +146,7 @@ instance StoreData State where
 
       CacheRecordsSet t recs -> do
         let toCol (Entity c col, content) = (c, (col, content))
-            recMaps = map (id *** Map.fromList . map toCol) recs
+            recMaps = map (second $ Map.fromList . map toCol) recs
         pure $ st & stateCacheRecords . at t .~ Just (Map.fromList recMaps)
 
       -- Projects
@@ -206,8 +206,7 @@ instance StoreData State where
       TableUpdateColumns entries -> pure $
         st & stateColumns %~ \cols ->
           foldl' (\cols' (Entity i c) -> Map.insert i c cols') cols $
-          filter (\(Entity _ c) -> st ^. stateTableId == Just (columnTableId c)) $
-          entries
+          filter (\(Entity _ c) -> st ^. stateTableId == Just (columnTableId c)) entries
 
       TableAddColumn -> do
         case st ^. stateTableId of
@@ -260,13 +259,13 @@ instance StoreData State where
       ColumnSetDt i dt -> do
         request api (Proxy :: Proxy ColumnSetDataType) i dt $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
-          Right ()    -> pure $ []
+          Right ()    -> pure []
         pure $ st & stateColumns . at i . _Just %~ \c -> c { columnDataType = dt }
 
       ColumnSetFormula i payload@(inpTyp, src) -> do
         request api (Proxy :: Proxy ColumnSetInput) i payload $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
-          Right ()    -> pure $ []
+          Right ()    -> pure []
         pure $ st & stateColumns . at i . _Just %~ \c -> c { columnInputType = inpTyp
                                                            , columnSourceCode = src
                                                            }
@@ -282,7 +281,7 @@ instance StoreData State where
     where
 
       fillEntries entries m = foldl' (\m' (c, v) -> Map.insert c v m') m $
-        map (\(colId, recId, val) -> ((Coords colId recId), val)) entries
+        map (\(colId, recId, val) -> (Coords colId recId, val)) entries
 
 toCellUpdate :: Entity Cell -> (Id Column, Id Record, CellContent)
 toCellUpdate (Entity _ (Cell content (Aspects _ c r))) = (c, r, content)
