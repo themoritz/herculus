@@ -3,6 +3,7 @@
 
 module Lib.Compiler.Parser
   ( parseExpr
+  , expr
   ) where
 
 import           Control.Monad.Identity
@@ -27,7 +28,7 @@ import           Lib.Types
 lexer :: P.TokenParser ()
 lexer = P.makeTokenParser emptyDef
   { P.reservedOpNames = ["+", "-", "*", "/", "==", "=", "<=", ">=", "<", ">", "&&", "||"]
-  , P.reservedNames = ["if", "then", "else", "True", "False", "let", "in"]
+  , P.reservedNames = ["if", "then", "else", "True", "False", "let"]
   , P.identStart = letter
   , P.identLetter = alphaNum <|> oneOf "_"
   }

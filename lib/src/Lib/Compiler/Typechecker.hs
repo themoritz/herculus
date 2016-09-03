@@ -145,6 +145,7 @@ infer expr = case expr of
           Sub       -> (num, num)
           Mul       -> (num, num)
           Div       -> (num, num)
+          Eq        ->
           LessEq    -> (tim, bol)
           GreaterEq -> (tim, bol)
           Less      -> (tim, bol)
