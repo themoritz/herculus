@@ -5,14 +5,13 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module Lib.Model.Column where
 
 import           Control.DeepSeq
 
 import           Control.Lens.Prism
-import           Control.Lens (makeLenses)
+import           Control.Lens.Lens
 import           Data.Aeson                   (FromJSON (..), ToJSON (..))
 import           Data.Aeson.Bson
 import           Data.Bson                    (Val, (=:))
@@ -60,6 +59,15 @@ data Column = Column
   , _columnName    :: Text
   , _columnKind    :: ColumnKind
   } deriving (Eq, Generic, NFData)
+
+columnTableId :: Lens' Column (Id Table)
+columnTableId = lens _columnTableId (\c i -> c { _columnTableId = i})
+
+columnName :: Lens' Column Text
+columnName = lens _columnName (\c n -> c { _columnName = n})
+
+columnKind :: Lens' Column ColumnKind
+columnKind = lens _columnKind (\c k -> c { _columnKind = k})
 
 instance Model Column where
   collectionName = const "columns"
@@ -192,5 +200,3 @@ collectDependencies = go
           TColumnRef c      -> [(c, OneToOne)]
           TWholeColumnRef c -> [(c, OneToAll)]
           TTableRef _ cs    -> map (,OneToAll) cs
-
-makeLenses ''Column
