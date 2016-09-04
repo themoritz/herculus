@@ -25,7 +25,6 @@ import           React.Flux
 
 import           Lib.Model.Cell
 import           Lib.Model.Column
-import           Lib.Model.Types
 import           Lib.Types
 
 import           Store

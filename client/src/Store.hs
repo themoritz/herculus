@@ -23,7 +23,9 @@ import           React.Flux.Addons.Servant
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
-import           Lib.Model.Types
+import           Lib.Model.Table
+import           Lib.Model.Project
+import           Lib.Model.Record
 import           Lib.Types
 
 import           Lib.Api.Rest
@@ -91,7 +93,7 @@ data Action
   -- Column
   | ColumnRename (Id Column) Text
   | ColumnSetDt (Id Column) DataType
-  | ColumnSetFormula (Id Column) (InputType, Text)
+  | ColumnSetFormula (Id Column) (IsDerived, Text)
   -- Cell
   | CellSetValue (Id Column) (Id Record) Value
   deriving (Typeable, Generic, NFData)
@@ -192,9 +194,9 @@ instance StoreData State where
       -- Table
 
       TableSet (cols, recs, entries) -> pure $
-        st & stateColumns .~ (Map.fromList $ map (\(Entity i c) -> (i, c)) cols)
-           & stateRecords .~ (Map.fromList $ map (\(Entity i r) -> (i, r)) recs)
-           & stateCells .~ fillEntries entries Map.empty
+        st & stateColumns .~ Map.fromList (map (\(Entity i c) -> (i, c)) cols)
+           & stateRecords .~ Map.fromList (map (\(Entity i r) -> (i, r)) recs)
+           & stateCells   .~ fillEntries entries Map.empty
 
       TableUpdateCells cells -> pure $
         let toEntry (Cell content (Aspects _ c r)) = (c, r, content)
@@ -260,13 +262,14 @@ instance StoreData State where
         request api (Proxy :: Proxy ColumnSetDataType) i dt $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ()    -> pure []
+        -- pure $ st & stateColumns . at i . _Just %~ \c -> c { columnDataType = dt }
         pure $ st & stateColumns . at i . _Just %~ \c -> c { columnDataType = dt }
 
       ColumnSetFormula i payload@(inpTyp, src) -> do
         request api (Proxy :: Proxy ColumnSetInput) i payload $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ()    -> pure []
-        pure $ st & stateColumns . at i . _Just %~ \c -> c { columnInputType = inpTyp
+        pure $ st & stateColumns . at i . _Just %~ \c -> c { columnIsDerived = inpTyp
                                                            , columnSourceCode = src
                                                            }
 

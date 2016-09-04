@@ -29,7 +29,7 @@ import           React.Flux.Addons.Servant (request)
 import           Lib.Api.Rest (TableListGlobal)
 import           Lib.Model
 import           Lib.Model.Column
-import           Lib.Model.Types (Table (..))
+import           Lib.Model.Table
 import           Lib.Types
 
 import           Store
@@ -43,7 +43,7 @@ type TableCache = Map (Id Table) Text
 
 data ColConfState = ColConfState
   { _ccsTmpDataType  :: Map (Id Column) DataType
-  , _ccsTmpIsFormula :: Map (Id Column) InputType
+  , _ccsTmpIsFormula :: Map (Id Column) IsDerived
   , _ccsTmpFormula   :: Map (Id Column) Text
   , _ccsVisible      :: Set (Id Column) -- not in set === false
   , _ccsTableCache   :: TableCache
@@ -51,10 +51,10 @@ data ColConfState = ColConfState
 
 makeLenses ''ColConfState
 
-data ColumnAction
+data ColConfAction
   = ColumnSetTmpDataType    (Id Column) DataType
   | ColumnUnsetTmpDataType  (Id Column)
-  | ColumnSetTmpIsFormula   (Id Column) InputType
+  | ColumnSetTmpIsFormula   (Id Column) IsDerived
   | ColumnUnsetTmpIsFormula (Id Column)
   | ColumnSetTmpFormula     (Id Column) Text
   | ColumnUnsetTmpFormula   (Id Column)
@@ -64,7 +64,7 @@ data ColumnAction
   deriving (Typeable, Generic, NFData)
 
 instance StoreData ColConfState where
-  type StoreAction ColConfState = ColumnAction
+  type StoreAction ColConfState = ColConfAction
   transform action st = case action of
     ColumnSetTmpDataType i dt ->
       pure $ st & ccsTmpDataType . at i .~ Just dt
@@ -180,11 +180,60 @@ columnInfo_ !c = view columnInfo c mempty
 
 columnInfo :: ReactView (Entity Column)
 columnInfo = defineView "column info" $ \(Entity _ Column{..}) ->
-  cldiv_ "info" $ do
-    case columnInputType of
-      ColumnDerived -> faIcon_ "superscript fa-fw"
-      ColumnInput   -> faIcon_ "i-cursor fa-fw"
-    dataTypeInfo_ columnDataType
+  cldiv_ "info" $
+    case columKind of
+      ColumnData DataColumn{..} -> do
+        case columnIsDerived of
+          Derived    -> faIcon_ "superscript fa-fw"
+          NotDerived -> faIcon_ "i-cursor fa-fw"
+        dataTypeInfo_ columnDataType
+      ColumnReport _ -> reportInfo_
+
+-- configure column
+
+columnConfig_ :: Entity Column -> ReactElementM eh ()
+columnConfig_ !c = view columnConfig c mempty
+
+columnConfig :: ReactView (Entity Column)
+columnConfig = defineControllerView "column configuration" colConfStore $
+  \state c@(Entity i Column{..}) -> cldiv_ "config" $ do
+    let mError = case columnKind of
+          ColumnData DataColumn{..} ->
+            case (columnIsDerived, columnCompileResult) of
+              (Derived, CompileResultError msg) -> Just msg
+              _                                 -> Nothing
+          _                         -> Nothing
+    button_ (
+      maybe [] (\msg -> [ "title" &= msg ]) mError <>
+      [ classNames
+          [ ("openIcon", True)
+          , ("pure", True)
+          , ("error", isJust mError)
+          ]
+      , onClick $ \_ _ ->
+          [ SomeStoreAction colConfStore $ ColumnSetVisibility i True ]
+      ] ) $ faIcon_ "gears fa-2x"
+    when isVisible $ cldiv_ "dialog" $
+      case columnKind of
+        ColumnData dataProps -> dataColConf_ dataProps
+        ColumnReport reportProps -> reportColConf_ reportProps
+
+-- column kind: report
+
+reportInfo_ :: ReactElementM eh ()
+reportInfo_ = view reportInfo () mempty
+
+reportInfo :: ReactView ()
+reportInfo = defineView "report info" $ \_ ->
+  cldiv_ "reportInfo" $ elemText "Report"
+
+reportColConf_ :: ReactElementM eh ()
+reportColConf_ !r = view reportColConf r mempty
+
+reportColConf :: ReactView ReportColumn
+reportColConf defineStatefulView "report column config"
+
+-- column kind: data
 
 dataTypeInfo_ :: DataType -> ReactElementM eh ()
 dataTypeInfo_ !dt = view dataTypeInfo dt mempty
@@ -197,7 +246,7 @@ dataTypeInfo = defineControllerView "datatype info" colConfStore $
       DataString   -> "String"
       DataNumber   -> "Number"
       DataTime     -> "Time"
-      DataRecord t -> do onDidMount_ ([SomeStoreAction colConfStore ColumnGetTableCache]) mempty
+      DataRecord t -> do onDidMount_ [SomeStoreAction colConfStore ColumnGetTableCache] mempty
                          let tableName = Map.lookup t (state ^. ccsTableCache)
                                       ?: "missing table"
                          elemText $ "Records of " <> tableName
@@ -208,35 +257,19 @@ dataTypeInfo = defineControllerView "datatype info" colConfStore $
                          dataTypeInfo_ d
                          ")"
 
--- configure column
+dataColConf_ :: Entity ColumnData -> ReactElementM eh ()
+dataColConf_ !c = view dataColConf c mempty
 
-columnConfig_ :: Entity Column -> ReactElementM eh ()
-columnConfig_ !c = view columnConfig c mempty
-
-columnConfig :: ReactView (Entity Column)
-columnConfig = defineControllerView "column configuration" colConfStore $
+dataColConf :: ReactView (Entity Column)
+dataColConf = defineControllerView "data column configuration" colConfStore $
   \state c@(Entity i Column{..}) -> cldiv_ "config" $ do
-    let mError = case (columnInputType, columnCompileResult) of
-          (ColumnDerived, CompileResultError msg) -> Just msg
-          _                                       -> Nothing
-    button_ (
-      maybe [] (\msg -> [ "title" &= msg ]) mError <>
-      [ classNames
-          [ ("openIcon", True)
-          , ("pure", True)
-          , ("error", isJust mError)
-          ]
-      , onClick $ \_ _ ->
-          [ SomeStoreAction colConfStore $ ColumnSetVisibility i True ]
-      ] ) $ faIcon_ "gears fa-2x"
-    when (Set.member i $ state ^. ccsVisible) $ cldiv_ "dialog" $ do
       cldiv_ "bodyWrapper" $ cldiv_ "body" $ do
         cldiv_ "datatype" $
           selDatatype_ c (state ^. ccsTableCache)
         cldiv_ "formula" $ do
           checkIsFormula_ c (state ^. ccsTmpIsFormula . at i)
           -- input field for formula
-          let isFormula = state ^. ccsTmpIsFormula . at i ?: columnInputType
+          let isFormula = state ^. ccsTmpIsFormula . at i ?: columnIsDerived
           inputFormula_ c (state ^. ccsTmpFormula . at i) isFormula
       for_ mError $ \errMsg -> cldiv_ "error" $ do
         clspan_ "title" "Error"
@@ -253,7 +286,7 @@ columnConfig = defineControllerView "column configuration" colConfStore $
           ] "Cancel"
         -- TODO: figure out what changed before initiating ajax
         -- in the Nothing case: nothing has changed
-        let inpTyp = (state ^. ccsTmpIsFormula . at i) ?: columnInputType
+        let inpTyp = (state ^. ccsTmpIsFormula . at i) ?: columnIsDerived
             formula = (state ^. ccsTmpFormula . at i)  ?: columnSourceCode
             dataTypeActions = case state ^. ccsTmpDataType . at i of
               Nothing -> []
@@ -276,6 +309,7 @@ columnConfig = defineControllerView "column configuration" colConfStore $
           clbutton_ "button" saveActions $ do
             faIcon_ "check"
             "Save"
+
 
 -- select datatype
 
@@ -308,9 +342,9 @@ selBranch = defineStatefulView "selBranch" Nothing $ \curBranch (mDt, tables, cb
     ] $ forM_ (Map.toList branches) $ \(label, _) ->
           option_ [ "value" &= label ] $ elemText label
   case selectedBranch of
-    BMaybe  -> selBranch_ (subType =<< mDt) tables (\dt -> cb (DataMaybe dt))
-    BList   -> selBranch_ (subType =<< mDt) tables (\dt -> cb (DataList  dt))
-    BRecord -> selTable_  (recordTableId =<< mDt) tables (\i -> cb (DataRecord i))
+    BMaybe  -> selBranch_ (subType =<< mDt) tables (cb . DataMaybe)
+    BList   -> selBranch_ (subType =<< mDt) tables (cb . DataList)
+    BRecord -> selTable_  (recordTableId =<< mDt) tables (cb . DataRecord)
     _       -> pure ()
 
 selTable_ :: Maybe (Id Table) -> TableCache -> SelTableCallback -> ReactElementM eh ()
@@ -318,7 +352,7 @@ selTable_ mTableId tables cb = view selTable (mTableId, tables, cb) mempty
 
 selTable :: ReactView (Maybe (Id Table), TableCache, SelTableCallback)
 selTable = defineView "selBranch" $ \(mTableId, tables, cb) -> do
-  onDidMount_ ([SomeStoreAction colConfStore ColumnGetTableCache]) mempty
+  onDidMount_ [SomeStoreAction colConfStore ColumnGetTableCache] mempty
   select_
     [ "defaultValue" &= fromMaybe "" (show <$> mTableId)
     , onChange $ \evt -> maybe [] cb $ readMaybe $ target evt "value"
@@ -328,38 +362,38 @@ selTable = defineView "selBranch" $ \(mTableId, tables, cb) -> do
 
 -- checkbox for "is formula"
 
-checkIsFormula_ :: Entity Column -> Maybe InputType -> ReactElementM eh ()
+checkIsFormula_ :: Entity Column -> Maybe IsDerived -> ReactElementM eh ()
 checkIsFormula_ !c !i = view checkIsFormula (c, i) mempty
 
-checkIsFormula :: ReactView (Entity Column, Maybe InputType)
+checkIsFormula :: ReactView (Entity Column, Maybe IsDerived)
 checkIsFormula = defineView "checkIsFormula" $ \(Entity i Column{..}, mIsFormula) -> do
-    let checked = case mIsFormula ?: columnInputType of
-          ColumnDerived -> True
-          ColumnInput   -> False
+    let checked = case mIsFormula ?: columnIsDerived of
+          Derived    -> True
+          NotDerived -> False
     input_
       [ "type"    $= "checkbox"
       , "checked" &= checked
       , onChange $ \_ ->
           -- flip the checked status
-          let newInpType = if checked then ColumnInput else ColumnDerived
+          let newInpType = if checked then NotDerived else Derived
           in  [ SomeStoreAction colConfStore $ ColumnSetTmpIsFormula i newInpType ]
       ]
     span_ [] "Use formula"
 
 -- input field for formula (i.a.)
 
-inputFormula_ :: Entity Column -> Maybe Text -> InputType -> ReactElementM eh ()
+inputFormula_ :: Entity Column -> Maybe Text -> IsDerived -> ReactElementM eh ()
 inputFormula_ !c !f !i = view inputFormula (c, f, i) mempty
 
-inputFormula :: ReactView (Entity Column, Maybe Text, InputType)
+inputFormula :: ReactView (Entity Column, Maybe Text, IsDerived)
 inputFormula = defineView "input formula" $ \(Entity i Column{..}, mFormula, inpTyp) -> do
   let isActive = case inpTyp of
-        ColumnDerived -> True
-        ColumnInput   -> False
+        Derived -> True
+        NotDerived   -> False
   div_
     [ "className" $= "inputFormula"
     , classNames [ ( "active", isActive ) ]
-    ] $ codemirror_ $ CodemirrorProps
+    ] $ codemirror_ CodemirrorProps
           { codemirrorMode = "text/x-ocaml"
           , codemirrorTheme = "neat"
           , codemirrorValue = mFormula ?: columnSourceCode

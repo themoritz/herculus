@@ -5,11 +5,14 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Lib.Model.Column where
 
 import           Control.DeepSeq
 
+import           Control.Lens.Prism
+import           Control.Lens (makeLenses)
 import           Data.Aeson                   (FromJSON (..), ToJSON (..))
 import           Data.Aeson.Bson
 import           Data.Bson                    (Val, (=:))
@@ -53,9 +56,9 @@ getReference = \case
   DataMaybe sub -> getReference sub
 
 data Column = Column
-  { columnTableId :: Id Table
-  , columnName    :: Text
-  , columnKind    :: ColumnKind
+  { _columnTableId :: Id Table
+  , _columnName    :: Text
+  , _columnKind    :: ColumnKind
   } deriving (Eq, Generic, NFData)
 
 instance Model Column where
@@ -85,6 +88,16 @@ data ColumnKind
   | ColumnData DataCol
   deriving (Eq, Show, NFData, Generic)
   -- Future: | ColumnAction Action
+
+_ColumnReport :: Prism' ColumnKind ReportCol
+_ColumnReport = prism' ColumnReport $ \case
+  ColumnReport rep -> Just rep
+  ColumnData   _   -> Nothing
+
+_ColumnData :: Prism' ColumnKind DataCol
+_ColumnData = prism' ColumnData $ \case
+  ColumnReport _   -> Nothing
+  ColumnData   dat -> Just dat
 
 instance ToJSON ColumnKind
 instance FromJSON ColumnKind
@@ -179,3 +192,5 @@ collectDependencies = go
           TColumnRef c      -> [(c, OneToOne)]
           TWholeColumnRef c -> [(c, OneToAll)]
           TTableRef _ cs    -> map (,OneToAll) cs
+
+makeLenses ''Column
