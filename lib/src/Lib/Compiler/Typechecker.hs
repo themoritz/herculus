@@ -39,24 +39,24 @@ prelude = Context $ Map.fromList
     , Forall [] $ TyNullary TyNumber `TyArr` TyNullary TyNumber
     )
   , ( "sum"
-    , Forall [] $ (TyUnary TyList $ TyNullary TyNumber) `TyArr` TyNullary TyNumber
+    , Forall [] $ TyUnary TyList (TyNullary TyNumber) `TyArr` TyNullary TyNumber
     )
   , ( "show"
     , Forall [] $ TyNullary TyNumber `TyArr` TyNullary TyString
     )
   , ( "map"
     , Forall [TV "_a", TV "_b"] $
-        (TyVar (TV "_a") `TyArr` (TyVar (TV "_b"))) `TyArr`
+        (TyVar (TV "_a") `TyArr` TyVar (TV "_b")) `TyArr`
         (TyUnary TyList (TyVar (TV "_a")) `TyArr` TyUnary TyList (TyVar (TV "_b")))
     )
   , ( "filter"
     , Forall [TV "_a"] $
-        (TyVar (TV "_a") `TyArr` (TyNullary TyBool)) `TyArr`
+        (TyVar (TV "_a") `TyArr` TyNullary TyBool) `TyArr`
         (TyUnary TyList (TyVar (TV "_a")) `TyArr` TyUnary TyList (TyVar (TV "_a")))
     )
   , ( "find"
     , Forall [TV "_a"] $
-        (TyVar (TV "_a") `TyArr` (TyNullary TyBool)) `TyArr`
+        (TyVar (TV "_a") `TyArr` TyNullary TyBool) `TyArr`
         (TyUnary TyList (TyVar (TV "_a")) `TyArr` TyUnary TyMaybe (TyVar (TV "_a")))
     )
   ]
@@ -175,7 +175,7 @@ infer expr = case expr of
       Nothing -> throwError $ pack $ "column not found: " <> show colRef
       Just (i, dataCol) -> do
         getRows <- asks envGetTableRows
-        t <- lift $ typeOfDataType getRows $ dataColType dataCol
+        t <- lift $ typeOfDataType getRows $ _dataColType dataCol
         pure $ TColumnRef i ::: t
   PColumnOfTableRef tblRef colRef -> do
     f <- asks envResolveColumnOfTableRef
@@ -185,7 +185,7 @@ infer expr = case expr of
                                      show tblRef
       Just (colId, dataCol) -> do
         getRows <- asks envGetTableRows
-        t <- lift $ typeOfDataType getRows $ dataColType dataCol
+        t <- lift $ typeOfDataType getRows $ _dataColType dataCol
         pure $ TWholeColumnRef colId ::: TyUnary TyList t
   PTableRef tblRef -> do
     f <- asks envResolveTableRef

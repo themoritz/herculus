@@ -118,11 +118,23 @@ instance Val ColumnKind where
   cast' = decodeValue
 
 data ReportCol = ReportCol
-  { reportColTemplate         :: Text
-  , reportColCompiledTemplate :: CompileResult TTemplate
-  , reportColLanguage         :: ReportLanguage
-  , reportColFormat           :: ReportFormat
+  { _reportColTemplate         :: Text
+  , _reportColCompiledTemplate :: CompileResult TTemplate
+  , _reportColLanguage         :: ReportLanguage
+  , _reportColFormat           :: ReportFormat
   } deriving (Eq, Generic, NFData, Show)
+
+reportColTemplate :: Lens' ReportCol Text
+reportColTemplate = lens _reportColTemplate (\r t -> r { _reportColTemplate = t})
+
+reportColCompiledTemplate :: Lens' ReportCol (CompileResult TTemplate)
+reportColCompiledTemplate = lens _reportColCompiledTemplate (\r ct -> r { _reportColCompiledTemplate = ct})
+
+reportColLanguage :: Lens' ReportCol ReportLanguage
+reportColLanguage = lens _reportColLanguage (\r l -> r { _reportColLanguage = l})
+
+reportColFormat :: Lens' ReportCol ReportFormat
+reportColFormat = lens _reportColFormat (\r f -> r { _reportColFormat = f})
 
 instance ToJSON ReportCol
 instance FromJSON ReportCol
@@ -148,11 +160,23 @@ instance ToJSON ReportFormat
 instance FromJSON ReportFormat
 
 data DataCol = DataCol
-  { dataColType          :: DataType
-  , dataColIsDerived     :: IsDerived
-  , dataColSourceCode    :: Text
-  , dataColCompileResult :: CompileResult TExpr
+  { _dataColType          :: DataType
+  , _dataColIsDerived     :: IsDerived
+  , _dataColSourceCode    :: Text
+  , _dataColCompileResult :: CompileResult TExpr
   } deriving (Eq, Generic, NFData, Show)
+
+dataColType :: Lens' DataCol DataType
+dataColType = lens _dataColType (\d dt -> d { _dataColType = dt })
+
+dataColIsDerived :: Lens' DataCol IsDerived
+dataColIsDerived = lens _dataColIsDerived (\d iD -> d { _dataColIsDerived = iD })
+
+dataColSourceCode :: Lens' DataCol Text
+dataColSourceCode = lens _dataColSourceCode (\d s -> d { _dataColSourceCode = s })
+
+dataColCompileResult :: Lens' DataCol (CompileResult TExpr)
+dataColCompileResult = lens _dataColCompileResult (\d cr -> d { _dataColCompileResult = cr })
 
 instance ToJSON DataCol
 instance FromJSON DataCol
