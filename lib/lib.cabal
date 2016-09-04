@@ -40,6 +40,7 @@ library
                      , Lib.Template.Parser
                      , Lib.Template.Typechecker
                      , Lib.Template.Interpreter
+                     , Lib.Template.Types
                      , Data.Aeson.Bson
   build-depends:       base >= 4.7 && < 5
                      , aeson
