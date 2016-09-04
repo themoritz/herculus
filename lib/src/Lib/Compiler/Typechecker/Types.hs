@@ -22,7 +22,9 @@ import           Lib.Types
 
 import           Lib.Model
 import           Lib.Model.Column
-import           Lib.Model.Types
+import           Lib.Model.Table
+
+import           Lib.Compiler.Types
 
 --
 
@@ -79,7 +81,7 @@ instance Eq Type where
           go (TyRow n t' rest) = (n,t') : go rest
   TyNoRow == TyNoRow = True
   _ == _ = False
-  
+
 
 instance Show Type where
   show (TyVar a) = show a
@@ -174,9 +176,9 @@ data TypedExpr = TExpr ::: Type
 --
 
 data TypecheckEnv m = TypecheckEnv
-  { envResolveColumnRef        :: Ref Column -> m (Maybe (Entity Column))
-  , envResolveColumnOfTableRef :: Ref Table -> Ref Column -> m (Maybe (Entity Column))
-  , envResolveTableRef         :: Ref Table -> m (Maybe (Id Table, [Entity Column]))
+  { envResolveColumnRef        :: Ref Column -> m (Maybe (Id Column, DataCol))
+  , envResolveColumnOfTableRef :: Ref Table -> Ref Column -> m (Maybe (Id Column, DataCol))
+  , envResolveTableRef         :: Ref Table -> m (Maybe (Id Table, [(Id Column, DataCol)]))
   , envGetTableRows            :: Id Table -> m Type
   , envOwnTableId              :: Id Table
   }

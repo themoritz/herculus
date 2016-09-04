@@ -27,7 +27,9 @@ library
                      , Lib.Api.WebSocket
                      , Lib.Types
                      , Lib.Model
-                     , Lib.Model.Types
+                     , Lib.Model.Table
+                     , Lib.Model.Project
+                     , Lib.Model.Record
                      , Lib.Model.Column
                      , Lib.Model.Cell
                      , Lib.Model.Class

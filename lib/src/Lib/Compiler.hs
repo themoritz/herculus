@@ -1,54 +1,34 @@
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Lib.Compiler where
 
-import           Data.Text                      (Text, pack, unpack)
+import           Data.Text                      (pack, unpack)
+import qualified Data.Text.IO                   as Text
 
-import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Types
 
+import           Lib.Compiler.Interpreter
+import           Lib.Compiler.Interpreter.Types
 import           Lib.Compiler.Parser
 import           Lib.Compiler.Typechecker
 import           Lib.Compiler.Typechecker.Types
-import           Lib.Compiler.Interpreter
-import           Lib.Compiler.Interpreter.Types
 
-compile :: Monad m => Text -> TypecheckEnv m
-        -> m (Either Text TypedExpr)
-compile inp env = case parseExpr inp of
-  Left e -> pure $ Left e
-  Right expr -> do
-    expr' <- runInfer env expr
-    pure expr'
-
---
-
-testColumn :: Entity Column
-testColumn = Entity nullObjectId col
-  where col = Column nullObjectId
-                     "A"
-                     DataNumber
-                     ColumnInput
-                     ""
-                     CompileResultNone
+testDataCol :: DataCol
+testDataCol = DataCol
+  DataNumber
+  NotDerived
+  ""
+  CompileResultNone
 
 testTypecheckEnv :: Monad m => TypecheckEnv m
 testTypecheckEnv = TypecheckEnv
-  { envResolveColumnRef = \_ -> pure $ Just testColumn
-  , envResolveColumnOfTableRef = \_ _ -> pure $ Just testColumn
+  { envResolveColumnRef = \_ -> pure $ Just (nullObjectId, testDataCol)
+  , envResolveColumnOfTableRef = \_ _ -> pure $ Just (nullObjectId, testDataCol)
   , envResolveTableRef = \_ -> pure $ Just (nullObjectId
-                                           , [ Entity nullObjectId
-                                                      (Column nullObjectId
-                                                              "A"
-                                                              DataNumber
-                                                              ColumnInput
-                                                              ""
-                                                              CompileResultNone
-                                                      )
+                                           , [ (nullObjectId, testDataCol)
                                              ]
                                            )
   , envGetTableRows = \_ -> pure $ TyRow (Ref "A") (TyNullary TyNumber) TyNoRow
@@ -64,10 +44,14 @@ testEvalEnv = EvalEnv
   }
 
 test :: String -> IO ()
-test inp = compile (pack inp) testTypecheckEnv >>= \case
-  Left e -> putStrLn $ unpack e
-  Right (expr ::: typ) -> do
-    putStrLn $ "Type: " ++ show typ
-    case interpret expr testEvalEnv of
+test inp = case parseExpr (pack inp) of
+  Left e -> Text.putStrLn e
+  Right pe -> do
+    inferRes <- runInfer testTypecheckEnv pe
+    case inferRes of
       Left e -> putStrLn $ unpack e
-      Right val -> putStrLn $ "Val: " ++ show val
+      Right (te ::: typ) -> do
+        putStrLn $ "Type: " ++ show typ
+        case interpret te testEvalEnv of
+          Left e -> putStrLn $ unpack e
+          Right val -> putStrLn $ "Val: " ++ show val

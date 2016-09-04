@@ -12,12 +12,13 @@ import           Lib.Compiler.Interpreter.Types
 import           Lib.Model.Cell
 
 import           Lib.Template.Typechecker
+import           Lib.Template.Types
 
 runEvalTemplate :: Monad m => EvalEnv m -> TTemplate -> m (Either Text Text)
 runEvalTemplate env tpl = runInterpretT env (evalTpl prelude tpl)
 
 evalTpl :: Monad m => TermEnv m -> TTemplate -> InterpretT m Text
-evalTpl env = fmap mconcat . traverse (evalTplExpr env)
+evalTpl env (TTemplate tpl) = mconcat <$> traverse (evalTplExpr env) tpl
 
 evalTplExpr :: Monad m => TermEnv m -> TTplExpr -> InterpretT m Text
 evalTplExpr env tplExpr = case tplExpr of

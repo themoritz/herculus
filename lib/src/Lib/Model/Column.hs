@@ -1,12 +1,10 @@
-{-# LANGUAGE DeriveAnyClass             #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE TupleSections              #-}
+{-# LANGUAGE DeriveAnyClass      #-}
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
 
 module Lib.Model.Column where
 
@@ -21,9 +19,11 @@ import           Data.Text                    (Text, pack)
 
 import           GHC.Generics
 
+import           Lib.Compiler.Types
 import           Lib.Model.Class
 import           Lib.Model.Dependencies.Types
-import           Lib.Model.Types
+import           Lib.Model.Table
+import           Lib.Template.Types
 import           Lib.Types
 
 data DataType
@@ -44,21 +44,18 @@ instance FromBSON DataType
 
 getReference :: DataType -> Maybe (Id Table)
 getReference = \case
-  DataBool -> Nothing
-  DataString -> Nothing
-  DataNumber -> Nothing
-  DataTime -> Nothing
-  DataRecord t -> Just t
-  DataList sub -> getReference sub
+  DataBool      -> Nothing
+  DataString    -> Nothing
+  DataNumber    -> Nothing
+  DataTime      -> Nothing
+  DataRecord t  -> Just t
+  DataList sub  -> getReference sub
   DataMaybe sub -> getReference sub
 
 data Column = Column
-  { columnTableId       :: Id Table
-  , columnName          :: Text
-  , columnDataType      :: DataType
-  , columnInputType     :: InputType
-  , columnSourceCode    :: Text
-  , columnCompileResult :: CompileResult
+  { columnTableId :: Id Table
+  , columnName    :: Text
+  , columnKind    :: ColumnKind
   } deriving (Eq, Generic, NFData)
 
 instance Model Column where
@@ -68,131 +65,108 @@ instance ToJSON Column
 instance FromJSON Column
 
 instance ToDocument Column where
-  toDocument (Column t name typ inputType source compiled) =
+  toDocument (Column t name kind) =
     [ "tableId" =: toObjectId t
     , "name" =: name
-    , "type" =: toValue typ
-    , "inputType" =: toValue inputType
-    , "sourceCode" =: source
-    , "compiledCode" =: compiled
+    , "kind" =: toValue kind
     ]
 
 instance FromDocument Column where
   parseDocument doc = do
     t <- Bson.lookup "tableId" doc
     name <- Bson.lookup "name" doc
-    typVal <- Bson.lookup "type" doc
-    inpTypeVal <- Bson.lookup "inputType" doc
-    source <- Bson.lookup "sourceCode" doc
-    compiled <- Bson.lookup "compiledCode" doc
-    case eitherDecodeValue typVal of
-      Right typ -> case eitherDecodeValue inpTypeVal of
-        Right inpTyp -> pure $ Column (fromObjectId t) name typ inpTyp source compiled
-        Left msg -> Left $ pack msg
+    kindVal <- Bson.lookup "kind" doc
+    case eitherDecodeValue kindVal of
+      Right kind ->  pure $ Column (fromObjectId t) name kind
       Left msg -> Left $ pack msg
 
-data CompileResult
-  = CompileResultCode TExpr
+data ColumnKind
+  = ColumnReport ReportCol
+  | ColumnData DataCol
+  deriving (Eq, Show, NFData, Generic)
+  -- Future: | ColumnAction Action
+
+instance ToJSON ColumnKind
+instance FromJSON ColumnKind
+
+instance ToBSON ColumnKind
+instance FromBSON ColumnKind
+
+instance Val ColumnKind where
+  val = toValue
+  cast' = decodeValue
+
+data ReportCol = ReportCol
+  { reportColTemplate         :: Text
+  , reportColCompiledTemplate :: CompileResult TTemplate
+  , reportColLanguage         :: ReportLanguage
+  , reportColFormat           :: ReportFormat
+  } deriving (Eq, Generic, NFData, Show)
+
+instance ToJSON ReportCol
+instance FromJSON ReportCol
+
+data ReportLanguage
+  = ReportLanguagePlain
+  | ReportLanguageMarkdown
+  | ReportLanguageLatex
+  | ReportLanguageHTML
+  deriving (Eq, Generic, NFData, Show)
+
+instance ToJSON ReportLanguage
+instance FromJSON ReportLanguage
+
+data ReportFormat
+  = ReportFormatPlain
+  | ReportFormatPDF
+  | ReportFormatHTML
+  | ReportFormatMarkdown
+  deriving (Eq, Generic, NFData, Show)
+
+instance ToJSON ReportFormat
+instance FromJSON ReportFormat
+
+data DataCol = DataCol
+  { dataColType          :: DataType
+  , dataColIsDerived     :: IsDerived
+  , dataColSourceCode    :: Text
+  , dataColCompileResult :: CompileResult TExpr
+  } deriving (Eq, Generic, NFData, Show)
+
+instance ToJSON DataCol
+instance FromJSON DataCol
+
+data CompileResult a
+  = CompileResultOk a
   | CompileResultNone
   | CompileResultError Text
   deriving (Eq, Show, Generic, NFData)
 
-instance ToJSON CompileResult
-instance FromJSON CompileResult
+instance ToJSON a => ToJSON (CompileResult a)
+instance FromJSON a => FromJSON (CompileResult a)
 
-instance ToBSON CompileResult
-instance FromBSON CompileResult
+instance ToBSON a => ToBSON (CompileResult a)
+instance FromBSON a => FromBSON (CompileResult a)
 
-instance Val CompileResult where
-  val = toValue
-  cast' = decodeValue
-
-data InputType
-  = ColumnInput
-  | ColumnDerived
+data IsDerived
+  = Derived
+  | NotDerived
   deriving (Eq, Ord, Show, Read, Generic, NFData)
 
-instance ToJSON InputType
-instance FromJSON InputType
+instance ToJSON IsDerived
+instance FromJSON IsDerived
 
-instance ToBSON InputType
-instance FromBSON InputType
+instance ToBSON IsDerived
+instance FromBSON IsDerived
 
-instance Val InputType where
+instance Val IsDerived where
   val = toValue
   cast' = decodeValue
-
---
-
-type Name = String
-
-data Lit
-  = LNumber Number
-  | LBool Bool
-  | LString Text
-  deriving (Show, Eq, Ord, Generic, NFData)
-
-instance ToJSON Lit
-instance FromJSON Lit
-
-data Binop
-  = Add
-  | Sub
-  | Mul
-  | Div
-  | LessEq
-  | GreaterEq
-  | Less
-  | Greater
-  | And
-  | Or
-  deriving (Eq, Ord, Show, Generic, NFData)
-
-instance ToJSON Binop
-instance FromJSON Binop
-
-data PExpr
-  = PLam Name (PExpr)
-  | PApp (PExpr) (PExpr)
-  | PLet Name (PExpr) (PExpr)
-  -- | PFix Expr
-  | PIf (PExpr) (PExpr) (PExpr)
-  | PVar Name
-  | PLit Lit
-  | PBinop Binop (PExpr) (PExpr)
-  | PPrjRecord (PExpr) (Ref Column)
-  --
-  | PColumnRef (Ref Column)
-  | PColumnOfTableRef (Ref Table) (Ref Column)
-  | PTableRef (Ref Table)
-  deriving (Eq, Show, Generic)
-
-instance ToJSON PExpr
-instance FromJSON PExpr
-
-data TExpr
-  = TLam Name (TExpr)
-  | TApp (TExpr) (TExpr)
-  | TLet Name (TExpr) (TExpr)
-  --T | Fix Expr
-  | TIf (TExpr) (TExpr) (TExpr)
-  | TVar Name
-  | TLit Lit
-  | TBinop Binop (TExpr) (TExpr)
-  | TPrjRecord (TExpr) (Ref Column)
-  --
-  | TColumnRef (Id Column)
-  | TWholeColumnRef (Id Column)
-  | TTableRef (Id Table) [Id Column]
-  deriving (Eq, Show, Generic, NFData)
-
-instance ToJSON TExpr
-instance FromJSON TExpr
 
 --
 
 collectDependencies :: TExpr -> [(Id Column, DependencyType)]
-collectDependencies expr = go expr
+collectDependencies = go
   where go e' = case e' of
           TLam _ body       -> go body
           TApp f e          -> go f <> go e

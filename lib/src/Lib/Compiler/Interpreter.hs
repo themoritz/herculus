@@ -12,10 +12,10 @@ import           Data.Text                      (Text, pack)
 import           Data.Traversable
 
 import           Lib.Model.Cell
-import           Lib.Model.Column
 import           Lib.Types
 
 import           Lib.Compiler.Interpreter.Types
+import           Lib.Compiler.Types
 
 -- Prelude
 

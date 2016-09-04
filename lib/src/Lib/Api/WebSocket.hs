@@ -1,19 +1,20 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric  #-}
 
 module Lib.Api.WebSocket where
 
-import Control.DeepSeq
+import           Control.DeepSeq
 
-import Data.Aeson (ToJSON, FromJSON)
+import           Data.Aeson       (FromJSON, ToJSON)
 
-import GHC.Generics
+import           GHC.Generics
 
-import Lib.Types
-import Lib.Model
-import Lib.Model.Types
-import Lib.Model.Column
-import Lib.Model.Cell
+import           Lib.Model
+import           Lib.Model.Cell
+import           Lib.Model.Column
+import           Lib.Model.Record
+import           Lib.Model.Table
+import           Lib.Types
 
 data WsUpMessage
   = WsUpDummy

@@ -19,7 +19,8 @@ import           GHC.Generics
 
 import           Lib.Model.Class
 import           Lib.Model.Column
-import           Lib.Model.Types
+import           Lib.Model.Table
+import           Lib.Model.Record
 import           Lib.Types
 
 data CellContent

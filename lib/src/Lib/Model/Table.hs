@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
-module Lib.Model.Types where
+module Lib.Model.Table where
 
 import Control.DeepSeq
 
@@ -15,26 +15,8 @@ import qualified Data.Bson       as Bson
 import           GHC.Generics
 
 import           Lib.Model.Class
+import           Lib.Model.Project
 import           Lib.Types
-
-
-data Project = Project
-  { projectName :: Text
-  } deriving (Generic, NFData)
-
-instance Model Project where
-  collectionName = const "projects"
-
-instance ToJSON Project
-instance FromJSON Project
-
-instance ToDocument Project where
-  toDocument (Project name) =
-    [ "name" =: name
-    ]
-
-instance FromDocument Project where
-  parseDocument doc = Project <$> Bson.lookup "name" doc
 
 data Table = Table
   { tableProjectId :: Id Project
@@ -56,21 +38,3 @@ instance ToDocument Table where
 instance FromDocument Table where
   parseDocument doc = Table <$> (fromObjectId <$> Bson.lookup "projectId" doc)
                             <*> Bson.lookup "name" doc
-
-data Record = Record
-  { recordTableId :: Id Table
-  } deriving (Generic, NFData, Eq, Ord, Show)
-
-instance Model Record where
-  collectionName = const "records"
-
-instance ToJSON Record
-instance FromJSON Record
-
-instance ToDocument Record where
-  toDocument (Record tblId)=
-    [ "tableId" =: toObjectId tblId
-    ]
-
-instance FromDocument Record where
-  parseDocument doc = Record <$> Bson.lookup "tableId" doc

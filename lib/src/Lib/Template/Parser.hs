@@ -3,8 +3,6 @@
 
 module Lib.Template.Parser
   ( parseTemplate
-  , Template
-  , TplExpr (..)
   ) where
 
 import           Control.Monad        (void)
@@ -17,16 +15,7 @@ import           Text.Parsec.String   (Parser)
 import qualified Text.Parsec.Token    as P
 
 import           Lib.Compiler.Parser  (expr)
-import           Lib.Model.Column
-
-type Template = [TplExpr]
-
-data TplExpr
-  = TplText Text
-  | TplFor Name PExpr Template
-  | TplIf PExpr Template Template
-  | TplShow PExpr
-  deriving (Show)
+import           Lib.Template.Types
 
 lexer :: P.TokenParser ()
 lexer = P.makeTokenParser emptyDef
@@ -35,16 +24,16 @@ lexer = P.makeTokenParser emptyDef
   , P.identLetter = alphaNum <|> oneOf "_"
   }
 
-parseTemplate :: Text -> Either Text Template
+parseTemplate :: Text -> Either Text PTemplate
 parseTemplate e =
   case parse (template <* eof) "" $ unpack e of
     Left msg -> Left $ pack $ show msg
     Right x -> Right x
 
-template :: Parser Template
-template = many tpl
+template :: Parser PTemplate
+template = PTemplate <$> many tpl
 
-tpl :: Parser TplExpr
+tpl :: Parser PTplExpr
 tpl =
       try tplFor
   <|> try tplIf
@@ -67,7 +56,7 @@ startShow = P.lexeme lexer $ () <$ string "{{"
 endShow :: Parser ()
 endShow = () <$ string "}}"
 
-tplFor :: Parser TplExpr
+tplFor :: Parser PTplExpr
 tplFor = do
   (name, hexlExpr) <- instr "for" $ do
     name <- P.identifier lexer
@@ -76,24 +65,24 @@ tplFor = do
     pure (name, hexlExpr)
   body <- template
   instr "endfor" $ pure ()
-  pure $ TplFor name hexlExpr body
+  pure $ PTplFor name hexlExpr body
 
-tplIf :: Parser TplExpr
+tplIf :: Parser PTplExpr
 tplIf = do
   cond <- instr "if" expr
   thenTpl <- template
   instr "else" $ pure ()
   elseTpl <- template
   instr "endif" $ pure ()
-  pure $ TplIf cond thenTpl elseTpl
+  pure $ PTplIf cond thenTpl elseTpl
 
-tplShow :: Parser TplExpr
-tplShow = TplShow <$> (startShow *> expr <* endShow)
+tplShow :: Parser PTplExpr
+tplShow = PTplShow <$> (startShow *> expr <* endShow)
 
-tplText :: Parser TplExpr
+tplText :: Parser PTplExpr
 tplText = text >>= \case
   ""  -> fail "empty TplText"
-  txt -> pure $ TplText txt
+  txt -> pure $ PTplText txt
 
 text :: Parser Text
 text = pack <$> manyUntil anyChar (try (string "{{") <|> string "{%")

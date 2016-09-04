@@ -5,13 +5,15 @@ module Lib.Compiler.Interpreter.Types where
 import           Control.Monad.Except
 import           Control.Monad.Reader
 
-import           Data.Text              (Text)
+import           Data.Text            (Text)
 
-import           Data.Map               (Map)
+import           Data.Map             (Map)
 
+import           Lib.Compiler.Types
 import           Lib.Model.Cell
 import           Lib.Model.Column
-import           Lib.Model.Types
+import           Lib.Model.Record
+import           Lib.Model.Table
 import           Lib.Types
 
 type TermEnv m = Map String (Result m)
@@ -25,7 +27,7 @@ type EvalError = Text
 
 data EvalEnv m = EvalEnv
   { envGetCellValue    :: Id Column -> m (Maybe Value)
-  , envGetColumnValues :: Id Column -> m [(Maybe Value)]
+  , envGetColumnValues :: Id Column -> m [Maybe Value]
   , envGetTableRecords :: Id Table -> m [Id Record]
   , envGetRecordValue  :: Id Record -> Ref Column -> m (Maybe Value)
   }

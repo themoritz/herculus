@@ -9,7 +9,7 @@
 
 module Lib.Types where
 
-import Control.DeepSeq
+import           Control.DeepSeq
 
 import           Data.Aeson         (FromJSON (..), ToJSON (..))
 import           Data.Bson          (ObjectId (..), Val (..))
@@ -18,11 +18,11 @@ import           Data.Monoid        ((<>))
 import           Data.Serialize
 import           Data.Text          (Text, pack, unpack)
 import           Data.Text.Encoding
-import           Data.Time.Clock (UTCTime (..))
 import           Data.Time.Calendar (Day (..))
-import           Data.Time.Format (defaultTimeLocale, parseTimeM)
-import qualified Data.Time.Format as T (formatTime)
-import Data.Typeable (Typeable)
+import           Data.Time.Clock    (UTCTime (..))
+import           Data.Time.Format   (defaultTimeLocale, parseTimeM)
+import qualified Data.Time.Format   as T (formatTime)
+import           Data.Typeable      (Typeable)
 
 import           Text.Read          (readMaybe)
 
@@ -141,3 +141,7 @@ newtype Utf8Text = Utf8Text { unUtf8Text :: Text }
 instance Serialize Utf8Text where
     put = put . encodeUtf8 . unUtf8Text
     get = (Utf8Text . decodeUtf8) <$> get
+
+--
+
+type Name = String

@@ -20,7 +20,7 @@ import           Text.Parsec.Language   (emptyDef)
 import           Text.Parsec.String     (Parser)
 import qualified Text.Parsec.Token      as P
 
-import           Lib.Model.Column
+import           Lib.Compiler.Types
 import           Lib.Types
 
 --

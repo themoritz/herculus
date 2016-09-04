@@ -24,8 +24,9 @@ import qualified Data.Set                       as Set
 import           Data.Text                      (pack)
 
 import           Lib.Compiler.Typechecker.Types
-import           Lib.Model
+import           Lib.Compiler.Types
 import           Lib.Model.Column
+import           Lib.Types
 
 --
 
@@ -115,7 +116,7 @@ infer expr = case expr of
     f' ::: tf <- infer f
     arg' ::: targ <- infer arg
     tres <- fresh
-    s <- unify [(tf, (TyArr targ tres))]
+    s <- unify [(tf, TyArr targ tres)]
     pure $ TApp f' arg' ::: apply s tres
   PLet x e rest -> do
     e' ::: te <- infer e
@@ -139,7 +140,7 @@ infer expr = case expr of
           LNumber _ -> TyNumber
           LBool _   -> TyBool
           LString _ -> TyString
-    pure $ TLit l ::: (TyNullary t)
+    pure $ TLit l ::: TyNullary t
   PBinop op l r -> do
     l' ::: tl <- infer l
     r' ::: tr <- infer r
@@ -172,9 +173,9 @@ infer expr = case expr of
     f <- asks envResolveColumnRef
     lift (f colRef) >>= \case
       Nothing -> throwError $ pack $ "column not found: " <> show colRef
-      Just (Entity i col) -> do
+      Just (i, dataCol) -> do
         getRows <- asks envGetTableRows
-        t <- lift $ typeOfDataType getRows $ columnDataType col
+        t <- lift $ typeOfDataType getRows $ dataColType dataCol
         pure $ TColumnRef i ::: t
   PColumnOfTableRef tblRef colRef -> do
     f <- asks envResolveColumnOfTableRef
@@ -182,9 +183,9 @@ infer expr = case expr of
       Nothing -> throwError $ pack $ "column not found: " <>
                                      show colRef <> " on table " <>
                                      show tblRef
-      Just (Entity colId col) -> do
+      Just (colId, dataCol) -> do
         getRows <- asks envGetTableRows
-        t <- lift $ typeOfDataType getRows $ columnDataType col
+        t <- lift $ typeOfDataType getRows $ dataColType dataCol
         pure $ TWholeColumnRef colId ::: TyUnary TyList t
   PTableRef tblRef -> do
     f <- asks envResolveTableRef
@@ -193,11 +194,7 @@ infer expr = case expr of
       Just (i, cols) -> do
         getRows <- asks envGetTableRows
         tblRows <- lift $ getRows i
-        -- let toRow [] = TyNoRow
-        --     toRow ((Entity _ c):rest) = TyRow (Ref $ columnName c)
-        --                                       (typeOfDataType $ columnDataType c)
-        --                                       (toRow rest)
-        pure $ TTableRef i (map entityId cols) ::: TyUnary TyList (TyRecord $ tblRows)
+        pure $ TTableRef i (map fst cols) ::: TyUnary TyList (TyRecord tblRows)
 
 --
 
