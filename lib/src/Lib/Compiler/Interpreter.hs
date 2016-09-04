@@ -8,7 +8,7 @@ import           Control.Monad.Reader
 
 import           Data.Map                       (Map)
 import qualified Data.Map                       as Map
-import           Data.Text                      (Text)
+import           Data.Text                      (Text, pack)
 import           Data.Traversable
 
 import           Lib.Model.Cell
@@ -30,6 +30,9 @@ prelude = Map.fromList
   , ( "sum"
     , RPrelude $ \_ (RValue (VList xs)) -> pure $
         RValue $ VNumber $ sum $ map (\(VNumber v) -> v) xs
+    )
+  , ( "show"
+    , RPrelude $ \_ (RValue (VNumber n)) -> pure $ RValue $ VString $ pack $ show n
     )
   , ( "map"
     , RPrelude $ \env arg -> pure $ RPrelude $ \_ (RValue (VList xs)) -> do

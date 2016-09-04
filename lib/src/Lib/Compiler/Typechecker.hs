@@ -1,10 +1,14 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell     #-}
 
 module Lib.Compiler.Typechecker
   ( runInfer
+  , infer
+  , fresh
+  , unify
+  , inEnv
+  , newInferState
   , Scheme (..)
   , Type (..)
   ) where
@@ -35,6 +39,9 @@ prelude = Context $ Map.fromList
     )
   , ( "sum"
     , Forall [] $ (TyUnary TyList $ TyNullary TyNumber) `TyArr` TyNullary TyNumber
+    )
+  , ( "show"
+    , Forall [] $ TyNullary TyNumber `TyArr` TyNullary TyString
     )
   , ( "map"
     , Forall [TV "_a", TV "_b"] $
@@ -145,7 +152,6 @@ infer expr = case expr of
           Sub       -> (num, num)
           Mul       -> (num, num)
           Div       -> (num, num)
-          Eq        ->
           LessEq    -> (tim, bol)
           GreaterEq -> (tim, bol)
           Less      -> (tim, bol)

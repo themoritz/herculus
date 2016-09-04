@@ -3,16 +3,15 @@
 
 module Lib.Template.Parser
   ( parseTemplate
+  , Template
+  , TplExpr (..)
   ) where
 
-import           Control.Applicative  (empty)
 import           Control.Monad        (void)
 
 import           Data.Text            (Text, pack, unpack)
-import           Data.Text            as Text (null)
 
 import           Text.Parsec          hiding (Column)
-import           Text.Parsec.Expr
 import           Text.Parsec.Language (emptyDef)
 import           Text.Parsec.String   (Parser)
 import qualified Text.Parsec.Token    as P
@@ -24,7 +23,7 @@ type Template = [TplExpr]
 
 data TplExpr
   = TplText Text
-  | TplFor Text PExpr Template
+  | TplFor Name PExpr Template
   | TplIf PExpr Template Template
   | TplShow PExpr
   deriving (Show)
@@ -77,7 +76,7 @@ tplFor = do
     pure (name, hexlExpr)
   body <- template
   instr "endfor" $ pure ()
-  pure $ TplFor (pack name) hexlExpr body
+  pure $ TplFor name hexlExpr body
 
 tplIf :: Parser TplExpr
 tplIf = do

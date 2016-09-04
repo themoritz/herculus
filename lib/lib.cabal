@@ -34,6 +34,10 @@ library
                      , Lib.Model.Dependencies
                      , Lib.Model.Dependencies.Types
                      , Lib.Model.References
+                     , Lib.Template
+                     , Lib.Template.Parser
+                     , Lib.Template.Typechecker
+                     , Lib.Template.Interpreter
                      , Data.Aeson.Bson
   build-depends:       base >= 4.7 && < 5
                      , aeson
