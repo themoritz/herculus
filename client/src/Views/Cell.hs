@@ -2,8 +2,10 @@
 {-# LANGUAGE DeriveGeneric  #-}
 
 module Views.Cell
-  ( cell_
-  , CellProps (..)
+  ( dataCell_
+  , reportCell_
+  , DataCellProps (..)
+  , ReportCellProps (..)
   ) where
 
 import           Control.DeepSeq
@@ -25,6 +27,8 @@ import           React.Flux
 
 import           Lib.Model.Cell
 import           Lib.Model.Column
+import           Lib.Model.Record
+import           Lib.Model.Table
 import           Lib.Types
 
 import           Store
@@ -32,13 +36,15 @@ import           Views.Combinators
 import           Views.Common
 import           Views.Foreign
 
+-- data cell
+
 type CellCallback a = a -> [SomeStoreAction]
 
-data CellProps = CellProps
-  { cellColId   :: !(Id Column)
-  , cellRecId   :: !(Id Record)
-  , cellColumn  :: !Column
-  , cellContent :: !CellContent
+data DataCellProps = DataCellProps
+  { dataCellColId   :: !(Id Column)
+  , dataCellRecId   :: !(Id Record)
+  , dataCellColData :: !DataCol
+  , dataCellContent :: !CellContent
   }
 
 data CellState = CellState (Map (Id Column, Id Record) Bool)
@@ -54,48 +60,48 @@ instance StoreData CellState where
   transform (Toggle (c, r)) (CellState m) = pure $
     CellState $ m & at (c, r) . non False %~ not
 
-cell_ :: CellProps -> ReactElementM eh ()
-cell_ !props = view cell props mempty
+dataCell_ :: DataCellProps -> ReactElementM eh ()
+dataCell_ !props = view dataCell props mempty
 
-cell :: ReactView CellProps
-cell = defineControllerView "cell" cellStore $ \(CellState m) CellProps{..} ->
-  case cellContent of
+dataCell :: ReactView DataCellProps
+dataCell = defineControllerView "cell" cellStore $ \(CellState m) DataCellProps{..} ->
+  case dataCellContent of
     CellError _ ->
       clspan_ "error" "Error" -- TODO: what to do with the error message here?
                               --       putting it in every row seems unnecessary
     CellValue val ->
-      let open = fromMaybe False $ Map.lookup (cellColId, cellRecId) m
-          inpType = columnInputType cellColumn
-          datType = columnDataType cellColumn
+      let open = fromMaybe False $ Map.lookup (dataCellColId, dataCellRecId) m
+          inpType = dataCellColData ^. dataColIsDerived
+          datType = dataCellColData ^. dataColType
           needsEx = needsExpand (datType, inpType)
           inline = value_ (if needsEx then Compact else Full)
                           inpType
                           datType
                           val
-                          (\v -> dispatch $ CellSetValue cellColId cellRecId v)
+                          (dispatch . CellSetValue dataCellColId dataCellRecId)
       in
       case needsEx of
         True -> cldiv_ "compactWrapper" $ do
           cldiv_ "compact" inline
           cldiv_ "expand" $ do
             let buttonCls = "expand" <> if open then " open" else ""
-            faButton_ buttonCls [SomeStoreAction cellStore $ Toggle (cellColId, cellRecId)]
+            faButton_ buttonCls [SomeStoreAction cellStore $ Toggle (dataCellColId, dataCellRecId)]
             when open $ cldiv_ "expanded" $ cldiv_ "body" $
               value_ Full
                      inpType
                      datType
                      val
-                     (\v -> dispatch $ CellSetValue cellColId cellRecId v)
+                     (dispatch . CellSetValue dataCellColId dataCellRecId)
         False -> inline
 
-needsExpand :: (DataType, InputType) -> Bool
+needsExpand :: (DataType, IsDerived) -> Bool
 needsExpand (dt, it) = case (dt, it) of
   (DataBool,     _)             -> False
   (DataString,   _)             -> False
   (DataNumber,   _)             -> False
   (DataTime,     _)             -> False
-  (DataRecord _, ColumnInput)   -> False
-  (DataRecord _, ColumnDerived) -> True
+  (DataRecord _, NotDerived)   -> False
+  (DataRecord _, Derived) -> True
   (DataList _,   _)             -> True
   (DataMaybe sub,  _)           -> needsExpand (sub, it)
 
@@ -105,12 +111,12 @@ data Mode
 
 --
 
-value_ :: Mode -> InputType -> DataType -> Value -> CellCallback Value
+value_ :: Mode -> IsDerived -> DataType -> Value -> CellCallback Value
        -> ReactElementM eh ()
 value_ !mode !inpType !datType !val !cb =
   view value (mode, inpType, datType, val, cb) mempty
 
-value :: ReactView (Mode, InputType, DataType, Value, CellCallback Value)
+value :: ReactView (Mode, IsDerived, DataType, Value, CellCallback Value)
 value = defineView "value" $ \(mode, inpType, datType, val, cb) -> case datType of
   DataBool -> case val of
     VBool b -> cellBool_ mode inpType b (cb . VBool)
@@ -134,15 +140,15 @@ value = defineView "value" $ \(mode, inpType, datType, val, cb) -> case datType 
     VMaybe v -> cellMaybe_ mode inpType t v (cb . VMaybe)
     _ -> mempty
 
-cellBool_ :: Mode -> InputType -> Bool -> CellCallback Bool
+cellBool_ :: Mode -> IsDerived -> Bool -> CellCallback Bool
           -> ReactElementM ViewEventHandler ()
 cellBool_ !mode !inpType !b !cb =
   view cellBool (mode, inpType, b, cb) mempty
 
-cellBool :: ReactView (Mode, InputType, Bool, CellCallback Bool)
+cellBool :: ReactView (Mode, IsDerived, Bool, CellCallback Bool)
 cellBool = defineView "cellBool" $ \(mode, inpType, b, cb) ->
   case (mode, inpType) of
-    (Full, ColumnInput) ->
+    (Full, NotDerived) ->
       input_
         [ "type" $= "checkbox"
         , "checked" @= b
@@ -151,15 +157,15 @@ cellBool = defineView "cellBool" $ \(mode, inpType, b, cb) ->
     _ ->
       elemText $ if b then "True" else "False"
 
-cellString_ :: Mode -> InputType -> Text -> CellCallback Text
+cellString_ :: Mode -> IsDerived -> Text -> CellCallback Text
             -> ReactElementM ViewEventHandler ()
 cellString_ !mode !inpType !s !cb =
   view cellString (mode, inpType, s, cb) mempty
 
-cellString :: ReactView (Mode, InputType, Text, CellCallback Text)
+cellString :: ReactView (Mode, IsDerived, Text, CellCallback Text)
 cellString = defineView "cellString" $ \(mode, inpType, s, cb) ->
   case (mode, inpType) of
-    (Full, ColumnInput) ->
+    (Full, NotDerived) ->
       editBox_ EditBoxProps
         { editBoxValue = s
         , editBoxPlaceholder = ""
@@ -171,15 +177,15 @@ cellString = defineView "cellString" $ \(mode, inpType, s, cb) ->
     _ ->
       elemText s
 
-cellNumber_ :: Mode -> InputType -> Number -> CellCallback Number
+cellNumber_ :: Mode -> IsDerived -> Number -> CellCallback Number
             -> ReactElementM ViewEventHandler ()
 cellNumber_ !mode !inpType !n !cb =
   view cellNumber (mode, inpType, n, cb) mempty
 
-cellNumber :: ReactView (Mode, InputType, Number, CellCallback Number)
+cellNumber :: ReactView (Mode, IsDerived, Number, CellCallback Number)
 cellNumber = defineView "cellNumber" $ \(mode, inpType, n, cb) ->
   case (mode, inpType) of
-    (Full, ColumnInput) ->
+    (Full, NotDerived) ->
       editBox_ EditBoxProps
         { editBoxValue = n
         , editBoxPlaceholder = "0"
@@ -191,15 +197,15 @@ cellNumber = defineView "cellNumber" $ \(mode, inpType, n, cb) ->
     _ ->
       cldiv_ "number" $ elemString $ show n
 
-cellTime_ :: Mode -> InputType -> Time -> CellCallback Time
+cellTime_ :: Mode -> IsDerived -> Time -> CellCallback Time
           -> ReactElementM ViewEventHandler ()
 cellTime_ !mode !inpType !t !cb =
   view cellTime (mode, inpType, t, cb) mempty
 
-cellTime :: ReactView (Mode, InputType, Time, CellCallback Time)
+cellTime :: ReactView (Mode, IsDerived, Time, CellCallback Time)
 cellTime = defineStatefulView "cellTime" Nothing $
   \invalidTmp (mode, inpType, t, cb) -> case (mode, inpType) of
-    (Full, ColumnInput) -> do
+    (Full, NotDerived) -> do
       let curT = fromMaybe (formatTime "%F" t) invalidTmp
           handleChange :: Text -> StatefulViewEventHandler (Maybe Text)
           handleChange x _ = case parseTime "%F" x of
@@ -215,13 +221,13 @@ cellTime = defineStatefulView "cellTime" Nothing $
     _ ->
       elemShow t
 
-cellRecord_ :: Mode -> InputType -> Maybe (Id Record) -> Id Table
+cellRecord_ :: Mode -> IsDerived -> Maybe (Id Record) -> Id Table
             -> CellCallback (Maybe (Id Record))
             -> ReactElementM ViewEventHandler ()
 cellRecord_ !mode !inpType !mr !t !cb =
   view cellRecord (mode, inpType, mr, t, cb) mempty
 
-cellRecord :: ReactView ( Mode, InputType, Maybe (Id Record), Id Table
+cellRecord :: ReactView ( Mode, IsDerived, Maybe (Id Record), Id Table
                         , CellCallback (Maybe (Id Record))
                         )
 cellRecord = defineControllerView "cellRecord" store $
@@ -229,7 +235,7 @@ cellRecord = defineControllerView "cellRecord" store $
     onDidMount_ (dispatch $ CacheRecordsGet t) mempty
     let records = fromMaybe Map.empty $ st ^. stateCacheRecords . at t
         showPairs = intercalate ", " .
-                    map (\(c, v) -> columnName c <> ": " <> (pack . show) v) .
+                    map (\(c, v) -> (c ^. columnName) <> ": " <> (pack . show) v) .
                     Map.elems
     case mode of
       Compact -> case mr of
@@ -238,7 +244,7 @@ cellRecord = defineControllerView "cellRecord" store $
           Nothing -> mempty
           Just fields -> elemText $ showPairs fields
       Full -> case inpType of
-        ColumnInput ->
+        NotDerived ->
           select_
             [ "defaultValue" &= case mr of
                 Nothing -> ""
@@ -253,28 +259,33 @@ cellRecord = defineControllerView "cellRecord" store $
                              Just newId -> cb $ Just newId
             ] $ do when (isNothing mr) $ option_
                      [ "value" $= ""
-                     ] $ ""
+                     ] ""
                    for_ (Map.toList records) $ \(i, record) -> option_
                      [ "value" &= show i
                      ] $ elemText $ showPairs record
-        ColumnDerived -> case mr of
+        Derived -> case mr of
           Nothing -> "Impossible: invalid record in derived cell"
           Just r -> case Map.lookup r records of
             Nothing -> mempty
             Just fields ->
               for_ fields $ \(c, content) -> cldiv_ "field" $ do
-                cldiv_ "key" $ elemText $ columnName c
-                cldiv_ "content" $ case content of
-                  CellError _ -> clspan_ "error" "Error"
-                  CellValue v -> value_ mode inpType (columnDataType c) v (const [])
+                cldiv_ "key" $ elemText $ c ^. columnName
+                cldiv_ "content" $ case (content, c ^. columnKind) of
+                  (CellValue v, ColumnData dat) -> value_ mode
+                                                          inpType
+                                                          (dat ^. dataColType)
+                                                          v
+                                                          (const [])
+                  (CellError _, _)              -> clspan_ "error" "Error"
+                  _                             -> mempty
 
 
-cellList_ :: Mode -> InputType -> DataType -> [Value] -> CellCallback [Value]
+cellList_ :: Mode -> IsDerived -> DataType -> [Value] -> CellCallback [Value]
           -> ReactElementM ViewEventHandler ()
 cellList_ !mode !inpType !datType !vs !cb =
   view cellList (mode, inpType, datType, vs, cb) mempty
 
-cellList :: ReactView (Mode, InputType, DataType, [Value], CellCallback [Value])
+cellList :: ReactView (Mode, IsDerived, DataType, [Value], CellCallback [Value])
 cellList = defineView "cellList" $ \(mode, inpType, datType, vs, cb) -> cldiv_ "list" $
   case mode of
     Compact -> do
@@ -282,7 +293,7 @@ cellList = defineView "cellList" $ \(mode, inpType, datType, vs, cb) -> cldiv_ "
       for_ (take 4 vs) $ \v -> cldiv_ "element" $
         value_ mode inpType datType v (const [])
     Full -> case inpType of
-      ColumnInput -> do
+      NotDerived -> do
         for_ (zip [0..] vs) $ \(i, v) -> cldiv_ "element-wrapper" $ cldiv_ "element input" $ do
           let listMod ind x xs = let (h, t) = splitAt ind xs in h <> (x : drop 1 t)
               listDel ind xs   = let (h, t) = splitAt ind xs in h <> drop 1 t
@@ -295,20 +306,20 @@ cellList = defineView "cellList" $ \(mode, inpType, datType, vs, cb) -> cldiv_ "
               let CellValue newV = defaultContentPure datType
               in  cb (vs <> [newV])
           ] $ faIcon_ "plus-circle"
-      ColumnDerived ->
+      Derived ->
         for_ vs $ \v -> cldiv_ "element-wrapper" $ cldiv_ "element" $ cldiv_ "content" $
           value_ mode inpType datType v (const [])
 
-cellMaybe_ :: Mode -> InputType -> DataType -> Maybe Value
+cellMaybe_ :: Mode -> IsDerived -> DataType -> Maybe Value
            -> CellCallback (Maybe Value)
            -> ReactElementM ViewEventHandler ()
 cellMaybe_ !mode !inpType !datType !mVal !cb =
   view cellMaybe (mode, inpType, datType, mVal, cb) mempty
 
-cellMaybe :: ReactView (Mode, InputType, DataType, Maybe Value, CellCallback (Maybe Value))
+cellMaybe :: ReactView (Mode, IsDerived, DataType, Maybe Value, CellCallback (Maybe Value))
 cellMaybe = defineView "cellMaybe" $ \(mode, inpType, datType, mVal, cb) ->
   case (mode, inpType) of
-    (Full, ColumnInput) -> case mVal of
+    (Full, NotDerived) -> case mVal of
       Nothing -> cldiv_ "maybe nothing" $ do
         let CellValue new = defaultContentPure datType
         cldiv_ "button" $ button_
@@ -324,3 +335,16 @@ cellMaybe = defineView "cellMaybe" $ \(mode, inpType, datType, mVal, cb) ->
     _ -> case mVal of
       Nothing -> "Nothing"
       Just val -> value_ mode inpType datType val (cb . Just)
+
+ -- report cell
+
+data ReportCellProps = ReportCellProps
+  { reportCellColId :: !(Id Column)
+  , reportCellColReport :: !ReportCol
+  }
+
+reportCell_ :: ReportCellProps -> ReactElementM eh ()
+reportCell_ !p = view reportCell p mempty
+
+reportCell :: ReactView ReportCellProps
+reportCell = defineView "reportCell" $ \props -> mempty

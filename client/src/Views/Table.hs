@@ -8,6 +8,7 @@ import           Data.Monoid       ((<>))
 import           React.Flux
 
 import           Lib.Model
+import           Lib.Model.Column
 
 import           Store
 import           Views.Cell
@@ -33,11 +34,20 @@ tableGrid = defineView "tableGrid" $ \st -> do
 
       getRecord y = let Just r = Map.lookup y recByIndex in uncurry Entity r
       getColumn x = let Just c = Map.lookup x colByIndex in uncurry Entity c
-      getCellProps x y = do
-        (c, col) <- Map.lookup x colByIndex
-        (r, _)   <- Map.lookup y recByIndex
-        content  <- Map.lookup (Coords c r) cells
-        pure $ CellProps c r col content
+
+      renderCell :: Int -> Int -> ReactElementM eh ()
+      renderCell x y =
+        case Map.lookup x colByIndex of
+          Nothing -> mempty
+          Just (c, col) -> case col ^. columnKind of
+            ColumnReport rep -> reportCell_ $ ReportCellProps c rep
+            ColumnData   dat -> do
+              let mRC = do (r, _)  <- Map.lookup y recByIndex
+                           content <- Map.lookup (Coords c r) cells
+                           pure (r, content)
+              case mRC of
+                Just (r, content) -> dataCell_ $ DataCellProps c r dat content
+                Nothing           -> mempty
 
       renderer (GridRenderArgs x y _)
         | x == 0 && y == 0 = cldiv_ "origin" mempty
@@ -50,9 +60,7 @@ tableGrid = defineView "tableGrid" $ \st -> do
         | y == 0 && 0 < x && x <= numCols =
             column_ $ getColumn (x - 1)
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $
-            case getCellProps (x - 1) (y - 1) of
-              Nothing -> mempty
-              Just res -> cell_ res
+            renderCell (x - 1) (y - 1)
         | otherwise = cldiv_ "empty" mempty
 
       props = GridProps

@@ -2,6 +2,7 @@ module Views.Record where
 
 import React.Flux
 
+import Lib.Model.Record
 import Lib.Model
 
 import Store

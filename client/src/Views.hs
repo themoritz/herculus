@@ -10,6 +10,8 @@ import React.Flux.Internal (toJSString)
 
 import Lib.Types
 import Lib.Model
+import Lib.Model.Project
+import Lib.Model.Table
 
 import Store
 import Views.Table

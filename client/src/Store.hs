@@ -208,7 +208,7 @@ instance StoreData State where
       TableUpdateColumns entries -> pure $
         st & stateColumns %~ \cols ->
           foldl' (\cols' (Entity i c) -> Map.insert i c cols') cols $
-          filter (\(Entity _ c) -> st ^. stateTableId == Just (columnTableId c)) entries
+          filter (\(Entity _ c) -> st ^. stateTableId == Just (c ^. columnTableId)) entries
 
       TableAddColumn -> do
         case st ^. stateTableId of
@@ -256,22 +256,21 @@ instance StoreData State where
         request api (Proxy :: Proxy ColumnSetName) i n $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ()    -> pure []
-        pure $ st & stateColumns . at i . _Just %~ \c -> c { columnName = n }
+        pure $ st & stateColumns . at i . _Just . columnName .~ n
 
       ColumnSetDt i dt -> do
-        request api (Proxy :: Proxy ColumnSetDataType) i dt $ \case
+        request api (Proxy :: Proxy DataColSetDataType) i dt $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ()    -> pure []
-        -- pure $ st & stateColumns . at i . _Just %~ \c -> c { columnDataType = dt }
-        pure $ st & stateColumns . at i . _Just %~ \c -> c { columnDataType = dt }
+        pure $ st & stateColumns . at i . _Just . columnKind . _ColumnData .
+          dataColType .~ dt
 
       ColumnSetFormula i payload@(inpTyp, src) -> do
-        request api (Proxy :: Proxy ColumnSetInput) i payload $ \case
+        request api (Proxy :: Proxy DataColSetIsDerived) i payload $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ()    -> pure []
-        pure $ st & stateColumns . at i . _Just %~ \c -> c { columnIsDerived = inpTyp
-                                                           , columnSourceCode = src
-                                                           }
+        pure $ st & stateColumns . at i . _Just . columnKind . _ColumnData . dataColIsDerived .~ inpTyp
+                  & stateColumns . at i . _Just . columnKind . _ColumnData . dataColSourceCode .~ src
 
       -- Cell
 
