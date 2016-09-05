@@ -1,13 +1,12 @@
+{-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveAnyClass #-}
 
 module Lib.Model.Record where
 
-import Control.DeepSeq
+import           Control.DeepSeq
 
 import           Data.Aeson      (FromJSON, ToJSON)
-import           Data.Text       (Text)
 
 import           Data.Bson       ((=:))
 import qualified Data.Bson       as Bson

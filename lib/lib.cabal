@@ -24,6 +24,7 @@ library
                      , Lib.Compiler.Typechecker.Types
                      , Lib.NamedMap
                      , Lib.Api.Rest
+                     , Lib.Api.Rest.Report
                      , Lib.Api.WebSocket
                      , Lib.Types
                      , Lib.Model
@@ -42,22 +43,23 @@ library
                      , Lib.Template.Interpreter
                      , Lib.Template.Types
                      , Data.Aeson.Bson
-  build-depends:       base >= 4.7 && < 5
+  build-depends:       Decimal
                      , aeson
                      , attoparsec
+                     , base >= 4.7 && < 5
+                     , base64-bytestring
                      , bson
                      , bytestring
-                     , base64-bytestring
                      , cereal
                      , containers
                      , deepseq
-                     , Decimal
                      , http-api-data
+                     , http-media
                      , lens
                      , mtl
                      , parsec
-                     , servant
                      , scientific
+                     , servant
                      , text
                      , time
                      , transformers

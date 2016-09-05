@@ -12,4 +12,4 @@ instance ToJSON Base64 where
   toJSON (Base64 bs) = toJSON . TE.decodeUtf8 . B64.encode $ bs
 
 instance FromJSON Base64 where
-  parseJSON json = (Base64 . B64.decodeLenient . TE.encodeUtf8 ) <$> parseJSON json
+  parseJSON jsn = (Base64 . B64.decodeLenient . TE.encodeUtf8 ) <$> parseJSON jsn

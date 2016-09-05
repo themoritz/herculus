@@ -50,10 +50,15 @@ handle =
 
   :<|> handleColumnCreate
   :<|> handleColumnDelete
-  :<|> handleColumnSetName
-  :<|> handleColumnSetDataType
-  :<|> handleColumnSetIsDerived
   :<|> handleColumnList
+  :<|> handleColumnSetName
+
+  :<|> handleDataColSetDataType
+  :<|> handleDataColSetIsDerived
+
+  :<|> handleReportColSetTemplate
+  :<|> handleReportColSetFormat
+  :<|> handleReportColSetLanguage
 
   :<|> handleRecordCreate
   :<|> handleRecordDelete
@@ -131,6 +136,9 @@ handleColumnDelete colId = do
   sendWS $ WsDownColumnsChanged newChilds
   propagate [RootWholeColumns $ map entityId newChilds]
 
+handleColumnList :: MonadHexl m => Id Table -> m [Entity Column]
+handleColumnList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
+
 handleColumnSetName :: MonadHexl m => Id Column -> Text -> m ()
 handleColumnSetName c name = do
   update c $ \col -> col { _columnName = name }
@@ -138,8 +146,10 @@ handleColumnSetName c name = do
   sendWS $ WsDownColumnsChanged newChilds
   propagate [RootWholeColumns $ map entityId newChilds]
 
-handleColumnSetDataType :: MonadHexl m => Id Column -> DataType -> m ()
-handleColumnSetDataType c typ = do
+--
+
+handleDataColSetDataType :: MonadHexl m => Id Column -> DataType -> m ()
+handleDataColSetDataType c typ = do
   oldCol <- getById' c
   case oldCol ^? columnKind . _ColumnData of
     Nothing -> throwError $ ErrBug "Tried to set type of column other than data"
@@ -155,8 +165,8 @@ handleColumnSetDataType c typ = do
       sendWS $ WsDownColumnsChanged toUpdate
       propagate [RootWholeColumns $ map entityId toUpdate]
 
-handleColumnSetIsDerived :: MonadHexl m => Id Column -> (IsDerived, Text) -> m ()
-handleColumnSetIsDerived c (derived, code) = do
+handleDataColSetIsDerived :: MonadHexl m => Id Column -> (IsDerived, Text) -> m ()
+handleDataColSetIsDerived c (derived, code) = do
   oldCol <- getById' c
   case oldCol ^? columnKind . _ColumnData of
     Nothing -> throwError $ ErrBug "Tried to set IsDerived of column other than data."
@@ -172,8 +182,16 @@ handleColumnSetIsDerived c (derived, code) = do
           renewErrorCells c
           updateReference c (dataCol ^. dataColType)
 
-handleColumnList :: MonadHexl m => Id Table -> m [Entity Column]
-handleColumnList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
+--
+
+handleReportColSetTemplate :: MonadHexl m => Id Column -> Text -> m ()
+handleReportColSetTemplate = undefined
+
+handleReportColSetFormat :: MonadHexl m => Id Column -> ReportFormat -> m ()
+handleReportColSetFormat = undefined
+
+handleReportColSetLanguage :: MonadHexl m => Id Column -> ReportLanguage -> m ()
+handleReportColSetLanguage = undefined
 
 --
 

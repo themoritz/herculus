@@ -8,13 +8,13 @@ module Data.Aeson.Bson (
   decodeValue, eitherDecodeValue
 ) where
 
-import           Data.Monoid ((<>))
-import           Data.Aeson.Types       as Aeson
-import           Data.Bson              as Bson
-import           Data.HashMap.Strict    as Map (fromList, toList)
+import           Data.Aeson.Types    as Aeson
+import           Data.Bson           as Bson
+import           Data.HashMap.Strict as Map (fromList, toList)
+import           Data.Monoid         ((<>))
 import           Data.Scientific
-import           Data.Text              as T hiding (map)
-import           Data.Vector            as Vector (toList)
+import           Data.Text           as T hiding (map)
+import           Data.Vector         as Vector (toList)
 import           Numeric
 
 import           Lib.Base64
@@ -50,7 +50,7 @@ bsonifyValue (Aeson.Array array) = Bson.Array $
 bsonifyValue (Aeson.String str) = Bson.String str
 bsonifyValue (Number n) = case floatingOrInteger n of
   Left f -> Float f
-  Right i -> Int64 $ fromIntegral i
+  Right i -> Int64 $ fromIntegral (i :: Integer)
 bsonifyValue (Aeson.Bool b) = Bson.Bool b
 bsonifyValue Aeson.Null = Bson.Null
 

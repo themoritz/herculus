@@ -20,7 +20,6 @@ import           Data.Text            (Text, unpack)
 
 import           Lib.Types
 
-import           Lib.Model
 import           Lib.Model.Column
 import           Lib.Model.Table
 
