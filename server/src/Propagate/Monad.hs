@@ -1,10 +1,10 @@
 {-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TemplateHaskell            #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
 
 module Propagate.Monad where
 
@@ -21,7 +21,8 @@ import           Lib.Api.WebSocket
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
-import           Lib.Model.Types
+import           Lib.Model.Record
+import           Lib.Model.Table
 import           Lib.Types
 
 import           Monads
@@ -39,7 +40,7 @@ class (MonadError AppError m, Monad m) => MonadPropagate m where
   getRecordValue  :: Id Record -> Ref Column -> m (Maybe Value)
   addTargets :: Id Column -> AddTarget -> m ()
   getTargets :: Id Column -> m [Id Record]
-  getCompileResult :: Id Column -> m CompileResult
+  getCompileResult :: Id Column -> m DataCompileResult
 
 data State = State
   { _stateCache   :: Cache
@@ -133,13 +134,13 @@ instance MonadHexl m => MonadPropagate (PropT m) where
     Just rs -> pure rs
     Nothing -> do
       col <- lift $ getById' c
-      records <- lift $ listByQuery [ "tableId" =: toObjectId (columnTableId col) ]
+      records <- lift $ listByQuery [ "tableId" =: toObjectId (_columnTableId col) ]
       pure $ map entityId records
 
   getCompileResult c = gets (getCode c . _stateCache) >>= \case
     Just result -> pure result
     Nothing -> do
       col <- lift $ getById' c
-      let compileResult = columnCompileResult col
+      let Just compileResult = col ^? columnKind . _ColumnData . dataColCompileResult
       stateCache %= storeCode c compileResult
       pure compileResult

@@ -3,8 +3,7 @@
 
 module Lib.Compiler where
 
-import           Data.Text                      (pack, unpack)
-import qualified Data.Text.IO                   as Text
+import           Data.Text                      (Text, pack, unpack)
 
 import           Lib.Model.Cell
 import           Lib.Model.Column
@@ -15,6 +14,12 @@ import           Lib.Compiler.Interpreter.Types
 import           Lib.Compiler.Parser
 import           Lib.Compiler.Typechecker
 import           Lib.Compiler.Typechecker.Types
+
+compile :: Monad m => Text -> TypecheckEnv m
+        -> m (Either Text TypedExpr)
+compile inp env = case parseExpr inp of
+  Left e -> pure $ Left e
+  Right e' -> runInfer env e'
 
 testDataCol :: DataCol
 testDataCol = DataCol
@@ -44,14 +49,10 @@ testEvalEnv = EvalEnv
   }
 
 test :: String -> IO ()
-test inp = case parseExpr (pack inp) of
-  Left e -> Text.putStrLn e
-  Right pe -> do
-    inferRes <- runInfer testTypecheckEnv pe
-    case inferRes of
+test inp = compile (pack inp) testTypecheckEnv >>= \case
+  Left e -> putStrLn $ unpack e
+  Right (e' ::: typ) -> do
+    putStrLn $ "Type: " ++ show typ
+    case interpret e' testEvalEnv of
       Left e -> putStrLn $ unpack e
-      Right (te ::: typ) -> do
-        putStrLn $ "Type: " ++ show typ
-        case interpret te testEvalEnv of
-          Left e -> putStrLn $ unpack e
-          Right val -> putStrLn $ "Val: " ++ show val
+      Right val -> putStrLn $ "Val: " ++ show val

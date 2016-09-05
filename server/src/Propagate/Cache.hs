@@ -17,15 +17,15 @@ import           Control.Lens
 import           Data.Map         (Map)
 import qualified Data.Map         as Map
 
-import           Lib.Model.Column
 import           Lib.Model.Cell
-import           Lib.Model.Types
+import           Lib.Model.Column
+import           Lib.Model.Record
 import           Lib.Types
 
 data Cache = Cache
   { _cacheCell          :: Map (Id Column, Id Record) Cell
   , _cacheColumn        :: Map (Id Column) [CellContent]
-  , _cacheCompileResult :: Map (Id Column) CompileResult
+  , _cacheCompileResult :: Map (Id Column) DataCompileResult
   }
 
 makeLenses ''Cache
@@ -54,8 +54,8 @@ getColumn c = view (cacheColumn . at c)
 
 --
 
-storeCode :: Id Column -> CompileResult -> Cache -> Cache
+storeCode :: Id Column -> DataCompileResult -> Cache -> Cache
 storeCode c expr = set (cacheCompileResult . at c) (Just expr)
 
-getCode :: Id Column -> Cache -> Maybe CompileResult
+getCode :: Id Column -> Cache -> Maybe DataCompileResult
 getCode c = view (cacheCompileResult . at c)

@@ -10,8 +10,8 @@ module Lib.Model.Column where
 
 import           Control.DeepSeq
 
-import           Control.Lens.Prism
 import           Control.Lens.Lens
+import           Control.Lens.Prism
 import           Data.Aeson                   (FromJSON (..), ToJSON (..))
 import           Data.Aeson.Bson
 import           Data.Bson                    (Val, (=:))
@@ -119,7 +119,7 @@ instance Val ColumnKind where
 
 data ReportCol = ReportCol
   { _reportColTemplate         :: Text
-  , _reportColCompiledTemplate :: CompileResult TTemplate
+  , _reportColCompiledTemplate :: ReportCompileResult
   , _reportColLanguage         :: ReportLanguage
   , _reportColFormat           :: ReportFormat
   } deriving (Eq, Generic, NFData, Show)
@@ -163,7 +163,7 @@ data DataCol = DataCol
   { _dataColType          :: DataType
   , _dataColIsDerived     :: IsDerived
   , _dataColSourceCode    :: Text
-  , _dataColCompileResult :: CompileResult TExpr
+  , _dataColCompileResult :: DataCompileResult
   } deriving (Eq, Generic, NFData, Show)
 
 dataColType :: Lens' DataCol DataType
@@ -186,6 +186,9 @@ data CompileResult a
   | CompileResultNone
   | CompileResultError Text
   deriving (Eq, Show, Generic, NFData)
+
+type DataCompileResult = CompileResult TExpr
+type ReportCompileResult = CompileResult TTemplate
 
 instance ToJSON a => ToJSON (CompileResult a)
 instance FromJSON a => FromJSON (CompileResult a)

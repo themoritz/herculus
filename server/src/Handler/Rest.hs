@@ -6,11 +6,12 @@
 
 module Handler.Rest where
 
-import           Control.Arrow                  ((***))
+import           Control.Arrow                  (second)
+import           Control.Lens
 import           Control.Monad                  (unless, void)
 
 import           Data.List                      (union)
-import           Data.Maybe                     (mapMaybe)
+import           Data.Maybe                     (catMaybes, mapMaybe)
 import           Data.Monoid
 import           Data.Text                      (Text, pack)
 import           Data.Traversable
@@ -27,8 +28,10 @@ import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
+import           Lib.Model.Project
+import           Lib.Model.Record
 import           Lib.Model.References
-import           Lib.Model.Types
+import           Lib.Model.Table
 import           Lib.Types
 
 import           Monads
@@ -49,7 +52,7 @@ handle =
   :<|> handleColumnDelete
   :<|> handleColumnSetName
   :<|> handleColumnSetDataType
-  :<|> handleColumnSetInput
+  :<|> handleColumnSetIsDerived
   :<|> handleColumnList
 
   :<|> handleRecordCreate
@@ -96,11 +99,21 @@ handleTableGetWhole tblId =
 
 handleColumnCreate :: MonadHexl m => Id Table -> m (Entity Column, [Entity Cell])
 handleColumnCreate t = do
-  let newCol = Column t "" DataString ColumnInput "" CompileResultNone
+  let newType = DataString
+      newCol = Column
+        { _columnTableId = t
+        , _columnName = ""
+        , _columnKind = ColumnData DataCol
+          { _dataColType = newType
+          , _dataColIsDerived = NotDerived
+          , _dataColSourceCode = ""
+          , _dataColCompileResult = CompileResultNone
+          }
+        }
   c <- create newCol
   rs <- listByQuery [ "tableId" =: toObjectId t ]
   cells <- for rs $ \e -> do
-    defContent <- defaultContent newCol
+    defContent <- defaultContent newType
     let cell = newCell t c (entityId e) defContent
     i <- create cell
     pure $ Entity i cell
@@ -120,7 +133,7 @@ handleColumnDelete colId = do
 
 handleColumnSetName :: MonadHexl m => Id Column -> Text -> m ()
 handleColumnSetName c name = do
-  update c $ \col -> col { columnName = name }
+  update c $ \col -> col { _columnName = name }
   newChilds <- compileColumnChildren c
   sendWS $ WsDownColumnsChanged newChilds
   propagate [RootWholeColumns $ map entityId newChilds]
@@ -128,32 +141,36 @@ handleColumnSetName c name = do
 handleColumnSetDataType :: MonadHexl m => Id Column -> DataType -> m ()
 handleColumnSetDataType c typ = do
   oldCol <- getById' c
-  update c $ \col -> col { columnDataType = typ }
-  unless (columnDataType oldCol == typ) $ do
-    newChilds <- compileColumnChildren c
-    toUpdate <- case columnInputType oldCol of
-      ColumnInput   -> do invalidateCells c
-                          updateReference c typ
-                          pure newChilds
-      ColumnDerived -> do newC <- compileColumn c
-                          pure $ newC:newChilds
-    sendWS $ WsDownColumnsChanged toUpdate
-    propagate [RootWholeColumns $ map entityId toUpdate]
+  case oldCol ^? columnKind . _ColumnData of
+    Nothing -> throwError $ ErrBug "Tried to set type of column other than data"
+    Just dataCol -> unless (dataCol ^. dataColType == typ) $ do
+      update c $ over (columnKind . _ColumnData . dataColType) (const typ)
+      newChilds <- compileColumnChildren c
+      toUpdate <- case dataCol ^. dataColIsDerived of
+        NotDerived -> do invalidateCells c
+                         updateReference c typ
+                         pure newChilds
+        Derived    -> do newC <- compileColumn c
+                         pure $ newC:newChilds
+      sendWS $ WsDownColumnsChanged toUpdate
+      propagate [RootWholeColumns $ map entityId toUpdate]
 
-handleColumnSetInput :: MonadHexl m => Id Column -> (InputType, Text) -> m ()
-handleColumnSetInput c (typ, code) = do
+handleColumnSetIsDerived :: MonadHexl m => Id Column -> (IsDerived, Text) -> m ()
+handleColumnSetIsDerived c (derived, code) = do
   oldCol <- getById' c
-  update c $ const $ oldCol { columnInputType = typ
-                            , columnSourceCode = code
-                            }
-  case typ of
-    ColumnDerived -> do
-      newCol <- compileColumn c
-      sendWS $ WsDownColumnsChanged [newCol]
-      propagate [RootWholeColumns [c]]
-    ColumnInput -> do
-      renewErrorCells c
-      updateReference c (columnDataType oldCol)
+  case oldCol ^? columnKind . _ColumnData of
+    Nothing -> throwError $ ErrBug "Tried to set IsDerived of column other than data."
+    Just dataCol -> do
+      update c $ over (columnKind . _ColumnData) $ (dataColIsDerived .~ derived)
+                                                 . (dataColSourceCode .~ code)
+      case derived of
+        Derived -> do
+          newCol <- compileColumn c
+          sendWS $ WsDownColumnsChanged [newCol]
+          propagate [RootWholeColumns [c]]
+        NotDerived -> do
+          renewErrorCells c
+          updateReference c (dataCol ^. dataColType)
 
 handleColumnList :: MonadHexl m => Id Table -> m [Entity Column]
 handleColumnList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
@@ -164,29 +181,34 @@ handleRecordCreate :: MonadHexl m => Id Table -> m (Entity Record, [Entity Cell]
 handleRecordCreate t = do
   let newRec = Record t
   r <- create newRec
-  cs <- listByQuery [ "tableId" =: toObjectId t ]
-  newCells <- for cs $ \e@(Entity c col) -> do
-    defContent <- defaultContent col
-    let cell = newCell t c r defContent
-    i <- create cell
-    pure $ case columnInputType col of
-      ColumnInput -> Just (e, Entity i cell)
-      ColumnDerived -> Nothing
+  cols <- listByQuery [ "tableId" =: toObjectId t ]
+  newCells <- for cols $ \e@(Entity c col) ->
+    case col ^? columnKind . _ColumnData of
+      Nothing -> pure Nothing
+      Just dataCol -> do
+        defContent <- defaultContent (dataCol ^. dataColType)
+        let cell = newCell t c r defContent
+        i <- create cell
+        case dataCol ^. dataColIsDerived of
+          NotDerived -> pure $ Just (e, Entity i cell)
+          Derived    -> pure Nothing
   propagate
     [ RootCellChanges $
-        mapMaybe (\(Entity c col) -> case columnInputType col of
-                     ColumnInput -> Just (c, r)
-                     ColumnDerived -> Nothing
-                 ) cs
+        mapMaybe (\(Entity c col) ->
+                     case col ^? columnKind . _ColumnData . dataColIsDerived of
+                       Just NotDerived -> Just (c, r)
+                       _               -> Nothing
+                 ) cols
     , RootSpecificCells $
-        mapMaybe (\(Entity c col) -> case columnInputType col of
-                     ColumnInput -> Nothing
-                     ColumnDerived -> Just (c, r)
-                 ) cs
+        mapMaybe (\(Entity c col) ->
+                      case col ^? columnKind . _ColumnData . dataColIsDerived of
+                        Just Derived -> Just (c, r)
+                        _            -> Nothing
+                 ) cols
     ]
   sendWS $ WsDownRecordCreated t r $
-    map (id *** cellContent . entityVal) $ mapMaybe id newCells
-  pure (Entity r newRec, map snd $ mapMaybe id newCells)
+    map (second $ cellContent . entityVal) $ catMaybes newCells
+  pure (Entity r newRec, map snd $ catMaybes newCells)
 
 handleRecordDelete :: MonadHexl m => Id Record -> m ()
 handleRecordDelete recId = do
@@ -198,10 +220,10 @@ handleRecordDelete recId = do
     ]
   graph <- getDependencies
   cs <- listByQuery [ "tableId" =: toObjectId (recordTableId record) ]
-  let allChildren = foldr union [] $
-        map (\e -> map fst .
-                   filter (\(_, typ) -> typ == OneToAll) .
-                   getChildren (entityId e) $ graph) cs
+  let allChildren = foldr (union . (\e ->
+                                      map fst .
+                                      filter (\(_, typ) -> typ == OneToAll) .
+                                      getChildren (entityId e) $ graph)) [] cs
   -- Invalidate references
   refGraph <- getReferences
   let refingCols = getReferringColumns (recordTableId record) refGraph
@@ -215,7 +237,7 @@ handleRecordDelete recId = do
           let updatedCell = cell { cellContent = CellValue newVal }
           update i $ const updatedCell
           pure $ Just updatedCell
-  let cellChanges = concat $ map (mapMaybe id) mCellChanges
+  let cellChanges = concatMap catMaybes mCellChanges
   sendWS $ WsDownCellsChanged cellChanges
   propagate
     [ RootWholeColumns allChildren
@@ -234,7 +256,8 @@ handleRecordData recId = do
 handleRecordList :: MonadHexl m => Id Table -> m [Entity Record]
 handleRecordList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
 
-handleRecordListWithData :: MonadHexl m => Id Table -> m [(Id Record, [(Entity Column, CellContent)])]
+handleRecordListWithData :: MonadHexl m => Id Table
+                         -> m [(Id Record, [(Entity Column, CellContent)])]
 handleRecordListWithData tblId = do
   recs <- listByQuery [ "tableId" =: toObjectId tblId ]
   for recs $ \r -> (entityId r,) <$> handleRecordData (entityId r)
@@ -258,14 +281,17 @@ handleCellSet c r val = do
 compileColumn :: MonadHexl m => Id Column -> m (Entity Column)
 compileColumn c = do
   col <- getById' c
+  dataCol <- case col ^? columnKind . _ColumnData of
+    Nothing -> throwError $ ErrBug "Trying to compile column other than data"
+    Just dataCol -> pure dataCol
   let abort msg = do
         void $ modifyDependencies c []
         pure $ CompileResultError msg
-  res <- compile (columnSourceCode col) (mkTypecheckEnv $ columnTableId col)
+  res <- compile (dataCol ^. dataColSourceCode) (mkTypecheckEnv $ col ^. columnTableId)
   compileResult <- case res of
     Left msg -> abort msg
     Right (expr ::: typ) -> do
-      colTyp <- typeOfDataType getTableRows (columnDataType col)
+      colTyp <- typeOfDataType getTableRows (dataCol ^. dataColType)
       if typ /= colTyp
         then abort $ pack $
                "Inferred type `" <> show typ <>
@@ -275,9 +301,10 @@ compileColumn c = do
           let deps = collectDependencies expr
           cycles <- modifyDependencies c deps
           if cycles then abort "Dependency graph has cycles"
-                    else pure $ CompileResultCode expr
-  update c $ \col' -> col' { columnCompileResult = compileResult }
-  pure $ Entity c col { columnCompileResult = compileResult }
+                    else pure $ CompileResultOk expr
+  let newCol = col & columnKind . _ColumnData . dataColCompileResult .~ compileResult
+  update c $ const newCol
+  pure $ Entity c newCol
 
 compileColumnChildren :: MonadHexl m => Id Column -> m [Entity Column]
 compileColumnChildren c = do
@@ -289,10 +316,13 @@ compileColumnChildren c = do
 
 invalidateCells :: MonadHexl m => Id Column -> m ()
 invalidateCells c = do
-  cells <- listByQuery [ "aspects.columnId" =: toObjectId c]
   col <- getById' c
+  dataCol <- case col ^? columnKind . _ColumnData of
+    Nothing -> throwError $ ErrBug "Trying to invalidate cells of column other than data"
+    Just dataCol -> pure dataCol
+  cells <- listByQuery [ "aspects.columnId" =: toObjectId c]
   changes <- for cells $ \(Entity i cell) -> do
-    defContent <- defaultContent col
+    defContent <- defaultContent (dataCol ^. dataColType)
     let invalidatedCell = Cell defContent (cellAspects cell)
     update i $ const invalidatedCell
     pure invalidatedCell
@@ -300,20 +330,23 @@ invalidateCells c = do
 
 renewErrorCells :: MonadHexl m => Id Column -> m ()
 renewErrorCells c = do
-  cells <- listByQuery [ "aspects.columnId" =: toObjectId c]
   col <- getById' c
+  dataCol <- case col ^? columnKind . _ColumnData of
+    Nothing -> throwError $ ErrBug "Trying to renewErrorCells of column other than data"
+    Just dataCol -> pure dataCol
+  cells <- listByQuery [ "aspects.columnId" =: toObjectId c]
   changes <- for cells $ \(Entity i cell) ->
     case cellContent cell of
       CellError _ -> do
-        defContent <- defaultContent col
+        defContent <- defaultContent (dataCol ^. dataColType)
         let renewedCell = Cell defContent (cellAspects cell)
         update i $ const renewedCell
         pure $ Just renewedCell
       CellValue _ -> pure Nothing
-  sendWS $ WsDownCellsChanged $ mapMaybe id changes
+  sendWS $ WsDownCellsChanged $ catMaybes changes
   propagate [ RootCellChanges $
                 map (\(Cell _ (Aspects _ c' r')) -> (c', r')) $
-                mapMaybe id changes
+                catMaybes changes
             ]
 
 updateReference :: MonadHexl m => Id Column -> DataType -> m ()
@@ -339,7 +372,9 @@ mkTypecheckEnv ownTblId = TypecheckEnv
           Left _ -> pure Nothing
           Right (Entity tblId _) -> do
             cols <- listByQuery [ "tableId" =: toObjectId tblId ]
-            pure $ Just (tblId, cols)
+            let dataCols = flip mapMaybe cols $ \(Entity i col) ->
+                  fmap (i,) (col ^? columnKind . _ColumnData)
+            pure $ Just (tblId, dataCols)
 
     , envGetTableRows = getTableRows
 
@@ -347,29 +382,30 @@ mkTypecheckEnv ownTblId = TypecheckEnv
 
     }
   where
-    resolveColumnRef :: Id Table -> Ref Column -> m (Maybe (Entity Column))
+    resolveColumnRef :: Id Table -> Ref Column -> m (Maybe (Id Column, DataCol))
     resolveColumnRef tbl colName = do
       let colQuery =
             [ "name" =: colName
             , "tableId" =: toObjectId tbl
             ]
       columnRes <- getOneByQuery colQuery
-      case columnRes of
-        Left _  -> pure Nothing
-        Right e -> pure $ Just e
+      pure $ case columnRes of
+        Left _  -> Nothing
+        Right (Entity i col) -> fmap (i,) (col ^? columnKind . _ColumnData)
 
 getTableRows :: MonadHexl m => Id Table -> m Type
 getTableRows t = do
   cols <- listByQuery [ "tableId" =: toObjectId t ]
   let toRow [] = pure TyNoRow
-      toRow ((Entity _ c):rest) = TyRow (Ref $ columnName c)
-                                    <$> typeOfDataType getTableRows (columnDataType c)
+      toRow ((name, col):rest) = TyRow (Ref name)
+                                    <$> typeOfDataType getTableRows (col ^. dataColType)
                                     <*> toRow rest
-  toRow cols
+  toRow $ flip mapMaybe cols $ \(Entity _ col) ->
+    fmap (col ^. columnName,) (col ^? columnKind . _ColumnData)
 
 -- TODO: configurable by user
-defaultContent :: MonadHexl m => Column -> m CellContent
-defaultContent col = case columnDataType col of
+defaultContent :: MonadHexl m => DataType -> m CellContent
+defaultContent = \case
   DataBool     -> pure . CellValue $ VBool False
   DataString   -> pure . CellValue $ VString ""
   DataNumber   -> pure . CellValue $ VNumber 0

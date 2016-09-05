@@ -1,8 +1,8 @@
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleContexts    #-}
 
 module Propagate
   ( PropagationRoot (..)
@@ -14,13 +14,13 @@ import           Control.Monad.Except
 import           Data.Foldable
 import           Data.Traversable
 
-import           Lib.Model.Column
-import           Lib.Model.Cell
-import           Lib.Model.Dependencies
-import           Lib.Model.Types
-import           Lib.Types
 import           Lib.Compiler.Interpreter
 import           Lib.Compiler.Interpreter.Types
+import           Lib.Model.Cell
+import           Lib.Model.Column
+import           Lib.Model.Dependencies
+import           Lib.Model.Record
+import           Lib.Types
 
 import           Monads
 import           Propagate.Monad
@@ -59,7 +59,7 @@ propagate' ((next, children):rest) = do
   let doTarget :: Id Record -> m ()
       doTarget r = do
         result <- case compileResult of
-          CompileResultCode expr -> do
+          CompileResultOk expr -> do
             let env = EvalEnv
                         { envGetCellValue = flip getCellValue r
                         , envGetColumnValues = getColumnValues
