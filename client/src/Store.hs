@@ -269,8 +269,9 @@ instance StoreData State where
         request api (Proxy :: Proxy DataColSetIsDerived) i payload $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ()    -> pure []
-        pure $ st & stateColumns . at i . _Just . columnKind . _ColumnData . dataColIsDerived .~ inpTyp
-                  & stateColumns . at i . _Just . columnKind . _ColumnData . dataColSourceCode .~ src
+        let dataColLens = stateColumns . at i . _Just . columnKind . _ColumnData
+        pure $ st & dataColLens . dataColIsDerived .~ inpTyp
+                  & dataColLens . dataColSourceCode .~ src
 
       -- Cell
 

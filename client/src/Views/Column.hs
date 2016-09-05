@@ -213,7 +213,7 @@ columnConfig = defineControllerView "column configuration" colConfStore $
       , onClick $ \_ _ ->
           [ SomeStoreAction colConfStore $ ColumnSetVisibility i True ]
       ] ) $ faIcon_ "gears fa-2x"
-    when (Set.member i $ state ^. ccsVisible) $ cldiv_ "dialog" $
+    when (Set.member i $ state ^. ccsVisible) $
       case col ^. columnKind of
         ColumnData   dat -> dataColConf_ i dat
         ColumnReport rep -> reportColConf_ i rep
@@ -262,7 +262,7 @@ dataColConf_ !i !d = view dataColConf (i, d) mempty
 
 dataColConf :: ReactView (Id Column, DataCol)
 dataColConf = defineControllerView "data column configuration" colConfStore $
-  \state (i, dat) -> cldiv_ "config" $ do
+  \state (i, dat) -> cldiv_ "dialog" $ do
       let mError = case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of
             (Derived, CompileResultError msg) -> Just msg
             _                                 -> Nothing
