@@ -8,6 +8,7 @@ module Lib.Compiler.Parser
 
 import           Control.Monad.Identity
 
+import           Data.Foldable          (foldl')
 import           Data.Functor           (($>))
 import           Data.Monoid            ((<>))
 import           Data.Text              (Text, pack, unpack)
@@ -50,8 +51,8 @@ expr = buildExpressionParser table terms
           try app
       <|> try let'
       <|> try lam
-      <|> try ifThenElse
       <|> try prjRecord
+      <|> try ifThenElse
       <|> try aExpr
       <?> "expression"
 
@@ -66,27 +67,35 @@ aExpr =
   <?> "atomic expression"
 
 app :: Parser PExpr
-app = mkAppChain =<< many1 aExpr
-  where mkAppChain exprs =
-          let (h:t) = reverse exprs
-          in case go t of
-            Just ex -> pure $ PApp ex h
-            Nothing -> fail "application"
-        go [] = Nothing
-        go (h:t) = case go t of
-          Just ex -> Just $ PApp ex h
-          Nothing -> Just h
+app = do
+  start <- aExpr
+  args <- many1 expr
+  pure $ foldl' PApp start args
+
+prjRecord :: Parser PExpr
+prjRecord = do
+  e <- aExpr
+  refs <- many1 $ char '.' *> ((Ref . pack) <$> P.identifier lexer)
+  pure $ foldl' PPrjRecord e refs
 
 let' :: Parser PExpr
-let' = PLet
-  <$> (P.reserved lexer "let" *> P.identifier lexer)
-  <*> (P.reservedOp lexer "=" *> expr <* P.lexeme lexer (char ';'))
-  <*> expr
+let' = do
+  _ <- P.reserved lexer "let"
+  name <- P.identifier lexer
+  args <- many $ P.identifier lexer
+  _ <- P.reservedOp lexer "="
+  e <- expr
+  _ <- P.lexeme lexer (char ';')
+  body <- expr
+  pure $ PLet name (foldr PLam e args) body
 
 lam :: Parser PExpr
-lam = PLam
-  <$> (char '\\' *> P.identifier lexer)
-  <*> (P.lexeme lexer (string "->") *> expr)
+lam = do
+  _ <- P.lexeme lexer $ char '\\'
+  vars <- many1 $ P.identifier lexer
+  _ <- P.lexeme lexer $ string "->"
+  body <- expr
+  pure $ foldr PLam body vars
 
 var :: Parser PExpr
 var = PVar <$> P.identifier lexer
@@ -112,11 +121,6 @@ ifThenElse = PIf
   <$> (P.reserved lexer "if"   *> expr)
   <*> (P.reserved lexer "then" *> expr)
   <*> (P.reserved lexer "else" *> expr)
-
-prjRecord :: Parser PExpr
-prjRecord = PPrjRecord
-  <$> aExpr
-  <*> (char '.' *> ((Ref . pack) <$> P.identifier lexer))
 
 tblRef :: Parser PExpr
 tblRef = PTableRef . Ref . pack <$> (char '#' *> P.identifier lexer)
