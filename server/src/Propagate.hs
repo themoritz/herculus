@@ -14,6 +14,7 @@ import           Control.Monad.Except
 import           Data.Foldable
 import           Data.Traversable
 
+import           Lib.Api.WebSocket
 import           Lib.Compiler.Interpreter
 import           Lib.Compiler.Interpreter.Types
 import           Lib.Model.Cell
@@ -22,6 +23,7 @@ import           Lib.Model.Dependencies
 import           Lib.Model.Record
 import           Lib.Types
 
+import           Cache
 import           Monads
 import           Propagate.Monad
 
@@ -31,24 +33,26 @@ data PropagationRoot
   | RootSpecificCells [(Id Column, Id Record)]
 
 propagate :: MonadHexl m => [PropagationRoot] -> m ()
-propagate roots = runPropagate $ do
-  startCols <- for roots $ \root -> case root of
-    RootCellChanges coords -> do
-      graph <- lift getDependencies
-      for_ coords $ \(c, r) ->
-        for_ (getChildren c graph) $ \(child, depType) -> case depType of
-          OneToOne -> addTargets child (OneRecord r)
-          OneToAll -> addTargets child CompleteColumn
-      -- Don't need to remove the root columns because they have no targets
-      pure $ map fst coords
-    RootWholeColumns cs -> do
-      for_ cs $ \c -> addTargets c CompleteColumn
-      pure cs
-    RootSpecificCells coords -> do
-      for_ coords $ \(c, r) -> addTargets c (OneRecord r)
-      pure $ map fst coords
-  order <- lift $ getColumnOrder $ join startCols
-  propagate' order
+propagate roots = do
+  (_, changedCells) <- runPropT $ do
+    startCols <- for roots $ \root -> case root of
+      RootCellChanges coords -> do
+        graph <- lift getDependencies
+        for_ coords $ \(c, r) ->
+          for_ (getChildren c graph) $ \(child, depType) -> case depType of
+            OneToOne -> addTargets child (OneRecord r)
+            OneToAll -> addTargets child CompleteColumn
+        -- Don't need to remove the root columns because they have no targets
+        pure $ map fst coords
+      RootWholeColumns cs -> do
+        for_ cs $ \c -> addTargets c CompleteColumn
+        pure cs
+      RootSpecificCells coords -> do
+        for_ coords $ \(c, r) -> addTargets c (OneRecord r)
+        pure $ map fst coords
+    order <- lift $ getColumnOrder $ join startCols
+    propagate' order
+  sendWS $ WsDownCellsChanged changedCells
 
 propagate' :: forall m. MonadPropagate m => ColumnOrder -> m ()
 propagate' [] = pure ()

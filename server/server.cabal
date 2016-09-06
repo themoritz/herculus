@@ -15,13 +15,13 @@ library
   hs-source-dirs:      src
   exposed-modules:     Monads
                      , Propagate
-                     , Propagate.Cache
+                     , Cache
                      , Propagate.Monad
                      , ConnectionManager
                      , Handler.WebSocket
                      , Handler.Rest
-  build-depends:       base >= 4.7 && < 5
-                     , aeson
+  build-depends:       aeson
+                     , base >= 4.7 && < 5
                      , bytestring
                      , containers
                      , fast-logger
@@ -31,6 +31,7 @@ library
                      , monad-logger
                      , mongoDB
                      , mtl
+                     , pandoc
                      , pretty-show
                      , servant-server
                      , stm

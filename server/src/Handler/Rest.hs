@@ -17,6 +17,9 @@ import           Data.Monoid
 import           Data.Text                      (Text, pack)
 import           Data.Traversable
 
+import qualified Text.Pandoc                    as Pandoc
+import qualified Text.Pandoc.Error              as Pandoc (handleError)
+
 import           Servant
 
 import           Database.MongoDB               ((=:))
@@ -24,6 +27,7 @@ import           Database.MongoDB               ((=:))
 import           Lib.Api.Rest
 import           Lib.Api.WebSocket
 import           Lib.Compiler
+import           Lib.Compiler.Interpreter.Types
 import           Lib.Compiler.Typechecker.Types
 import           Lib.Model
 import           Lib.Model.Cell
@@ -34,8 +38,10 @@ import           Lib.Model.Record
 import           Lib.Model.References
 import           Lib.Model.Table
 import           Lib.Template
+import           Lib.Template.Interpreter
 import           Lib.Types
 
+import           Cache
 import           Monads
 import           Propagate
 
@@ -120,8 +126,7 @@ handleColumnCreate newCol = do
         i <- create cell
         pure $ Entity i cell
       pure (Entity c newCol, cells)
-    ColumnReport repCol -> do
-      pure (Entity c newCol, [])
+    ColumnReport _ -> pure (Entity c newCol, [])
 
 handleColumnDelete :: MonadHexl m => Id Column -> m ()
 handleColumnDelete colId = do
@@ -140,7 +145,7 @@ handleColumnList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
 
 handleColumnSetName :: MonadHexl m => Id Column -> Text -> m ()
 handleColumnSetName c name = do
-  update c $ \col -> col { _columnName = name }
+  update c $ columnName .~ name
   newChilds <- compileColumnChildren c
   sendWS $ WsDownColumnsChanged newChilds
   propagate [RootWholeColumns $ map entityId newChilds]
@@ -198,10 +203,12 @@ handleReportColSetTemplate c template = do
   sendWS $ WsDownColumnsChanged [Entity c newCol]
 
 handleReportColSetFormat :: MonadHexl m => Id Column -> ReportFormat -> m ()
-handleReportColSetFormat = undefined
+handleReportColSetFormat c format =
+  update c $ columnKind . _ColumnReport . reportColFormat .~ format
 
 handleReportColSetLanguage :: MonadHexl m => Id Column -> ReportLanguage -> m ()
-handleReportColSetLanguage = undefined
+handleReportColSetLanguage c lang =
+  update c $ columnKind . _ColumnReport . reportColLanguage .~ lang
 
 --
 
@@ -311,9 +318,27 @@ handleCellGetReportHTML :: MonadHexl m => Id Column -> Id Record -> m Text
 handleCellGetReportHTML = undefined
 
 handleCellGetReportPlain :: MonadHexl m => Id Column -> Id Record -> m Text
-handleCellGetReportPlain = undefined
+handleCellGetReportPlain = evalReport
 
 -- Helper ----------------------------
+
+evalReport :: MonadHexl m => Id Column -> Id Record -> m Text
+evalReport c r = do
+  col <- getById' c
+  case col ^? columnKind . _ColumnReport of
+    Nothing -> throwError $ ErrBug "Trying to get report for non report column"
+    Just repCol -> case repCol ^. reportColCompiledTemplate of
+      CompileResultOk ttpl -> fmap fst $ runCacheT $ do
+        let env = EvalEnv
+                    { envGetCellValue = flip getCellValue r
+                    , envGetColumnValues = getColumnValues
+                    , envGetTableRecords = getTableRecords
+                    , envGetRecordValue = getRecordValue
+                    }
+        runEvalTemplate env ttpl >>= \case
+          Left e -> pure e
+          Right res -> pure res
+      _ -> throwError $ ErrBug "Getting report for non compiled template."
 
 compileColumn :: MonadHexl m => Id Column -> m (Entity Column)
 compileColumn c = do
