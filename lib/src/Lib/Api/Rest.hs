@@ -67,7 +67,7 @@ type DataColSetIsDerived  = "dataCol"   :> "setInput" :> Capture "columnId" (Id 
 
 type ReportColSetTemplate = "reportCol" :> "setTemplate" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] Text :> Post '[JSON] ()
 type ReportColSetFormat   = "reportCol" :> "setFormat" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] ReportFormat :> Post '[JSON] ()
-type ReportColSetLanguage = "reportCol" :> "setFormat" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] ReportLanguage :> Post '[JSON] ()
+type ReportColSetLanguage = "reportCol" :> "setFormat" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] (Maybe ReportLanguage) :> Post '[JSON] ()
 
 type RecordCreate         = "record"    :> "create" :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Entity Record, [Entity Cell])
 type RecordDelete         = "record"    :> "delete" :> Capture "recordId" (Id Record) :> Get '[JSON] ()

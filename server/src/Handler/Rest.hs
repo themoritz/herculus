@@ -14,11 +14,11 @@ import qualified Data.ByteString.Lazy           as BL
 import           Data.List                      (union)
 import           Data.Maybe                     (catMaybes, isNothing, mapMaybe)
 import           Data.Monoid
-import           Data.Text                      (Text, pack)
+import           Data.Text                      (Text, pack, unpack)
 import           Data.Traversable
 
 import qualified Text.Pandoc                    as Pandoc
-import qualified Text.Pandoc.Error              as Pandoc (handleError)
+import qualified Text.Pandoc.Error              as Pandoc
 
 import           Servant
 
@@ -206,7 +206,7 @@ handleReportColSetFormat :: MonadHexl m => Id Column -> ReportFormat -> m ()
 handleReportColSetFormat c format =
   update c $ columnKind . _ColumnReport . reportColFormat .~ format
 
-handleReportColSetLanguage :: MonadHexl m => Id Column -> ReportLanguage -> m ()
+handleReportColSetLanguage :: MonadHexl m => Id Column -> Maybe ReportLanguage -> m ()
 handleReportColSetLanguage c lang =
   update c $ columnKind . _ColumnReport . reportColLanguage .~ lang
 
@@ -315,14 +315,26 @@ handleCellGetReportPDF :: MonadHexl m => Id Column -> Id Record -> m BL.ByteStri
 handleCellGetReportPDF = undefined
 
 handleCellGetReportHTML :: MonadHexl m => Id Column -> Id Record -> m Text
-handleCellGetReportHTML = undefined
+handleCellGetReportHTML c r = do
+  (repCol, plain) <- evalReport c r
+  pure $ case repCol ^. reportColLanguage of
+    Nothing -> plain
+    Just lang -> case getPandocReader lang plain of
+      Left err -> pack $ show err
+      Right pandoc -> pack $ Pandoc.writeHtmlString Pandoc.def pandoc
+
+getPandocReader :: ReportLanguage -> Text -> Either Pandoc.PandocError Pandoc.Pandoc
+getPandocReader = \case
+  ReportLanguageMarkdown -> Pandoc.readMarkdown Pandoc.def . unpack
+  ReportLanguageLatex    -> Pandoc.readLaTeX Pandoc.def . unpack
+  ReportLanguageHTML     -> Pandoc.readHtml Pandoc.def . unpack
 
 handleCellGetReportPlain :: MonadHexl m => Id Column -> Id Record -> m Text
-handleCellGetReportPlain = evalReport
+handleCellGetReportPlain c r = snd <$> evalReport c r
 
 -- Helper ----------------------------
 
-evalReport :: MonadHexl m => Id Column -> Id Record -> m Text
+evalReport :: MonadHexl m => Id Column -> Id Record -> m (ReportCol, Text)
 evalReport c r = do
   col <- getById' c
   case col ^? columnKind . _ColumnReport of
@@ -336,8 +348,8 @@ evalReport c r = do
                     , envGetRecordValue = getRecordValue
                     }
         runEvalTemplate env ttpl >>= \case
-          Left e -> pure e
-          Right res -> pure res
+          Left e -> pure (repCol, e)
+          Right res -> pure (repCol, res)
       _ -> throwError $ ErrBug "Getting report for non compiled template."
 
 compileColumn :: MonadHexl m => Id Column -> m (Entity Column)
