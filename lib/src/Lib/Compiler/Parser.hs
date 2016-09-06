@@ -1,5 +1,4 @@
-{-# LANGUAGE FlexibleInstances  #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Lib.Compiler.Parser
   ( parseExpr
@@ -70,7 +69,7 @@ app :: Parser PExpr
 app = do
   start <- aExpr
   args <- many1 expr
-  pure $ foldl' PApp start args
+  pure $ foldr PApp start args
 
 prjRecord :: Parser PExpr
 prjRecord = do
