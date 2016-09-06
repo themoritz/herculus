@@ -3,7 +3,7 @@
 
 module Lib.Api.Rest where
 
-import           Data.ByteString.Lazy
+import qualified Data.ByteString.Lazy as BL
 import           Data.Text
 
 import           Servant.API
@@ -44,6 +44,9 @@ type Routes =
  :<|> RecordListWithData
 
  :<|> CellSet
+ :<|> CellGetReportPDF
+ :<|> CellGetReportHTML
+ :<|> CellGetReportPlain
 
 type ProjectCreate        = "project"   :> "create" :> ReqBody '[JSON] Project :> Post '[JSON] (Id Project)
 type ProjectList          = "project"   :> "list"   :> Get '[JSON] [Entity Project]
@@ -54,7 +57,7 @@ type TableListGlobal      = "table"     :> "listGlobal" :> Get '[JSON] [Entity T
 type TableData            = "table"     :> "data" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Column, Id Record, CellContent)]
 type TableGetWhole        = "table"     :> "getWhole" :> Capture "tableId" (Id Table) :> Get '[JSON] ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
 
-type ColumnCreate         = "column"    :> "create"  :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Entity Column, [Entity Cell])
+type ColumnCreate         = "column"    :> "create"  :> ReqBody '[JSON] Column :> Post '[JSON] (Entity Column, [Entity Cell])
 type ColumnDelete         = "column"    :> "delete"  :> Capture "columnId" (Id Column) :> Get '[JSON] ()
 type ColumnList           = "column"    :> "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [Entity Column]
 type ColumnSetName        = "column"    :> "setName" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] Text :> Post '[JSON] ()
@@ -73,5 +76,6 @@ type RecordList           = "record"    :> "list" :> Capture "tableId" (Id Table
 type RecordListWithData   = "record"    :> "listWithData" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Record, [(Entity Column, CellContent)])]
 
 type CellSet              = "cell"      :> "set" :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record) :> ReqBody '[JSON] Value :> Post '[JSON] ()
-type CellGetReportPDF     = "cell"      :> "getReportPDF" :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record) :> Get '[PDF] ByteString
+type CellGetReportPDF     = "cell"      :> "getReportPDF" :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record) :> Get '[PDF] BL.ByteString
 type CellGetReportHTML    = "cell"      :> "getReportHTML" :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record) :> Get '[HTML] Text
+type CellGetReportPlain   = "cell"      :> "getReportPlain" :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record) :> Get '[PlainText] Text

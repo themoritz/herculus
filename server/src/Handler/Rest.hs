@@ -8,10 +8,11 @@ module Handler.Rest where
 
 import           Control.Arrow                  (second)
 import           Control.Lens
-import           Control.Monad                  (unless, void)
+import           Control.Monad                  (unless, void, when)
 
+import qualified Data.ByteString.Lazy           as BL
 import           Data.List                      (union)
-import           Data.Maybe                     (catMaybes, mapMaybe)
+import           Data.Maybe                     (catMaybes, isNothing, mapMaybe)
 import           Data.Monoid
 import           Data.Text                      (Text, pack)
 import           Data.Traversable
@@ -32,6 +33,7 @@ import           Lib.Model.Project
 import           Lib.Model.Record
 import           Lib.Model.References
 import           Lib.Model.Table
+import           Lib.Template
 import           Lib.Types
 
 import           Monads
@@ -67,6 +69,9 @@ handle =
   :<|> handleRecordListWithData
 
   :<|> handleCellSet
+  :<|> handleCellGetReportPDF
+  :<|> handleCellGetReportHTML
+  :<|> handleCellGetReportPlain
 
 --
 
@@ -102,27 +107,21 @@ handleTableGetWhole tblId =
 
 --
 
-handleColumnCreate :: MonadHexl m => Id Table -> m (Entity Column, [Entity Cell])
-handleColumnCreate t = do
-  let newType = DataString
-      newCol = Column
-        { _columnTableId = t
-        , _columnName = ""
-        , _columnKind = ColumnData DataCol
-          { _dataColType = newType
-          , _dataColIsDerived = NotDerived
-          , _dataColSourceCode = ""
-          , _dataColCompileResult = CompileResultNone
-          }
-        }
+handleColumnCreate :: MonadHexl m => Column -> m (Entity Column, [Entity Cell])
+handleColumnCreate newCol = do
   c <- create newCol
-  rs <- listByQuery [ "tableId" =: toObjectId t ]
-  cells <- for rs $ \e -> do
-    defContent <- defaultContent newType
-    let cell = newCell t c (entityId e) defContent
-    i <- create cell
-    pure $ Entity i cell
-  pure (Entity c newCol, cells)
+  case newCol ^. columnKind of
+    ColumnData dataCol -> do
+      let t = newCol ^. columnTableId
+      rs <- listByQuery [ "tableId" =: toObjectId t ]
+      cells <- for rs $ \e -> do
+        defContent <- defaultContent (dataCol ^. dataColType)
+        let cell = newCell t c (entityId e) defContent
+        i <- create cell
+        pure $ Entity i cell
+      pure (Entity c newCol, cells)
+    ColumnReport repCol -> do
+      pure (Entity c newCol, [])
 
 handleColumnDelete :: MonadHexl m => Id Column -> m ()
 handleColumnDelete colId = do
@@ -185,7 +184,18 @@ handleDataColSetIsDerived c (derived, code) = do
 --
 
 handleReportColSetTemplate :: MonadHexl m => Id Column -> Text -> m ()
-handleReportColSetTemplate = undefined
+handleReportColSetTemplate c template = do
+  oldCol <- getById' c
+  when (isNothing (oldCol ^? columnKind . _ColumnReport)) $
+    throwError $ ErrBug "Tried to set template of column other than data"
+  res <- compileTemplate template (mkTypecheckEnv $ oldCol ^. columnTableId)
+  let compileResult = case res of
+        Left msg -> CompileResultError msg
+        Right tTpl -> CompileResultOk tTpl
+      newCol = oldCol & columnKind . _ColumnReport . reportColCompiledTemplate .~ compileResult
+                      & columnKind . _ColumnReport . reportColTemplate .~ template
+  update c $ const newCol
+  sendWS $ WsDownColumnsChanged [Entity c newCol]
 
 handleReportColSetFormat :: MonadHexl m => Id Column -> ReportFormat -> m ()
 handleReportColSetFormat = undefined
@@ -293,6 +303,15 @@ handleCellSet c r val = do
   sendWS $ WsDownCellsChanged [changedCell]
   -- TODO: fork this
   propagate [RootCellChanges [(c, r)]]
+
+handleCellGetReportPDF :: MonadHexl m => Id Column -> Id Record -> m BL.ByteString
+handleCellGetReportPDF = undefined
+
+handleCellGetReportHTML :: MonadHexl m => Id Column -> Id Record -> m Text
+handleCellGetReportHTML = undefined
+
+handleCellGetReportPlain :: MonadHexl m => Id Column -> Id Record -> m Text
+handleCellGetReportPlain = undefined
 
 -- Helper ----------------------------
 
