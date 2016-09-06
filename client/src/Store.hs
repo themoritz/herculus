@@ -84,7 +84,7 @@ data Action
   | TableSet ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
   | TableUpdateCells [Cell]
   | TableUpdateColumns [Entity Column]
-  | TableAddColumn
+  | TableAddColumn Column
   | TableAddColumnDone (Entity Column, [Entity Cell])
   | TableDeleteColumn (Id Column)
   | TableAddRecord
@@ -210,12 +210,10 @@ instance StoreData State where
           foldl' (\cols' (Entity i c) -> Map.insert i c cols') cols $
           filter (\(Entity _ c) -> st ^. stateTableId == Just (c ^. columnTableId)) entries
 
-      TableAddColumn -> do
-        case st ^. stateTableId of
-          Nothing -> pure ()
-          Just t -> request api (Proxy :: Proxy ColumnCreate) t $ \case
-            Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
-            Right res -> pure $ dispatch $ TableAddColumnDone res
+      TableAddColumn col -> do
+        request api (Proxy :: Proxy ColumnCreate) col $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right res -> pure $ dispatch $ TableAddColumnDone res
         pure st
 
       TableAddColumnDone (Entity i c, cells) -> pure $

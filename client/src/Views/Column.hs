@@ -1,66 +1,73 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveAnyClass  #-}
+{-# LANGUAGE DeriveGeneric   #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Views.Column where
 
-import           Control.Lens hiding (view)
+import           Control.Lens              hiding (view)
 import           React.Flux
 
-import           Control.Monad       (forM_, when)
-import           Control.Applicative ((<|>))
-import           Data.Foldable       (for_)
-import qualified Data.Map            as Map
-import           Data.Map            (Map)
-import           Data.Maybe          (fromMaybe, isJust)
-import           Data.Monoid         ((<>))
-import qualified Data.Set            as Set
-import           Data.Set            (Set)
+import           Control.Applicative       ((<|>))
+import           Control.DeepSeq           (NFData)
+import           Control.Monad             (forM_, when)
+import           Data.Foldable             (for_)
+import           Data.Map                  (Map)
+import qualified Data.Map                  as Map
+import           Data.Maybe                (fromMaybe, isJust)
+import           Data.Monoid               ((<>))
 import           Data.Proxy
-import           Data.Text           (Text)
-import           Data.Tuple          (swap)
-import qualified Data.Text           as Text
-import           Data.Typeable       (Typeable)
-import           GHC.Generics        (Generic)
-import           Control.DeepSeq     (NFData)
-import           Text.Read           (readMaybe)
+import           Data.Set                  (Set)
+import qualified Data.Set                  as Set
+import           Data.Text                 (Text)
+import qualified Data.Text                 as Text
+import           Data.Tuple                (swap)
+import           Data.Typeable             (Typeable)
+import           GHC.Generics              (Generic)
+import           Text.Read                 (readMaybe)
 
-import           React.Flux.Addons.Servant (request)
-import           Lib.Api.Rest (TableListGlobal)
+import           Lib.Api.Rest              (TableListGlobal)
 import           Lib.Model
 import           Lib.Model.Column
 import           Lib.Model.Table
 import           Lib.Types
+import           React.Flux.Addons.Servant (request)
 
 import           Store
-import           Views.Common (editBox_, EditBoxProps (..))
-import           Views.Foreign
 import           Views.Combinators
+import           Views.Common              (EditBoxProps (..), editBox_)
+import           Views.Foreign
 
 -- state of column controller view
 
 type TableCache = Map (Id Table) Text
 
 data ColConfState = ColConfState
-  { _ccsTmpDataType  :: Map (Id Column) DataType
-  , _ccsTmpIsFormula :: Map (Id Column) IsDerived
-  , _ccsTmpFormula   :: Map (Id Column) Text
-  , _ccsVisible      :: Set (Id Column) -- not in set === false
-  , _ccsTableCache   :: TableCache
+  { _ccsTmpDataType       :: Map (Id Column) DataType
+  , _ccsTmpIsFormula      :: Map (Id Column) IsDerived
+  , _ccsTmpFormula        :: Map (Id Column) Text
+  , _ccsVisible           :: Set (Id Column) -- not in set === false
+  , _ccsTableCache        :: TableCache
+  , _ccsTmpReportLanguage :: Map (Id Column) ReportLanguage
+  , _ccsTmpReportFormat   :: Map (Id Column) ReportFormat
+  , _ccsTmpReportTemplate :: Map (Id Column) Text
   }
 
 makeLenses ''ColConfState
 
 data ColConfAction
-  = ColumnSetTmpDataType    (Id Column) DataType
-  | ColumnUnsetTmpDataType  (Id Column)
-  | ColumnSetTmpIsFormula   (Id Column) IsDerived
-  | ColumnUnsetTmpIsFormula (Id Column)
-  | ColumnSetTmpFormula     (Id Column) Text
-  | ColumnUnsetTmpFormula   (Id Column)
-  | ColumnSetVisibility     (Id Column) Bool
+  = ColumnSetTmpDataType       (Id Column) DataType
+  | ColumnUnsetTmpDataType     (Id Column)
+  | ColumnSetTmpIsFormula      (Id Column) IsDerived
+  | ColumnUnsetTmpIsFormula    (Id Column)
+  | ColumnSetTmpFormula        (Id Column) Text
+  | ColumnUnsetTmpFormula      (Id Column)
+  | ColumnSetVisibility        (Id Column) Bool
   | ColumnGetTableCache
-  | ColumnSetTableCache     (Map (Id Table) Text)
+  | ColumnSetTableCache        (Map (Id Table) Text)
+  | ColumnSetTmpReportLang     (Id Column) ReportLanguage
+  | ColumnUnsetTmpReportLang   (Id Column)
+  | ColumnSetTmpReportFormat   (Id Column) ReportFormat
+  | ColumnUnsetTmpReportFormat (Id Column)
   deriving (Typeable, Generic, NFData)
 
 instance StoreData ColConfState where
@@ -92,8 +99,24 @@ instance StoreData ColConfState where
     ColumnSetTableCache m ->
       pure $ st & ccsTableCache .~ m
 
+    ColumnSetTmpReportLang i lang ->
+      pure $ st & ccsTmpReportLanguage . at i .~ Just lang
+    ColumnUnsetTmpReportLang i ->
+      pure $ st & ccsTmpReportLanguage . at i .~ Nothing
+    ColumnSetTmpReportFormat i format ->
+      pure $ st & ccsTmpReportFormat . at i .~ Just format
+    ColumnUnsetTmpReportFormat i ->
+      pure $ st & ccsTmpReportFormat . at i .~ Nothing
+
 colConfStore :: ReactStore ColConfState
-colConfStore = mkStore $ ColConfState Map.empty Map.empty Map.empty Set.empty Map.empty
+colConfStore = mkStore $ ColConfState Map.empty
+                                      Map.empty
+                                      Map.empty
+                                      Set.empty
+                                      Map.empty
+                                      Map.empty
+                                      Map.empty
+                                      Map.empty
 
 -- helper
 
@@ -139,6 +162,22 @@ branches = Map.fromList
   , ("Record", BRecord)
   , ("List"  , BList  )
   , ("Maybe" , BMaybe )
+  ]
+
+reportLangs :: Map Text ReportLanguage
+reportLangs = Map.fromList
+  [ ("Plaintext", ReportLanguagePlain    )
+  , ("Markdown" , ReportLanguageMarkdown )
+  , ("Latex"    , ReportLanguageLatex    )
+  , ("HTML"     , ReportLanguageHTML     )
+  ]
+
+reportFormats :: Map Text ReportFormat
+reportFormats = Map.fromList
+  [ ("Plaintext", ReportFormatPlain    )
+  , ("PDF"      , ReportFormatPDF      )
+  , ("HTML"     , ReportFormatHTML     )
+  , ("Markdown" , ReportFormatMarkdown )
   ]
 
 subType :: DataType -> Maybe DataType
@@ -187,7 +226,9 @@ columnInfo = defineView "column info" $ \(Entity _ col) ->
           Derived    -> faIcon_ "superscript fa-fw"
           NotDerived -> faIcon_ "i-cursor fa-fw"
         dataTypeInfo_ $ dat ^. dataColType
-      ColumnReport rep -> reportInfo_ rep
+      ColumnReport rep -> do
+        faIcon_ "file-text-o"
+        reportInfo_ rep
 
 -- configure column
 
@@ -196,7 +237,7 @@ columnConfig_ !c = view columnConfig c mempty
 
 columnConfig :: ReactView (Entity Column)
 columnConfig = defineControllerView "column configuration" colConfStore $
-  \state c@(Entity i col) -> cldiv_ "config" $ do
+  \state (Entity i col) -> cldiv_ "config" $ do
     let mError = case col ^. columnKind of
           ColumnData dat ->
             case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of
@@ -224,14 +265,79 @@ reportInfo_ :: ReportCol -> ReactElementM eh ()
 reportInfo_ !r = view reportInfo r mempty
 
 reportInfo :: ReactView ReportCol
-reportInfo = defineView "report info" $ \r ->
-  cldiv_ "reportInfo" $ elemText "Report"
+reportInfo = defineView "report info" $ \r -> clspan_ "reportInfo" $ do
+  let format = case r ^. reportColFormat of
+        ReportFormatPlain     -> "Plaintext"
+        ReportFormatPDF       -> "PDF"
+        ReportFormatHTML      -> "HTML"
+        ReportFormatMarkdown  -> "Markdown"
+      lang = case r ^. reportColLanguage of
+        ReportLanguagePlain    -> "Plaintext"
+        ReportLanguageMarkdown -> "Markdown"
+        ReportLanguageLatex    -> "Latex"
+        ReportLanguageHTML     -> "HTML"
+  elemText $ "Report " <> lang <> " "
+  faIcon_ "long-arrow-right"
+  elemText format
 
 reportColConf_ :: Id Column -> ReportCol -> ReactElementM eh ()
 reportColConf_ !i !r = view reportColConf (i, r) mempty
 
 reportColConf :: ReactView (Id Column, ReportCol)
-reportColConf = defineStatefulView "report column config" (undefined :: Int) $ \state (i, rep) -> mempty
+reportColConf = defineControllerView "report column config" colConfStore $
+  \state (i, rep) -> do
+    let mError = case rep ^. reportColCompiledTemplate of
+          CompileResultError msg -> Just msg
+          _                      -> Nothing
+        lang = state ^. ccsTmpReportLanguage . at i ?: rep ^. reportColLanguage
+        format = state ^. ccsTmpReportFormat . at i ?: rep ^. reportColFormat
+        template = state ^. ccsTmpReportTemplate . at i ?: rep ^. reportColTemplate
+    cldiv_ "bodyWrapper" $ cldiv_ "body" $ do
+      cldiv_ "language" $ selReportLanguage_ i lang
+      faIcon_ "long-arrow-right"
+      cldiv_ "format" $ selReportFormat_ i format
+    -- input field for template code
+    inputTemplate_ i template lang
+    for_ mError $ \errMsg -> cldiv_ "error" $ do
+      clspan_ "title" "Error"
+      cldiv_  "body" $ elemText errMsg
+    let cancelActions = []
+        deleteActions = [ SomeStoreAction store $ TableDeleteColumn i ]
+        saveAction    = []
+    confButtons_ cancelActions deleteActions saveAction
+
+selReportLanguage_ :: Id Column -> ReportLanguage -> ReactElementM eh ()
+selReportLanguage_ !i !lang = view selReportLanguage (i, lang) mempty
+
+selReportLanguage :: ReactView (Id Column, ReportLanguage)
+selReportLanguage = defineView "select report lang" $ \(i, lang) ->
+  select_
+    [ "defaultValue" &= lang
+    , onInput $ \evt ->
+        let lang' = readMaybe (target evt "value")
+              ?: ReportLanguagePlain -- unexpected
+        in  [SomeStoreAction colConfStore $ ColumnSetTmpReportLang i lang' ]
+    ] $ optionsFor_ reportLangs
+
+selReportFormat_ :: Id Column -> ReportFormat -> ReactElementM eh ()
+selReportFormat_ !i !f = view selReportFormat (i, f) mempty
+
+selReportFormat :: ReactView (Id Column, ReportFormat)
+selReportFormat = defineView "select report format" $ \(i, format) ->
+  select_
+    [ "defaultValue" &= format
+    , onInput $ \evt ->
+        let format' = readMaybe (target evt "value")
+              ?: ReportFormatPlain -- unexpected
+        in  [SomeStoreAction colConfStore $ ColumnSetTmpReportFormat i format' ]
+    ] $ optionsFor_ reportFormats
+
+inputTemplate_ :: Id Column -> Text -> ReportLanguage -> ReactElementM eh ()
+inputTemplate_ !c !t !lang = view inputTemplate (c, t, lang) mempty
+
+inputTemplate :: ReactView (Id Column, Text, ReportLanguage)
+inputTemplate = defineView "input template" $ \(i, t, lang) ->
+  mempty
 
 -- column kind: data
 
@@ -266,51 +372,64 @@ dataColConf = defineControllerView "data column configuration" colConfStore $
       let mError = case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of
             (Derived, CompileResultError msg) -> Just msg
             _                                 -> Nothing
-      let isDerived = state ^. ccsTmpIsFormula . at i ?: dat ^. dataColIsDerived
+          isDerived = state ^. ccsTmpIsFormula . at i ?: dat ^. dataColIsDerived
+          formula = state ^. ccsTmpFormula . at i ?: dat ^. dataColSourceCode
       cldiv_ "bodyWrapper" $ cldiv_ "body" $ do
         cldiv_ "datatype" $
           selDatatype_ i dat (state ^. ccsTableCache)
         cldiv_ "formula" $ do
-          checkIsFormula_ i dat (state ^. ccsTmpIsFormula . at i)
+          checkIsFormula_ i isDerived
           -- input field for formula
-          inputFormula_ i dat (state ^. ccsTmpFormula . at i) isDerived
+          inputFormula_ i formula isDerived
       for_ mError $ \errMsg -> cldiv_ "error" $ do
         clspan_ "title" "Error"
         cldiv_  "body" $ elemText errMsg
-      cldiv_ "buttons" $ do
-        cldiv_ "left" $ span_
-          [ "className" $= "link"
-          , onClick $ \_ _ ->
-              [ SomeStoreAction colConfStore $ ColumnSetVisibility i False
-              , SomeStoreAction colConfStore $ ColumnUnsetTmpDataType i
-              , SomeStoreAction colConfStore $ ColumnUnsetTmpFormula i
-              , SomeStoreAction colConfStore $ ColumnUnsetTmpIsFormula i
-              ]
-          ] "Cancel"
-        -- TODO: figure out what changed before initiating ajax
-        -- in the Nothing case: nothing has changed
-        let formula = (state ^. ccsTmpFormula . at i)  ?: dat ^. dataColSourceCode
-            dataTypeActions = case state ^. ccsTmpDataType . at i of
-              Nothing -> []
-              Just dt -> [ SomeStoreAction store        $ ColumnSetDt i dt
-                         , SomeStoreAction colConfStore $ ColumnUnsetTmpDataType i
-                         ]
-            saveActions =
-              -- hide dialog
-              [ SomeStoreAction colConfStore $ ColumnSetVisibility i False
-              -- is formula and formula
-              , SomeStoreAction store        $ ColumnSetFormula i (isDerived, formula)
-              , SomeStoreAction colConfStore $ ColumnUnsetTmpIsFormula i
-              , SomeStoreAction colConfStore $ ColumnUnsetTmpFormula i
-              -- datatype selection
-              ] ++ dataTypeActions
-        cldiv_ "right" $ do
-          clbutton_ "button delete" [ SomeStoreAction store $ TableDeleteColumn i ] $ do
-            faIcon_ "close"
-            "Delete column"
-          clbutton_ "button" saveActions $ do
-            faIcon_ "check"
-            "Save"
+      let cancelActions =
+            [ SomeStoreAction colConfStore $ ColumnSetVisibility i False
+            , SomeStoreAction colConfStore $ ColumnUnsetTmpDataType i
+            , SomeStoreAction colConfStore $ ColumnUnsetTmpFormula i
+            , SomeStoreAction colConfStore $ ColumnUnsetTmpIsFormula i
+            ]
+          dataTypeActions = case state ^. ccsTmpDataType . at i of
+            Nothing -> []
+            Just dt -> [ SomeStoreAction store        $ ColumnSetDt i dt
+                       , SomeStoreAction colConfStore $ ColumnUnsetTmpDataType i
+                       ]
+          -- TODO: figure out what changed before initiating ajax
+          -- in the Nothing case: nothing has changed
+          deleteActions = [ SomeStoreAction store $ TableDeleteColumn i ]
+          saveActions =
+            -- hide dialog
+            [ SomeStoreAction colConfStore $ ColumnSetVisibility i False
+            -- is formula and formula
+            , SomeStoreAction store        $ ColumnSetFormula i (isDerived, formula)
+            , SomeStoreAction colConfStore $ ColumnUnsetTmpIsFormula i
+            , SomeStoreAction colConfStore $ ColumnUnsetTmpFormula i
+            -- datatype selection
+            ] ++ dataTypeActions
+      confButtons_ cancelActions deleteActions saveActions
+
+confButtons_ :: [SomeStoreAction]
+             -> [SomeStoreAction]
+             -> [SomeStoreAction]
+             -> ReactElementM eh ()
+confButtons_ cancelActions deleteActions saveActions =
+  view confButtons (cancelActions, deleteActions, saveActions) mempty
+
+confButtons :: ReactView ([SomeStoreAction], [SomeStoreAction], [SomeStoreAction])
+confButtons = defineView "column configuration buttons" $
+  \(cancelActions, deleteActions, saveActions) -> cldiv_ "buttons" $ do
+      cldiv_ "left" $ span_
+        [ "className" $= "link"
+        , onClick $ \_ _ -> cancelActions
+        ] "Cancel"
+      cldiv_ "right" $ do
+        clbutton_ "button delete" deleteActions $ do
+          faIcon_ "close"
+          "Delete column"
+        clbutton_ "button" saveActions $ do
+          faIcon_ "check"
+          "Save"
 
 -- select datatype
 
@@ -330,7 +449,7 @@ selBranch = defineStatefulView "selBranch" Nothing $ \curBranch (mDt, tables, cb
   let defDt = DataNumber
       selectedBranch = curBranch <|> toBranch <$> mDt ?: toBranch defDt
   cldiv_ "selBranch" $ select_
-    [ "defaultValue" &= fromMaybe "" (inverseLookup selectedBranch branches)
+    [ "defaultValue" &= selectedBranch
     , onInput $ \evt _ -> case Map.lookup (target evt "value") branches of
         Just BBool   -> (cb DataBool  , Just $ Just BBool  )
         Just BString -> (cb DataString, Just $ Just BString)
@@ -340,8 +459,7 @@ selBranch = defineStatefulView "selBranch" Nothing $ \curBranch (mDt, tables, cb
         Just BList   -> (cb $ DataList  defDt, Just $ Just BList)
         Just BRecord -> ([], Just $ Just BRecord)
         Nothing      -> error "selBranch: unexpected: Nothing"
-    ] $ forM_ (Map.toList branches) $ \(label, _) ->
-          option_ [ "value" &= label ] $ elemText label
+    ] $ optionsFor_ branches
   case selectedBranch of
     BMaybe  -> selBranch_ (subType =<< mDt) tables (cb . DataMaybe)
     BList   -> selBranch_ (subType =<< mDt) tables (cb . DataList)
@@ -352,23 +470,22 @@ selTable_ :: Maybe (Id Table) -> TableCache -> SelTableCallback -> ReactElementM
 selTable_ mTableId tables cb = view selTable (mTableId, tables, cb) mempty
 
 selTable :: ReactView (Maybe (Id Table), TableCache, SelTableCallback)
-selTable = defineView "selBranch" $ \(mTableId, tables, cb) -> do
+selTable = defineView "select table" $ \(mTableId, tables, cb) -> do
   onDidMount_ [SomeStoreAction colConfStore ColumnGetTableCache] mempty
   select_
     [ "defaultValue" &= fromMaybe "" (show <$> mTableId)
     , onChange $ \evt -> maybe [] cb $ readMaybe $ target evt "value"
-    ] $ do option_ ""
-           forM_ (Map.toList tables) $ \(tId, name) ->
-             option_ [ "value" &= show tId ] $ elemText name
+    ] $ do option_ [ "value" &= "" ] $ elemText ""
+           optionsFor_ tables
 
 -- checkbox for "is formula"
 
-checkIsFormula_ :: Id Column -> DataCol -> Maybe IsDerived -> ReactElementM eh ()
-checkIsFormula_ !i !dat !d = view checkIsFormula (i, dat, d) mempty
+checkIsFormula_ :: Id Column -> IsDerived -> ReactElementM eh ()
+checkIsFormula_ !i !d = view checkIsFormula (i, d) mempty
 
-checkIsFormula :: ReactView (Id Column, DataCol, Maybe IsDerived)
-checkIsFormula = defineView "checkIsFormula" $ \(i, dat, mIsFormula) -> do
-    let checked = case mIsFormula ?: dat ^. dataColIsDerived of
+checkIsFormula :: ReactView (Id Column, IsDerived)
+checkIsFormula = defineView "checkIsFormula" $ \(i, isDerived) -> do
+    let checked = case isDerived of
           Derived    -> True
           NotDerived -> False
     input_
@@ -383,11 +500,11 @@ checkIsFormula = defineView "checkIsFormula" $ \(i, dat, mIsFormula) -> do
 
 -- input field for formula (i.a.)
 
-inputFormula_ :: Id Column -> DataCol -> Maybe Text -> IsDerived -> ReactElementM eh ()
+inputFormula_ :: Id Column -> Text -> IsDerived -> ReactElementM eh ()
 inputFormula_ !i !dat !f !d = view inputFormula (i, dat, f, d) mempty
 
-inputFormula :: ReactView (Id Column, DataCol, Maybe Text, IsDerived)
-inputFormula = defineView "input formula" $ \(i, dat, mFormula, inpTyp) -> do
+inputFormula :: ReactView (Id Column, Text, IsDerived)
+inputFormula = defineView "input formula" $ \(i, dat, formula, inpTyp) -> do
   let isActive = case inpTyp of
         Derived    -> True
         NotDerived -> False
@@ -397,7 +514,7 @@ inputFormula = defineView "input formula" $ \(i, dat, mFormula, inpTyp) -> do
     ] $ codemirror_ CodemirrorProps
           { codemirrorMode = "text/x-ocaml"
           , codemirrorTheme = "neat"
-          , codemirrorValue = mFormula ?: dat ^. dataColSourceCode
+          , codemirrorValue = formula
           , codemirrorOnChange = \v ->
               [ SomeStoreAction colConfStore $ ColumnSetTmpFormula i v ]
           }
@@ -408,8 +525,9 @@ inputFormula = defineView "input formula" $ \(i, dat, mFormula, inpTyp) -> do
 
 --
 
-inverseLookup :: Ord v => v -> Map k v -> Maybe k
-inverseLookup x m = Map.lookup x (Map.fromList $ map swap $ Map.toList m)
+optionsFor_ :: Show a => Map Text a -> ReactElementM eh ()
+optionsFor_ m = for_ (Map.toList m) $ \(value, label) ->
+  option_ [ "value" &= show value ] $ elemText label
 
 (?:) :: Maybe a -> a -> a
 (?:) = flip fromMaybe

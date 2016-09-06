@@ -2,6 +2,7 @@ module Views.Table where
 
 import           Control.Lens      hiding (view)
 
+import           Data.Maybe        (fromMaybe)
 import qualified Data.Map.Strict   as Map
 import           Data.Monoid       ((<>))
 
@@ -9,6 +10,8 @@ import           React.Flux
 
 import           Lib.Model
 import           Lib.Model.Column
+import           Lib.Model.Table
+import           Lib.Types
 
 import           Store
 import           Views.Cell
@@ -49,14 +52,41 @@ tableGrid = defineView "tableGrid" $ \st -> do
                 Just (r, content) -> dataCell_ $ DataCellProps c r dat content
                 Nothing           -> mempty
 
+      emptyDataCol :: Id Table -> Column
+      emptyDataCol tableId = Column
+        { _columnTableId = tableId
+        , _columnName    = ""
+        , _columnKind    = ColumnData DataCol
+          { _dataColType          = DataNumber
+          , _dataColIsDerived     = NotDerived
+          , _dataColSourceCode    = ""
+          , _dataColCompileResult = CompileResultNone
+          }
+        }
+
+      emptyReportCol :: Id Table -> Column
+      emptyReportCol tableId = Column
+        { _columnTableId = tableId
+        , _columnName = ""
+        , _columnKind = ColumnReport ReportCol
+          { _reportColTemplate         = ""
+          , _reportColCompiledTemplate = CompileResultNone
+          , _reportColLanguage         = ReportLanguageMarkdown
+          , _reportColFormat           = ReportFormatPDF
+          }
+        }
+
       renderer (GridRenderArgs x y _)
         | x == 0 && y == 0 = cldiv_ "origin" mempty
         | x == 0 && y == (numRecs + 1) = cldiv_ "record-new" $
             faButton_ "plus-circle" $ dispatch TableAddRecord
         | x == 0 && 0 < y && y <= numRecs = cldiv_ "record" $
             record_ $ getRecord (y - 1)
-        | y == 0 && x == (numCols + 1) = cldiv_ "column-new" $
-            faButton_ "plus-circle" $ dispatch TableAddColumn
+        | y == 0 && x == (numCols + 1) = cldiv_ "column-new" $ do
+            faButton_ "plus-circle" $ fromMaybe [] $
+              dispatch . TableAddColumn . emptyDataCol <$> st ^. stateTableId
+            faButton_ "bars" $ fromMaybe [] $
+              dispatch . TableAddColumn . emptyReportCol <$> st ^. stateTableId
         | y == 0 && 0 < x && x <= numCols =
             column_ $ getColumn (x - 1)
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $
