@@ -152,7 +152,6 @@ data ReportFormat
   = ReportFormatPlain
   | ReportFormatPDF
   | ReportFormatHTML
-  | ReportFormatMarkdown
   deriving (Eq, Generic, NFData, Show)
 
 instance ToJSON ReportFormat

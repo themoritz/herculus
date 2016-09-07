@@ -3,9 +3,7 @@
 
 module Views.Cell
   ( dataCell_
-  , reportCell_
   , DataCellProps (..)
-  , ReportCellProps (..)
   ) where
 
 import           Control.DeepSeq
@@ -335,16 +333,3 @@ cellMaybe = defineView "cellMaybe" $ \(mode, inpType, datType, mVal, cb) ->
     _ -> case mVal of
       Nothing -> "Nothing"
       Just val -> value_ mode inpType datType val (cb . Just)
-
- -- report cell
-
-data ReportCellProps = ReportCellProps
-  { reportCellColId :: !(Id Column)
-  , reportCellColReport :: !ReportCol
-  }
-
-reportCell_ :: ReportCellProps -> ReactElementM eh ()
-reportCell_ !p = view reportCell p mempty
-
-reportCell :: ReactView ReportCellProps
-reportCell = defineView "reportCell" $ \props -> mempty

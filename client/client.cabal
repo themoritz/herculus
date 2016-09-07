@@ -20,6 +20,7 @@ executable client
                      , Views.Column
                      , Views.Record
                      , Views.Cell
+                     , Views.ReportCell
                      , Views.Foreign
                      , Views.Combinators
                      , Views.Common

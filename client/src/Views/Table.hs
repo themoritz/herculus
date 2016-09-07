@@ -2,8 +2,8 @@ module Views.Table where
 
 import           Control.Lens      hiding (view)
 
-import           Data.Maybe        (fromMaybe)
 import qualified Data.Map.Strict   as Map
+import           Data.Maybe        (fromMaybe)
 import           Data.Monoid       ((<>))
 
 import           React.Flux
@@ -19,6 +19,7 @@ import           Views.Column
 import           Views.Combinators
 import           Views.Foreign
 import           Views.Record
+import           Views.ReportCell
 
 tableGrid_ :: State -> ReactElementM eh ()
 tableGrid_ !st = view tableGrid st mempty
