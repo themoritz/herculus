@@ -28,15 +28,18 @@ import           Control.Monad.Trans.Control
 
 import           Data.Aeson
 import qualified Data.ByteString.Char8       as B8
+import qualified Data.ByteString.Lazy        as BL
 import           Data.Monoid
 import           Data.Proxy
 import           Data.Text
 import           Data.Time.Clock             as Clock (getCurrentTime)
-import           Database.MongoDB            ((=:))
 
+import           Database.MongoDB            ((=:))
 import qualified Database.MongoDB            as Mongo
 
 import           System.Log.FastLogger
+import qualified Text.Pandoc                 as Pandoc
+import qualified Text.Pandoc.PDF             as Pandoc
 
 import           Network.WebSockets
 
@@ -86,6 +89,8 @@ class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m 
   modifyReferences :: (ReferenceGraph -> ReferenceGraph) -> m ()
 
   getColumnOrder :: [Id Column] -> m ColumnOrder
+
+  makePDF :: Pandoc.Pandoc -> m (Either BL.ByteString BL.ByteString)
 
 data HexlEnv = HexlEnv
   { envPipe        :: Mongo.Pipe
@@ -230,6 +235,9 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
     case getDependentTopological cs graph of
       Nothing -> throwError $ ErrBug "dependency graph has cycles"
       Just order -> pure order
+
+  makePDF pandoc = liftIO $
+    Pandoc.makePDF "pdflatex" Pandoc.writeLaTeX Pandoc.def pandoc
 
 --
 

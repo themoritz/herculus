@@ -312,7 +312,16 @@ handleCellSet c r val = do
   propagate [RootCellChanges [(c, r)]]
 
 handleCellGetReportPDF :: MonadHexl m => Id Column -> Id Record -> m BL.ByteString
-handleCellGetReportPDF = undefined
+handleCellGetReportPDF c r = do
+  (repCol, plain) <- evalReport c r
+  case repCol ^. reportColLanguage of
+    Nothing -> throwError $ ErrUser "Cannot generate PDF from plain text"
+    Just lang -> case getPandocReader lang plain of
+      Left err -> throwError $ ErrUser $ "Could not read generated code into pandoc document: "
+                                      <> (pack . show) err
+      Right pandoc -> makePDF pandoc >>= \case
+        Left e -> pure e
+        Right pdf -> pure pdf
 
 handleCellGetReportHTML :: MonadHexl m => Id Column -> Id Record -> m Text
 handleCellGetReportHTML c r = do
@@ -323,14 +332,14 @@ handleCellGetReportHTML c r = do
       Left err -> pack $ show err
       Right pandoc -> pack $ Pandoc.writeHtmlString Pandoc.def pandoc
 
+handleCellGetReportPlain :: MonadHexl m => Id Column -> Id Record -> m Text
+handleCellGetReportPlain c r = snd <$> evalReport c r
+
 getPandocReader :: ReportLanguage -> Text -> Either Pandoc.PandocError Pandoc.Pandoc
 getPandocReader = \case
   ReportLanguageMarkdown -> Pandoc.readMarkdown Pandoc.def . unpack
   ReportLanguageLatex    -> Pandoc.readLaTeX Pandoc.def . unpack
   ReportLanguageHTML     -> Pandoc.readHtml Pandoc.def . unpack
-
-handleCellGetReportPlain :: MonadHexl m => Id Column -> Id Record -> m Text
-handleCellGetReportPlain c r = snd <$> evalReport c r
 
 -- Helper ----------------------------
 
