@@ -46,7 +46,7 @@ data ColConfState = ColConfState
   , _ccsTmpFormula        :: Map (Id Column) Text
   , _ccsVisible           :: Set (Id Column) -- not in set === false
   , _ccsTableCache        :: TableCache
-  , _ccsTmpReportLanguage :: Map (Id Column) (Maybe ReportLanguage)
+  , _ccsTmpReportLanguage :: Map (Id Column) ReportLanguage
   , _ccsTmpReportFormat   :: Map (Id Column) ReportFormat
   , _ccsTmpReportTemplate :: Map (Id Column) Text
   }
@@ -63,7 +63,7 @@ data ColConfAction
   | ColumnSetVisibility        (Id Column) Bool
   | ColumnGetTableCache
   | ColumnSetTableCache        TableCache
-  | ColumnSetTmpReportLang     (Id Column) (Maybe ReportLanguage)
+  | ColumnSetTmpReportLang     (Id Column) ReportLanguage
   | ColumnUnsetTmpReportLang   (Id Column)
   | ColumnSetTmpReportFormat   (Id Column) ReportFormat
   | ColumnUnsetTmpReportFormat (Id Column)
@@ -169,12 +169,12 @@ branches = Map.fromList
   , (BMaybe , "Maybe" )
   ]
 
-reportLangs :: Map (Maybe ReportLanguage) Text
-reportLangs = Map.fromList
-  [ (Nothing                    , "Plaintext" )
-  , (Just ReportLanguageMarkdown, "Markdown"  )
-  , (Just ReportLanguageLatex   , "Latex"     )
-  , (Just ReportLanguageHTML    , "HTML"      )
+reportLangs :: Map ReportLanguage Text
+reportLangs = Map.mapKeys ReportLanguage $ Map.fromList
+  [ (Nothing              , "Plaintext" )
+  , (Just LanguageMarkdown, "Markdown"  )
+  , (Just LanguageLatex   , "Latex"     )
+  , (Just LanguageHTML    , "HTML"      )
   ]
 
 reportFormats :: Map ReportFormat Text
@@ -277,10 +277,10 @@ reportInfo = defineView "report info" $ \r -> clspan_ "reportInfo" $ do
         ReportFormatHTML      -> "HTML"
         -- ReportFormatMarkdown  -> "Markdown"
       lang = case r ^. reportColLanguage of
-        Nothing                     -> "Plaintext"
-        Just ReportLanguageMarkdown -> "Markdown"
-        Just ReportLanguageLatex    -> "Latex"
-        Just ReportLanguageHTML     -> "HTML"
+        ReportLanguage Nothing                 -> "Plaintext"
+        ReportLanguage (Just LanguageMarkdown) -> "Markdown"
+        ReportLanguage (Just LanguageLatex)    -> "Latex"
+        ReportLanguage (Just LanguageHTML)     -> "HTML"
   elemText $ "Report " <> lang <> " "
   faIcon_ "long-arrow-right"
   elemText format
@@ -290,7 +290,7 @@ reportColConf_ !i !r = view reportColConf (i, r) mempty
 
 reportColConf :: ReactView (Id Column, ReportCol)
 reportColConf = defineControllerView "report column config" colConfStore $
-  \state (i, rep) -> do
+  \state (i, rep) -> cldiv_ "dialog" $ do
     let mError = case rep ^. reportColCompiledTemplate of
           CompileResultError msg -> Just msg
           _                      -> Nothing
@@ -326,16 +326,16 @@ reportColConf = defineControllerView "report column config" colConfStore $
           ]
     confButtons_ cancelActions deleteActions saveActions
 
-selReportLanguage_ :: Id Column -> Maybe ReportLanguage -> ReactElementM eh ()
+selReportLanguage_ :: Id Column -> ReportLanguage -> ReactElementM eh ()
 selReportLanguage_ !i !lang = view selReportLanguage (i, lang) mempty
 
-selReportLanguage :: ReactView (Id Column, Maybe ReportLanguage)
+selReportLanguage :: ReactView (Id Column, ReportLanguage)
 selReportLanguage = defineView "select report lang" $ \(i, lang) ->
   select_
     [ "defaultValue" &= show lang
     , onInput $ \evt ->
         let lang' = readMaybe (target evt "value") -- Maybe (Maybe a)
-              ?: Nothing -- unexpected
+              ?: ReportLanguage Nothing -- unexpected
         in  [SomeStoreAction colConfStore $ ColumnSetTmpReportLang i lang' ]
     ] $ optionsFor_ reportLangs
 
@@ -352,16 +352,16 @@ selReportFormat = defineView "select report format" $ \(i, format) ->
         in  [SomeStoreAction colConfStore $ ColumnSetTmpReportFormat i format' ]
     ] $ optionsFor_ reportFormats
 
-inputTemplate_ :: Id Column -> Text -> Maybe ReportLanguage -> ReactElementM eh ()
+inputTemplate_ :: Id Column -> Text -> ReportLanguage -> ReactElementM eh ()
 inputTemplate_ !c !t !lang = view inputTemplate (c, t, lang) mempty
 
-inputTemplate :: ReactView (Id Column, Text, Maybe ReportLanguage)
+inputTemplate :: ReactView (Id Column, Text, ReportLanguage)
 inputTemplate = defineView "input template" $ \(i, t, lang) -> do
   let mode = case lang of
-        Nothing                     -> "text/plain"
-        Just ReportLanguageMarkdown -> "GFM"
-        Just ReportLanguageLatex    -> "text/x-stex"
-        Just ReportLanguageHTML     -> "text/html"
+        ReportLanguage Nothing                 -> "text/plain"
+        ReportLanguage (Just LanguageMarkdown) -> "GFM"
+        ReportLanguage (Just LanguageLatex)    -> "text/x-stex"
+        ReportLanguage (Just LanguageHTML)     -> "text/html"
   div_
     [ "className" $= "inputTemplate"
     ] $ codemirror_ CodemirrorProps

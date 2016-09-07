@@ -75,7 +75,7 @@ tableGrid = defineView "tableGrid" $ \st -> do
         , _columnKind = ColumnReport ReportCol
           { _reportColTemplate         = ""
           , _reportColCompiledTemplate = CompileResultNone
-          , _reportColLanguage         = Just ReportLanguageMarkdown
+          , _reportColLanguage         = ReportLanguage (Just LanguageMarkdown)
           , _reportColFormat           = ReportFormatPDF
           }
         }
