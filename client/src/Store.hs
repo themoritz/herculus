@@ -92,8 +92,13 @@ data Action
   | TableDeleteRecord (Id Record)
   -- Column
   | ColumnRename (Id Column) Text
+  -- Data column
   | ColumnSetDt (Id Column) DataType
   | ColumnSetFormula (Id Column) (IsDerived, Text)
+  -- Report column
+  | ColumnSetReportLang (Id Column) (Maybe ReportLanguage)
+  | ColumnSetReportFormat (Id Column) ReportFormat
+  | ColumnSetReportTemplate (Id Column) Text
   -- Cell
   | CellSetValue (Id Column) (Id Record) Value
   deriving (Typeable, Generic, NFData)
@@ -256,6 +261,8 @@ instance StoreData State where
           Right ()    -> pure []
         pure $ st & stateColumns . at i . _Just . columnName .~ n
 
+      -- Data column
+
       ColumnSetDt i dt -> do
         request api (Proxy :: Proxy DataColSetDataType) i dt $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
@@ -270,6 +277,29 @@ instance StoreData State where
         let dataColLens = stateColumns . at i . _Just . columnKind . _ColumnData
         pure $ st & dataColLens . dataColIsDerived .~ inpTyp
                   & dataColLens . dataColSourceCode .~ src
+
+      -- Report column
+
+      ColumnSetReportLang i lang -> do
+        request api (Proxy :: Proxy ReportColSetLanguage) i lang $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right ()    -> pure []
+        pure $ st & stateColumns . at i . _Just . columnKind . _ColumnReport .
+                        reportColLanguage .~ lang
+
+      ColumnSetReportFormat i format -> do
+        request api (Proxy :: Proxy ReportColSetFormat) i format $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right ()    -> pure []
+        pure $ st & stateColumns . at i . _Just . columnKind . _ColumnReport .
+                        reportColFormat .~ format
+
+      ColumnSetReportTemplate i templ -> do
+        request api (Proxy :: Proxy ReportColSetTemplate) i templ $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right ()    -> pure []
+        pure $ st & stateColumns . at i . _Just . columnKind . _ColumnReport .
+                        reportColTemplate .~ templ
 
       -- Cell
 

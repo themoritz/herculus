@@ -67,6 +67,8 @@ data ColConfAction
   | ColumnUnsetTmpReportLang   (Id Column)
   | ColumnSetTmpReportFormat   (Id Column) ReportFormat
   | ColumnUnsetTmpReportFormat (Id Column)
+  | ColumnSetTmpReportTemplate       (Id Column) Text
+  | ColumnUnsetTmpReportTemplate     (Id Column)
   deriving (Typeable, Generic, NFData)
 
 instance StoreData ColConfState where
@@ -106,6 +108,10 @@ instance StoreData ColConfState where
       pure $ st & ccsTmpReportFormat . at i .~ Just format
     ColumnUnsetTmpReportFormat i ->
       pure $ st & ccsTmpReportFormat . at i .~ Nothing
+    ColumnSetTmpReportTemplate i templ ->
+      pure $ st & ccsTmpReportTemplate . at i .~ Just templ
+    ColumnUnsetTmpReportTemplate i ->
+      pure $ st & ccsTmpReportTemplate . at i .~ Nothing
 
 colConfStore :: ReactStore ColConfState
 colConfStore = mkStore $ ColConfState Map.empty
@@ -300,10 +306,25 @@ reportColConf = defineControllerView "report column config" colConfStore $
     for_ mError $ \errMsg -> cldiv_ "error" $ do
       clspan_ "title" "Error"
       cldiv_  "body" $ elemText errMsg
-    let cancelActions = []
+    let cancelActions =
+          [ SomeStoreAction colConfStore $ ColumnSetVisibility i False
+          , SomeStoreAction colConfStore $ ColumnUnsetTmpReportLang i
+          , SomeStoreAction colConfStore $ ColumnUnsetTmpReportFormat i
+          , SomeStoreAction colConfStore $ ColumnUnsetTmpReportTemplate i
+          ]
         deleteActions = [ SomeStoreAction store $ TableDeleteColumn i ]
-        saveAction    = []
-    confButtons_ cancelActions deleteActions saveAction
+        saveActions   =
+          -- hide dialog
+          [ SomeStoreAction colConfStore $ ColumnSetVisibility i False
+          , SomeStoreAction store        $ ColumnSetReportLang i lang
+          , SomeStoreAction colConfStore $ ColumnUnsetTmpReportLang i
+          , SomeStoreAction store        $ ColumnSetReportFormat i format
+          , SomeStoreAction colConfStore $ ColumnUnsetTmpReportFormat i
+          , SomeStoreAction store        $ ColumnSetReportTemplate i template
+          , SomeStoreAction colConfStore $ ColumnUnsetTmpReportTemplate i
+          -- datatype selection
+          ]
+    confButtons_ cancelActions deleteActions saveActions
 
 selReportLanguage_ :: Id Column -> Maybe ReportLanguage -> ReactElementM eh ()
 selReportLanguage_ !i !lang = view selReportLanguage (i, lang) mempty
@@ -335,8 +356,21 @@ inputTemplate_ :: Id Column -> Text -> Maybe ReportLanguage -> ReactElementM eh 
 inputTemplate_ !c !t !lang = view inputTemplate (c, t, lang) mempty
 
 inputTemplate :: ReactView (Id Column, Text, Maybe ReportLanguage)
-inputTemplate = defineView "input template" $ \(i, t, lang) ->
-  mempty
+inputTemplate = defineView "input template" $ \(i, t, lang) -> do
+  let mode = case lang of
+        Nothing                     -> "text/plain"
+        Just ReportLanguageMarkdown -> "GFM"
+        Just ReportLanguageLatex    -> "text/x-stex"
+        Just ReportLanguageHTML     -> "text/html"
+  div_
+    [ "className" $= "inputTemplate"
+    ] $ codemirror_ CodemirrorProps
+          { codemirrorMode = mode
+          , codemirrorTheme = "neat"
+          , codemirrorValue = t
+          , codemirrorOnChange = \v ->
+              [ SomeStoreAction colConfStore $ ColumnSetTmpReportTemplate i v ]
+          }
 
 -- column kind: data
 
