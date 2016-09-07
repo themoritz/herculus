@@ -120,7 +120,7 @@ instance Val ColumnKind where
 data ReportCol = ReportCol
   { _reportColTemplate         :: Text
   , _reportColCompiledTemplate :: ReportCompileResult
-  , _reportColLanguage         :: ReportLanguage
+  , _reportColLanguage         :: Maybe ReportLanguage
   , _reportColFormat           :: ReportFormat
   } deriving (Eq, Generic, NFData, Show)
 
@@ -130,7 +130,7 @@ reportColTemplate = lens _reportColTemplate (\r t -> r { _reportColTemplate = t}
 reportColCompiledTemplate :: Lens' ReportCol (CompileResult TTemplate)
 reportColCompiledTemplate = lens _reportColCompiledTemplate (\r ct -> r { _reportColCompiledTemplate = ct})
 
-reportColLanguage :: Lens' ReportCol ReportLanguage
+reportColLanguage :: Lens' ReportCol (Maybe ReportLanguage)
 reportColLanguage = lens _reportColLanguage (\r l -> r { _reportColLanguage = l})
 
 reportColFormat :: Lens' ReportCol ReportFormat
@@ -139,24 +139,14 @@ reportColFormat = lens _reportColFormat (\r f -> r { _reportColFormat = f})
 instance ToJSON ReportCol
 instance FromJSON ReportCol
 
-newtype ReportLanguage = ReportLanguage
-  { _reportLanguage :: Maybe Language }
+data ReportLanguage
+  = ReportLanguageMarkdown
+  | ReportLanguageLatex
+  | ReportLanguageHTML
   deriving (Eq, Ord, Generic, NFData, Read, Show)
-
-reportLanguage :: Lens' ReportLanguage (Maybe Language)
-reportLanguage = lens _reportLanguage (\r l -> r { _reportLanguage = l})
 
 instance ToJSON ReportLanguage
 instance FromJSON ReportLanguage
-
-data Language
-  = LanguageMarkdown
-  | LanguageLatex
-  | LanguageHTML
-  deriving (Eq, Ord, Generic, NFData, Read, Show)
-
-instance ToJSON Language
-instance FromJSON Language
 
 data ReportFormat
   = ReportFormatPlain

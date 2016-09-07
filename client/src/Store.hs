@@ -96,7 +96,7 @@ data Action
   | ColumnSetDt (Id Column) DataType
   | ColumnSetFormula (Id Column) (IsDerived, Text)
   -- Report column
-  | ColumnSetReportLang (Id Column) ReportLanguage
+  | ColumnSetReportLang (Id Column) (Maybe ReportLanguage)
   | ColumnSetReportFormat (Id Column) ReportFormat
   | ColumnSetReportTemplate (Id Column) Text
   -- Cell

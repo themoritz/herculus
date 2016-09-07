@@ -207,7 +207,7 @@ handleReportColSetFormat :: MonadHexl m => Id Column -> ReportFormat -> m ()
 handleReportColSetFormat c format =
   update c $ columnKind . _ColumnReport . reportColFormat .~ format
 
-handleReportColSetLanguage :: MonadHexl m => Id Column -> ReportLanguage -> m ()
+handleReportColSetLanguage :: MonadHexl m => Id Column -> Maybe ReportLanguage -> m ()
 handleReportColSetLanguage c lang =
   update c $ columnKind . _ColumnReport . reportColLanguage .~ lang
 
@@ -315,7 +315,7 @@ handleCellSet c r val = do
 handleCellGetReportPDF :: MonadHexl m => Id Column -> Id Record -> m BL.ByteString
 handleCellGetReportPDF c r = do
   (repCol, plain) <- evalReport c r
-  case repCol ^? reportColLanguage . reportLanguage . _Just of
+  case repCol ^. reportColLanguage of
     Nothing -> throwError $ ErrUser "Cannot generate PDF from plain text"
     Just lang -> case getPandocReader lang plain of
       Left err -> throwError $ ErrUser $ "Could not read generated code into pandoc document: "
@@ -332,7 +332,7 @@ handleCellGetReportPDF c r = do
 handleCellGetReportHTML :: MonadHexl m => Id Column -> Id Record -> m Text
 handleCellGetReportHTML c r = do
   (repCol, plain) <- evalReport c r
-  pure $ case repCol ^? reportColLanguage . reportLanguage . _Just  of
+  pure $ case repCol ^. reportColLanguage of
     Nothing   -> plain
     Just lang -> case getPandocReader lang plain of
       Left err -> pack $ show err
@@ -341,11 +341,11 @@ handleCellGetReportHTML c r = do
 handleCellGetReportPlain :: MonadHexl m => Id Column -> Id Record -> m Text
 handleCellGetReportPlain c r = snd <$> evalReport c r
 
-getPandocReader :: Language -> Text -> Either Pandoc.PandocError Pandoc.Pandoc
+getPandocReader :: ReportLanguage -> Text -> Either Pandoc.PandocError Pandoc.Pandoc
 getPandocReader = \case
-  LanguageMarkdown -> Pandoc.readMarkdown Pandoc.def . unpack
-  LanguageLatex    -> Pandoc.readLaTeX Pandoc.def . unpack
-  LanguageHTML     -> Pandoc.readHtml Pandoc.def . unpack
+  ReportLanguageMarkdown -> Pandoc.readMarkdown Pandoc.def . unpack
+  ReportLanguageLatex    -> Pandoc.readLaTeX Pandoc.def . unpack
+  ReportLanguageHTML     -> Pandoc.readHtml Pandoc.def . unpack
 
 -- Helper ----------------------------
 
