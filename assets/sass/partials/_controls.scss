@@ -13,7 +13,7 @@ button.pure {
   cursor: pointer;
 }
 
-span.link {
+a, span.link {
   color: $link;
   cursor: pointer;
   &:hover {
@@ -21,6 +21,6 @@ span.link {
   }
 }
 
-span.active {
+a.active, span.active {
   font-weight: bold;
 }

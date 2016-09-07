@@ -156,6 +156,7 @@
       .delete {
         width: $buttonWidth;
         display: table-cell;
+        vertical-align: middle;
         padding: 5px;
         border-right: 1px solid lightgray;
       }
@@ -189,6 +190,7 @@
     background-color: $light-gray;
     max-width: 60px;
     white-space: nowrap;
+    min-height: 24px;
   }
 }
 

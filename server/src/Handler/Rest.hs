@@ -11,7 +11,6 @@ import           Control.Lens
 import           Control.Monad                  (unless, void, when)
 
 import qualified Data.ByteString.Lazy           as BL
-import qualified Data.ByteString.Lazy.Char8     as BL8
 import           Data.List                      (union)
 import           Data.Maybe                     (catMaybes, isNothing, mapMaybe)
 import           Data.Monoid
