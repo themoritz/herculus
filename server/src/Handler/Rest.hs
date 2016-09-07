@@ -9,6 +9,7 @@ module Handler.Rest where
 import           Control.Arrow                  (second)
 import           Control.Lens
 import           Control.Monad                  (unless, void, when)
+import           Control.Monad.Logger           (logDebugN)
 
 import qualified Data.ByteString.Lazy           as BL
 import qualified Data.ByteString.Lazy.Char8     as BL8
@@ -314,13 +315,13 @@ handleCellGetReportPDF c r = do
   (repCol, plain) <- evalReport c r
   case repCol ^. reportColLanguage of
     Nothing -> throwError $ ErrUser "Cannot generate PDF from plain text"
-    Just lang -> case getPandocReader lang plain of
-      Left err -> throwError $ ErrUser $ "Could not read generated code into pandoc document: "
-                                      <> (pack . show) err
-      Right pandoc -> do
-        let options = case lang of
-              ReportLanguageLatex -> Pandoc.def
-              _ -> Pandoc.def
+    Just lang -> case getPandocReader lang (repCol ^. reportColFormat) of
+      Nothing -> undefined -- TODO: call latex on plain
+      Just reader -> case reader Pandoc.def (unpack plain) of
+        Left err -> throwError $ ErrUser $ "Could not read generated code into pandoc document: "
+                                        <> (pack . show) err
+        Right pandoc -> do
+          let options = Pandoc.def
                 { Pandoc.writerStandalone = True
                 , Pandoc.writerTemplate = unlines
                   [ "\\documentclass[a4paper,12pt]{article}"
@@ -331,9 +332,10 @@ handleCellGetReportPDF c r = do
                   , "\\end{document}"
                   ]
                 }
-        makePDF options pandoc >>= \case
-          Left e -> throwError $ ErrBug $ "Error generating PDF: " <> (pack . BL8.unpack) e
-          Right pdf -> pure pdf
+          logDebugN $ (pack . show) $ Pandoc.writeLaTeX options pandoc
+          makePDF options pandoc >>= \case
+            Left e -> throwError $ ErrBug $ "Error generating PDF: " <> (pack . BL8.unpack) e
+            Right pdf -> pure pdf
 
 handleCellGetReportHTML :: MonadHexl m => Id Column -> Id Record -> m Text
 handleCellGetReportHTML c r = do
@@ -341,12 +343,12 @@ handleCellGetReportHTML c r = do
   (repCol, plain) <- evalReport c r
   pure $ case repCol ^. reportColLanguage of
     Nothing   -> plain
-    Just lang -> case getPandocReader lang plain of
-      Left err -> pack $ show err
-      Right pandoc -> do
-        let options = case lang of
-              ReportLanguageHTML -> Pandoc.def
-              _ -> Pandoc.def
+    Just lang -> case getPandocReader lang (repCol ^. reportColFormat) of
+      Nothing -> plain
+      Just reader -> case reader Pandoc.def (unpack plain) of
+        Left err -> pack $ show err
+        Right pandoc -> do
+          let options = Pandoc.def
                 { Pandoc.writerStandalone = True
                 , Pandoc.writerTemplate = unlines
                   [ "<html>"
@@ -360,16 +362,21 @@ handleCellGetReportHTML c r = do
                   , "</html>"
                   ]
                 }
-        pack $ Pandoc.writeHtmlString options pandoc
+          pack $ Pandoc.writeHtmlString options pandoc
 
 handleCellGetReportPlain :: MonadHexl m => Id Column -> Id Record -> m Text
 handleCellGetReportPlain c r = snd <$> evalReport c r
 
-getPandocReader :: ReportLanguage -> Text -> Either Pandoc.PandocError Pandoc.Pandoc
-getPandocReader = \case
-  ReportLanguageMarkdown -> Pandoc.readMarkdown Pandoc.def . unpack
-  ReportLanguageLatex    -> Pandoc.readLaTeX Pandoc.def . unpack
-  ReportLanguageHTML     -> Pandoc.readHtml Pandoc.def . unpack
+getPandocReader :: ReportLanguage -> ReportFormat
+  -> Maybe (Pandoc.ReaderOptions -> String -> Either Pandoc.PandocError Pandoc.Pandoc)
+getPandocReader lang format = case lang of
+  ReportLanguageMarkdown -> Just Pandoc.readMarkdown
+  ReportLanguageLatex    -> case format of
+    ReportFormatPDF -> Nothing
+    _               -> Just Pandoc.readLaTeX
+  ReportLanguageHTML     -> case format of
+    ReportFormatHTML -> Nothing
+    _                -> Just Pandoc.readHtml
 
 -- Helper ----------------------------
 
