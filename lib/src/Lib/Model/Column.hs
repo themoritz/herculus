@@ -143,7 +143,7 @@ data ReportLanguage
   = ReportLanguageMarkdown
   | ReportLanguageLatex
   | ReportLanguageHTML
-  deriving (Eq, Generic, NFData, Show)
+  deriving (Eq, Ord, Generic, NFData, Read, Show)
 
 instance ToJSON ReportLanguage
 instance FromJSON ReportLanguage
@@ -152,7 +152,7 @@ data ReportFormat
   = ReportFormatPlain
   | ReportFormatPDF
   | ReportFormatHTML
-  deriving (Eq, Generic, NFData, Show)
+  deriving (Eq, Ord, Generic, NFData, Read, Show)
 
 instance ToJSON ReportFormat
 instance FromJSON ReportFormat

@@ -9,7 +9,7 @@ import           React.Flux
 
 import           Control.Applicative       ((<|>))
 import           Control.DeepSeq           (NFData)
-import           Control.Monad             (forM_, when)
+import           Control.Monad             (when)
 import           Data.Foldable             (for_)
 import           Data.Map                  (Map)
 import qualified Data.Map                  as Map
@@ -20,7 +20,6 @@ import           Data.Set                  (Set)
 import qualified Data.Set                  as Set
 import           Data.Text                 (Text)
 import qualified Data.Text                 as Text
-import           Data.Tuple                (swap)
 import           Data.Typeable             (Typeable)
 import           GHC.Generics              (Generic)
 import           Text.Read                 (readMaybe)
@@ -47,7 +46,7 @@ data ColConfState = ColConfState
   , _ccsTmpFormula        :: Map (Id Column) Text
   , _ccsVisible           :: Set (Id Column) -- not in set === false
   , _ccsTableCache        :: TableCache
-  , _ccsTmpReportLanguage :: Map (Id Column) ReportLanguage
+  , _ccsTmpReportLanguage :: Map (Id Column) (Maybe ReportLanguage)
   , _ccsTmpReportFormat   :: Map (Id Column) ReportFormat
   , _ccsTmpReportTemplate :: Map (Id Column) Text
   }
@@ -63,8 +62,8 @@ data ColConfAction
   | ColumnUnsetTmpFormula      (Id Column)
   | ColumnSetVisibility        (Id Column) Bool
   | ColumnGetTableCache
-  | ColumnSetTableCache        (Map (Id Table) Text)
-  | ColumnSetTmpReportLang     (Id Column) ReportLanguage
+  | ColumnSetTableCache        TableCache
+  | ColumnSetTmpReportLang     (Id Column) (Maybe ReportLanguage)
   | ColumnUnsetTmpReportLang   (Id Column)
   | ColumnSetTmpReportFormat   (Id Column) ReportFormat
   | ColumnUnsetTmpReportFormat (Id Column)
@@ -141,7 +140,7 @@ data Branch
   | BRecord
   | BList
   | BMaybe
-  deriving (Eq, Ord, Generic, NFData)
+  deriving (Eq, Ord, Generic, NFData, Read, Show)
 
 toBranch :: DataType -> Branch
 toBranch = \case
@@ -153,31 +152,31 @@ toBranch = \case
   DataList   _ -> BList
   DataMaybe  _ -> BMaybe
 
-branches :: Map Text Branch
+branches :: Map Branch Text
 branches = Map.fromList
-  [ ("Bool"  , BBool  )
-  , ("String", BString)
-  , ("Number", BNumber)
-  , ("Time"  , BTime  )
-  , ("Record", BRecord)
-  , ("List"  , BList  )
-  , ("Maybe" , BMaybe )
+  [ (BBool  , "Bool"  )
+  , (BString, "String")
+  , (BNumber, "Number")
+  , (BTime  , "Time"  )
+  , (BRecord, "Record")
+  , (BList  , "List"  )
+  , (BMaybe , "Maybe" )
   ]
 
-reportLangs :: Map Text ReportLanguage
+reportLangs :: Map (Maybe ReportLanguage) Text
 reportLangs = Map.fromList
-  [ ("Plaintext", ReportLanguagePlain    )
-  , ("Markdown" , ReportLanguageMarkdown )
-  , ("Latex"    , ReportLanguageLatex    )
-  , ("HTML"     , ReportLanguageHTML     )
+  [ (Nothing                    , "Plaintext" )
+  , (Just ReportLanguageMarkdown, "Markdown"  )
+  , (Just ReportLanguageLatex   , "Latex"     )
+  , (Just ReportLanguageHTML    , "HTML"      )
   ]
 
-reportFormats :: Map Text ReportFormat
+reportFormats :: Map ReportFormat Text
 reportFormats = Map.fromList
-  [ ("Plaintext", ReportFormatPlain    )
-  , ("PDF"      , ReportFormatPDF      )
-  , ("HTML"     , ReportFormatHTML     )
-  , ("Markdown" , ReportFormatMarkdown )
+  [ (ReportFormatPlain , "Plaintext")
+  , (ReportFormatPDF   , "PDF"      )
+  , (ReportFormatHTML  , "HTML"     )
+  -- , ("Markdown" , ReportFormatMarkdown )
   ]
 
 subType :: DataType -> Maybe DataType
@@ -270,12 +269,12 @@ reportInfo = defineView "report info" $ \r -> clspan_ "reportInfo" $ do
         ReportFormatPlain     -> "Plaintext"
         ReportFormatPDF       -> "PDF"
         ReportFormatHTML      -> "HTML"
-        ReportFormatMarkdown  -> "Markdown"
+        -- ReportFormatMarkdown  -> "Markdown"
       lang = case r ^. reportColLanguage of
-        ReportLanguagePlain    -> "Plaintext"
-        ReportLanguageMarkdown -> "Markdown"
-        ReportLanguageLatex    -> "Latex"
-        ReportLanguageHTML     -> "HTML"
+        Nothing                     -> "Plaintext"
+        Just ReportLanguageMarkdown -> "Markdown"
+        Just ReportLanguageLatex    -> "Latex"
+        Just ReportLanguageHTML     -> "HTML"
   elemText $ "Report " <> lang <> " "
   faIcon_ "long-arrow-right"
   elemText format
@@ -306,16 +305,16 @@ reportColConf = defineControllerView "report column config" colConfStore $
         saveAction    = []
     confButtons_ cancelActions deleteActions saveAction
 
-selReportLanguage_ :: Id Column -> ReportLanguage -> ReactElementM eh ()
+selReportLanguage_ :: Id Column -> Maybe ReportLanguage -> ReactElementM eh ()
 selReportLanguage_ !i !lang = view selReportLanguage (i, lang) mempty
 
-selReportLanguage :: ReactView (Id Column, ReportLanguage)
+selReportLanguage :: ReactView (Id Column, Maybe ReportLanguage)
 selReportLanguage = defineView "select report lang" $ \(i, lang) ->
   select_
-    [ "defaultValue" &= lang
+    [ "defaultValue" &= show lang
     , onInput $ \evt ->
-        let lang' = readMaybe (target evt "value")
-              ?: ReportLanguagePlain -- unexpected
+        let lang' = readMaybe (target evt "value") -- Maybe (Maybe a)
+              ?: Nothing -- unexpected
         in  [SomeStoreAction colConfStore $ ColumnSetTmpReportLang i lang' ]
     ] $ optionsFor_ reportLangs
 
@@ -325,17 +324,17 @@ selReportFormat_ !i !f = view selReportFormat (i, f) mempty
 selReportFormat :: ReactView (Id Column, ReportFormat)
 selReportFormat = defineView "select report format" $ \(i, format) ->
   select_
-    [ "defaultValue" &= format
+    [ "defaultValue" &= show format
     , onInput $ \evt ->
         let format' = readMaybe (target evt "value")
               ?: ReportFormatPlain -- unexpected
         in  [SomeStoreAction colConfStore $ ColumnSetTmpReportFormat i format' ]
     ] $ optionsFor_ reportFormats
 
-inputTemplate_ :: Id Column -> Text -> ReportLanguage -> ReactElementM eh ()
+inputTemplate_ :: Id Column -> Text -> Maybe ReportLanguage -> ReactElementM eh ()
 inputTemplate_ !c !t !lang = view inputTemplate (c, t, lang) mempty
 
-inputTemplate :: ReactView (Id Column, Text, ReportLanguage)
+inputTemplate :: ReactView (Id Column, Text, Maybe ReportLanguage)
 inputTemplate = defineView "input template" $ \(i, t, lang) ->
   mempty
 
@@ -449,8 +448,8 @@ selBranch = defineStatefulView "selBranch" Nothing $ \curBranch (mDt, tables, cb
   let defDt = DataNumber
       selectedBranch = curBranch <|> toBranch <$> mDt ?: toBranch defDt
   cldiv_ "selBranch" $ select_
-    [ "defaultValue" &= selectedBranch
-    , onInput $ \evt _ -> case Map.lookup (target evt "value") branches of
+    [ "defaultValue" &= show selectedBranch
+    , onInput $ \evt _ -> case readMaybe (target evt "value") of
         Just BBool   -> (cb DataBool  , Just $ Just BBool  )
         Just BString -> (cb DataString, Just $ Just BString)
         Just BNumber -> (cb DataNumber, Just $ Just BNumber)
@@ -475,7 +474,7 @@ selTable = defineView "select table" $ \(mTableId, tables, cb) -> do
   select_
     [ "defaultValue" &= fromMaybe "" (show <$> mTableId)
     , onChange $ \evt -> maybe [] cb $ readMaybe $ target evt "value"
-    ] $ do option_ [ "value" &= "" ] $ elemText ""
+    ] $ do option_ [ "value" $= "" ] $ elemText ""
            optionsFor_ tables
 
 -- checkbox for "is formula"
@@ -501,10 +500,10 @@ checkIsFormula = defineView "checkIsFormula" $ \(i, isDerived) -> do
 -- input field for formula (i.a.)
 
 inputFormula_ :: Id Column -> Text -> IsDerived -> ReactElementM eh ()
-inputFormula_ !i !dat !f !d = view inputFormula (i, dat, f, d) mempty
+inputFormula_ !i !f !d = view inputFormula (i, f, d) mempty
 
 inputFormula :: ReactView (Id Column, Text, IsDerived)
-inputFormula = defineView "input formula" $ \(i, dat, formula, inpTyp) -> do
+inputFormula = defineView "input formula" $ \(i, formula, inpTyp) -> do
   let isActive = case inpTyp of
         Derived    -> True
         NotDerived -> False
@@ -525,7 +524,7 @@ inputFormula = defineView "input formula" $ \(i, dat, formula, inpTyp) -> do
 
 --
 
-optionsFor_ :: Show a => Map Text a -> ReactElementM eh ()
+optionsFor_ :: Show a => Map a Text -> ReactElementM eh ()
 optionsFor_ m = for_ (Map.toList m) $ \(value, label) ->
   option_ [ "value" &= show value ] $ elemText label
 
