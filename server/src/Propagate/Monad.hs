@@ -30,7 +30,7 @@ data AddTarget
   = CompleteColumn
   | OneRecord (Id Record)
 
-class (MonadCache m) => MonadPropagate m where
+class MonadCache m => MonadPropagate m where
   addTargets :: Id Column -> AddTarget -> m ()
   getTargets :: Id Column -> m [Id Record]
 
@@ -59,12 +59,12 @@ runPropT :: MonadHexl m => PropT m a -> m (a, [Cell])
 runPropT action = runCacheT $ evalStateT (unPropT action) (State Map.empty)
 
 instance MonadHexl m => MonadCache (PropT m) where
-  getCellValue     = getCellValue
-  setCellContent   = setCellContent
-  getColumnValues  = getColumnValues
-  getTableRecords  = getTableRecords
-  getRecordValue   = getRecordValue
-  getCompileResult = getCompileResult
+  getCellValue c     = PropT . lift . getCellValue c
+  setCellContent c r = PropT . lift . setCellContent c r
+  getColumnValues    = PropT . lift . getColumnValues
+  getTableRecords    = PropT . lift . getTableRecords
+  getRecordValue c   = PropT . lift . getRecordValue c
+  getCompileResult   = PropT . lift . getCompileResult
 
 
 instance MonadHexl m => MonadPropagate (PropT m) where

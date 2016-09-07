@@ -47,33 +47,38 @@ expr = buildExpressionParser table terms
       , [ binary "||" Or ]
       ]
     terms =
-          try app
+          try ifThenElse
       <|> try let'
       <|> try lam
-      <|> try prjRecord
-      <|> try ifThenElse
+      <|> try app
       <|> try aExpr
       <?> "expression"
 
 aExpr :: Parser PExpr
 aExpr =
+      try prjRecord
+  <|> try bExpr
+  <?> "a-expression"
+
+bExpr :: Parser PExpr
+bExpr =
       try var
   <|> try tblRef
   <|> try colOfTblRef
   <|> try colRef
   <|> try lit
   <|> try (P.parens lexer expr)
-  <?> "atomic expression"
+  <?> "b-expression"
 
 app :: Parser PExpr
 app = do
   start <- aExpr
-  args <- many1 expr
-  pure $ foldr PApp start args
+  args <- many1 aExpr
+  pure $ foldl' PApp start args
 
 prjRecord :: Parser PExpr
 prjRecord = do
-  e <- aExpr
+  e <- bExpr
   refs <- many1 $ char '.' *> ((Ref . pack) <$> P.identifier lexer)
   pure $ foldl' PPrjRecord e refs
 

@@ -58,7 +58,7 @@ data Column = Column
   { _columnTableId :: Id Table
   , _columnName    :: Text
   , _columnKind    :: ColumnKind
-  } deriving (Eq, Generic, NFData)
+  } deriving (Eq, Generic, NFData, Show)
 
 columnTableId :: Lens' Column (Id Table)
 columnTableId = lens _columnTableId (\c i -> c { _columnTableId = i})

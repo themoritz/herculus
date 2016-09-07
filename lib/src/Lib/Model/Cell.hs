@@ -1,26 +1,26 @@
-{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Lib.Model.Cell where
 
 import           Control.DeepSeq
 import           Control.Monad.Writer
 
-import           Data.Aeson       (FromJSON, ToJSON)
+import           Data.Aeson           (FromJSON, ToJSON)
 import           Data.Aeson.Bson
-import           Data.Bson        (Val, (=:))
-import qualified Data.Bson        as Bson
-import           Data.Text        (Text, unpack)
+import           Data.Bson            (Val, (=:))
+import qualified Data.Bson            as Bson
+import           Data.Text            (Text, unpack)
 import           Data.Typeable
 
 import           GHC.Generics
 
 import           Lib.Model.Class
 import           Lib.Model.Column
-import           Lib.Model.Table
 import           Lib.Model.Record
+import           Lib.Model.Table
 import           Lib.Types
 
 data CellContent
@@ -128,7 +128,7 @@ instance Val Aspects where
 data Cell = Cell
   { cellContent :: CellContent
   , cellAspects :: Aspects
-  } deriving (Generic, NFData)
+  } deriving (Generic, NFData, Show)
 
 newCell :: Id Table -> Id Column -> Id Record -> CellContent -> Cell
 newCell t c r content = Cell
