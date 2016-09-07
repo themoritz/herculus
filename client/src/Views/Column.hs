@@ -293,7 +293,7 @@ reportColConf_ !i !r = view reportColConf (i, r) mempty
 
 reportColConf :: ReactView (Id Column, ReportCol)
 reportColConf = defineControllerView "report column config" colConfStore $
-  \state (i, rep) -> cldiv_ "dialog" $ do
+  \state (i, rep) -> cldiv_ "dialog report" $ do
     let mError = case rep ^. reportColCompiledTemplate of
           CompileResultError msg -> Just msg
           _                      -> Nothing
@@ -302,7 +302,7 @@ reportColConf = defineControllerView "report column config" colConfStore $
         template = state ^. ccsTmpReportTemplate . at i ?: rep ^. reportColTemplate
     cldiv_ "bodyWrapper" $ cldiv_ "body" $ do
       cldiv_ "language" $ selReportLanguage_ i lang
-      faIcon_ "long-arrow-right"
+      cldiv_ "separator" $ faIcon_ "long-arrow-right"
       cldiv_ "format" $ selReportFormat_ i format
     -- input field for template code
     inputTemplate_ i template lang
@@ -409,7 +409,7 @@ dataColConf_ !i !d = view dataColConf (i, d) mempty
 
 dataColConf :: ReactView (Id Column, DataCol)
 dataColConf = defineControllerView "data column configuration" colConfStore $
-  \state (i, dat) -> cldiv_ "dialog" $ do
+  \state (i, dat) -> cldiv_ "dialog data" $ do
       let mError = case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of
             (Derived, CompileResultError msg) -> Just msg
             _                                 -> Nothing

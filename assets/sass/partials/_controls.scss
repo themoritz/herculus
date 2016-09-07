@@ -24,3 +24,11 @@ a, span.link {
 a.active, span.active {
   font-weight: bold;
 }
+
+select {
+ width: 100%;
+ font-size: inherit;
+ background-color: $light-gray;
+ border-radius: 2px;
+ outline: none;
+}

@@ -38,7 +38,6 @@
     $diagLeft: 190px;
     .dialog {
       position: absolute;
-      width: 480px;
       left: -$diagLeft;
       top: 60px;
       z-index: 10;
@@ -79,11 +78,6 @@
             padding: 5px 5px 0px 5px;
             select {
               margin-bottom: 5px;
-              width: 100%;
-              font-size: inherit;
-              background-color: $light-gray;
-              border-radius: 2px;
-              outline: none;
             }
           }
           .formula {
@@ -96,11 +90,34 @@
               opacity: 0.4;
             }
           }
+          .language {
+            height: 100%;
+            box-sizing: border-box;
+            display: table-cell;
+            padding: 5px;
+          }
+          .format {
+            height: 100%;
+            box-sizing: border-box;
+            display: table-cell;
+            padding: 5px;
+          }
+          .separator {
+            height: 100%;
+            box-sizing: border-box;
+            display: table-cell;
+            padding: 5px;
+            vertical-align: bottom;
+            text-align: center;
+          }
         }
+      }
+      .inputTemplate {
+        margin: 5px;
       }
       .error {
         background-color: lighten(red, 40%);
-        margin: 5px;
+        margin: 0px;
         padding: 5px;
         font-size: small;
         .title {
@@ -140,6 +157,12 @@
           }
         }
       }
+    }
+    .dialog.data {
+      width: 480px;
+    }
+    .dialog.report {
+      width: 690px;
     }
   }
 }
