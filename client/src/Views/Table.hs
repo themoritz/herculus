@@ -44,7 +44,7 @@ tableGrid = defineView "tableGrid" $ \st -> do
         case Map.lookup x colByIndex of
           Nothing -> mempty
           Just (c, col) -> case col ^. columnKind of
-            ColumnReport rep -> reportCell_ $ ReportCellProps c rep
+            ColumnReport rep -> reportCell_ $ ReportCellProps c r rep
             ColumnData   dat -> do
               let mRC = do (r, _)  <- Map.lookup y recByIndex
                            content <- Map.lookup (Coords c r) cells

@@ -37,12 +37,15 @@ reportCell = defineView "reportCell" $ \ReportCellProps{..} -> cldiv_ "reportCel
     CompileResultOk _ -> case reportCellColReport ^. reportColFormat of
       ReportFormatPlain ->
         a_ [ "href" &= getPlain reportCellColId reportCellRecId
+           , "target" $= "_blank"
            ] $ faIcon_ "file-text-o"
       ReportFormatPDF ->
         a_ [ "href" &= getPDF reportCellColId reportCellRecId
+           , "target" $= "_blank"
            ] $ faIcon_ "file-pdf-o"
       ReportFormatHTML ->
         a_ [ "href" &= getHTML reportCellColId reportCellRecId
+           , "target" $= "_blank"
            ] $ faIcon_ "file-code-o"
 
 api :: Proxy Routes
