@@ -6,11 +6,14 @@ module Lib.Template.Types where
 import           Control.DeepSeq
 
 import           Data.Aeson
-import           Data.Text
+import           Data.Monoid
+import           Data.Text (Text)
 
 import           GHC.Generics
 
 import           Lib.Compiler.Types
+import {-# SOURCE #-} Lib.Model.Column
+import           Lib.Model.Dependencies.Types
 import           Lib.Types
 
 newtype PTemplate = PTemplate [PTplExpr]
@@ -38,3 +41,12 @@ data TTplExpr
 
 instance ToJSON TTplExpr
 instance FromJSON TTplExpr
+
+collectTplDependencies :: TTemplate -> [(Id Column, DependencyType)]
+collectTplDependencies = go
+  where go (TTemplate tpls) = concatMap goOne tpls
+        goOne e' = case e' of
+          TTplText _ -> []
+          TTplFor _ e body -> collectDependencies e <> go body
+          TTplIf e then' else' -> collectDependencies e <> go then' <> go else'
+          TTplShow e -> collectDependencies e

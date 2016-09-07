@@ -11,6 +11,7 @@ import           Control.Lens
 import           Control.Monad                  (unless, void, when)
 
 import qualified Data.ByteString.Lazy           as BL
+import qualified Data.ByteString.Lazy.Char8     as BL8
 import           Data.List                      (union)
 import           Data.Maybe                     (catMaybes, isNothing, mapMaybe)
 import           Data.Monoid
@@ -27,6 +28,7 @@ import           Database.MongoDB               ((=:))
 import           Lib.Api.Rest
 import           Lib.Api.WebSocket
 import           Lib.Compiler
+import           Lib.Compiler.Types
 import           Lib.Compiler.Interpreter.Types
 import           Lib.Compiler.Typechecker.Types
 import           Lib.Model
@@ -38,6 +40,7 @@ import           Lib.Model.Record
 import           Lib.Model.References
 import           Lib.Model.Table
 import           Lib.Template
+import           Lib.Template.Types
 import           Lib.Template.Interpreter
 import           Lib.Types
 
@@ -193,14 +196,9 @@ handleReportColSetTemplate c template = do
   oldCol <- getById' c
   when (isNothing (oldCol ^? columnKind . _ColumnReport)) $
     throwError $ ErrBug "Tried to set template of column other than data"
-  res <- compileTemplate template (mkTypecheckEnv $ oldCol ^. columnTableId)
-  let compileResult = case res of
-        Left msg -> CompileResultError msg
-        Right tTpl -> CompileResultOk tTpl
-      newCol = oldCol & columnKind . _ColumnReport . reportColCompiledTemplate .~ compileResult
-                      & columnKind . _ColumnReport . reportColTemplate .~ template
-  update c $ const newCol
-  sendWS $ WsDownColumnsChanged [Entity c newCol]
+  update c $ columnKind . _ColumnReport . reportColTemplate .~ template
+  newCol <- compileColumn c
+  sendWS $ WsDownColumnsChanged [newCol]
 
 handleReportColSetFormat :: MonadHexl m => Id Column -> ReportFormat -> m ()
 handleReportColSetFormat c format =
@@ -366,31 +364,43 @@ evalReport c r = do
           Right res -> pure (repCol, res)
       _ -> throwError $ ErrBug "Getting report for non compiled template."
 
-compileColumn :: MonadHexl m => Id Column -> m (Entity Column)
+-- | Compiles all kinds of columns
+compileColumn :: forall m. MonadHexl m => Id Column -> m (Entity Column)
 compileColumn c = do
   col <- getById' c
-  dataCol <- case col ^? columnKind . _ColumnData of
-    Nothing -> throwError $ ErrBug "Trying to compile column other than data"
-    Just dataCol -> pure dataCol
-  let abort msg = do
+  let abort :: Text -> m (CompileResult a)
+      abort msg = do
         void $ modifyDependencies c []
         pure $ CompileResultError msg
-  res <- compile (dataCol ^. dataColSourceCode) (mkTypecheckEnv $ col ^. columnTableId)
-  compileResult <- case res of
-    Left msg -> abort msg
-    Right (expr ::: typ) -> do
-      colTyp <- typeOfDataType getTableRows (dataCol ^. dataColType)
-      if typ /= colTyp
-        then abort $ pack $
-               "Inferred type `" <> show typ <>
-               "` does not match column type `" <>
-               show colTyp <> "`."
-        else do
-          let deps = collectDependencies expr
+  newCol <- case col ^. columnKind of
+    ColumnData dataCol -> do
+      res <- compile (dataCol ^. dataColSourceCode) (mkTypecheckEnv $ col ^. columnTableId)
+      compileResult <- case res of
+        Left msg -> abort msg
+        Right (expr ::: typ) -> do
+          colTyp <- typeOfDataType getTableRows (dataCol ^. dataColType)
+          if typ /= colTyp
+            then abort $ pack $
+                   "Inferred type `" <> show typ <>
+                   "` does not match column type `" <>
+                   show colTyp <> "`."
+            else do
+              let deps = collectDependencies expr
+              cycles <- modifyDependencies c deps
+              if cycles then abort "Dependency graph has cycles"
+                        else pure $ CompileResultOk expr
+      pure $ col & columnKind . _ColumnData . dataColCompileResult .~ compileResult
+    ColumnReport repCol -> do
+      res <- compileTemplate (repCol ^. reportColTemplate)
+                             (mkTypecheckEnv $ col ^. columnTableId)
+      compileResult <- case res of
+        Left msg -> abort msg
+        Right tTpl -> do
+          let deps = collectTplDependencies tTpl
           cycles <- modifyDependencies c deps
-          if cycles then abort "Dependency graph has cycles"
-                    else pure $ CompileResultOk expr
-  let newCol = col & columnKind . _ColumnData . dataColCompileResult .~ compileResult
+          when cycles $ throwError $ ErrBug "Setting report dependencies generated cycle"
+          pure $ CompileResultOk tTpl
+      pure $ col & columnKind . _ColumnReport . reportColCompiledTemplate .~ compileResult
   update c $ const newCol
   pure $ Entity c newCol
 

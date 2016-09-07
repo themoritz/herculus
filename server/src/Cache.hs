@@ -80,7 +80,7 @@ class (MonadError AppError m, Monad m) => MonadCache m where
   getColumnValues :: Id Column -> m [Maybe Value]
   getTableRecords :: Id Table -> m [Id Record]
   getRecordValue  :: Id Record -> Ref Column -> m (Maybe Value)
-  getCompileResult :: Id Column -> m DataCompileResult
+  getCompileResult :: Id Column -> m (Maybe DataCompileResult)
 
 newtype CacheT m a = CacheT
   { unCacheT :: StateT Cache m a
@@ -155,9 +155,11 @@ instance MonadHexl m => MonadCache (CacheT m) where
     getCellValue (entityId col) r
 
   getCompileResult c = gets (getCode c) >>= \case
-    Just result -> pure result
+    Just result -> pure $ Just result
     Nothing -> do
       col <- lift $ getById' c
-      let Just compileResult = col ^? columnKind . _ColumnData . dataColCompileResult
-      modify $ storeCode c compileResult
-      pure compileResult
+      case col ^? columnKind . _ColumnData . dataColCompileResult of
+        Nothing -> pure Nothing
+        Just compileResult -> do
+          modify $ storeCode c compileResult
+          pure $ Just compileResult

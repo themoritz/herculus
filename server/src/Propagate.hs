@@ -58,32 +58,33 @@ propagate' :: forall m. MonadPropagate m => ColumnOrder -> m ()
 propagate' [] = pure ()
 propagate' ((next, children):rest) = do
   records <- getTargets next
-  compileResult <- getCompileResult next
+  getCompileResult next >>= \case
+    Nothing -> pure () -- Nothing means that the column is not a data column
+    Just compileResult -> do
+      let doTarget :: Id Record -> m ()
+          doTarget r = do
+            result <- case compileResult of
+              CompileResultOk expr -> do
+                let env = EvalEnv
+                            { envGetCellValue = flip getCellValue r
+                            , envGetColumnValues = getColumnValues
+                            , envGetTableRecords = getTableRecords
+                            , envGetRecordValue = getRecordValue
+                            }
+                interpret expr env >>= \case
+                  Left e -> pure $ CellError e
+                  Right v -> pure $ CellValue v
+              CompileResultError _ -> pure $
+                CellError "Column not compiled"
+              CompileResultNone -> throwError $
+                ErrBug "propagate: no compile result for column"
 
-  let doTarget :: Id Record -> m ()
-      doTarget r = do
-        result <- case compileResult of
-          CompileResultOk expr -> do
-            let env = EvalEnv
-                        { envGetCellValue = flip getCellValue r
-                        , envGetColumnValues = getColumnValues
-                        , envGetTableRecords = getTableRecords
-                        , envGetRecordValue = getRecordValue
-                        }
-            interpret expr env >>= \case
-              Left e -> pure $ CellError e
-              Right v -> pure $ CellValue v
-          CompileResultError _ -> pure $
-            CellError "Column not compiled"
-          CompileResultNone -> throwError $
-            ErrBug "propagate: no compile result for column"
+            setCellContent next r result
 
-        setCellContent next r result
+            for_ children $ \(child, depType) -> case depType of
+              OneToOne -> addTargets child (OneRecord r)
+              OneToAll -> addTargets child CompleteColumn
 
-        for_ children $ \(child, depType) -> case depType of
-          OneToOne -> addTargets child (OneRecord r)
-          OneToAll -> addTargets child CompleteColumn
-
-  mapM_ doTarget records
+      mapM_ doTarget records
 
   propagate' rest

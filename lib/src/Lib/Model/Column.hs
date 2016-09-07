@@ -208,20 +208,3 @@ instance FromBSON IsDerived
 instance Val IsDerived where
   val = toValue
   cast' = decodeValue
-
---
-
-collectDependencies :: TExpr -> [(Id Column, DependencyType)]
-collectDependencies = go
-  where go e' = case e' of
-          TLam _ body       -> go body
-          TApp f e          -> go f <> go e
-          TLet _ e body     -> go e <> go body
-          TIf c t e         -> go c <> go t <> go e
-          TVar _            -> []
-          TLit _            -> []
-          TBinop _ l r      -> go l <> go r
-          TPrjRecord e _    -> go e
-          TColumnRef c      -> [(c, OneToOne)]
-          TWholeColumnRef c -> [(c, OneToAll)]
-          TTableRef _ cs    -> map (,OneToAll) cs
