@@ -11,6 +11,7 @@ import           Control.Lens
 import           Control.Monad                  (unless, void, when)
 
 import qualified Data.ByteString.Lazy           as BL
+import qualified Data.ByteString.Lazy.Char8     as BL8
 import           Data.List                      (union)
 import           Data.Maybe                     (catMaybes, isNothing, mapMaybe)
 import           Data.Monoid
@@ -319,9 +320,14 @@ handleCellGetReportPDF c r = do
     Just lang -> case getPandocReader lang plain of
       Left err -> throwError $ ErrUser $ "Could not read generated code into pandoc document: "
                                       <> (pack . show) err
-      Right pandoc -> makePDF pandoc >>= \case
-        Left e -> pure e
-        Right pdf -> pure pdf
+      Right pandoc -> do
+        let options = Pandoc.def
+              { Pandoc.writerStandalone = True
+              , Pandoc.writerTemplate = "\\documentclass[]{article}\n\\begin{document}$body$\\end{document}"
+              }
+        makePDF options pandoc >>= \case
+          Left e -> throwError $ ErrBug $ "Error generating PDF: " <> (pack . BL8.unpack) e
+          Right pdf -> pure pdf
 
 handleCellGetReportHTML :: MonadHexl m => Id Column -> Id Record -> m Text
 handleCellGetReportHTML c r = do

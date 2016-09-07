@@ -90,7 +90,8 @@ class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m 
 
   getColumnOrder :: [Id Column] -> m ColumnOrder
 
-  makePDF :: Pandoc.Pandoc -> m (Either BL.ByteString BL.ByteString)
+  makePDF :: Pandoc.WriterOptions -> Pandoc.Pandoc
+          -> m (Either BL.ByteString BL.ByteString)
 
 data HexlEnv = HexlEnv
   { envPipe        :: Mongo.Pipe
@@ -236,8 +237,8 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
       Nothing -> throwError $ ErrBug "dependency graph has cycles"
       Just order -> pure order
 
-  makePDF pandoc = liftIO $
-    Pandoc.makePDF "pdflatex" Pandoc.writeLaTeX Pandoc.def pandoc
+  makePDF options pandoc =
+    liftIO $ Pandoc.makePDF "pdflatex" Pandoc.writeLaTeX options pandoc
 
 --
 
