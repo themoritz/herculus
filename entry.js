@@ -29,6 +29,3 @@ require('font-awesome-webpack!./font-awesome.config.js')
 
 // Styles
 require('./assets/sass/main.scss')
-
-// GHCJS
-require('./client/.stack-work/dist/x86_64-linux/Cabal-1.22.8.0_ghcjs/build/client/client.jsexe/all.js')
