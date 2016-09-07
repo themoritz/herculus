@@ -276,11 +276,11 @@ reportInfo = defineView "report info" $ \r -> clspan_ "reportInfo" $ do
         ReportFormatPDF       -> "PDF"
         ReportFormatHTML      -> "HTML"
         -- ReportFormatMarkdown  -> "Markdown"
-      lang = case r ^. reportColLanguage of
-        ReportLanguage Nothing                 -> "Plaintext"
-        ReportLanguage (Just LanguageMarkdown) -> "Markdown"
-        ReportLanguage (Just LanguageLatex)    -> "Latex"
-        ReportLanguage (Just LanguageHTML)     -> "HTML"
+      lang = case r ^? reportColLanguage . reportLanguage . _Just of
+        Nothing               -> "Plaintext"
+        Just LanguageMarkdown -> "Markdown"
+        Just LanguageLatex    -> "Latex"
+        Just LanguageHTML     -> "HTML"
   elemText $ "Report " <> lang <> " "
   faIcon_ "long-arrow-right"
   elemText format
@@ -357,11 +357,11 @@ inputTemplate_ !c !t !lang = view inputTemplate (c, t, lang) mempty
 
 inputTemplate :: ReactView (Id Column, Text, ReportLanguage)
 inputTemplate = defineView "input template" $ \(i, t, lang) -> do
-  let mode = case lang of
-        ReportLanguage Nothing                 -> "text/plain"
-        ReportLanguage (Just LanguageMarkdown) -> "GFM"
-        ReportLanguage (Just LanguageLatex)    -> "text/x-stex"
-        ReportLanguage (Just LanguageHTML)     -> "text/html"
+  let mode = case lang ^? reportLanguage . _Just of
+        Nothing               -> "text/plain"
+        Just LanguageMarkdown -> "GFM"
+        Just LanguageLatex    -> "text/x-stex"
+        Just LanguageHTML     -> "text/html"
   div_
     [ "className" $= "inputTemplate"
     ] $ codemirror_ CodemirrorProps

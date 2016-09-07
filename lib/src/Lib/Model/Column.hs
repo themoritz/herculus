@@ -139,8 +139,12 @@ reportColFormat = lens _reportColFormat (\r f -> r { _reportColFormat = f})
 instance ToJSON ReportCol
 instance FromJSON ReportCol
 
-newtype ReportLanguage = ReportLanguage (Maybe Language)
+newtype ReportLanguage = ReportLanguage
+  { _reportLanguage :: Maybe Language }
   deriving (Eq, Ord, Generic, NFData, Read, Show)
+
+reportLanguage :: Lens' ReportLanguage (Maybe Language)
+reportLanguage = lens _reportLanguage (\r l -> r { _reportLanguage = l})
 
 instance ToJSON ReportLanguage
 instance FromJSON ReportLanguage

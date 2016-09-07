@@ -314,9 +314,9 @@ handleCellSet c r val = do
 handleCellGetReportPDF :: MonadHexl m => Id Column -> Id Record -> m BL.ByteString
 handleCellGetReportPDF c r = do
   (repCol, plain) <- evalReport c r
-  case repCol ^. reportColLanguage of
-    ReportLanguage Nothing -> throwError $ ErrUser "Cannot generate PDF from plain text"
-    ReportLanguage (Just lang) -> case getPandocReader lang plain of
+  case repCol ^? reportColLanguage . reportLanguage . _Just of
+    Nothing -> throwError $ ErrUser "Cannot generate PDF from plain text"
+    Just lang -> case getPandocReader lang plain of
       Left err -> throwError $ ErrUser $ "Could not read generated code into pandoc document: "
                                       <> (pack . show) err
       Right pandoc -> makePDF pandoc >>= \case
@@ -326,9 +326,9 @@ handleCellGetReportPDF c r = do
 handleCellGetReportHTML :: MonadHexl m => Id Column -> Id Record -> m Text
 handleCellGetReportHTML c r = do
   (repCol, plain) <- evalReport c r
-  pure $ case repCol ^. reportColLanguage of
-    ReportLanguage Nothing -> plain
-    ReportLanguage (Just lang) -> case getPandocReader lang plain of
+  pure $ case repCol ^? reportColLanguage . reportLanguage . _Just  of
+    Nothing   -> plain
+    Just lang -> case getPandocReader lang plain of
       Left err -> pack $ show err
       Right pandoc -> pack $ Pandoc.writeHtmlString Pandoc.def pandoc
 
