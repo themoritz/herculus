@@ -318,22 +318,49 @@ handleCellGetReportPDF c r = do
       Left err -> throwError $ ErrUser $ "Could not read generated code into pandoc document: "
                                       <> (pack . show) err
       Right pandoc -> do
-        let options = Pandoc.def
-              { Pandoc.writerStandalone = True
-              , Pandoc.writerTemplate = "\\documentclass[]{article}\n\\begin{document}$body$\\end{document}"
-              }
+        let options = case lang of
+              ReportLanguageLatex -> Pandoc.def
+              _ -> Pandoc.def
+                { Pandoc.writerStandalone = True
+                , Pandoc.writerTemplate = unlines
+                  [ "\\documentclass[a4paper,12pt]{article}"
+                  , "\\usepackage[margin=3cm]{geometry}"
+                  , "\\renewcommand{\\familydefault}{\\sfdefault}"
+                  , "\\begin{document}"
+                  , "$body$"
+                  , "\\end{document}"
+                  ]
+                }
         makePDF options pandoc >>= \case
           Left e -> throwError $ ErrBug $ "Error generating PDF: " <> (pack . BL8.unpack) e
           Right pdf -> pure pdf
 
 handleCellGetReportHTML :: MonadHexl m => Id Column -> Id Record -> m Text
 handleCellGetReportHTML c r = do
+  col <- getById' c
   (repCol, plain) <- evalReport c r
   pure $ case repCol ^. reportColLanguage of
     Nothing   -> plain
     Just lang -> case getPandocReader lang plain of
       Left err -> pack $ show err
-      Right pandoc -> pack $ Pandoc.writeHtmlString Pandoc.def pandoc
+      Right pandoc -> do
+        let options = case lang of
+              ReportLanguageHTML -> Pandoc.def
+              _ -> Pandoc.def
+                { Pandoc.writerStandalone = True
+                , Pandoc.writerTemplate = unlines
+                  [ "<html>"
+                  , "<head>"
+                  , "<meta charset=\"utf-8\"/>"
+                  , "<title>Report " <> unpack (col ^. columnName) <> "</title>"
+                  , "</head>"
+                  , "<body>"
+                  , "$body$"
+                  , "</body>"
+                  , "</html>"
+                  ]
+                }
+        pack $ Pandoc.writeHtmlString options pandoc
 
 handleCellGetReportPlain :: MonadHexl m => Id Column -> Id Record -> m Text
 handleCellGetReportPlain c r = snd <$> evalReport c r
