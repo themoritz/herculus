@@ -92,6 +92,9 @@
             height: 100%;
             width: 75%;
             display: table-cell;
+            .inputFormula.disabled {
+              opacity: 0.4;
+            }
           }
         }
       }

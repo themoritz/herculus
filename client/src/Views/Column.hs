@@ -248,7 +248,10 @@ columnConfig = defineControllerView "column configuration" colConfStore $
             case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of
               (Derived, CompileResultError msg) -> Just msg
               _                                 -> Nothing
-          _                         -> Nothing
+          ColumnReport rep ->
+            case rep ^. reportColCompiledTemplate of
+              CompileResultError msg -> Just msg
+              _                      -> Nothing
     button_ (
       maybe [] (\msg -> [ "title" &= msg ]) mError <>
       [ classNames
@@ -331,26 +334,30 @@ selReportLanguage_ !i !lang = view selReportLanguage (i, lang) mempty
 
 selReportLanguage :: ReactView (Id Column, Maybe ReportLanguage)
 selReportLanguage = defineView "select report lang" $ \(i, lang) ->
-  select_
-    [ "defaultValue" &= show lang
-    , onInput $ \evt ->
-        let lang' = readMaybe (target evt "value") -- Maybe (Maybe a)
-              ?: Nothing -- unexpected
-        in  [SomeStoreAction colConfStore $ ColumnSetTmpReportLang i lang' ]
-    ] $ optionsFor_ reportLangs
+  clspan_ "select" $ do
+    "Input language"
+    select_
+      [ "defaultValue" &= show lang
+      , onInput $ \evt ->
+          let lang' = readMaybe (target evt "value") -- Maybe (Maybe a)
+                ?: Nothing -- unexpected
+          in  [SomeStoreAction colConfStore $ ColumnSetTmpReportLang i lang' ]
+      ] $ optionsFor_ reportLangs
 
 selReportFormat_ :: Id Column -> ReportFormat -> ReactElementM eh ()
 selReportFormat_ !i !f = view selReportFormat (i, f) mempty
 
 selReportFormat :: ReactView (Id Column, ReportFormat)
 selReportFormat = defineView "select report format" $ \(i, format) ->
-  select_
-    [ "defaultValue" &= show format
-    , onInput $ \evt ->
-        let format' = readMaybe (target evt "value")
-              ?: ReportFormatPlain -- unexpected
-        in  [SomeStoreAction colConfStore $ ColumnSetTmpReportFormat i format' ]
-    ] $ optionsFor_ reportFormats
+  clspan_ "select" $ do
+    "Output format"
+    select_
+      [ "defaultValue" &= show format
+      , onInput $ \evt ->
+          let format' = readMaybe (target evt "value")
+                ?: ReportFormatPlain -- unexpected
+          in  [SomeStoreAction colConfStore $ ColumnSetTmpReportFormat i format' ]
+      ] $ optionsFor_ reportFormats
 
 inputTemplate_ :: Id Column -> Text -> Maybe ReportLanguage -> ReactElementM eh ()
 inputTemplate_ !c !t !lang = view inputTemplate (c, t, lang) mempty
@@ -358,15 +365,16 @@ inputTemplate_ !c !t !lang = view inputTemplate (c, t, lang) mempty
 inputTemplate :: ReactView (Id Column, Text, Maybe ReportLanguage)
 inputTemplate = defineView "input template" $ \(i, t, lang) -> do
   let mode = case lang of
-        Nothing               -> "text/plain"
-        Just ReportLanguageMarkdown -> "GFM"
+        Nothing                     -> "text/plain"
+        Just ReportLanguageMarkdown -> "text/x-gfm"
         Just ReportLanguageLatex    -> "text/x-stex"
         Just ReportLanguageHTML     -> "text/html"
   div_
     [ "className" $= "inputTemplate"
     ] $ codemirror_ CodemirrorProps
           { codemirrorMode = mode
-          , codemirrorTheme = "neat"
+          , codemirrorTheme = "default"
+          , codemirrorReadOnly = CodemirrorEnabled
           , codemirrorValue = t
           , codemirrorOnChange = \v ->
               [ SomeStoreAction colConfStore $ ColumnSetTmpReportTemplate i v ]
@@ -538,15 +546,18 @@ inputFormula_ !i !f !d = view inputFormula (i, f, d) mempty
 
 inputFormula :: ReactView (Id Column, Text, IsDerived)
 inputFormula = defineView "input formula" $ \(i, formula, inpTyp) -> do
-  let isActive = case inpTyp of
-        Derived    -> True
-        NotDerived -> False
+  let (readOnly, roFlag) = case inpTyp of
+        Derived    -> (CodemirrorEnabled, False)
+        NotDerived -> (CodemirrorDisabled, True)
   div_
-    [ "className" $= "inputFormula"
-    , classNames [ ( "active", isActive ) ]
+    [ classNames
+      [ ("inputFormula", True  )
+      , ("disabled",      roFlag)
+      ]
     ] $ codemirror_ CodemirrorProps
           { codemirrorMode = "text/x-ocaml"
-          , codemirrorTheme = "neat"
+          , codemirrorTheme = "default"
+          , codemirrorReadOnly = readOnly
           , codemirrorValue = formula
           , codemirrorOnChange = \v ->
               [ SomeStoreAction colConfStore $ ColumnSetTmpFormula i v ]

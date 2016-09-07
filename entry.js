@@ -15,6 +15,9 @@ require('react-datepicker/dist/react-datepicker.css');
 var Codemirror = require('react-codemirror')
 require('codemirror/lib/codemirror.css')
 require('codemirror/mode/mllike/mllike')
+require('codemirror/mode/gfm/gfm')
+require('codemirror/mode/stex/stex')
+require('codemirror/mode/htmlmixed/htmlmixed')
 require('codemirror/theme/neat.css')
 
 global.Codemirror = Codemirror

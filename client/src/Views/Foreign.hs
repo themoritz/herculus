@@ -44,15 +44,26 @@ grid_ !props =  do
 data CodemirrorProps func = CodemirrorProps
   { codemirrorMode     :: Text
   , codemirrorTheme    :: Text
+  , codemirrorReadOnly :: CodemirrorReadOnly
   , codemirrorValue    :: Text
   , codemirrorOnChange :: func -- JSString -> a
   }
 
+data CodemirrorReadOnly
+  = CodemirrorEnabled
+  | CodemirrorReadOnly
+  | CodemirrorDisabled
+
 codemirror_ :: (CallbackFunction eh func, Typeable func)
             => CodemirrorProps func -> ReactElementM eh ()
-codemirror_ !props =
+codemirror_ !props = do
+  let readOnlyProp = case codemirrorReadOnly props of
+        CodemirrorDisabled -> ["readOnly" $= "nocursor"]
+        CodemirrorReadOnly -> ["readOnly" &= True]
+        CodemirrorEnabled  -> ["readOnly" &= False]
   foreign_ "Codemirror"
-    [ nestedProperty "options"
+    [ nestedProperty "options" $
+      readOnlyProp ++
       [ "mode" &= codemirrorMode props
       , "theme" &= codemirrorTheme props
       , "lineWrapping" &= True
