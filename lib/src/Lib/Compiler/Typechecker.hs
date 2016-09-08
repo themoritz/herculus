@@ -148,11 +148,13 @@ infer expr = case expr of
     let num = TyNullary TyNumber
         tim = TyNullary TyTime
         bol = TyNullary TyBool
+        str = TyNullary TyString
         (arg, res) = case op of
           Add       -> (num, num)
           Sub       -> (num, num)
           Mul       -> (num, num)
           Div       -> (num, num)
+          Equal     -> (str, bol)
           LessEq    -> (tim, bol)
           GreaterEq -> (tim, bol)
           Less      -> (tim, bol)

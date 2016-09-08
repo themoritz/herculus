@@ -112,11 +112,16 @@ eval env expr = case expr of
           RValue (VBool a) <- eval env l
           RValue (VBool b) <- eval env r
           pure $ RValue $ VBool $ a `o` b
+        strOp o = do
+          RValue (VString a) <- eval env l
+          RValue (VString b) <- eval env r
+          pure $ RValue $ VBool $ a `o` b
     case op of
       Add       -> numOp (+)
       Sub       -> numOp (-)
       Mul       -> numOp (*)
       -- Div TODO: catch div by 0 error
+      Equal     -> strOp (==)
       LessEq    -> timOp (<=)
       GreaterEq -> timOp (>=)
       Less      -> timOp (<)

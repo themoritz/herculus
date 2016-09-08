@@ -1,5 +1,3 @@
-{-# LANGUAGE FlexibleInstances #-}
-
 module Lib.Compiler.Parser
   ( parseExpr
   , expr
@@ -41,8 +39,15 @@ expr = buildExpressionParser table terms
   where
     table =
       [ [ binary "*" Mul ]
-      , [ binary "+" Add, binary "-" Sub ]
-      , [ binary "<=" LessEq, binary ">=" GreaterEq, binary "<" Less, binary ">" Greater]
+      , [ binary "+" Add
+        , binary "-" Sub
+        ]
+      , [ binary "<=" LessEq
+        , binary ">=" GreaterEq
+        , binary "<" Less
+        , binary ">" Greater
+        , binary "==" Equal
+        ]
       , [ binary "&&" And ]
       , [ binary "||" Or ]
       ]
@@ -63,8 +68,8 @@ aExpr =
 bExpr :: Parser PExpr
 bExpr =
       try var
-  <|> try tblRef
   <|> try colOfTblRef
+  <|> try tblRef
   <|> try colRef
   <|> try lit
   <|> try (P.parens lexer expr)
@@ -134,7 +139,7 @@ colRef = PColumnRef . Ref . pack <$> (char '$' *> P.identifier lexer)
 
 colOfTblRef :: Parser PExpr
 colOfTblRef = do
-  tbl <- char '$' *> P.identifier lexer
+  tbl <- char '#' *> P.identifier lexer
   col <- char '.' *> P.identifier lexer
   pure $ PColumnOfTableRef (Ref $ pack tbl) (Ref $ pack col)
 
