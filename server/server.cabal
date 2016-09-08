@@ -16,6 +16,7 @@ library
   exposed-modules:     Monads
                      , Propagate
                      , Cache
+                     , Latex
                      , Propagate.Monad
                      , ConnectionManager
                      , Handler.WebSocket
@@ -24,7 +25,9 @@ library
                      , base >= 4.7 && < 5
                      , bytestring
                      , containers
+                     , directory
                      , fast-logger
+                     , filepath
                      , lens
                      , lib
                      , monad-control

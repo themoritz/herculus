@@ -9,7 +9,6 @@ module Handler.Rest where
 import           Control.Arrow                  (second)
 import           Control.Lens
 import           Control.Monad                  (unless, void, when)
-import           Control.Monad.Logger           (logDebugN)
 
 import qualified Data.ByteString.Lazy           as BL
 import qualified Data.ByteString.Lazy.Char8     as BL8
@@ -29,9 +28,9 @@ import           Database.MongoDB               ((=:))
 import           Lib.Api.Rest
 import           Lib.Api.WebSocket
 import           Lib.Compiler
-import           Lib.Compiler.Types
 import           Lib.Compiler.Interpreter.Types
 import           Lib.Compiler.Typechecker.Types
+import           Lib.Compiler.Types
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
@@ -41,8 +40,8 @@ import           Lib.Model.Record
 import           Lib.Model.References
 import           Lib.Model.Table
 import           Lib.Template
-import           Lib.Template.Types
 import           Lib.Template.Interpreter
+import           Lib.Template.Types
 import           Lib.Types
 
 import           Cache
@@ -316,13 +315,20 @@ handleCellGetReportPDF c r = do
   case repCol ^. reportColLanguage of
     Nothing -> throwError $ ErrUser "Cannot generate PDF from plain text"
     Just lang -> case getPandocReader lang (repCol ^. reportColFormat) of
-      Nothing -> undefined -- TODO: call latex on plain
+      Nothing -> do
+        let options = Pandoc.def
+        runLatex options (unpack plain) >>= \case
+          Left e -> throwError $ ErrUser $
+            "Error running pdflatex: " <> (pack . BL8.unpack) e <>
+            "Source: " <> plain
+          Right pdf -> pure pdf
       Just reader -> case reader Pandoc.def (unpack plain) of
-        Left err -> throwError $ ErrUser $ "Could not read generated code into pandoc document: "
-                                        <> (pack . show) err
+        Left err -> throwError $ ErrUser $
+          "Could not read generated code into pandoc document: " <> (pack . show) err
         Right pandoc -> do
           template <- getDefaultTemplate "latex" >>= \case
-            Left msg -> throwError $ ErrBug $ "Could not load latex template: " <> pack msg
+            Left msg -> throwError $ ErrBug $
+              "Could not load latex template: " <> pack msg
             Right template -> pure template
           let options = Pandoc.def
                 { Pandoc.writerStandalone = True
@@ -335,9 +341,10 @@ handleCellGetReportPDF c r = do
                   , ("fontfamilyoptions", "default")
                   ]
                 }
-          logDebugN $ (pack . show) $ Pandoc.writeLaTeX options pandoc
           makePDF options pandoc >>= \case
-            Left e -> throwError $ ErrBug $ "Error generating PDF: " <> (pack . BL8.unpack) e
+            Left e -> throwError $ ErrUser $
+              "Error generating PDF: " <> (pack . BL8.unpack) e <>
+              "Source: " <> (pack . show) (Pandoc.writeLaTeX options pandoc)
             Right pdf -> pure pdf
 
 handleCellGetReportHTML :: MonadHexl m => Id Column -> Id Record -> m Text

@@ -52,6 +52,8 @@ import           Lib.Model.Dependencies
 import           Lib.Model.References
 import           Lib.Types
 
+import qualified Latex                       as Latex
+
 data AppError
   = ErrUser Text
   | ErrBug Text
@@ -92,6 +94,8 @@ class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m 
 
   -- Pandoc stuff
   getDefaultTemplate :: String -> m (Either String String)
+  runLatex :: Pandoc.WriterOptions -> String
+           -> m (Either BL.ByteString BL.ByteString)
   makePDF :: Pandoc.WriterOptions -> Pandoc.Pandoc
           -> m (Either BL.ByteString BL.ByteString)
 
@@ -245,6 +249,9 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
     liftIO (Pandoc.getDefaultTemplate Nothing writer) >>= \case
       Left exception -> pure $ Left $ show exception
       Right template -> pure $ Right template
+
+  runLatex options source =
+    liftIO $ Latex.makePDF options "pdflatex" source
 
   makePDF options pandoc =
     liftIO $ Pandoc.makePDF "pdflatex" Pandoc.writeLaTeX options pandoc
