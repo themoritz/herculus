@@ -71,7 +71,7 @@
           box-sizing: border-box;
           .datatype {
             height: 100%;
-            width: 25%;
+            width: 110px;
             border-right: 1px solid $medium-gray;
             box-sizing: border-box;
             display: table-cell;
@@ -84,7 +84,7 @@
             padding: 5px;
             box-sizing: border-box;
             height: 100%;
-            width: 75%;
+            width: 540px;
             display: table-cell;
             .inputFormula.disabled {
               opacity: 0.4;
@@ -159,7 +159,7 @@
       }
     }
     .dialog.data {
-      width: 480px;
+      width: 650px;
     }
     .dialog.report {
       width: 690px;

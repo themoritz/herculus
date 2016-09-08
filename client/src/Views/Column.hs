@@ -300,12 +300,13 @@ reportColConf = defineControllerView "report column config" colConfStore $
         lang = state ^. ccsTmpReportLanguage . at i ?: rep ^. reportColLanguage
         format = state ^. ccsTmpReportFormat . at i ?: rep ^. reportColFormat
         template = state ^. ccsTmpReportTemplate . at i ?: rep ^. reportColTemplate
-    cldiv_ "bodyWrapper" $ cldiv_ "body" $ do
-      cldiv_ "language" $ selReportLanguage_ i lang
-      cldiv_ "separator" $ faIcon_ "long-arrow-right"
-      cldiv_ "format" $ selReportFormat_ i format
-    -- input field for template code
-    inputTemplate_ i template lang
+    cldiv_ "bodyWrapper" $ do
+      cldiv_ "body" $ do
+        cldiv_ "language" $ selReportLanguage_ i lang
+        cldiv_ "separator" $ faIcon_ "long-arrow-right"
+        cldiv_ "format" $ selReportFormat_ i format
+      -- input field for template code
+      inputTemplate_ i template lang
     for_ mError $ \errMsg -> cldiv_ "error" $ do
       clspan_ "title" "Error"
       cldiv_  "body" $ elemText errMsg
