@@ -4,12 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-      "watch-styles": "./node_modules/.bin/gulp",
-      "watch-client": "./node_modules/.bin/webpack --progress --colors --watch",
-      "build-client": "./build-client.sh",
-      "webpack": "./node_modules/.bin/webpack --progress --colors",
-      "run-server": "./build-server.sh",
-      "test": "echo \"Error: no test specified\" && exit 1"
+    "watch-styles": "./node_modules/.bin/gulp",
+    "watch-client": "./node_modules/.bin/webpack --progress --colors --watch",
+    "build-client": "./build-client.sh",
+    "webpack": "./node_modules/.bin/webpack --progress --colors",
+    "run-server": "./build-server.sh",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
@@ -30,6 +30,7 @@
     "less-loader": "^2.2.3",
     "moment": "^2.14.1",
     "node-sass": "^3.9.3",
+    "node-zopfli": "^2.0.0",
     "react": "^15.3.1",
     "react-addons-shallow-compare": "^15.3.1",
     "react-codemirror": "^0.2.6",

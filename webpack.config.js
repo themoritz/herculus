@@ -1,11 +1,12 @@
 var ExtractTextPlugin = require('extract-text-webpack-plugin')
 var path = require('path')
+var webpack = require('webpack')
 
 module.exports = {
   entry: './entry.js',
   output: {
     path: path.join(__dirname, 'assets/public'),
-    filename: 'js/bundle.js'
+    filename: 'js/app.js'
   },
   module: {
     loaders: [
@@ -19,6 +20,18 @@ module.exports = {
     ]
   },
   plugins: [
-    new ExtractTextPlugin("css/bundle.css")
+    new ExtractTextPlugin("css/bundle.css"),
+    // TODO: Only enable these plugins in production
+    // For React
+    new webpack.DefinePlugin({
+      'process.env': {
+        'NODE_ENV': JSON.stringify('production')
+      }
+    }),
+    new webpack.optimize.UglifyJsPlugin({
+      compress: {
+        warnings: false
+      }
+    })
   ]
 }

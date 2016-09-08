@@ -32,3 +32,6 @@ require('font-awesome-webpack!./font-awesome.config.js')
 
 // Styles
 require('./assets/sass/main.scss')
+
+// TODO: Only in production, in development manually append this to app.js ...
+require('./client/.stack-work/dist/x86_64-linux/Cabal-1.24.0.0_ghcjs/build/client/client.jsexe/all.js')
