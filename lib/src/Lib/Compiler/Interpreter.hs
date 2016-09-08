@@ -34,6 +34,10 @@ prelude = Map.fromList
   , ( "show"
     , RPrelude $ \_ (RValue (VNumber n)) -> pure $ RValue $ VString $ pack $ show n
     )
+  , ( "formatTime"
+    , RPrelude $ \_ (RValue (VString f)) -> pure $ RPrelude $ \_ (RValue (VTime t)) ->
+        pure $ RValue $ VString $ formatTime f t
+    )
   , ( "map"
     , RPrelude $ \env arg -> pure $ RPrelude $ \_ (RValue (VList xs)) -> do
         let f x = case arg of
@@ -122,6 +126,7 @@ eval env expr = case expr of
       Mul       -> numOp (*)
       -- Div TODO: catch div by 0 error
       Equal     -> strOp (==)
+      NotEqual  -> strOp (/=)
       LessEq    -> timOp (<=)
       GreaterEq -> timOp (>=)
       Less      -> timOp (<)

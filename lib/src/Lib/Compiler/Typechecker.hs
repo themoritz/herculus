@@ -44,6 +44,9 @@ prelude = Context $ Map.fromList
   , ( "show"
     , Forall [] $ TyNullary TyNumber `TyArr` TyNullary TyString
     )
+  , ( "formatTime"
+    , Forall [] $ TyNullary TyString `TyArr` (TyNullary TyTime `TyArr` TyNullary TyString)
+    )
   , ( "map"
     , Forall [TV "_a", TV "_b"] $
         (TyVar (TV "_a") `TyArr` TyVar (TV "_b")) `TyArr`
@@ -155,6 +158,7 @@ infer expr = case expr of
           Mul       -> (num, num)
           Div       -> (num, num)
           Equal     -> (str, bol)
+          NotEqual  -> (str, bol)
           LessEq    -> (tim, bol)
           GreaterEq -> (tim, bol)
           Less      -> (tim, bol)

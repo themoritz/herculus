@@ -47,6 +47,7 @@ expr = buildExpressionParser table terms
         , binary "<" Less
         , binary ">" Greater
         , binary "==" Equal
+        , binary "!=" NotEqual
         ]
       , [ binary "&&" And ]
       , [ binary "||" Or ]

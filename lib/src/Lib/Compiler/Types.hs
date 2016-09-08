@@ -32,6 +32,7 @@ data Binop
   | Mul
   | Div
   | Equal
+  | NotEqual
   | LessEq
   | GreaterEq
   | Less

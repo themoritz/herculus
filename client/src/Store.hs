@@ -23,9 +23,9 @@ import           React.Flux.Addons.Servant
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
-import           Lib.Model.Table
 import           Lib.Model.Project
 import           Lib.Model.Record
+import           Lib.Model.Table
 import           Lib.Types
 
 import           Lib.Api.Rest
