@@ -2,35 +2,48 @@
 
 ## Preps
 
-Works with npm v2.15.1 and node v4.4.3.
-Use `nvm install v.4.4.3`.
-
-Install globally
-
-``` shell
-npm install -g webpack gulp
-```
+Works with npm v3.10.31 and node v6.5.0.
+Use `nvm install v6.5.0`.
 
 ## Dev
 
-Run in background:
+### Run in background:
+
+#### Watchers
+
 
 ``` shell
 cd hexl
 npm install
 # optional gulp for live css injection
-gulp
-webpack --progress --colors --watch
+npm run watch-styles
+npm run watch-client
 ```
 
-Build:
+#### MongoDB
+
+- Windows
+
+TODO: How to...?
+
+
+- OS X (via Homebrew)
+
+``` shell
+brew services start mongodb
+```
+
+To stop run `brew services start mongodb`
+
+
+### Build:
 
 ``` shell
 cd hexl
 # Server
-./build-server.sh
+npm run run-server
 # Client
-./build-client.sh
+npm run build-client
 ```
 
 Then go to [localhost:3001](http://localhost:3001).
