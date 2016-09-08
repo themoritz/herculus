@@ -321,15 +321,18 @@ handleCellGetReportPDF c r = do
         Left err -> throwError $ ErrUser $ "Could not read generated code into pandoc document: "
                                         <> (pack . show) err
         Right pandoc -> do
+          template <- getDefaultTemplate "latex" >>= \case
+            Left msg -> throwError $ ErrBug $ "Could not load latex template: " <> pack msg
+            Right template -> pure template
           let options = Pandoc.def
                 { Pandoc.writerStandalone = True
-                , Pandoc.writerTemplate = unlines
-                  [ "\\documentclass[a4paper,12pt]{article}"
-                  , "\\usepackage[margin=3cm]{geometry}"
-                  , "\\renewcommand{\\familydefault}{\\sfdefault}"
-                  , "\\begin{document}"
-                  , "$body$"
-                  , "\\end{document}"
+                , Pandoc.writerTemplate = template
+                , Pandoc.writerVariables =
+                  [ ("papersize", "A4")
+                  , ("fontsize", "12pt")
+                  , ("geometry", "margin=3cm")
+                  , ("fontfamily", "lato")
+                  , ("fontfamilyoptions", "default")
                   ]
                 }
           logDebugN $ (pack . show) $ Pandoc.writeLaTeX options pandoc
@@ -341,28 +344,25 @@ handleCellGetReportHTML :: MonadHexl m => Id Column -> Id Record -> m Text
 handleCellGetReportHTML c r = do
   col <- getById' c
   (repCol, plain) <- evalReport c r
-  pure $ case repCol ^. reportColLanguage of
-    Nothing   -> plain
+  case repCol ^. reportColLanguage of
+    Nothing   -> pure plain
     Just lang -> case getPandocReader lang (repCol ^. reportColFormat) of
-      Nothing -> plain
+      Nothing -> pure plain
       Just reader -> case reader Pandoc.def (unpack plain) of
-        Left err -> pack $ show err
+        Left err -> pure $ pack $ show err
         Right pandoc -> do
+          template <- getDefaultTemplate "html5" >>= \case
+            Left msg -> throwError $ ErrBug $ "Could not load html5 template: " <> pack msg
+            Right template -> pure template
           let options = Pandoc.def
                 { Pandoc.writerStandalone = True
-                , Pandoc.writerTemplate = unlines
-                  [ "<html>"
-                  , "<head>"
-                  , "<meta charset=\"utf-8\"/>"
-                  , "<title>Report " <> unpack (col ^. columnName) <> "</title>"
-                  , "</head>"
-                  , "<body>"
-                  , "$body$"
-                  , "</body>"
-                  , "</html>"
+                , Pandoc.writerTemplate = template
+                , Pandoc.writerVariables =
+                  [ ("pagetitle", unpack (col ^. columnName))
+                  , ("title-prefix", "Report")
                   ]
                 }
-          pack $ Pandoc.writeHtmlString options pandoc
+          pure $ pack $ Pandoc.writeHtmlString options pandoc
 
 handleCellGetReportPlain :: MonadHexl m => Id Column -> Id Record -> m Text
 handleCellGetReportPlain c r = snd <$> evalReport c r

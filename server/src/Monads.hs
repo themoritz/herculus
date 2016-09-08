@@ -90,6 +90,8 @@ class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m 
 
   getColumnOrder :: [Id Column] -> m ColumnOrder
 
+  -- Pandoc stuff
+  getDefaultTemplate :: String -> m (Either String String)
   makePDF :: Pandoc.WriterOptions -> Pandoc.Pandoc
           -> m (Either BL.ByteString BL.ByteString)
 
@@ -184,7 +186,7 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
         runMongo $ Mongo.save collection $ toDocument $ Entity i (f x)
 
   upsert :: Model a => Mongo.Selector -> a -> (a -> a) -> HexlT m (Maybe (Id a))
-  upsert query new f = do
+  upsert query new f =
     getOneByQuery query >>= \case
       Right (Entity i _) -> update i f *> pure Nothing
       Left _ -> Just <$> create (f new)
@@ -236,6 +238,13 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
     case getDependentTopological cs graph of
       Nothing -> throwError $ ErrBug "dependency graph has cycles"
       Just order -> pure order
+
+  --
+
+  getDefaultTemplate writer =
+    liftIO (Pandoc.getDefaultTemplate Nothing writer) >>= \case
+      Left exception -> pure $ Left $ show exception
+      Right template -> pure $ Right template
 
   makePDF options pandoc =
     liftIO $ Pandoc.makePDF "pdflatex" Pandoc.writeLaTeX options pandoc

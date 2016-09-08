@@ -34,3 +34,13 @@ cd hexl
 ```
 
 Then go to [localhost:3001](http://localhost:3001).
+
+## PDF Generation
+
+PDF generation requires LaTeX with a recent version of TeX Live to be
+installed on the system.
+See http://pandoc.org/MANUAL.html for details on the required packages.
+
+PDFs are generated with the Lato font. Is included in the debian package
+`texlive-fonts-extra` or directly:
+http://www.ctan.org/tex-archive/fonts/lato/
