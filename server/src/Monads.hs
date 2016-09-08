@@ -115,8 +115,9 @@ newtype HexlT m a = HexlT
              , MonadError AppError
              )
 
+-- TODO: Filter for logLevel and show context
 instance MonadIO m => MonadLogger (HexlT m) where
-  monadLoggerLog loc src lvl msg = do
+  monadLoggerLog _ _ _ msg =
     liftIO $ B8.putStrLn $ fromLogStr $ toLogStr msg
 
 --
@@ -263,7 +264,7 @@ runHexl env action = runReaderT (runExceptT (unHexlT action)) env
 
 --
 
-runMongo :: (Monad m, MonadIO m) => Mongo.Action IO a -> HexlT m a
+runMongo :: MonadIO m => Mongo.Action IO a -> HexlT m a
 runMongo action = do
   pipe <- asks envPipe
   database <- asks envDatabase

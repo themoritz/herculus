@@ -3,5 +3,6 @@ server/.stack-work/
 lib/.stack-work/
 assets/public/
 node_modules/
+npm-debug.log
 TAGS
 .#*

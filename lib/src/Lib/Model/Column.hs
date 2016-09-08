@@ -12,18 +12,16 @@ import           Control.DeepSeq
 
 import           Control.Lens.Lens
 import           Control.Lens.Prism
-import           Data.Aeson                   (FromJSON (..), ToJSON (..))
+import           Data.Aeson         (FromJSON (..), ToJSON (..))
 import           Data.Aeson.Bson
-import           Data.Bson                    (Val, (=:))
-import qualified Data.Bson                    as Bson
-import           Data.Monoid                  ((<>))
-import           Data.Text                    (Text, pack)
+import           Data.Bson          (Val, (=:))
+import qualified Data.Bson          as Bson
+import           Data.Text          (Text, pack)
 
 import           GHC.Generics
 
 import           Lib.Compiler.Types
 import           Lib.Model.Class
-import           Lib.Model.Dependencies.Types
 import           Lib.Model.Table
 import           Lib.Template.Types
 import           Lib.Types
