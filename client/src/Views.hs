@@ -1,20 +1,20 @@
 module Views where
 
-import Control.Lens hiding (view)
+import           Control.Lens        hiding (view)
 
-import Data.Text as Text
-import Data.Foldable (for_)
+import           Data.Foldable       (for_)
+import           Data.Text           as Text
 
-import React.Flux
-import React.Flux.Internal (toJSString)
+import           React.Flux
+import           React.Flux.Internal (toJSString)
 
-import Lib.Types
-import Lib.Model
-import Lib.Model.Project
-import Lib.Model.Table
+import           Lib.Model
+import           Lib.Model.Project
+import           Lib.Model.Table
+import           Lib.Types
 
-import Store
-import Views.Table
+import           Store
+import           Views.Table
 
 app :: ReactView ()
 app = defineControllerView "app" store $ \st () ->
