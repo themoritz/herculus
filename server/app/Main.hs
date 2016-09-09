@@ -1,18 +1,19 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TypeOperators     #-}
 
 module Main where
 
 import           Control.Concurrent.STM
-import           Control.Monad.IO.Class
-import           Control.Monad.Except
 import           Control.Exception              (finally)
+import           Control.Monad.Except
 
 import           Data.Aeson
+import           Data.ByteString.Lazy           (fromStrict)
+import           Data.Monoid                    ((<>))
 import           Data.Proxy
-import Data.ByteString.Lazy (fromStrict)
-import Data.Text.Encoding (encodeUtf8)
+import           Data.Text.Encoding             (encodeUtf8)
 
 import qualified Database.MongoDB               as Mongo
 
@@ -23,11 +24,13 @@ import           Network.Wai.Handler.WebSockets
 
 import           Network.WebSockets
 
+import           ConnectionManager
 import           Handler.Rest
 import           Handler.WebSocket
 import           Lib.Api.Rest
 import           Monads
-import           ConnectionManager
+
+import           Options                        (Options (..), getOptions)
 
 type AllRoutes =
        Routes
@@ -68,25 +71,25 @@ wsApp env pending = if requestPath (pendingRequest pending) == "/websocket"
     forkPingThread connection 30
     let disconnect = atomically $ modifyTVar connections $
           removeConnection connectionId
-    flip finally disconnect $ do
-      forever $ do
+    flip finally disconnect $ forever $ do
         message <- receiveData connection
         case eitherDecode message of
           Left err  -> putStrLn err
           Right wsUp -> do
             res <- runHexl env $ handleClientMessage wsUp
             case res of
-              Left err -> putStrLn $ show err
+              Left err -> print err
               Right a  -> pure a
 
   else rejectRequest pending "Wrong path"
 
 main :: IO ()
 main = do
-  pipe <- Mongo.connect $ Mongo.host "127.0.0.1"
+  Options{..} <- getOptions
+  pipe <- Mongo.connect $ Mongo.host optMongoHost
   connections <- atomically $ newTVar newConnectionManager
   let env = HexlEnv pipe "test" connections
       webSocketApp = wsApp env
       restApp = serve routes $ rest env
-  putStrLn "Listening on port 3000..."
-  Warp.run 3000 $ websocketsOr defaultConnectionOptions webSocketApp restApp
+  putStrLn $ "Listening on port " <> show optPort <> " ..."
+  Warp.run optPort $ websocketsOr defaultConnectionOptions webSocketApp restApp
