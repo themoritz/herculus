@@ -4,11 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "watch-styles": "./node_modules/.bin/gulp",
-    "watch-client": "./node_modules/.bin/webpack --progress --colors --watch",
+    "watch": "./node_modules/.bin/gulp",
+    "webpack-dev": "./build-client.sh --skip-combine && webpack --config webpack.dev.config.js --progress --colors --watch",
+    "webpack-prod": "./build-client.sh --skip-combine && webpack --config webpack.prod.config.js --progress --colors",
     "build-client": "./build-client.sh",
-    "webpack": "./node_modules/.bin/webpack --progress --colors",
-    "run-server": "./build-server.sh",
+    "build-server": "./build-server.sh",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -40,6 +40,7 @@
     "sass-loader": "^4.0.0",
     "style-loader": "^0.13.1",
     "url-loader": "^0.5.7",
-    "webpack": "^1.13.2"
+    "webpack": "^1.13.2",
+    "webpack-shell-plugin": "^0.4.3"
   }
 }

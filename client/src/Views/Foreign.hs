@@ -5,7 +5,6 @@ module Views.Foreign where
 import           Data.Aeson
 import           Data.Aeson.Types
 import           Data.Text
-import           Data.Typeable
 
 import           React.Flux
 
@@ -54,7 +53,7 @@ data CodemirrorReadOnly
   | CodemirrorReadOnly
   | CodemirrorDisabled
 
-codemirror_ :: (CallbackFunction eh func, Typeable func)
+codemirror_ :: CallbackFunction eh func
             => CodemirrorProps func -> ReactElementM eh ()
 codemirror_ !props = do
   let readOnlyProp = case codemirrorReadOnly props of
@@ -83,7 +82,7 @@ data DatePickerProps func = DatePickerProps
   , datePickerClassNames :: [(Text, Bool)]
   }
 
-datePicker_ :: (CallbackFunction eh func, Typeable func)
+datePicker_ :: CallbackFunction eh func
             => DatePickerProps func -> ReactElementM eh ()
 datePicker_ !props =
   foreign_ "DatePicker"
@@ -96,7 +95,7 @@ datePicker_ !props =
 
 -- own: OnLoad
 
-onDidMount_ :: (CallbackFunction eh func, Typeable func)
+onDidMount_ :: CallbackFunction eh func
             => func -> ReactElementM eh a -> ReactElementM eh a
 onDidMount_ !f =
   foreign_ "OnDidMount"

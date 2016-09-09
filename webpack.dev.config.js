@@ -3,10 +3,10 @@ var path = require('path')
 var webpack = require('webpack')
 
 module.exports = {
-  entry: './entry.js',
+  entry: './entry.dev.js',
   output: {
     path: path.join(__dirname, 'assets/public'),
-    filename: 'js/app.js'
+    filename: 'js/bundle.js'
   },
   module: {
     loaders: [
@@ -21,17 +21,5 @@ module.exports = {
   },
   plugins: [
     new ExtractTextPlugin("css/bundle.css"),
-    // TODO: Only enable these plugins in production
-    // For React
-    new webpack.DefinePlugin({
-      'process.env': {
-        'NODE_ENV': JSON.stringify('production')
-      }
-    }),
-    new webpack.optimize.UglifyJsPlugin({
-      compress: {
-        warnings: false
-      }
-    })
   ]
 }

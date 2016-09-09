@@ -1,9 +1,9 @@
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE PolyKinds           #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators       #-}
 
 module React.Flux.Addons.Servant(
     HandleResponse
@@ -14,27 +14,26 @@ module React.Flux.Addons.Servant(
   , Request(..)
 ) where
 
-import React.Flux
-import React.Flux.Ajax
-import Servant.Utils.Links
-import Servant.API
-import GHCJS.Types (JSVal, nullRef)
-import GHCJS.Marshal (toJSVal_aeson, FromJSVal(..))
-import GHC.TypeLits
-import Data.Typeable (Proxy(..))
-import Data.Aeson
-import Data.JSString (JSString)
-import Data.Monoid ((<>))
-import qualified Data.JSString as JSS
+import           Data.Aeson
+import           Data.JSString      (JSString)
+import qualified Data.JSString      as JSS
 import qualified Data.JSString.Text as JSS
-import qualified Data.Text as T
+import           Data.Monoid        ((<>))
+import qualified Data.Text          as T
 import qualified Data.Text.Encoding as T
+import           Data.Typeable      (Proxy (..))
+import           GHC.TypeLits
+import           GHCJS.Marshal      (FromJSVal (..), toJSVal_aeson)
+import           GHCJS.Types        (JSVal, nullRef)
+import           React.Flux
+import           React.Flux.Ajax
+import           Servant.API
 
 data Request = Request {
     segments :: [JSString]
   , rHeaders :: [(JSString, JSString)]
-  , rQuery :: [(JSString, JSString)]
-  , rBody :: IO JSVal
+  , rQuery   :: [(JSString, JSString)]
+  , rBody    :: IO JSVal
   , rTimeout :: RequestTimeout
 }
 
@@ -42,10 +41,10 @@ type HandleResponse a = Either (Int,String) a -> IO [SomeStoreAction]
 
 data ApiRequestConfig api = ApiRequestConfig
     { urlPrefix :: JSString
-    , timeout :: RequestTimeout
+    , timeout   :: RequestTimeout
     }
 
-request :: (IsElem endpoint api, HasAjaxRequest endpoint) => ApiRequestConfig api -> Proxy endpoint -> MkRequest endpoint
+request :: HasAjaxRequest endpoint => ApiRequestConfig api -> Proxy endpoint -> MkRequest endpoint
 request (ApiRequestConfig p t) endpoint = toRequest endpoint (Request [p] [] [] (pure nullRef) t)
 
 class HasAjaxRequest endpoint where
