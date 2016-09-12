@@ -10,6 +10,7 @@ import           Options.Applicative
 data Options = Options
   { optPort      :: Int
   , optMongoHost :: HostName
+  , optAssetDir  :: String
   }
 
 getOptions :: IO Options
@@ -28,10 +29,17 @@ options = Options
                   <> showDefault
                   <> help "Server port"
                   )
-  <*> strOption   (  long "mongo database hostname"
+  <*> strOption   (  long "mongo-host"
                   <> short 'm'
                   <> metavar "HOSTNAME"
                   <> value "127.0.0.1"
                   <> showDefault
                   <> help "Hostname of Mongo database"
+                  )
+  <*> strOption   (  long "asset-directory"
+                  <> short 'a'
+                  <> metavar "ASSETDIR"
+                  <> value "../assets/public"
+                  <> showDefault
+                  <> help "directory to static files and js"
                   )

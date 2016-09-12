@@ -1,6 +1,5 @@
 var browserSync = require('browser-sync')
 var gulp = require('gulp')
-var shell = require('gulp-shell')
 
 var exec = require('child_process').exec;
 
