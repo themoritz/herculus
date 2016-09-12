@@ -39,10 +39,10 @@ type AllRoutes =
 routes :: Proxy AllRoutes
 routes = Proxy
 
-rest :: HexlEnv -> Server AllRoutes
-rest env =
+rest :: HexlEnv -> FilePath -> Server AllRoutes
+rest env path =
          enter hexlToEither handle
-    :<|> serveDirectory "../assets/public/"
+    :<|> serveDirectory path
   where
     hexlToEither :: HexlT IO :~> ExceptT ServantErr IO
     hexlToEither = Nat $ \hexlAction -> do
@@ -90,6 +90,6 @@ main = do
   connections <- atomically $ newTVar newConnectionManager
   let env = HexlEnv pipe "test" connections
       webSocketApp = wsApp env
-      restApp = serve routes $ rest env
+      restApp = serve routes $ rest env optAssetDir
   putStrLn $ "Listening on port " <> show optPort <> " ..."
   Warp.run optPort $ websocketsOr defaultConnectionOptions webSocketApp restApp
