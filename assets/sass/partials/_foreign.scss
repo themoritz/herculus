@@ -16,3 +16,26 @@
 .react-datepicker__day--selected {
   background-color: $brand !important;
 }
+
+.react-datepicker__input-container {
+  box-sizing: border-box;
+  height: 100%;
+  width: 100%;
+  padding: 1px;
+  input {
+    position: relative;
+    outline: none;
+    font-weight: inherit;
+    height: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    font-family: inherit;
+    font-size: inherit;
+    border: 1px solid transparent;
+    padding: 1px;
+    cursor: pointer;
+    &:hover {
+      border: 1px solid darken($medium-gray, 5%);
+    }
+  }
+}
