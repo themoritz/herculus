@@ -26,6 +26,7 @@ type Routes =
  :<|> TableListGlobal
  :<|> TableData
  :<|> TableGetWhole
+ :<|> TableSetName
 
  :<|> ColumnCreate
  :<|> ColumnDelete
@@ -56,6 +57,7 @@ type TableList            = "table"     :> "list" :> Capture "projectId" (Id Pro
 type TableListGlobal      = "table"     :> "listGlobal" :> Get '[JSON] [Entity Table]
 type TableData            = "table"     :> "data" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Column, Id Record, CellContent)]
 type TableGetWhole        = "table"     :> "getWhole" :> Capture "tableId" (Id Table) :> Get '[JSON] ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
+type TableSetName         = "table"     :> "setName" :> Capture "tableId" (Id Table) :> ReqBody '[JSON] Text :> Post '[JSON] ()
 
 type ColumnCreate         = "column"    :> "create"  :> ReqBody '[JSON] Column :> Post '[JSON] (Entity Column, [Entity Cell])
 type ColumnDelete         = "column"    :> "delete"  :> Capture "columnId" (Id Column) :> Get '[JSON] ()

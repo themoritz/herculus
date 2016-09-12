@@ -58,6 +58,7 @@ handle =
   :<|> handleTableListGlobal
   :<|> handleTableData
   :<|> handleTableGetWhole
+  :<|> handleTableSetName
 
   :<|> handleColumnCreate
   :<|> handleColumnDelete
@@ -113,6 +114,12 @@ handleTableGetWhole tblId =
   (,,) <$> handleColumnList tblId
        <*> handleRecordList tblId
        <*> handleTableData tblId
+
+handleTableSetName :: MonadHexl m => Id Table -> Text -> m ()
+handleTableSetName tblId name = do
+  table <- getById' tblId
+  let changedTable = table { tableName = name }
+  update tblId $ const changedTable
 
 --
 

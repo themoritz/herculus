@@ -90,6 +90,7 @@ data Action
   | TableAddRecord
   | TableAddRecordDone (Entity Record, [Entity Cell])
   | TableDeleteRecord (Id Record)
+  | ATableSetName (Id Table) Text
   -- Column
   | ColumnRename (Id Column) Text
   -- Data column
@@ -252,6 +253,12 @@ instance StoreData State where
         pure $ st & stateRecords %~ Map.delete i
                   & stateCells %~ Map.filterWithKey
                              (\(Coords _ r) _ -> r /= i)
+
+      ATableSetName id name -> do
+        request api (Proxy :: Proxy TableSetName) id name $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right () -> pure []
+        pure st
 
       -- Column
 

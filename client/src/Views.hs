@@ -74,14 +74,24 @@ table_' :: Entity Table -> Bool -> ReactElementM eh ()
 table_' !t !s = viewWithSKey table (toJSString $ show $ entityId t) (t, s) mempty
 
 table :: ReactView (Entity Table, Bool)
-table = defineView "table" $ \(Entity i t, selected) ->
-  li_
-    [ classNames
-      [ ("link", True)
-      , ("active", selected)
-      ]
-    , onClick $ \_ _ -> dispatch $ TablesLoadTable i
-    ] $ elemText $ tableName t
+table = defineStatefulView "table" True $ \edited (Entity i t, selected) ->
+  li_ $ do
+   if edited
+     then span_
+        [ classNames
+          [ ("link", True)
+          , ("active", selected)
+          ]
+        , onClick $ \_ _ _ -> (dispatch $ TablesLoadTable i, Nothing)
+        ] $ elemText $ tableName t
+     else
+       input_ [ "value" &= tableName t ]
+
+   button_ [ "className" $= "btn-edit"
+             , onClick $ \_ _ edited -> ([], Just $ not edited)
+             ] $ elemText $ if edited
+                              then "edit"
+                              else "save"
 
 --
 
