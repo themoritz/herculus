@@ -5,11 +5,12 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE StandaloneDeriving         #-}
 
 module Lib.Types where
 
 import           Control.DeepSeq
+import           Control.Exception  (SomeException, displayException, evaluate,
+                                     try)
 
 import           Data.Aeson         (FromJSON (..), ToJSON (..))
 import           Data.Bson          (ObjectId (..), Val (..))
@@ -24,9 +25,11 @@ import           Data.Time.Format   (defaultTimeLocale, parseTimeM)
 import qualified Data.Time.Format   as T (formatTime)
 import           Data.Typeable      (Typeable)
 
+import           Text.Printf        (PrintfArg (..), formatRealFloat, printf)
 import           Text.Read          (readMaybe)
 
 import           GHC.Generics
+import           System.IO.Unsafe   (unsafePerformIO)
 
 import           Web.HttpApiData
 
@@ -115,6 +118,14 @@ instance FromJSON Number where
 instance Serialize Number where
   put (Number (Decimal places mantissa)) = put places >> put mantissa
   get = Number <$> (Decimal <$> get <*> get)
+
+instance PrintfArg Number where
+  formatArg (Number d) = formatRealFloat (read $ show d :: Double)
+
+formatNumber :: Text -> Number -> Text
+formatNumber f n = case unsafePerformIO (try $ evaluate $ printf (unpack f) n) of
+  Left (e :: SomeException) -> pack $ displayException e
+  Right str -> pack str
 
 --
 

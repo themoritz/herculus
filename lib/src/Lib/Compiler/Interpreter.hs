@@ -31,8 +31,18 @@ prelude = Map.fromList
     , RPrelude $ \_ (RValue (VList xs)) -> pure $
         RValue $ VNumber $ sum $ map (\(VNumber v) -> v) xs
     )
+  , ( "length"
+    , RPrelude $ \_ (RValue (VList xs)) -> pure $ RValue $ VNumber $ fromIntegral $ length xs
+    )
+  , ( "not"
+    , RPrelude $ \_ (RValue (VBool b)) -> pure $ RValue $ VBool $ not b
+    )
   , ( "show"
     , RPrelude $ \_ (RValue (VNumber n)) -> pure $ RValue $ VString $ pack $ show n
+    )
+  , ( "formatNumber"
+    , RPrelude $ \_ (RValue (VString f)) -> pure $ RPrelude $ \_ (RValue (VNumber n)) ->
+        pure $ RValue $ VString $ formatNumber f n
     )
   , ( "formatTime"
     , RPrelude $ \_ (RValue (VString f)) -> pure $ RPrelude $ \_ (RValue (VTime t)) ->

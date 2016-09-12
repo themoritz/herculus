@@ -41,8 +41,17 @@ prelude = Context $ Map.fromList
   , ( "sum"
     , Forall [] $ TyUnary TyList (TyNullary TyNumber) `TyArr` TyNullary TyNumber
     )
+  , ( "length"
+    , Forall [] $ TyUnary TyList (TyVar (TV "_a")) `TyArr` TyNullary TyNumber
+    )
+  , ( "not"
+    , Forall [] $ TyNullary TyBool `TyArr` TyNullary TyBool
+    )
   , ( "show"
     , Forall [] $ TyNullary TyNumber `TyArr` TyNullary TyString
+    )
+  , ( "formatNumber"
+    , Forall [] $ TyNullary TyString `TyArr` (TyNullary TyNumber `TyArr` TyNullary TyString)
     )
   , ( "formatTime"
     , Forall [] $ TyNullary TyString `TyArr` (TyNullary TyTime `TyArr` TyNullary TyString)
