@@ -19,8 +19,8 @@ import           Views.Table
 app :: ReactView ()
 app = defineControllerView "app" store $ \st () ->
   cldiv_ "container" $ do
-    cldiv_ "sidebar" $ do
-      h1_ "Hexl"
+    cldiv_ "menubar" $ do
+      cldiv_ "logo" "TABLES"
       projects_ (st ^. stateProjects) (st ^. stateProjectId)
       case st ^. stateProjectId of
         Nothing -> pure ()
@@ -31,6 +31,11 @@ app = defineControllerView "app" store $ \st () ->
           h3_ "Error"
           elemText t
     cldiv_ "tableGrid" $ tableGrid_ st
+    cldiv_ "footer" $ a_
+      [ "href" $= "mailto:Moritz <mdrexl@fastmail.fm>, Ruben <ruben.moor@gmail.com>"
+      , "className" $= "link-on-dark"
+      , "target" $= "_blank"
+      ] "Contact"
 
 --
 
@@ -38,17 +43,16 @@ projects_ :: [Entity Project] -> Maybe (Id Project) -> ReactElementM eh ()
 projects_ !ps !mProj = view projects (ps, mProj) mempty
 
 projects :: ReactView ([Entity Project], Maybe (Id Project))
-projects = defineView "projects" $ \(ps, mProj) -> do
-  h3_ "Projects"
-  inputNew_ "New project..." (dispatch . ProjectsCreate . Project)
+projects = defineView "projects" $ \(ps, mProj) -> cldiv_ "projects" $ do
   ul_ $ for_ ps $ \p -> project_ p (Just (entityId p) == mProj)
+  inputNew_ "Add project..." (dispatch . ProjectsCreate . Project)
 
 project_ :: Entity Project -> Bool -> ReactElementM eh ()
 project_ !p !s = viewWithSKey project (toJSString $ show $ entityId p) (p, s) mempty
 
 project :: ReactView (Entity Project, Bool)
 project = defineView "project" $ \(Entity i p, selected) ->
-  li_ $ span_
+  li_
     [ classNames
       [ ("link", True)
       , ("active", selected)
@@ -62,17 +66,16 @@ tables_ :: [Entity Table] -> Maybe (Id Table) -> Id Project -> ReactElementM eh 
 tables_ !ts !mTbl !prj = view tables (ts, mTbl, prj) mempty
 
 tables :: ReactView ([Entity Table], Maybe (Id Table), Id Project)
-tables = defineView "tables" $ \(ts, mTbl, projId) -> do
-  h3_ "Tables"
-  inputNew_ "New table..." (dispatch . TablesCreate . Table projId)
-  ul_ $ for_ ts $ \t -> table'_ t (Just (entityId t) == mTbl)
+tables = defineView "tables" $ \(ts, mTbl, projId) -> cldiv_ "tables" $ do
+  ul_ $ for_ ts $ \t -> table_' t (Just (entityId t) == mTbl)
+  inputNew_ "Add table..." (dispatch . TablesCreate . Table projId)
 
-table'_ :: Entity Table -> Bool -> ReactElementM eh ()
-table'_ !t !s = viewWithSKey table (toJSString $ show $ entityId t) (t, s) mempty
+table_' :: Entity Table -> Bool -> ReactElementM eh ()
+table_' !t !s = viewWithSKey table (toJSString $ show $ entityId t) (t, s) mempty
 
 table :: ReactView (Entity Table, Bool)
 table = defineView "table" $ \(Entity i t, selected) ->
-  li_ $ span_
+  li_
     [ classNames
       [ ("link", True)
       , ("active", selected)

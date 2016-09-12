@@ -2,7 +2,7 @@
 
 .column {
   position: relative;
-  $openWidth: 49px;
+  $openWidth: 45px;
   .head {
     position: absolute;
     left: 0px;
@@ -26,11 +26,16 @@
     bottom: 0px;
     width: $openWidth;
     box-sizing: border-box;
-    padding: 10px;
-    padding-top: 13px;
+    padding: 11px;
+    padding-top: 15px;
     .openIcon {
-      color: $brand;
+      color: $link;
       padding: 0px;
+      transition-property: color;
+      transition-duration: 100ms;
+      &:hover {
+        color: $brand-dark;
+      }
     }
     .error {
       color: desaturate(red, 40%);
@@ -145,7 +150,7 @@
           .button {
             font-weight: bold;
             .fa {
-              color: $brand;
+              color: green;
               margin-right: 5px;
             }
           }

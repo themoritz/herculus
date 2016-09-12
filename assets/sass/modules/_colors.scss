@@ -1,6 +1,10 @@
-$light-gray: darken(white, 3%);
-$medium-gray: darken(white, 7%);
+$light-gray: #f4f4f4;
+$medium-gray: darken(white, 10%);
 
-$brand: green;
-$link: $brand;
-$link-hover: darken($brand, 10%);
+$anthrazit: #28373C;
+$gray: rgba(255, 255, 255, 0.5);
+
+$brand-dark: #ff1489;
+$brand-light: #e9ff00;
+$link: lighten($anthrazit, 5%);
+$link-hover: darken($brand-dark, 10%);

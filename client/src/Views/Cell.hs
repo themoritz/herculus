@@ -146,7 +146,7 @@ cellBool_ !mode !inpType !b !cb =
 cellBool :: ReactView (Mode, IsDerived, Bool, CellCallback Bool)
 cellBool = defineView "cellBool" $ \(mode, inpType, b, cb) ->
   case (mode, inpType) of
-    (Full, NotDerived) ->
+    (Full, NotDerived) -> cldiv_ "bool plain" $
       input_
         [ "type" $= "checkbox"
         , "checked" @= b
@@ -189,11 +189,11 @@ cellNumber = defineView "cellNumber" $ \(mode, inpType, n, cb) ->
         , editBoxPlaceholder = "0"
         , editBoxClassName = "number"
         , editBoxShow = pack . show
-        , editBoxValidator = \s -> Number <$> (readMaybe $ unpack s)
+        , editBoxValidator = \s -> Number <$> readMaybe (unpack s)
         , editBoxOnSave = cb
         }
     _ ->
-      cldiv_ "number" $ elemString $ show n
+      cldiv_ "number plain" $ elemString $ show n
 
 cellTime_ :: Mode -> IsDerived -> Time -> CellCallback Time
           -> ReactElementM ViewEventHandler ()

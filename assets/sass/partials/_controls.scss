@@ -7,6 +7,8 @@ button.pure {
   color: $link;
   padding: 3px;
   line-height: 15px;
+  transition-property: color;
+  transition-duration: 100ms;
   &:hover {
     color: $link-hover;
   }
@@ -16,8 +18,21 @@ button.pure {
 a, span.link {
   color: $link;
   cursor: pointer;
+  text-decoration: none;
+  transition-property: color;
+  transition-duration: 100ms;
   &:hover {
     color: $link-hover;
+  }
+}
+
+.link-on-dark {
+  color: $gray;
+  cursor: pointer;
+  transition-property: color;
+  transition-duration: 100ms;
+  &:hover {
+    color: $brand-light;
   }
 }
 

@@ -261,7 +261,7 @@ columnConfig = defineControllerView "column configuration" colConfStore $
           ]
       , onClick $ \_ _ ->
           [ SomeStoreAction colConfStore $ ColumnSetVisibility i True ]
-      ] ) $ faIcon_ "gears fa-2x"
+      ] ) $ faIcon_ "gear fa-2x"
     when (Set.member i $ state ^. ccsVisible) $
       case col ^. columnKind of
         ColumnData   dat -> dataColConf_ i dat
