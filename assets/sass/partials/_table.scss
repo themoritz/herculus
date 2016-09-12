@@ -6,7 +6,7 @@
   left: 0px;
   top: $menubar-height;
   right: 0px;
-  bottom: 0px;
+  bottom: $footer-height;
 
   .cell {
     border-right: 1px solid $medium-gray;

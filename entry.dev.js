@@ -18,7 +18,7 @@ require('codemirror/mode/mllike/mllike')
 require('codemirror/mode/gfm/gfm')
 require('codemirror/mode/stex/stex')
 require('codemirror/mode/htmlmixed/htmlmixed')
-require('codemirror/theme/neat.css')
+//require('codemirror/theme/neat.css')
 
 global.Codemirror = Codemirror
 
