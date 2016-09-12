@@ -18,6 +18,7 @@
   "author": "Moritz Drexl",
   "license": "UNLICENSED",
   "devDependencies": {
+    "bluebird": "^3.4.6",
     "browser-sync": "^2.13.0",
     "codemirror": "^5.18.2",
     "css-loader": "^0.25.0",
