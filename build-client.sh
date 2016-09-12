@@ -2,10 +2,13 @@
 
 set -e
 
+JSDIR=assets/public/js
+mkdir -p $JSDIR
+
 # Client
 cd client && stack build client
 
-cp `stack path --local-install-root`/bin/client.jsexe/all.js ../assets/public/js/ghcjs.js
+cp `stack path --local-install-root`/bin/client.jsexe/all.js ../$JSDIR/ghcjs.js
 
 cd ..
 

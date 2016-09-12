@@ -69,9 +69,24 @@ App is available at [localhost:3001](http://localhost:3001).
 
 ### Server
 
+Initially,
+
+``` shell
+cd hexl
+npm install
+
+" hsc2hs
+" put executables installed by stack on path
+PATH=$PATH:$HOME/.local/bin
+" use stack.yaml in server
+cd hexl/server
+stack install hsc2hs
+```
+
 Basically run
 
 ``` shell
+cd hexl
 stack build server
 stack exec server
 ```

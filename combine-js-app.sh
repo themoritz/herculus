@@ -2,7 +2,10 @@
 
 set -e
 
-cd assets/public/js
+JSDIR=assets/public/js
+
+mkdir -p $JSDIR
+cd $JSDIR
 
 cp bundle.js app.js
 cat ghcjs.js >> app.js
