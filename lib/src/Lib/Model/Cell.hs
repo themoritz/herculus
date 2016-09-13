@@ -69,16 +69,15 @@ instance ToJSON Value
 instance FromJSON Value
 
 -- TODO: delete in favor of ajax calls to the server version of defaultContent
-
-defaultContentPure :: DataType -> CellContent
+defaultContentPure :: DataType -> Value
 defaultContentPure = \case
-  DataBool     -> CellValue $ VBool False
-  DataString   -> CellValue $ VString ""
-  DataNumber   -> CellValue $ VNumber 0
-  DataTime     -> CellValue $ VTime $ defaultTime
-  DataRecord _ -> CellError "no default for records"
-  DataList   _ -> CellValue $ VList []
-  DataMaybe  _ -> CellValue $ VMaybe Nothing--
+  DataBool     -> VBool False
+  DataString   -> VString ""
+  DataNumber   -> VNumber 0
+  DataTime     -> VTime defaultTime
+  DataRecord _ -> VRecord Nothing
+  DataList   _ -> VList []
+  DataMaybe  _ -> VMaybe Nothing
 
 -- | Returns `Nothing` if no record had to be invalidated
 invalidateRecord :: Id Record -> Value -> Maybe Value
