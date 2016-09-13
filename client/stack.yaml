@@ -1,15 +1,15 @@
-resolver: lts-6.15
-compiler: ghcjs-0.2.0.9006015_ghc-7.10.3
+resolver: nightly-2016-09-04
+compiler: ghcjs-0.2.0.820160904_ghc-8.0.1
 compiler-check: match-exact
 
 setup-info:
   ghcjs:
     source:
-      ghcjs-0.2.0.9006015_ghc-7.10.3:
-         url: "https://tolysz.org/ghcjs/lts-6.15-9006015.tar.gz"
-         sha1: 4d513006622bf428a3c983ca927837e3d14ab687
-allow-newer: true
+      ghcjs-0.2.0.820160904_ghc-8.0.1:
+        url: "http://tolysz.org/ghcjs/ghc-8.0-2016-09-05-nightly-2016-09-04-820160904.tar.gz"
+        sha1: "cf4383b77f9d712133bdf54e6389c4361c57b484"
 
+allow-newer: true
 require-stack-version: ">= 0.1.8"
 
 packages:
