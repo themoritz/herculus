@@ -2,14 +2,15 @@
 
 module Main where
 
-import React.Flux
-import React.Flux.Ajax
+import           React.Flux
+import           React.Flux.Ajax
 
-import Store
-import Views
+import qualified Config
+import           Store
+import           Views
 
 main :: IO ()
 main = do
   initAjax
-  executeAction $ SomeStoreAction store $ GlobalInit "ws://localhost:3000/websocket"
+  executeAction $ SomeStoreAction store $ GlobalInit Config.webSocketUrl
   reactRender "app" app ()

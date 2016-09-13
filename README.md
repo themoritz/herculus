@@ -94,7 +94,8 @@ stack exec server
 ### Client and Assets
 
 ``` shell
-npm run webpack-prod
+API_URL=http://host:5555 WEBSOCKET_URL=ws://host:5555/websocket npm run webpack-prod
+# Note the missing trailing slashes!
 ```
 
 After that, the `assets/public` folder should contain:
