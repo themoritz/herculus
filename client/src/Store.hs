@@ -268,6 +268,11 @@ instance StoreData State where
         request api (Proxy :: Proxy TableSetName) id name $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right () -> pure []
+        -- TODO (jens) update table
+        -- pure $ st & tableList
+        --   where
+        --     tableMap = Map.fromList $ st ^. stateTables
+        --     tableList = Map.toList tableMap & at id . _Just . tableName .~ name
         pure st
 
       -- Column

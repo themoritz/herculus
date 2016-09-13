@@ -93,20 +93,31 @@ initialTableViewState = TableViewState False "" False ""
 
 table :: ReactView (Entity Table, Bool)
 table = defineStatefulView "table" initialTableViewState $ \state (Entity i t, selected) ->
-  li_ $ do
-  if editable state
-    then div_ $ do
-      input_ [ "value" &= name state
-           , onChange $ \evt state ->([], Just state { name = target evt "value" })
+  let saveHandler state = (dispatch $ ATableSetName i (name state), Just state { editable = False })
+  in li_ $
+     if editable state
+     then div_ $ do
+       input_ [  classNames
+               [ ("inp", True)
+               , ("inp-error", hasNameError state)
+               ]
+             , "value" &= name state
+           , onChange $ \evt state ->
+               let value = target evt "value"
+               in ([], Just state { name = value, hasNameError = Text.null value})
            , onKeyDown $ \_ evt state ->
                if keyCode evt == 13 && not (Text.null $ name state)
-               then ([], Just state { editable = False })
+               then saveHandler state
                else ([], Just state)
            ]
-      button_ [ "className" $= "btn-cancel"
-            , onClick $ \_ _ state -> ([], Just state { editable = False })
+       button_ [ "className" $= "btn btn-cancel"
+            , onClick $ \_ _ state -> ([] , Just state { editable = False })
             ] $ elemText "c"
-    else span_
+       button_ [ "className" $= "btn btn-save"
+            , onClick $ \_ _ state -> saveHandler state
+            ] $ elemText "s"
+     else div_ $ do
+       span_
          [ classNames
            [ ("link", True)
            , ("active", selected)
@@ -114,11 +125,9 @@ table = defineStatefulView "table" initialTableViewState $ \state (Entity i t, s
          , onClick $ \_ _ _ -> (dispatch $ TablesLoadTable i, Nothing)
          ] $ elemText $ tableName t
 
-  button_ [ "className" $= "btn-edit"
-            , onClick $ \_ _ state -> ([], Just state { editable = not $ editable state })
-            ] $ elemText $ if editable state
-                           then "s"
-                           else "e"
+       button_ [ "className" $= "btn btn-edit"
+            , onClick $ \_ _ state -> ([], Just state { editable = True, name = tableName t })
+            ] $ elemText "e"
 
 --
 
