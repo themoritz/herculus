@@ -31,6 +31,7 @@ import           Lib.Types
 import           Lib.Api.Rest
 import           Lib.Api.WebSocket
 
+import qualified Config
 import           WebSocket
 
 data Coords = Coords (Id Column) (Id Record)
@@ -104,7 +105,7 @@ data Action
   deriving (Typeable, Generic, NFData)
 
 api :: ApiRequestConfig Routes
-api = ApiRequestConfig "" NoTimeout
+api = ApiRequestConfig Config.apiUrl NoTimeout
 
 dispatch :: Action -> [SomeStoreAction]
 dispatch a = [SomeStoreAction store a]
