@@ -237,7 +237,7 @@ cellRecord = defineControllerView "cellRecord" store $
                     Map.elems
     case mode of
       Compact -> case mr of
-        Nothing -> "impossible: invalid record in derived cell"
+        Nothing -> "<no record chosen>"
         Just r -> case Map.lookup r records of
           Nothing -> mempty
           Just fields -> elemText $ showPairs fields
@@ -301,7 +301,7 @@ cellList = defineView "cellList" $ \(mode, inpType, datType, vs, cb) -> cldiv_ "
           cldiv_ "content" $ value_ mode inpType datType v (\nv -> cb (listMod i nv vs))
         cldiv_ "new" $ button_
           [ onClick $ \_ _ ->
-              let CellValue newV = defaultContentPure datType
+              let newV = defaultContentPure datType
               in  cb (vs <> [newV])
           ] $ faIcon_ "plus-circle"
       Derived ->
@@ -319,7 +319,7 @@ cellMaybe = defineView "cellMaybe" $ \(mode, inpType, datType, mVal, cb) ->
   case (mode, inpType) of
     (Full, NotDerived) -> case mVal of
       Nothing -> cldiv_ "maybe nothing" $ do
-        let CellValue new = defaultContentPure datType
+        let new = defaultContentPure datType
         cldiv_ "button" $ button_
           [ onClick $ \_ _ -> cb $ Just new
           ] $ faIcon_ "plus-circle"

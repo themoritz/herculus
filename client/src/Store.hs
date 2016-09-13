@@ -5,6 +5,7 @@
 module Store where
 
 import           Control.Arrow             (second)
+import           Control.Concurrent        (forkIO)
 import           Control.DeepSeq
 import           Control.Lens
 
@@ -160,8 +161,12 @@ instance StoreData State where
 
       -- Projects
 
-      ProjectsSet ps -> pure $
-        st & stateProjects .~ ps
+      ProjectsSet ps -> do
+        _ <- forkIO $ case ps of
+          [] -> pure ()
+          Entity i _ : _ ->
+            alterStore store $ ProjectsLoadProject i
+        pure $ st & stateProjects .~ ps
 
       ProjectsCreate p -> do
         request api (Proxy :: Proxy ProjectCreate) p $ \case
@@ -180,8 +185,12 @@ instance StoreData State where
 
       -- Tables
 
-      TablesSet ts ->  pure $
-        st & stateTables .~ ts
+      TablesSet ts -> do
+        _ <- forkIO $ case ts of
+          [] -> pure ()
+          Entity i _ : _ ->
+            alterStore store $ TablesLoadTable i
+        pure $ st & stateTables .~ ts
 
       TablesCreate t -> do
         request api (Proxy :: Proxy TableCreate) t $ \case
