@@ -1,3 +1,6 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric  #-}
+
 module Views where
 
 import           Control.Lens        hiding (view)
@@ -15,6 +18,9 @@ import           Lib.Types
 
 import           Store
 import           Views.Table
+
+import           Control.DeepSeq     (NFData)
+import           GHC.Generics        (Generic)
 
 app :: ReactView ()
 app = defineControllerView "app" store $ \st () ->
@@ -70,28 +76,49 @@ tables = defineView "tables" $ \(ts, mTbl, projId) -> cldiv_ "tables" $ do
   ul_ $ for_ ts $ \t -> table_' t (Just (entityId t) == mTbl)
   inputNew_ "Add table..." (dispatch . TablesCreate . Table projId)
 
+--
+
 table_' :: Entity Table -> Bool -> ReactElementM eh ()
 table_' !t !s = viewWithSKey table (toJSString $ show $ entityId t) (t, s) mempty
 
-table :: ReactView (Entity Table, Bool)
-table = defineStatefulView "table" True $ \edited (Entity i t, selected) ->
-  li_ $ do
-   if edited
-     then span_
-        [ classNames
-          [ ("link", True)
-          , ("active", selected)
-          ]
-        , onClick $ \_ _ _ -> (dispatch $ TablesLoadTable i, Nothing)
-        ] $ elemText $ tableName t
-     else
-       input_ [ "value" &= tableName t ]
+data TableViewState = TableViewState {
+  editable       :: Bool
+  , name         :: Text
+  , hasNameError :: Bool
+  , nameErrorMsg :: Text
+  } deriving (Generic, Show, NFData)
 
-   button_ [ "className" $= "btn-edit"
-             , onClick $ \_ _ edited -> ([], Just $ not edited)
-             ] $ elemText $ if edited
-                              then "edit"
-                              else "save"
+initialTableViewState :: TableViewState
+initialTableViewState = TableViewState False "" False ""
+
+table :: ReactView (Entity Table, Bool)
+table = defineStatefulView "table" initialTableViewState $ \state (Entity i t, selected) ->
+  li_ $ do
+  if editable state
+    then div_ $ do
+      input_ [ "value" &= name state
+           , onChange $ \evt state ->([], Just state { name = target evt "value" })
+           , onKeyDown $ \_ evt state ->
+               if keyCode evt == 13 && not (Text.null $ name state)
+               then ([], Just state { editable = False })
+               else ([], Just state)
+           ]
+      button_ [ "className" $= "btn-cancel"
+            , onClick $ \_ _ state -> ([], Just state { editable = False })
+            ] $ elemText "c"
+    else span_
+         [ classNames
+           [ ("link", True)
+           , ("active", selected)
+           ]
+         , onClick $ \_ _ _ -> (dispatch $ TablesLoadTable i, Nothing)
+         ] $ elemText $ tableName t
+
+  button_ [ "className" $= "btn-edit"
+            , onClick $ \_ _ state -> ([], Just state { editable = not $ editable state })
+            ] $ elemText $ if editable state
+                           then "s"
+                           else "e"
 
 --
 
