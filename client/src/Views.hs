@@ -91,8 +91,8 @@ initialTableViewState :: TableViewState
 initialTableViewState = TableViewState False "" False
 
 table :: ReactView (Entity Table, Bool)
-table = defineStatefulView "table" initialTableViewState $ \state (Entity i t, selected) ->
-  let saveHandler state = (dispatch $ TableSetName i (name state), Just state { editable = False })
+table = defineStatefulView "table" initialTableViewState $ \state (Entity id table, selected) ->
+  let saveHandler state = (dispatch $ TableSetName id (name state), Just state { editable = False })
   in li_ $
      if editable state
      then div_ $ do
@@ -124,12 +124,12 @@ table = defineStatefulView "table" initialTableViewState $ \state (Entity i t, s
            [ ("link", True)
            , ("active", selected)
            ]
-         , onClick $ \_ _ _ -> (dispatch $ TablesLoadTable i, Nothing)
-         ] $ elemText $ tableName t
+         , onClick $ \_ _ _ -> (dispatch $ TablesLoadTable id, Nothing)
+         ] $ elemText $ table ^. tableName
 
        button_
          [ "className" $= "btn btn-edit"
-         , onClick $ \_ _ state -> ([], Just state { editable = True, name = tableName t })
+         , onClick $ \_ _ state -> ([], Just state { editable = True, name = table  ^. tableName })
          ] $ elemText "e"
 
 --

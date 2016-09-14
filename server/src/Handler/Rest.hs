@@ -118,8 +118,8 @@ handleTableGetWhole tblId =
 handleTableSetName :: MonadHexl m => Id Table -> Text -> m ()
 handleTableSetName tblId name = do
   table <- getById' tblId
-  let changedTable = table { tableName = name }
-  update tblId $ const changedTable
+  let table' = table & tableName .~ name
+  update tblId $ const table'
 
 --
 

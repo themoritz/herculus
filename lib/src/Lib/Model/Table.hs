@@ -1,16 +1,18 @@
+{-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
 module Lib.Model.Table where
 
-import Control.DeepSeq
+import           Control.DeepSeq
 
-import           Data.Aeson      (FromJSON, ToJSON)
-import           Data.Text       (Text)
+import           Control.Lens
+import           Data.Aeson        (FromJSON, ToJSON)
+import           Data.Text         (Text)
 
-import           Data.Bson       ((=:))
-import qualified Data.Bson       as Bson
+import           Data.Bson         ((=:))
+import qualified Data.Bson         as Bson
 
 import           GHC.Generics
 
@@ -19,9 +21,11 @@ import           Lib.Model.Project
 import           Lib.Types
 
 data Table = Table
-  { tableProjectId :: Id Project
-  , tableName      :: Text
+  { _tableProjectId :: Id Project
+  , _tableName      :: Text
   } deriving (Generic, NFData)
+
+makeLenses ''Table
 
 instance Model Table where
   collectionName = const "tables"

@@ -10,6 +10,6 @@ function hexl$getApiUrl () {
   try {
     return process.env.API_URL
   } catch (e) {
-    return "http://localhost:3001"
+    return "http://localhost:3000"
   }
 }

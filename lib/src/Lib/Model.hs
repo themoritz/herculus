@@ -1,17 +1,17 @@
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
 module Lib.Model where
 
-import Control.DeepSeq
+import           Control.DeepSeq
 
-import           Data.Aeson             (FromJSON, ToJSON)
-import           Data.Bson              ((=:))
-import qualified Data.Bson              as Bson
+import           Data.Aeson      (FromJSON, ToJSON)
+import           Data.Bson       ((=:))
+import qualified Data.Bson       as Bson
 import           Data.Monoid
-import Data.Typeable (Typeable)
+import           Data.Typeable   (Typeable)
 
 import           GHC.Generics
 
@@ -22,6 +22,12 @@ data Entity a = Entity
   { entityId  :: Id a
   , entityVal :: a
   } deriving (Typeable, Generic)
+
+entityToTuple :: Entity a -> (Id a, a)
+entityToTuple (Entity i a) = (i, a)
+
+tupleToEntity :: (Id a, a) -> Entity a
+tupleToEntity (i, a) = Entity i a
 
 deriving instance NFData a => NFData (Entity a)
 
