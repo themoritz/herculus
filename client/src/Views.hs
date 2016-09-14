@@ -93,6 +93,10 @@ initialTableViewState = TableViewState False "" False
 table :: ReactView (Entity Table, Bool)
 table = defineStatefulView "table" initialTableViewState $ \state (Entity id table, selected) ->
   let saveHandler state = (dispatch $ TableSetName id (name state), Just state { editable = False })
+      inputKeyDownHandler _ evt state
+        | keyCode evt == 13 && not (Text.null $ name state) = saveHandler state -- 13 = Enter
+        | keyCode evt == 27 = ([] , Just state { editable = False }) -- 27 = ESC
+        | otherwise = ([], Just state)
   in li_ $
      if editable state
      then div_ $ do
@@ -105,19 +109,8 @@ table = defineStatefulView "table" initialTableViewState $ \state (Entity id tab
          , onChange $ \evt state ->
              let value = target evt "value"
              in ([], Just state { name = value, hasNameError = Text.null value})
-         , onKeyDown $ \_ evt state ->
-             if keyCode evt == 13 && not (Text.null $ name state)
-             then saveHandler state
-             else ([], Just state)
+         , onKeyDown inputKeyDownHandler
          ]
-       button_
-         [ "className" $= "btn btn-cancel"
-         , onClick $ \_ _ state -> ([] , Just state { editable = False })
-         ] $ elemText "c"
-       button_
-         [ "className" $= "btn btn-save"
-         , onClick $ \_ _ state -> saveHandler state
-         ] $ elemText "s"
      else div_ $ do
        span_
          [ classNames
@@ -128,9 +121,9 @@ table = defineStatefulView "table" initialTableViewState $ \state (Entity id tab
          ] $ elemText $ table ^. tableName
 
        button_
-         [ "className" $= "btn btn-edit"
+         [ "className" $= "pure"
          , onClick $ \_ _ state -> ([], Just state { editable = True, name = table  ^. tableName })
-         ] $ elemText "e"
+         ] $ faIcon_ "pencil"
 
 --
 
