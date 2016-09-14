@@ -92,7 +92,7 @@ initialTableViewState = TableViewState False "" False
 
 table :: ReactView (Entity Table, Bool)
 table = defineStatefulView "table" initialTableViewState $ \state (Entity i t, selected) ->
-  let saveHandler state = (dispatch $ ATableSetName i (name state), Just state { editable = False })
+  let saveHandler state = (dispatch $ TableSetName i (name state), Just state { editable = False })
   in li_ $
      if editable state
      then div_ $ do

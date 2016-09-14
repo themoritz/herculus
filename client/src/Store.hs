@@ -29,7 +29,7 @@ import           Lib.Model.Record
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Lib.Api.Rest
+import           Lib.Api.Rest              as Api
 import           Lib.Api.WebSocket
 
 import qualified Config
@@ -92,7 +92,7 @@ data Action
   | TableAddRecord
   | TableAddRecordDone (Entity Record, [Entity Cell])
   | TableDeleteRecord (Id Record)
-  | ATableSetName (Id Table) Text
+  | TableSetName (Id Table) Text
   -- Column
   | ColumnRename (Id Column) Text
   -- Data column
@@ -125,7 +125,7 @@ instance StoreData State where
           WsDownColumnsChanged cs     -> pure $ dispatch $ TableUpdateColumns cs
           WsDownRecordCreated t r dat -> pure $ dispatch $ CacheRecordAdd t r dat
           WsDownRecordDeleted t r     -> pure $ dispatch $ CacheRecordDelete t r
-        request api (Proxy :: Proxy ProjectList) $ \case
+        request api (Proxy :: Proxy Api.ProjectList) $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ps -> pure $ dispatch $ ProjectsSet ps
         pure $ st & stateWebSocket .~ Just ws
@@ -149,7 +149,7 @@ instance StoreData State where
       CacheRecordsGet t -> case st ^. stateCacheRecords . at t of
         Just _  -> pure st
         Nothing -> do
-          request api (Proxy :: Proxy RecordListWithData) t $ \case
+          request api (Proxy :: Proxy Api.RecordListWithData) t $ \case
             Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
             Right res -> pure $ dispatch $ CacheRecordsSet t res
           pure st
@@ -169,7 +169,7 @@ instance StoreData State where
         pure $ st & stateProjects .~ ps
 
       ProjectsCreate p -> do
-        request api (Proxy :: Proxy ProjectCreate) p $ \case
+        request api (Proxy :: Proxy Api.ProjectCreate) p $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right i -> pure $ dispatch $ ProjectsAdd (Entity i p)
         pure st
@@ -178,7 +178,7 @@ instance StoreData State where
         st & stateProjects %~ (p:)
 
       ProjectsLoadProject i -> do
-        request api (Proxy :: Proxy TableList) i $ \case
+        request api (Proxy :: Proxy Api.TableList) i $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ts -> pure $ dispatch $ TablesSet ts
         pure $ st & stateProjectId .~ Just i
@@ -193,7 +193,7 @@ instance StoreData State where
         pure $ st & stateTables .~ ts
 
       TablesCreate t -> do
-        request api (Proxy :: Proxy TableCreate) t $ \case
+        request api (Proxy :: Proxy Api.TableCreate) t $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right i -> pure $ dispatch $ TablesAdd (Entity i t)
         pure st
@@ -202,7 +202,7 @@ instance StoreData State where
         st & stateTables %~ (t:)
 
       TablesLoadTable i -> do
-        request api (Proxy :: Proxy TableGetWhole) i $ \case
+        request api (Proxy :: Proxy Api.TableGetWhole) i $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right res -> pure $ dispatch $ TableSet res
         pure $ st & stateTableId .~ Just i
@@ -227,7 +227,7 @@ instance StoreData State where
           filter (\(Entity _ c) -> st ^. stateTableId == Just (c ^. columnTableId)) entries
 
       TableAddColumn col -> do
-        request api (Proxy :: Proxy ColumnCreate) col $ \case
+        request api (Proxy :: Proxy Api.ColumnCreate) col $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right res -> pure $ dispatch $ TableAddColumnDone res
         pure st
@@ -237,7 +237,7 @@ instance StoreData State where
            & stateCells %~ fillEntries (map toCellUpdate cells)
 
       TableDeleteColumn i -> do
-        request api (Proxy :: Proxy ColumnDelete) i $ \case
+        request api (Proxy :: Proxy Api.ColumnDelete) i $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right () -> pure []
         pure $ st & stateColumns %~ Map.delete i
@@ -247,7 +247,7 @@ instance StoreData State where
       TableAddRecord -> do
         case st ^. stateTableId of
           Nothing -> pure ()
-          Just t -> request api (Proxy :: Proxy RecordCreate) t $ \case
+          Just t -> request api (Proxy :: Proxy Api.RecordCreate) t $ \case
             Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
             Right res -> pure $ dispatch $ TableAddRecordDone res
         pure st
@@ -257,15 +257,15 @@ instance StoreData State where
            & stateCells %~ fillEntries (map toCellUpdate cells)
 
       TableDeleteRecord i -> do
-        request api (Proxy :: Proxy RecordDelete) i $ \case
+        request api (Proxy :: Proxy Api.RecordDelete) i $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right () -> pure []
         pure $ st & stateRecords %~ Map.delete i
                   & stateCells %~ Map.filterWithKey
                              (\(Coords _ r) _ -> r /= i)
 
-      ATableSetName id name -> do
-        request api (Proxy :: Proxy TableSetName) id name $ \case
+      TableSetName id name -> do
+        request api (Proxy :: Proxy Api.TableSetName) id name $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right () -> pure []
         -- TODO (jens) update table
@@ -278,7 +278,7 @@ instance StoreData State where
       -- Column
 
       ColumnRename i n -> do
-        request api (Proxy :: Proxy ColumnSetName) i n $ \case
+        request api (Proxy :: Proxy Api.ColumnSetName) i n $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ()    -> pure []
         pure $ st & stateColumns . at i . _Just . columnName .~ n
@@ -286,14 +286,14 @@ instance StoreData State where
       -- Data column
 
       ColumnSetDt i dt -> do
-        request api (Proxy :: Proxy DataColSetDataType) i dt $ \case
+        request api (Proxy :: Proxy Api.DataColSetDataType) i dt $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ()    -> pure []
         pure $ st & stateColumns . at i . _Just . columnKind . _ColumnData .
           dataColType .~ dt
 
       ColumnSetFormula i payload@(inpTyp, src) -> do
-        request api (Proxy :: Proxy DataColSetIsDerived) i payload $ \case
+        request api (Proxy :: Proxy Api.DataColSetIsDerived) i payload $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ()    -> pure []
         let dataColLens = stateColumns . at i . _Just . columnKind . _ColumnData
@@ -303,21 +303,21 @@ instance StoreData State where
       -- Report column
 
       ColumnSetReportLang i lang -> do
-        request api (Proxy :: Proxy ReportColSetLanguage) i lang $ \case
+        request api (Proxy :: Proxy Api.ReportColSetLanguage) i lang $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ()    -> pure []
         pure $ st & stateColumns . at i . _Just . columnKind . _ColumnReport .
                         reportColLanguage .~ lang
 
       ColumnSetReportFormat i format -> do
-        request api (Proxy :: Proxy ReportColSetFormat) i format $ \case
+        request api (Proxy :: Proxy Api.ReportColSetFormat) i format $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ()    -> pure []
         pure $ st & stateColumns . at i . _Just . columnKind . _ColumnReport .
                         reportColFormat .~ format
 
       ColumnSetReportTemplate i templ -> do
-        request api (Proxy :: Proxy ReportColSetTemplate) i templ $ \case
+        request api (Proxy :: Proxy Api.ReportColSetTemplate) i templ $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ()    -> pure []
         pure $ st & stateColumns . at i . _Just . columnKind . _ColumnReport .
@@ -326,7 +326,7 @@ instance StoreData State where
       -- Cell
 
       CellSetValue c r val -> do
-        request api (Proxy :: Proxy CellSet) c r val $ \case
+        request api (Proxy :: Proxy Api.CellSet) c r val $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right () -> pure []
         pure $ st & stateCells %~ fillEntries [(c, r, CellValue val)]
