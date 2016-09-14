@@ -49,7 +49,7 @@ data State = State
   , _stateCacheRecords :: Map (Id Table) (Map (Id Record) (Map (Id Column) (Column, CellContent)))
   , _stateProjects     :: [Entity Project]
   , _stateProjectId    :: Maybe (Id Project)
-  , _stateTables       :: [Entity Table]
+  , _stateTables       :: Map (Id Table) Table -- [Entity Table]
   , _stateTableId      :: Maybe (Id Table)
   , _stateCells        :: Map Coords CellContent
   , _stateColumns      :: Map (Id Column) Column
@@ -59,7 +59,7 @@ data State = State
 makeLenses ''State
 
 store :: ReactStore State
-store = mkStore $ State Nothing Nothing Map.empty [] Nothing [] Nothing
+store = mkStore $ State Nothing Nothing Map.empty [] Nothing Map.empty Nothing
   Map.empty Map.empty Map.empty
 
 data Action
@@ -187,7 +187,9 @@ instance StoreData State where
           [] -> pure ()
           Entity i _ : _ ->
             alterStore store $ TablesLoadTable i
-        pure $ st & stateTables .~ ts
+        pure $ st & stateTables .~ tablesMap
+          where
+            tablesMap = Map.fromList $ map entityToTuple ts
 
       TablesCreate t -> do
         request api (Proxy :: Proxy Api.TableCreate) t $ \case
@@ -195,8 +197,8 @@ instance StoreData State where
           Right i -> pure $ dispatch $ TablesAdd (Entity i t)
         pure st
 
-      TablesAdd t -> pure $
-        st & stateTables %~ (t:)
+      TablesAdd (Entity i t) -> pure $
+        st & stateTables . at i .~ Just t
 
       TablesLoadTable i -> do
         request api (Proxy :: Proxy Api.TableGetWhole) i $ \case
@@ -207,8 +209,8 @@ instance StoreData State where
       -- Table
 
       TableSet (cols, recs, entries) -> pure $
-        st & stateColumns .~ Map.fromList (map (\(Entity i c) -> (i, c)) cols)
-           & stateRecords .~ Map.fromList (map (\(Entity i r) -> (i, r)) recs)
+        st & stateColumns .~ Map.fromList $ map entityToTuple cols
+           & stateRecords .~ Map.fromList $ map entityToTuple recs
            & stateCells   .~ fillEntries entries Map.empty
 
       TableUpdateCells cells -> pure $
