@@ -81,15 +81,14 @@ tables = defineView "tables" $ \(ts, mTbl, projId) -> cldiv_ "tables" $ do
 table_' :: Entity Table -> Bool -> ReactElementM eh ()
 table_' !t !s = viewWithSKey table (toJSString $ show $ entityId t) (t, s) mempty
 
-data TableViewState = TableViewState {
-  editable       :: Bool
+data TableViewState = TableViewState
+  { editable     :: Bool
   , name         :: Text
   , hasNameError :: Bool
-  , nameErrorMsg :: Text
   } deriving (Generic, Show, NFData)
 
 initialTableViewState :: TableViewState
-initialTableViewState = TableViewState False "" False ""
+initialTableViewState = TableViewState False "" False
 
 table :: ReactView (Entity Table, Bool)
 table = defineStatefulView "table" initialTableViewState $ \state (Entity i t, selected) ->
@@ -97,25 +96,28 @@ table = defineStatefulView "table" initialTableViewState $ \state (Entity i t, s
   in li_ $
      if editable state
      then div_ $ do
-       input_ [  classNames
-               [ ("inp", True)
-               , ("inp-error", hasNameError state)
-               ]
-             , "value" &= name state
-           , onChange $ \evt state ->
-               let value = target evt "value"
-               in ([], Just state { name = value, hasNameError = Text.null value})
-           , onKeyDown $ \_ evt state ->
-               if keyCode evt == 13 && not (Text.null $ name state)
-               then saveHandler state
-               else ([], Just state)
-           ]
-       button_ [ "className" $= "btn btn-cancel"
-            , onClick $ \_ _ state -> ([] , Just state { editable = False })
-            ] $ elemText "c"
-       button_ [ "className" $= "btn btn-save"
-            , onClick $ \_ _ state -> saveHandler state
-            ] $ elemText "s"
+       input_
+         [  classNames
+            [ ("inp", True)
+            , ("inp-error", hasNameError state)
+            ]
+         , "value" &= name state
+         , onChange $ \evt state ->
+             let value = target evt "value"
+             in ([], Just state { name = value, hasNameError = Text.null value})
+         , onKeyDown $ \_ evt state ->
+             if keyCode evt == 13 && not (Text.null $ name state)
+             then saveHandler state
+             else ([], Just state)
+         ]
+       button_
+         [ "className" $= "btn btn-cancel"
+         , onClick $ \_ _ state -> ([] , Just state { editable = False })
+         ] $ elemText "c"
+       button_
+         [ "className" $= "btn btn-save"
+         , onClick $ \_ _ state -> saveHandler state
+         ] $ elemText "s"
      else div_ $ do
        span_
          [ classNames
@@ -125,9 +127,10 @@ table = defineStatefulView "table" initialTableViewState $ \state (Entity i t, s
          , onClick $ \_ _ _ -> (dispatch $ TablesLoadTable i, Nothing)
          ] $ elemText $ tableName t
 
-       button_ [ "className" $= "btn btn-edit"
-            , onClick $ \_ _ state -> ([], Just state { editable = True, name = tableName t })
-            ] $ elemText "e"
+       button_
+         [ "className" $= "btn btn-edit"
+         , onClick $ \_ _ state -> ([], Just state { editable = True, name = tableName t })
+         ] $ elemText "e"
 
 --
 
