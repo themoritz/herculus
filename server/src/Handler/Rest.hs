@@ -65,12 +65,9 @@ handle =
   :<|> handleColumnList
   :<|> handleColumnSetName
 
-  :<|> handleDataColSetDataType
-  :<|> handleDataColSetIsDerived
+  :<|> handleDataColUpdate
 
-  :<|> handleReportColSetTemplate
-  :<|> handleReportColSetFormat
-  :<|> handleReportColSetLanguage
+  :<|> handleReportColUpdate
 
   :<|> handleRecordCreate
   :<|> handleRecordDelete
@@ -162,58 +159,45 @@ handleColumnSetName c name = do
 
 --
 
-handleDataColSetDataType :: MonadHexl m => Id Column -> DataType -> m ()
-handleDataColSetDataType c typ = do
+handleDataColUpdate :: MonadHexl m => Id Column -> (DataType, IsDerived, Text) -> m ()
+handleDataColUpdate c (typ, derived, code) = do
   oldCol <- getById' c
   case oldCol ^? columnKind . _ColumnData of
-    Nothing -> throwError $ ErrBug "Tried to set type of column other than data"
-    Just dataCol -> unless (dataCol ^. dataColType == typ) $ do
-      update c $ over (columnKind . _ColumnData . dataColType) (const typ)
-      newChilds <- compileColumnChildren c
-      toUpdate <- case dataCol ^. dataColIsDerived of
-        NotDerived -> do invalidateCells c
-                         updateReference c typ
-                         pure newChilds
-        Derived    -> do newC <- compileColumn c
-                         pure $ newC:newChilds
-      sendWS $ WsDownColumnsChanged toUpdate
-      propagate [RootWholeColumns $ map entityId toUpdate]
-
-handleDataColSetIsDerived :: MonadHexl m => Id Column -> (IsDerived, Text) -> m ()
-handleDataColSetIsDerived c (derived, code) = do
-  oldCol <- getById' c
-  case oldCol ^? columnKind . _ColumnData of
-    Nothing -> throwError $ ErrBug "Tried to set IsDerived of column other than data."
+    Nothing -> throwError $ ErrBug "Called dataColUpdate for column other than data"
     Just dataCol -> do
-      update c $ over (columnKind . _ColumnData) $ (dataColIsDerived .~ derived)
-                                                 . (dataColSourceCode .~ code)
-      case derived of
+      let updatedCol = oldCol & columnKind . _ColumnData %~ (dataColType .~ typ)
+                                           . (dataColIsDerived .~ derived)
+                                           . (dataColSourceCode .~ code)
+      update c $ const updatedCol
+
+      updatedChilds <- if (dataCol ^. dataColType == typ)
+        then pure []
+        else compileColumnChildren c
+
+      (newSelf, propSelf) <- case derived of
         Derived -> do
-          newCol <- compileColumn c
-          sendWS $ WsDownColumnsChanged [newCol]
-          propagate [RootWholeColumns [c]]
+          newC <- compileColumn c
+          pure ([newC], [c])
         NotDerived -> do
           renewErrorCells c
-          updateReference c (dataCol ^. dataColType)
+          unless (typ == dataCol ^. dataColType) $ do
+            updateReference c typ
+            invalidateCells c
+          pure ([Entity c updatedCol], [])
 
---
+      sendWS $ WsDownColumnsChanged $ newSelf <> updatedChilds
+      propagate [RootWholeColumns $ propSelf <> map entityId updatedChilds]
 
-handleReportColSetTemplate :: MonadHexl m => Id Column -> Text -> m ()
-handleReportColSetTemplate c template = do
+handleReportColUpdate :: MonadHexl m => Id Column -> (Text, ReportFormat, Maybe ReportLanguage) -> m ()
+handleReportColUpdate c (template, format, lang) = do
   oldCol <- getById' c
   when (isNothing (oldCol ^? columnKind . _ColumnReport)) $
-    throwError $ ErrBug "Tried to set template of column other than data"
-  update c $ columnKind . _ColumnReport . reportColTemplate .~ template
+    throwError $ ErrBug "Called ReportColUpdate for column other than report"
+  update c $ columnKind . _ColumnReport %~ (reportColTemplate .~ template)
+                                         . (reportColFormat .~ format)
+                                         . (reportColLanguage .~ lang)
   newCol <- compileColumn c
   sendWS $ WsDownColumnsChanged [newCol]
-
-handleReportColSetFormat :: MonadHexl m => Id Column -> ReportFormat -> m ()
-handleReportColSetFormat c format =
-  update c $ columnKind . _ColumnReport . reportColFormat .~ format
-
-handleReportColSetLanguage :: MonadHexl m => Id Column -> Maybe ReportLanguage -> m ()
-handleReportColSetLanguage c lang =
-  update c $ columnKind . _ColumnReport . reportColLanguage .~ lang
 
 --
 

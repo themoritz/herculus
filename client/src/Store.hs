@@ -96,12 +96,9 @@ data Action
   -- Column
   | ColumnRename (Id Column) Text
   -- Data column
-  | ColumnSetDt (Id Column) DataType
-  | ColumnSetFormula (Id Column) (IsDerived, Text)
+  | DataColUpdate (Id Column) (DataType, IsDerived, Text)
   -- Report column
-  | ColumnSetReportLang (Id Column) (Maybe ReportLanguage)
-  | ColumnSetReportFormat (Id Column) ReportFormat
-  | ColumnSetReportTemplate (Id Column) Text
+  | ReportColUpdate (Id Column) (Text, ReportFormat, Maybe ReportLanguage)
   -- Cell
   | CellSetValue (Id Column) (Id Record) Value
   deriving (Typeable, Generic, NFData)
@@ -284,43 +281,25 @@ instance StoreData State where
 
       -- Data column
 
-      ColumnSetDt i dt -> do
-        request api (Proxy :: Proxy Api.DataColSetDataType) i dt $ \case
+      DataColUpdate i payload@(dt, inpTyp, src) -> do
+        request api (Proxy :: Proxy Api.DataColUpdate) i payload $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ()    -> pure []
-        pure $ st & stateColumns . at i . _Just . columnKind . _ColumnData .
-          dataColType .~ dt
-
-      ColumnSetFormula i payload@(inpTyp, src) -> do
-        request api (Proxy :: Proxy Api.DataColSetIsDerived) i payload $ \case
-          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
-          Right ()    -> pure []
-        let dataColLens = stateColumns . at i . _Just . columnKind . _ColumnData
-        pure $ st & dataColLens . dataColIsDerived .~ inpTyp
-                  & dataColLens . dataColSourceCode .~ src
+        pure $ st & stateColumns . at i . _Just . columnKind . _ColumnData
+                 %~ (dataColType .~ dt)
+                  . (dataColIsDerived .~ inpTyp)
+                  . (dataColSourceCode .~ src)
 
       -- Report column
 
-      ColumnSetReportLang i lang -> do
-        request api (Proxy :: Proxy Api.ReportColSetLanguage) i lang $ \case
+      ReportColUpdate i payload@(templ, format, lang) -> do
+        request api (Proxy :: Proxy Api.ReportColUpdate) i payload $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ()    -> pure []
-        pure $ st & stateColumns . at i . _Just . columnKind . _ColumnReport .
-                        reportColLanguage .~ lang
-
-      ColumnSetReportFormat i format -> do
-        request api (Proxy :: Proxy Api.ReportColSetFormat) i format $ \case
-          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
-          Right ()    -> pure []
-        pure $ st & stateColumns . at i . _Just . columnKind . _ColumnReport .
-                        reportColFormat .~ format
-
-      ColumnSetReportTemplate i templ -> do
-        request api (Proxy :: Proxy Api.ReportColSetTemplate) i templ $ \case
-          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
-          Right ()    -> pure []
-        pure $ st & stateColumns . at i . _Just . columnKind . _ColumnReport .
-                        reportColTemplate .~ templ
+        pure $ st & stateColumns . at i . _Just . columnKind . _ColumnReport
+                 %~ (reportColLanguage .~ lang)
+                  . (reportColFormat .~ format)
+                  . (reportColTemplate .~ templ)
 
       -- Cell
 

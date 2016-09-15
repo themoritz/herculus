@@ -320,11 +320,9 @@ reportColConf = defineControllerView "report column config" colConfStore $
         saveActions   =
           -- hide dialog
           [ SomeStoreAction colConfStore $ ColumnSetVisibility i False
-          , SomeStoreAction store        $ ColumnSetReportLang i lang
+          , SomeStoreAction store        $ ReportColUpdate i (template, format, lang)
           , SomeStoreAction colConfStore $ ColumnUnsetTmpReportLang i
-          , SomeStoreAction store        $ ColumnSetReportFormat i format
           , SomeStoreAction colConfStore $ ColumnUnsetTmpReportFormat i
-          , SomeStoreAction store        $ ColumnSetReportTemplate i template
           , SomeStoreAction colConfStore $ ColumnUnsetTmpReportTemplate i
           -- datatype selection
           ]
@@ -416,6 +414,7 @@ dataColConf = defineControllerView "data column configuration" colConfStore $
             _                                 -> Nothing
           isDerived = state ^. ccsTmpIsFormula . at i ?: dat ^. dataColIsDerived
           formula = state ^. ccsTmpFormula . at i ?: dat ^. dataColSourceCode
+          dt = state ^. ccsTmpDataType . at i ?: dat ^. dataColType
       cldiv_ "bodyWrapper" $ cldiv_ "body" $ do
         cldiv_ "datatype" $
           selDatatype_ i dat (state ^. ccsTableCache)
@@ -432,11 +431,6 @@ dataColConf = defineControllerView "data column configuration" colConfStore $
             , SomeStoreAction colConfStore $ ColumnUnsetTmpFormula i
             , SomeStoreAction colConfStore $ ColumnUnsetTmpIsFormula i
             ]
-          dataTypeActions = case state ^. ccsTmpDataType . at i of
-            Nothing -> []
-            Just dt -> [ SomeStoreAction store        $ ColumnSetDt i dt
-                       , SomeStoreAction colConfStore $ ColumnUnsetTmpDataType i
-                       ]
           -- TODO: figure out what changed before initiating ajax
           -- in the Nothing case: nothing has changed
           deleteActions = [ SomeStoreAction store $ TableDeleteColumn i ]
@@ -444,11 +438,11 @@ dataColConf = defineControllerView "data column configuration" colConfStore $
             -- hide dialog
             [ SomeStoreAction colConfStore $ ColumnSetVisibility i False
             -- is formula and formula
-            , SomeStoreAction store        $ ColumnSetFormula i (isDerived, formula)
+            , SomeStoreAction store        $ DataColUpdate i (dt, isDerived, formula)
+            , SomeStoreAction colConfStore $ ColumnUnsetTmpDataType i
             , SomeStoreAction colConfStore $ ColumnUnsetTmpIsFormula i
             , SomeStoreAction colConfStore $ ColumnUnsetTmpFormula i
-            -- datatype selection
-            ] ++ dataTypeActions
+            ]
       confButtons_ cancelActions deleteActions saveActions
 
 confButtons_ :: [SomeStoreAction]

@@ -32,11 +32,8 @@ type Routes =
  :<|> ColumnDelete
  :<|> ColumnList
  :<|> ColumnSetName
- :<|> DataColSetDataType
- :<|> DataColSetIsDerived
- :<|> ReportColSetTemplate
- :<|> ReportColSetFormat
- :<|> ReportColSetLanguage
+ :<|> DataColUpdate
+ :<|> ReportColUpdate
 
  :<|> RecordCreate
  :<|> RecordDelete
@@ -63,13 +60,8 @@ type ColumnCreate         = "column"    :> "create"  :> ReqBody '[JSON] Column :
 type ColumnDelete         = "column"    :> "delete"  :> Capture "columnId" (Id Column) :> Get '[JSON] ()
 type ColumnList           = "column"    :> "list" :> Capture "tableId" (Id Table) :> Get '[JSON] [Entity Column]
 type ColumnSetName        = "column"    :> "setName" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] Text :> Post '[JSON] ()
-
-type DataColSetDataType   = "dataCol"   :> "setDataType" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] DataType :> Post '[JSON] ()
-type DataColSetIsDerived  = "dataCol"   :> "setInput" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] (IsDerived, Text) :> Post '[JSON] ()
-
-type ReportColSetTemplate = "reportCol" :> "setTemplate" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] Text :> Post '[JSON] ()
-type ReportColSetFormat   = "reportCol" :> "setFormat" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] ReportFormat :> Post '[JSON] ()
-type ReportColSetLanguage = "reportCol" :> "setLanguage" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] (Maybe ReportLanguage) :> Post '[JSON] ()
+type DataColUpdate        = "dataCol"   :> "update" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] (DataType, IsDerived, Text) :> Post '[JSON] ()
+type ReportColUpdate      = "reportCol" :> "update" :> Capture "columnId" (Id Column) :> ReqBody '[JSON] (Text, ReportFormat, Maybe ReportLanguage) :> Post '[JSON] ()
 
 type RecordCreate         = "record"    :> "create" :> ReqBody '[JSON] (Id Table) :> Post '[JSON] (Entity Record, [Entity Cell])
 type RecordDelete         = "record"    :> "delete" :> Capture "recordId" (Id Record) :> Get '[JSON] ()
