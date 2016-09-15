@@ -126,7 +126,7 @@ colConfStore = mkStore $ ColConfState Map.empty
 -- helper
 
 toTableMap :: [Entity Table] -> TableCache
-toTableMap = Map.fromList . map (\(Entity id table) -> (id, table ^. tableName))
+toTableMap = Map.fromList . map (\(Entity tableId table) -> (tableId, table ^. tableName))
 
 --
 

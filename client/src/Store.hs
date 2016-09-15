@@ -49,7 +49,7 @@ data State = State
   , _stateCacheRecords :: Map (Id Table) (Map (Id Record) (Map (Id Column) (Column, CellContent)))
   , _stateProjects     :: [Entity Project]
   , _stateProjectId    :: Maybe (Id Project)
-  , _stateTables       :: Map (Id Table) Table -- [Entity Table]
+  , _stateTables       :: Map (Id Table) Table
   , _stateTableId      :: Maybe (Id Table)
   , _stateCells        :: Map Coords CellContent
   , _stateColumns      :: Map (Id Column) Column
@@ -263,15 +263,11 @@ instance StoreData State where
                   & stateCells %~ Map.filterWithKey
                              (\(Coords _ r) _ -> r /= i)
 
-      TableSetName id name -> do
-        request api (Proxy :: Proxy Api.TableSetName) id name $ \case
+      TableSetName i name -> do
+        request api (Proxy :: Proxy Api.TableSetName) i name $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right () -> pure []
-        pure $ st & stateTables .~ tableList
-          where
-            tableMap = Map.fromList . map entityToTuple $ st ^. stateTables
-            tableMap' = tableMap & at id . _Just . tableName .~ name
-            tableList = map tupleToEntity $ Map.toList tableMap'
+        pure $ st & stateTables . at i . _Just . tableName .~ name
 
       -- Column
 

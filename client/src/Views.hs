@@ -5,6 +5,9 @@ module Views where
 
 import           Control.Lens        hiding (view)
 
+import           Data.Map.Strict     (Map)
+import qualified Data.Map.Strict     as Map
+
 import           Data.Foldable       (for_)
 import           Data.Text           as Text
 
@@ -68,18 +71,20 @@ project = defineView "project" $ \(Entity i p, selected) ->
 
 --
 
-tables_ :: [Entity Table] -> Maybe (Id Table) -> Id Project -> ReactElementM eh ()
+tables_ :: Map (Id Table) Table -> Maybe (Id Table) -> Id Project -> ReactElementM eh ()
 tables_ !ts !mTbl !prj = view tables (ts, mTbl, prj) mempty
 
-tables :: ReactView ([Entity Table], Maybe (Id Table), Id Project)
-tables = defineView "tables" $ \(ts, mTbl, projId) -> cldiv_ "tables" $ do
-  ul_ $ for_ ts $ \t -> table_' t (Just (entityId t) == mTbl)
-  inputNew_ "Add table..." (dispatch . TablesCreate . Table projId)
+tables :: ReactView (Map (Id Table) Table, Maybe (Id Table), Id Project)
+tables = defineView "tables" $ \(ts, mTbl, projId) ->
+  let ts' = Prelude.map tupleToEntity $ Map.toList ts
+  in cldiv_ "tables" $ do
+    ul_ $ for_ ts' $ \t -> table_' t (Just (entityId t) == mTbl)
+    inputNew_ "Add table..." (dispatch . TablesCreate . Table projId)
 
 --
 
 table_' :: Entity Table -> Bool -> ReactElementM eh ()
-table_' !t !s = viewWithSKey table (toJSString $ show $ entityId t) (t, s) mempty
+table_' !table' !selected = viewWithSKey table (toJSString $ show $ entityId table') (table', selected) mempty
 
 data TableViewState = TableViewState
   { editable     :: Bool
@@ -91,8 +96,8 @@ initialTableViewState :: TableViewState
 initialTableViewState = TableViewState False "" False
 
 table :: ReactView (Entity Table, Bool)
-table = defineStatefulView "table" initialTableViewState $ \state (Entity id table, selected) ->
-  let saveHandler state = (dispatch $ TableSetName id (name state), Just state { editable = False })
+table = defineStatefulView "table" initialTableViewState $ \state (Entity tableId table, selected) ->
+  let saveHandler state = (dispatch $ TableSetName tableId (name state), Just state { editable = False })
       inputKeyDownHandler _ evt state
         | keyCode evt == 13 && not (Text.null $ name state) = saveHandler state -- 13 = Enter
         | keyCode evt == 27 = ([] , Just state { editable = False }) -- 27 = ESC
