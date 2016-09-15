@@ -164,14 +164,14 @@ branches = Map.fromList
   , (BString, "String")
   , (BNumber, "Number")
   , (BTime  , "Time"  )
-  , (BRecord, "Record")
+  , (BRecord, "Row"   )
   , (BList  , "List"  )
   , (BMaybe , "Maybe" )
   ]
 
 reportLangs :: Map (Maybe ReportLanguage) Text
 reportLangs = Map.fromList
-  [ (Nothing              , "Plaintext" )
+  [ (Nothing                    , "Plaintext" )
   , (Just ReportLanguageMarkdown, "Markdown"  )
   , (Just ReportLanguageLatex   , "Latex"     )
   , (Just ReportLanguageHTML    , "HTML"      )
@@ -208,7 +208,7 @@ column = defineView "column" $ \c@(Entity i col) -> cldiv_ "column" $ do
   cldiv_ "head" $ do
     editBox_ EditBoxProps
       { editBoxValue       = col ^. columnName
-      , editBoxPlaceholder = "Column name..."
+      , editBoxPlaceholder = "Name..."
       , editBoxClassName   = "columnName"
       , editBoxShow        = id
       , editBoxValidator   = Just
@@ -397,7 +397,7 @@ dataTypeInfo = defineControllerView "datatype info" colConfStore $
       DataRecord t -> do onDidMount_ [SomeStoreAction colConfStore ColumnGetTableCache] mempty
                          let tableName = Map.lookup t (state ^. ccsTableCache)
                                       ?: "missing table"
-                         elemText $ "Records of " <> tableName
+                         elemText $ "Row from " <> tableName
       DataList   d -> do "List ("
                          dataTypeInfo_ d
                          ")"

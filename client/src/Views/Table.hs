@@ -99,7 +99,7 @@ tableGrid = defineView "tableGrid" $ \st -> do
 
       props = GridProps
         { gridCellRenderer = defineView "cellRenderer" renderer
-        , gridColumnWidths = [37] <> replicate numCols 250 <> [37]
+        , gridColumnWidths = [37] <> replicate numCols 230 <> [37]
         , gridColumnCount = numCols + 2
         , gridRowHeights = [54] <> replicate numRecs 37 <> [37]
         , gridRowCount = numRecs + 2

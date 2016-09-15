@@ -1,5 +1,9 @@
 @import "../modules/colors";
 
+$dataTypeWidth: 110px;
+$formulaWidth: 540px;
+$diagLeft: 180px;
+
 .column {
   position: relative;
   $openWidth: 45px;
@@ -40,7 +44,6 @@
     .error {
       color: desaturate(red, 40%);
     }
-    $diagLeft: 190px;
     .dialog {
       position: absolute;
       left: -$diagLeft;
@@ -76,7 +79,7 @@
           box-sizing: border-box;
           .datatype {
             height: 100%;
-            width: 110px;
+            width: $dataTypeWidth;
             border-right: 1px solid $medium-gray;
             box-sizing: border-box;
             display: table-cell;
@@ -89,7 +92,7 @@
             padding: 5px;
             box-sizing: border-box;
             height: 100%;
-            width: 540px;
+            width: $formulaWidth;
             display: table-cell;
             .inputFormula.disabled {
               opacity: 0.4;
@@ -164,7 +167,7 @@
       }
     }
     .dialog.data {
-      width: 650px;
+      width: $formulaWidth + $dataTypeWidth;
     }
     .dialog.report {
       width: 690px;
