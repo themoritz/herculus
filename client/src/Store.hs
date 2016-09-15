@@ -209,8 +209,8 @@ instance StoreData State where
       -- Table
 
       TableSet (cols, recs, entries) -> pure $
-        st & stateColumns .~ Map.fromList $ map entityToTuple cols
-           & stateRecords .~ Map.fromList $ map entityToTuple recs
+        st & stateColumns .~ Map.fromList (map entityToTuple cols)
+           & stateRecords .~ Map.fromList (map entityToTuple recs)
            & stateCells   .~ fillEntries entries Map.empty
 
       TableUpdateCells cells -> pure $
