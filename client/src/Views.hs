@@ -9,7 +9,6 @@ import           Data.Map.Strict     (Map)
 import qualified Data.Map.Strict     as Map
 
 import           Data.Foldable       (for_)
-import           Data.Monoid         ((<>))
 import           Data.Text           (Text)
 import qualified Data.Text           as Text
 
@@ -94,6 +93,18 @@ screencasts = defineStatefulView "screencasts" (True, 0 :: Int) $ \(open, select
             li_ "Powerful types"
             li_ "Lorem ipsum"
         , "img/types.final.gif"
+        )
+      , ( "Powerful Formulas"
+        , ul_ $ do
+            li_ "Code!"
+            li_ "Lorem"
+        , "img/formulas.final.gif"
+        )
+      , ( "Quick Reports"
+        , ul_ $ do
+            li_ "Multiple languages and formats!"
+            li_ "For loops and if conditionals!"
+        , "img/reports.final.gif"
         )
       ]
 

@@ -393,9 +393,9 @@ dataTypeInfo = defineControllerView "datatype info" colConfStore $
       DataNumber   -> "Number"
       DataTime     -> "Time"
       DataRecord t -> do onDidMount_ [SomeStoreAction colConfStore ColumnGetTableCache] mempty
-                         let tableName = Map.lookup t (state ^. ccsTableCache)
-                                      ?: "missing table"
-                         elemText $ "Row from " <> tableName
+                         let tblName = Map.lookup t (state ^. ccsTableCache)
+                                    ?: "missing table"
+                         elemText $ "Row from " <> tblName
       DataList   d -> do "List ("
                          dataTypeInfo_ d
                          ")"
