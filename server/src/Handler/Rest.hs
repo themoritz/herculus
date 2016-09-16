@@ -52,6 +52,7 @@ handle :: MonadHexl m => ServerT Routes m
 handle =
        handleProjectCreate
   :<|> handleProjectList
+  :<|> handleProjectSetName
 
   :<|> handleTableCreate
   :<|> handleTableList
@@ -87,6 +88,12 @@ handleProjectCreate = create
 
 handleProjectList :: MonadHexl m => m [Entity Project]
 handleProjectList = listAll
+
+handleProjectSetName :: MonadHexl m => Id Project -> Text -> m ()
+handleProjectSetName projectId name = do
+  project <- getById' projectId
+  let updatedProject = project {projectName = name}
+  update projectId $ const updatedProject
 
 --
 

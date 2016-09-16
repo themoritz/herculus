@@ -20,6 +20,7 @@ import           Lib.Types
 type Routes =
       ProjectCreate
  :<|> ProjectList
+ :<|> ProjectSetName
 
  :<|> TableCreate
  :<|> TableList
@@ -48,6 +49,7 @@ type Routes =
 
 type ProjectCreate        = "project"   :> "create" :> ReqBody '[JSON] Project :> Post '[JSON] (Id Project)
 type ProjectList          = "project"   :> "list"   :> Get '[JSON] [Entity Project]
+type ProjectSetName       = "project"   :> "setName" :> Capture "projectId" (Id Project) :> ReqBody '[JSON] Text :> Post '[JSON] ()
 
 type TableCreate          = "table"     :> "create" :> ReqBody '[JSON] Table :> Post '[JSON] (Id Table)
 type TableList            = "table"     :> "list" :> Capture "projectId" (Id Project) :> Get '[JSON] [Entity Table]
