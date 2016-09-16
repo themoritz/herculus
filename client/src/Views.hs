@@ -107,10 +107,10 @@ table = defineStatefulView "table" initialTableViewState $ \state (Entity tableI
              [ ("active", selected)
              , ("link", True)
              ]
-         , onClick $ \_ _ _ -> (dispatch $ TablesLoadTable id, Nothing)
+         , onClick $ \_ _ _ -> (dispatch $ TablesLoadTable tableId, Nothing)
          ] $
      if editable state
-     then div_ $ do
+     then div_ $
        input_
          [  classNames
             [ ("inp", True)
