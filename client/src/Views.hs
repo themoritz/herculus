@@ -9,7 +9,8 @@ import           Data.Map.Strict     (Map)
 import qualified Data.Map.Strict     as Map
 
 import           Data.Foldable       (for_)
-import           Data.Text           as Text
+import           Data.Text           (Text)
+import qualified Data.Text           as Text
 
 import           React.Flux
 import           React.Flux.Internal (toJSString)
@@ -76,7 +77,7 @@ tables_ !ts !mTbl !prj = view tables (ts, mTbl, prj) mempty
 
 tables :: ReactView (Map (Id Table) Table, Maybe (Id Table), Id Project)
 tables = defineView "tables" $ \(ts, mTbl, projId) ->
-  let ts' = Prelude.map tupleToEntity $ Map.toList ts
+  let ts' = map tupleToEntity $ Map.toList ts
   in cldiv_ "tables" $ do
     ul_ $ for_ ts' $ \t -> table_' t (Just (entityId t) == mTbl)
     inputNew_ "Add table..." (dispatch . TablesCreate . Table projId)
