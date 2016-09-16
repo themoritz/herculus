@@ -77,15 +77,14 @@ tables_ !ts !mTbl !prj = view tables (ts, mTbl, prj) mempty
 
 tables :: ReactView (Map (Id Table) Table, Maybe (Id Table), Id Project)
 tables = defineView "tables" $ \(ts, mTbl, projId) ->
-  let ts' = map tupleToEntity $ Map.toList ts
-  in cldiv_ "tables" $ do
-    ul_ $ for_ ts' $ \t -> table_' t (Just (entityId t) == mTbl)
+  cldiv_ "tables" $ do
+    ul_ $ for_ (Map.toList ts) $ \(tableId, table') -> table_' tableId table' (Just tableId == mTbl)
     inputNew_ "Add table..." (dispatch . TablesCreate . Table projId)
 
 --
 
-table_' :: Entity Table -> Bool -> ReactElementM eh ()
-table_' !table' !selected = viewWithSKey table (toJSString $ show $ entityId table') (table', selected) mempty
+table_' :: Id Table -> Table -> Bool -> ReactElementM eh ()
+table_' !tableId !table' !selected = viewWithSKey table (toJSString $ show tableId) (tableId, table', selected) mempty
 
 data TableViewState = TableViewState
   { editable     :: Bool
@@ -96,8 +95,8 @@ data TableViewState = TableViewState
 initialTableViewState :: TableViewState
 initialTableViewState = TableViewState False "" False
 
-table :: ReactView (Entity Table, Bool)
-table = defineStatefulView "table" initialTableViewState $ \state (Entity tableId table', selected) ->
+table :: ReactView (Id Table, Table, Bool)
+table = defineStatefulView "table" initialTableViewState $ \state (tableId, table', selected) ->
   let saveHandler st = (dispatch $ TableSetName tableId (name st), Just state { editable = False })
       inputKeyDownHandler _ evt st
         | keyCode evt == 13 && not (Text.null $ name st) = saveHandler st -- 13 = Enter
