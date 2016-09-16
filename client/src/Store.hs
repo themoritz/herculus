@@ -77,6 +77,8 @@ data Action
   | ProjectsCreate Project
   | ProjectsAdd (Entity Project)
   | ProjectsLoadProject (Id Project)
+  -- Project
+  | ProjectSetName (Id Project) Text
   -- Tables
   | TablesSet [Entity Table]
   | TablesCreate Table
@@ -179,6 +181,16 @@ instance StoreData State where
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right ts -> pure $ dispatch $ TablesSet ts
         pure $ st & stateProjectId .~ Just i
+
+      -- Project
+
+      ProjectSetName projectId name -> do
+        request api (Proxy :: Proxy Api.ProjectSetName) projectId name $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right () -> pure []
+        -- TODO (jens) Use lenses
+        -- pure $ st & stateProjects . at i . _Just . projectName .~ name
+        pure st
 
       -- Tables
 
