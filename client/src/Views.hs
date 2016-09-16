@@ -23,6 +23,8 @@ import           Lib.Types
 import           Store
 import           Views.Table
 
+import           Helper              (keyENTER, keyESC)
+
 import           Control.DeepSeq     (NFData)
 import           GHC.Generics        (Generic)
 
@@ -121,15 +123,48 @@ projects = defineView "projects" $ \(ps, mProj) -> cldiv_ "projects" $ do
 project_ :: Entity Project -> Bool -> ReactElementM eh ()
 project_ !p !s = viewWithSKey project (toJSString $ show $ entityId p) (p, s) mempty
 
+data ProjectViewState = ProjectViewState
+  { pEditable  :: Bool
+  , pName      :: Text
+  , pNameError :: Bool
+  } deriving (Generic, Show, NFData)
+
+initialProjectViewState :: ProjectViewState
+initialProjectViewState = ProjectViewState False "" False
+
 project :: ReactView (Entity Project, Bool)
-project = defineView "project" $ \(Entity i p, selected) ->
-  li_
-    [ classNames
-      [ ("link", True)
-      , ("active", selected)
-      ]
-    , onClick $ \_ _ -> dispatch $ ProjectsLoadProject i
-    ] $ elemText $ projectName p
+project = defineStatefulView "project" initialProjectViewState $ \state (Entity projectId project', selected) ->
+  let saveHandler st = (dispatch $ ProjectSetName projectId (pName st), Just st { pEditable = False })
+      inputKeyDownHandler _ evt st
+        | keyENTER evt && not (Text.null $ pName st) = saveHandler st
+        | keyESC evt = ([] , Just st { pEditable = False })
+        | otherwise = ([], Just st)
+  in li_
+     [ classNames
+       [ ("link", True)
+       , ("active", selected)
+       ]
+     , onClick $ \_ _ _ -> (dispatch $ ProjectsLoadProject projectId, Nothing)
+     ] $
+     if pEditable state
+     then div_ $
+          input_
+          [  classNames
+             [ ("inp", True)
+             , ("inp-error", pNameError state)
+             ]
+          , "value" &= pName state
+          , onChange $ \evt st ->
+              let value = target evt "value"
+              in ([], Just st { pName = value, pNameError = Text.null value})
+          , onKeyDown inputKeyDownHandler
+          ]
+     else div_ $ do
+       span_ $ elemText $ projectName project'
+       -- button_
+       --   [ "className" $= "pure link-on-dark"
+       --   , onClick $ \_ _ st -> ([], Just st { pEditable = True, pName = projectName project'})
+       --   ] $ faIcon_ "pencil"
 
 --
 
@@ -148,9 +183,9 @@ table_' :: Id Table -> Table -> Bool -> ReactElementM eh ()
 table_' !tableId !table' !selected = viewWithSKey table (toJSString $ show tableId) (tableId, table', selected) mempty
 
 data TableViewState = TableViewState
-  { editable     :: Bool
-  , name         :: Text
-  , hasNameError :: Bool
+  { tEditable  :: Bool
+  , tName      :: Text
+  , tNameError :: Bool
   } deriving (Generic, Show, NFData)
 
 initialTableViewState :: TableViewState
@@ -158,10 +193,10 @@ initialTableViewState = TableViewState False "" False
 
 table :: ReactView (Id Table, Table, Bool)
 table = defineStatefulView "table" initialTableViewState $ \state (tableId, table', selected) ->
-  let saveHandler st = (dispatch $ TableSetName tableId (name st), Just state { editable = False })
+  let saveHandler st = (dispatch $ TableSetName tableId (tName st), Just st { tEditable = False })
       inputKeyDownHandler _ evt st
-        | keyCode evt == 13 && not (Text.null $ name st) = saveHandler st -- 13 = Enter
-        | keyCode evt == 27 = ([] , Just st { editable = False }) -- 27 = ESC
+        | keyENTER evt && not (Text.null $ tName st) = saveHandler st
+        | keyESC evt = ([] , Just st { tEditable = False })
         | otherwise = ([], Just st)
   in li_ [ classNames
              [ ("active", selected)
@@ -169,17 +204,17 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
              ]
          , onClick $ \_ _ _ -> (dispatch $ TablesLoadTable tableId, Nothing)
          ] $
-     if editable state
+     if tEditable state
      then div_ $
        input_
          [  classNames
             [ ("inp", True)
-            , ("inp-error", hasNameError state)
+            , ("inp-error", tNameError state)
             ]
-         , "value" &= name state
+         , "value" &= tName state
          , onChange $ \evt st ->
              let value = target evt "value"
-             in ([], Just st { name = value, hasNameError = Text.null value})
+             in ([], Just st { tName = value, tNameError = Text.null value})
          , onKeyDown inputKeyDownHandler
          ]
      else div_ $ do
@@ -187,7 +222,7 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
 
        -- button_
        --   [ "className" $= "pure link-on-dark"
-       --   , onClick $ \_ _ state -> ([], Just state { editable = True, name = table'  ^. tableName })
+       --   , onClick $ \_ _ state -> ([], Just state { tEditable = True, name = table'  ^. tableName })
        --   ] $ faIcon_ "pencil"
 
 --
@@ -202,7 +237,7 @@ inputNew = defineStatefulView "inputNew" ("" :: Text) $ \curText (p, cb) ->
     , "value" &= curText
     , onChange $ \evt _ -> ([], Just $ target evt "value")
     , onKeyDown $ \_ evt curState ->
-        if keyCode evt == 13 && not (Text.null curState) -- 13 = Enter
+        if keyENTER evt && not (Text.null curState)
            then (cb curState, Just "")
            else ([], Nothing)
     ]

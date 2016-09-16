@@ -190,7 +190,12 @@ instance StoreData State where
           Right () -> pure []
         -- TODO (jens) Use lenses
         -- pure $ st & stateProjects . at i . _Just . projectName .~ name
-        pure st
+        pure $ st & stateProjects %~ changeName
+        where
+           changeName = map (\(Entity projectId' project) ->
+                                   if projectId' == projectId
+                                   then Entity projectId' project {projectName = name }
+                                   else Entity projectId' project)
 
       -- Tables
 
