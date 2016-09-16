@@ -1,7 +1,8 @@
 client/.stack-work/
 server/.stack-work/
 lib/.stack-work/
-assets/public/
+assets/public/js/
+assets/public/css/
 node_modules/
 npm-debug.log
 TAGS

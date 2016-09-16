@@ -9,6 +9,7 @@ import           Data.Map.Strict     (Map)
 import qualified Data.Map.Strict     as Map
 
 import           Data.Foldable       (for_)
+import           Data.Monoid         ((<>))
 import           Data.Text           (Text)
 import qualified Data.Text           as Text
 
@@ -27,7 +28,8 @@ import           Control.DeepSeq     (NFData)
 import           GHC.Generics        (Generic)
 
 app :: ReactView ()
-app = defineControllerView "app" store $ \st () ->
+app = defineControllerView "app" store $ \st () -> do
+  screencasts_
   cldiv_ "container" $ do
     cldiv_ "menubar" $ do
       cldiv_ "logo" "TABLES"
@@ -46,6 +48,54 @@ app = defineControllerView "app" store $ \st () ->
       , "className" $= "link-on-dark"
       , "target" $= "_blank"
       ] "Contact"
+
+screencasts_ :: ReactElementM eh ()
+screencasts_ = view screencasts () mempty
+
+screencasts :: ReactView ()
+screencasts = defineStatefulView "screencasts" (True, 0 :: Int) $ \(open, selected) () ->
+    if open
+    then cldiv_ "screencasts-container" $ cldiv_ "screencasts" $ do
+      cldiv_ "toc" $ ul_ $ do
+        for_ (zip [0..] screencastContent) $ \(i, (title, _, _)) ->
+          li_ [ onClick $ \_ _ -> const ([], Just (True, i))
+              , classNames [ ("active", i == selected) ]
+              ] $ do
+          faIcon_ "caret-right fa-fw"
+          elemText title
+        li_ [ onClick $ \_ _ -> const ([], Just (False, 0))
+            , "className" $= "goto-tool"
+            ] $ do
+          faIcon_ "rocket fa-fw"
+          "Open the Tool!"
+      let (_, desc, img) = screencastContent !! selected
+      cldiv_ "entry" $ do
+        cldiv_ "cast" $
+          img_ [ "src" $= img ] mempty
+        cldiv_ "description" desc
+      cldiv_ "controls" $ if selected == length screencastContent - 1
+        then clbutton_ "" (const ([], Just (False, 0))) $ do
+               faIcon_ "rocket"
+               "Open the Tool!"
+        else clbutton_ "" (const ([], Just (True, selected + 1))) $ do
+               faIcon_ "arrow-right"
+               "Next"
+    else mempty
+  where
+    screencastContent =
+      [ ( "Spreadsheet Feel"
+        , ul_ $ do
+            li_ "Spreadsheet-like look and feel for your data"
+            li_ "Lorem ipsum"
+        , "img/spreadsheet.final.gif"
+        )
+      , ( "Powerful Types"
+        , ul_ $ do
+            li_ "Powerful types"
+            li_ "Lorem ipsum"
+        , "img/types.final.gif"
+        )
+      ]
 
 --
 
