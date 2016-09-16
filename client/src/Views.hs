@@ -97,12 +97,12 @@ initialTableViewState :: TableViewState
 initialTableViewState = TableViewState False "" False
 
 table :: ReactView (Entity Table, Bool)
-table = defineStatefulView "table" initialTableViewState $ \state (Entity tableId table, selected) ->
-  let saveHandler state = (dispatch $ TableSetName tableId (name state), Just state { editable = False })
-      inputKeyDownHandler _ evt state
-        | keyCode evt == 13 && not (Text.null $ name state) = saveHandler state -- 13 = Enter
-        | keyCode evt == 27 = ([] , Just state { editable = False }) -- 27 = ESC
-        | otherwise = ([], Just state)
+table = defineStatefulView "table" initialTableViewState $ \state (Entity tableId table', selected) ->
+  let saveHandler st = (dispatch $ TableSetName tableId (name st), Just state { editable = False })
+      inputKeyDownHandler _ evt st
+        | keyCode evt == 13 && not (Text.null $ name st) = saveHandler st -- 13 = Enter
+        | keyCode evt == 27 = ([] , Just st { editable = False }) -- 27 = ESC
+        | otherwise = ([], Just st)
   in li_ [ classNames
              [ ("active", selected)
              , ("link", True)
@@ -117,17 +117,17 @@ table = defineStatefulView "table" initialTableViewState $ \state (Entity tableI
             , ("inp-error", hasNameError state)
             ]
          , "value" &= name state
-         , onChange $ \evt state ->
+         , onChange $ \evt st ->
              let value = target evt "value"
-             in ([], Just state { name = value, hasNameError = Text.null value})
+             in ([], Just st { name = value, hasNameError = Text.null value})
          , onKeyDown inputKeyDownHandler
          ]
      else div_ $ do
-       span_ $ elemText $ table ^. tableName
+       span_ $ elemText $ table' ^. tableName
 
        -- button_
        --   [ "className" $= "pure link-on-dark"
-       --   , onClick $ \_ _ state -> ([], Just state { editable = True, name = table  ^. tableName })
+       --   , onClick $ \_ _ state -> ([], Just state { editable = True, name = table'  ^. tableName })
        --   ] $ faIcon_ "pencil"
 
 --
