@@ -97,7 +97,12 @@ table = defineStatefulView "table" initialTableViewState $ \state (Entity id tab
         | keyCode evt == 13 && not (Text.null $ name state) = saveHandler state -- 13 = Enter
         | keyCode evt == 27 = ([] , Just state { editable = False }) -- 27 = ESC
         | otherwise = ([], Just state)
-  in li_ $
+  in li_ [ classNames
+             [ ("active", selected)
+             , ("link", True)
+             ]
+         , onClick $ \_ _ _ -> (dispatch $ TablesLoadTable id, Nothing)
+         ] $
      if editable state
      then div_ $ do
        input_
@@ -112,18 +117,12 @@ table = defineStatefulView "table" initialTableViewState $ \state (Entity id tab
          , onKeyDown inputKeyDownHandler
          ]
      else div_ $ do
-       span_
-         [ classNames
-           [ ("link", True)
-           , ("active", selected)
-           ]
-         , onClick $ \_ _ _ -> (dispatch $ TablesLoadTable id, Nothing)
-         ] $ elemText $ table ^. tableName
+       span_ $ elemText $ table ^. tableName
 
-       button_
-         [ "className" $= "pure"
-         , onClick $ \_ _ state -> ([], Just state { editable = True, name = table  ^. tableName })
-         ] $ faIcon_ "pencil"
+       -- button_
+       --   [ "className" $= "pure link-on-dark"
+       --   , onClick $ \_ _ state -> ([], Just state { editable = True, name = table  ^. tableName })
+       --   ] $ faIcon_ "pencil"
 
 --
 
