@@ -15,6 +15,7 @@ import           Data.Monoid                    ((<>))
 import           Data.Proxy
 import           Data.Text.Encoding             (encodeUtf8)
 
+import           Database.MongoDB               ((=:))
 import qualified Database.MongoDB               as Mongo
 
 import           Servant
@@ -28,6 +29,10 @@ import           ConnectionManager
 import           Handler.Rest
 import           Handler.WebSocket
 import           Lib.Api.Rest
+import           Lib.Model.Cell
+import           Lib.Model.Class
+import           Lib.Model.Column
+import           Lib.Model.Record
 import           Monads
 
 import           Options                        (Options (..), getOptions)
@@ -87,8 +92,21 @@ main :: IO ()
 main = do
   Options{..} <- getOptions
   pipe <- Mongo.connect $ Mongo.host optMongoHost
+  let dbName = "test"
+  -- Ensure Mongo indices
+  Mongo.access pipe Mongo.master dbName $ do
+    let collColumn = collectionName (Proxy :: Proxy Column)
+        collCell   = collectionName (Proxy :: Proxy Cell)
+        collRecord = collectionName (Proxy :: Proxy Record)
+        asc = 1 :: Int
+    Mongo.ensureIndex $ Mongo.index collColumn [ "tableId" =: asc ]
+    Mongo.ensureIndex $ Mongo.index collRecord [ "tableId" =: asc ]
+    Mongo.ensureIndex $ Mongo.index collCell   [ "tableId" =: asc ]
+    Mongo.ensureIndex $ Mongo.index collCell   [ "columnId" =: asc ]
+    Mongo.ensureIndex $ Mongo.index collCell   [ "recordId" =: asc ]
+  --
   connections <- atomically $ newTVar newConnectionManager
-  let env = HexlEnv pipe "test" connections
+  let env = HexlEnv pipe dbName connections
       webSocketApp = wsApp env
       restApp = serve routes $ rest env optAssetDir
   putStrLn $ "Listening on port " <> show optPort <> " ..."

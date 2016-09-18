@@ -52,7 +52,7 @@ import           Lib.Model.Dependencies
 import           Lib.Model.References
 import           Lib.Types
 
-import qualified Latex                       as Latex
+import qualified Latex
 
 data AppError
   = ErrUser Text

@@ -3,6 +3,10 @@ server/.stack-work/
 lib/.stack-work/
 assets/public/js/
 assets/public/css/
+assets/public/*.woff*
+assets/public/*.svg
+assets/public/*.ttf
+assets/public/*.eot
 node_modules/
 npm-debug.log
 TAGS
