@@ -1,11 +1,13 @@
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
 module Lib.Model.Project where
 
 import           Control.DeepSeq
 
+import           Control.Lens    (makeLenses)
 import           Data.Aeson      (FromJSON, ToJSON)
 import           Data.Text       (Text)
 
@@ -18,8 +20,10 @@ import           Lib.Model.Class
 
 
 data Project = Project
-  { projectName :: Text
+  { _projectName :: Text
   } deriving (Generic, NFData)
+
+makeLenses ''Project
 
 instance Model Project where
   collectionName = const "projects"

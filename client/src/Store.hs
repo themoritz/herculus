@@ -47,7 +47,7 @@ data State = State
   { _stateError        :: Maybe Text
   , _stateWebSocket    :: Maybe JSWebSocket
   , _stateCacheRecords :: Map (Id Table) (Map (Id Record) (Map (Id Column) (Column, CellContent)))
-  , _stateProjects     :: [Entity Project]
+  , _stateProjects     :: Map (Id Project) Project
   , _stateProjectId    :: Maybe (Id Project)
   , _stateTables       :: Map (Id Table) Table
   , _stateTableId      :: Maybe (Id Table)
@@ -59,7 +59,7 @@ data State = State
 makeLenses ''State
 
 store :: ReactStore State
-store = mkStore $ State Nothing Nothing Map.empty [] Nothing Map.empty Nothing
+store = mkStore $ State Nothing Nothing Map.empty Map.empty Nothing Map.empty Nothing
   Map.empty Map.empty Map.empty
 
 data Action
@@ -165,7 +165,9 @@ instance StoreData State where
           [] -> pure ()
           Entity i _ : _ ->
             alterStore store $ ProjectsLoadProject i
-        pure $ st & stateProjects .~ ps
+        pure $ st & stateProjects .~ projectsMap
+          where
+            projectsMap = Map.fromList $ map entityToTuple ps
 
       ProjectsCreate p -> do
         request api (Proxy :: Proxy Api.ProjectCreate) p $ \case
@@ -173,8 +175,8 @@ instance StoreData State where
           Right i -> pure $ dispatch $ ProjectsAdd (Entity i p)
         pure st
 
-      ProjectsAdd p -> pure $
-        st & stateProjects %~ (p:)
+      ProjectsAdd (Entity i p) -> pure $
+        st & stateProjects . at i .~ Just p
 
       ProjectsLoadProject i -> do
         request api (Proxy :: Proxy Api.TableList) i $ \case
@@ -184,18 +186,11 @@ instance StoreData State where
 
       -- Project
 
-      ProjectSetName projectId name -> do
-        request api (Proxy :: Proxy Api.ProjectSetName) projectId name $ \case
+      ProjectSetName i name -> do
+        request api (Proxy :: Proxy Api.ProjectSetName) i name $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right () -> pure []
-        -- TODO (jens) Use lenses
-        -- pure $ st & stateProjects . at i . _Just . projectName .~ name
-        pure $ st & stateProjects %~ changeName
-        where
-           changeName = map (\(Entity projectId' project) ->
-                                   if projectId' == projectId
-                                   then Entity projectId' project {projectName = name }
-                                   else Entity projectId' project)
+        pure $ st & stateProjects . at i . _Just . projectName .~name
 
       -- Tables
 

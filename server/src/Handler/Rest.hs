@@ -92,7 +92,7 @@ handleProjectList = listAll
 handleProjectSetName :: MonadHexl m => Id Project -> Text -> m ()
 handleProjectSetName projectId name = do
   project <- getById' projectId
-  let updatedProject = project {projectName = name}
+  let updatedProject = project & projectName .~ name
   update projectId $ const updatedProject
 
 --

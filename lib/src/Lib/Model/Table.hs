@@ -7,7 +7,7 @@ module Lib.Model.Table where
 
 import           Control.DeepSeq
 
-import           Control.Lens
+import           Control.Lens      (makeLenses)
 import           Data.Aeson        (FromJSON, ToJSON)
 import           Data.Text         (Text)
 

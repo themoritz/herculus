@@ -125,16 +125,14 @@ screencasts = defineStatefulView "screencasts" (True, 0 :: Int) $ \(open, select
 
 --
 
-projects_ :: [Entity Project] -> Maybe (Id Project) -> ReactElementM eh ()
+projects_ :: Map (Id Project) Project -> Maybe (Id Project) -> ReactElementM eh ()
 projects_ !ps !mProj = view projects (ps, mProj) mempty
 
-projects :: ReactView ([Entity Project], Maybe (Id Project))
-projects = defineView "projects" $ \(ps, mProj) -> cldiv_ "projects" $ do
-  ul_ $ for_ ps $ \p -> project_ p (Just (entityId p) == mProj)
-  inputNew_ "Add project..." (dispatch . ProjectsCreate . Project)
-
-project_ :: Entity Project -> Bool -> ReactElementM eh ()
-project_ !p !s = viewWithSKey project (toJSString $ show $ entityId p) (p, s) mempty
+projects :: ReactView (Map (Id Project) Project, Maybe (Id Project))
+projects = defineView "projects" $ \(ps, mProj) ->
+  cldiv_ "projects" $ do
+    ul_ $ for_ (Map.toList ps) $ \(i, p) -> project_ i p (Just i == mProj)
+    inputNew_ "Add project..." (dispatch . ProjectsCreate . Project)
 
 data ProjectViewState = ProjectViewState
   { pEditable  :: Bool
@@ -145,8 +143,11 @@ data ProjectViewState = ProjectViewState
 initialProjectViewState :: ProjectViewState
 initialProjectViewState = ProjectViewState False "" False
 
-project :: ReactView (Entity Project, Bool)
-project = defineStatefulView "project" initialProjectViewState $ \state (Entity projectId project', selected) ->
+project_ :: Id Project -> Project -> Bool -> ReactElementM eh ()
+project_ !projectId !project' !selected = viewWithSKey project (toJSString $ show projectId) (projectId, project', selected) mempty
+
+project :: ReactView (Id Project, Project, Bool)
+project = defineStatefulView "project" initialProjectViewState $ \state (projectId, project', selected) ->
   let saveHandler st = (dispatch $ ProjectSetName projectId (pName st), Just st { pEditable = False })
       inputKeyDownHandler _ evt st
         | keyENTER evt && not (Text.null $ pName st) = saveHandler st
@@ -173,7 +174,7 @@ project = defineStatefulView "project" initialProjectViewState $ \state (Entity 
           , onKeyDown inputKeyDownHandler
           ]
      else div_ $ do
-       span_ $ elemText $ projectName project'
+       span_ $ elemText $ project' ^. projectName
        -- button_
        --   [ "className" $= "pure link-on-dark"
        --   , onClick $ \_ _ st -> ([], Just st { pEditable = True, pName = projectName project'})
