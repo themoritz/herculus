@@ -1,6 +1,7 @@
 var ExtractTextPlugin = require('extract-text-webpack-plugin')
 var path = require('path')
 var webpack = require('webpack')
+var autoprefixer = require('autoprefixer')
 
 module.exports = {
   entry: './entry.dev.js',
@@ -11,13 +12,16 @@ module.exports = {
   module: {
     loaders: [
       { test: /\.css$/, loader: "style!css" },
-      { test: /\.scss$/, loader: ExtractTextPlugin.extract("style", "css!sass") },
+      { test: /\.scss$/, loader: ExtractTextPlugin.extract("style", "css!postcss-loader!sass") },
       {
         test: /\.woff(2)?(\?v=[0-9]\.[0-9]\.[0-9])?$/,
         loader: 'url-loader?limit=10000&mimetype=application/font-woff'
       },
       { test: /\.(ttf|eot|svg)(\?v=[0-9]\.[0-9]\.[0-9])?$/, loader: 'file-loader' }
     ]
+  },
+  postcss: function () {
+    return [autoprefixer]
   },
   plugins: [
     new ExtractTextPlugin("css/bundle.css"),
