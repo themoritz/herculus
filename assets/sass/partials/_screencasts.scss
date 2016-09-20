@@ -26,7 +26,7 @@ $castWidth: 846px;
     text-align: left;
     vertical-align: middle;
     width: $tocWidth + $castWidth + 60px;
-    height: 700px;
+    height: 710px;
     border-radius: 6px;
     background-color: white;
     box-shadow: 0px 0px 15px 0px rgba(0, 0, 0, 0.5);
@@ -58,6 +58,12 @@ $castWidth: 846px;
         transition-duration: 75ms;
         &:hover {
           color: $brand-light;
+        }
+        .wrapper {
+          display: table;
+          .cell {
+            display: table-cell;
+          }
         }
       }
       li.active {

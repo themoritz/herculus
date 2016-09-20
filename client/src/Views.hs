@@ -33,7 +33,7 @@ app = defineControllerView "app" store $ \st () -> do
   screencasts_
   cldiv_ "container" $ do
     cldiv_ "menubar" $ do
-      cldiv_ "logo" "TABLES"
+      cldiv_ "logo" "HERCULUS"
       projects_ (st ^. stateProjects) (st ^. stateProjectId)
       case st ^. stateProjectId of
         Nothing -> pure ()
@@ -61,9 +61,9 @@ screencasts = defineStatefulView "screencasts" (True, 0 :: Int) $ \(open, select
         for_ (zip [0..] screencastContent) $ \(i, (title, _, _)) ->
           li_ [ onClick $ \_ _ -> const ([], Just (True, i))
               , classNames [ ("active", i == selected) ]
-              ] $ do
-          faIcon_ "caret-right fa-fw"
-          elemText title
+              ] $ cldiv_ "wrapper" $ do
+          cldiv_ "cell" $ faIcon_ "caret-right fa-fw"
+          cldiv_ "cell" $ elemText title
         li_ [ onClick $ \_ _ -> const ([], Just (False, 0))
             , "className" $= "goto-tool"
             ] $ do
@@ -85,28 +85,40 @@ screencasts = defineStatefulView "screencasts" (True, 0 :: Int) $ \(open, select
     else mempty
   where
     screencastContent =
-      [ ( "Spreadsheet Feel"
+      [ ( "Spreadsheet-like Look and Feel"
         , ul_ $ do
-            li_ "Spreadsheet-like look and feel for your data"
-            li_ "Lorem ipsum"
+            li_ "Quickly create tables and columns in a responsive interface"
+            li_ "Fill the cells with your data or use formulas"
+            li_ "Have changes to your data propagate automatically"
         , "img/spreadsheet.final.gif"
         )
-      , ( "Powerful Types"
+      , ( "Expressive Types"
         , ul_ $ do
-            li_ "Powerful types"
-            li_ "Lorem ipsum"
+            li_ "Choose the data type you need for each column"
+            li_ "Use the row type to have cells with records from other tables"
+            li_ "Use the date picker for date columns or the dropdown menu \
+                 \to select rows."
+            li_ "Select and edit more elaborate types like a list of rows of\
+                \ Books, with unlimited flexibility"
         , "img/types.final.gif"
         )
       , ( "Powerful Formulas"
         , ul_ $ do
-            li_ "Code!"
-            li_ "Lorem"
+            li_ "Use formulas as simple as \"$A * $B\" or as \
+                \advanced as \"sum (map getPrice $Books)\""
+            li_ "Create custom formulas with a few lines of code using the\
+                \ expressive built-in language"
+            li_ "Have your formulas automatically type-checked to avoid bugs"
         , "img/formulas.final.gif"
         )
-      , ( "Quick Reports"
+      , ( "Automated Reports"
         , ul_ $ do
-            li_ "Multiple languages and formats!"
-            li_ "For loops and if conditionals!"
+            li_ "Create a PDF-report from your data with a few clicks, or \
+                \choose any other output format"
+            li_ "Choose among different formatting languages and fine-tune \
+                \your custom template in detail"
+            li_ "Make use of the built-in template language to fill the \
+                \report with your own data"
         , "img/reports.final.gif"
         )
       ]
