@@ -48,9 +48,6 @@
     left: 0px;
     right: 0px;
     bottom: 0px;
-    background: $brand-dark;
-    background: -moz-linear-gradient(left, $brand-dark 0%, $brand-light 100%);
-    background: -webkit-linear-gradient(left, $brand-dark 0%, $brand-light 100%);
     background: linear-gradient(to right, $brand-dark 0%, $brand-light 100%);
   }
 

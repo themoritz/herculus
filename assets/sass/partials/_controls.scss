@@ -1,20 +1,5 @@
 @import "../modules/colors";
 
-button.pure {
-  border: none;
-  background: none;
-  outline: none;
-  color: $link;
-  padding: 3px;
-  line-height: 15px;
-  transition-property: color;
-  transition-duration: 100ms;
-  &:hover {
-    color: $link-hover;
-  }
-  cursor: pointer;
-}
-
 a, span.link {
   color: $link;
   cursor: pointer;
@@ -40,12 +25,47 @@ a.active, span.active {
   font-weight: bold;
 }
 
+select, button {
+  border: 1px solid darken($medium-gray, 8%);
+  border-radius: 2px;
+  background: $medium-gray;
+  box-shadow: 0px 0px 2px 0px darken($medium-gray, 5%);
+  color: $anthrazit;
+}
+
+button {
+  &:active {
+    transform: translate(1px, 1px);
+  }
+  &:hover {
+    box-shadow: 0px 0px 2px 0px darken($medium-gray, 15%);
+    color: black;
+  }
+  cursor: pointer;
+}
+
 select {
- width: 100%;
- font-size: inherit;
- background-color: $light-gray;
- border-radius: 2px;
- outline: none;
+  width: 100%;
+  font-size: inherit;
+  background: $light-gray;
+  border-radius: 2px;
+  outline: none;
+}
+
+button.pure {
+  box-shadow: none;
+  border: none;
+  background: none;
+  outline: none;
+  color: $link;
+  padding: 3px;
+  line-height: 15px;
+  transition-property: color;
+  transition-duration: 100ms;
+  &:hover {
+    color: $link-hover;
+  }
+  cursor: pointer;
 }
 
 // Scrollbars

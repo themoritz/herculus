@@ -116,9 +116,14 @@ $castWidth: 846px;
       box-sizing: border-box;
       button {
         font-size: 18px;
+        &:hover {
+          .fa {
+            color: $brand-dark;
+          }
+        }
         .fa {
           margin-right: 10px;
-          color: $brand-dark;
+          color: $anthrazit;
         }
       }
     }
