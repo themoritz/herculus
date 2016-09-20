@@ -33,7 +33,7 @@ app = defineControllerView "app" store $ \st () -> do
   screencasts_
   cldiv_ "container" $ do
     cldiv_ "menubar" $ do
-      cldiv_ "logo" "HERCULUS"
+      cldiv_ "logo" "Herculus"
       projects_ (st ^. stateProjects) (st ^. stateProjectId)
       case st ^. stateProjectId of
         Nothing -> pure ()

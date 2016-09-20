@@ -65,6 +65,9 @@ button.pure {
   &:hover {
     color: $link-hover;
   }
+  &:hover {
+    transform: none;
+  }
   cursor: pointer;
 }
 
