@@ -92,9 +92,8 @@ main :: IO ()
 main = do
   Options{..} <- getOptions
   pipe <- Mongo.connect $ Mongo.host optMongoHost
-  let dbName = "test"
   -- Ensure Mongo indices
-  Mongo.access pipe Mongo.master dbName $ do
+  Mongo.access pipe Mongo.master optMongoCollection $ do
     let collColumn = collectionName (Proxy :: Proxy Column)
         collCell   = collectionName (Proxy :: Proxy Cell)
         collRecord = collectionName (Proxy :: Proxy Record)
@@ -106,7 +105,7 @@ main = do
     Mongo.ensureIndex $ Mongo.index collCell   [ "recordId" =: asc ]
   --
   connections <- atomically $ newTVar newConnectionManager
-  let env = HexlEnv pipe dbName connections
+  let env = HexlEnv pipe optMongoCollection connections
       webSocketApp = wsApp env
       restApp = serve routes $ rest env optAssetDir
   putStrLn $ "Listening on port " <> show optPort <> " ..."

@@ -3,15 +3,21 @@ module Options
   , getOptions
   ) where
 
+import           Data.Text           (Text)
+import qualified Data.Text           as Text
 import           Network.Socket      (HostName)
 
 import           Options.Applicative
 
 data Options = Options
-  { optPort      :: Int
-  , optMongoHost :: HostName
-  , optAssetDir  :: String
+  { optPort            :: Int
+  , optMongoHost       :: HostName
+  , optAssetDir        :: String
+  , optMongoCollection :: Text
   }
+
+txtOption :: Mod OptionFields String -> Parser Text
+txtOption = fmap Text.pack . strOption
 
 getOptions :: IO Options
 getOptions = execParser $ info (helper <*> options)
@@ -42,4 +48,11 @@ options = Options
                   <> value "../assets/public"
                   <> showDefault
                   <> help "directory to static files and js"
+                  )
+  <*> txtOption   (  long "mongo-collection"
+                  <> short 'c'
+                  <> metavar "COLLECTION"
+                  <> value "test"
+                  <> showDefault
+                  <> help "Collection name for Mongo database"
                   )
