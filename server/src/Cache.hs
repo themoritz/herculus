@@ -16,8 +16,8 @@ import           Control.Monad.Except
 import           Control.Monad.State  (MonadState, StateT, gets, modify,
                                        runStateT)
 
-import           Data.Map             (Map)
-import qualified Data.Map             as Map
+import           Data.Map.Strict      (Map)
+import qualified Data.Map.Strict      as Map
 
 import           Database.MongoDB     ((=:))
 
@@ -31,10 +31,10 @@ import           Lib.Types
 import           Monads
 
 data Cache = Cache
-  { _cacheCell          :: Map (Id Column, Id Record) Cell
-  , _cacheCellsModified :: Map (Id Column, Id Record) Cell
-  , _cacheColumn        :: Map (Id Column) [CellContent]
-  , _cacheCompileResult :: Map (Id Column) DataCompileResult
+  { _cacheCell          :: !(Map (Id Column, Id Record) Cell)
+  , _cacheCellsModified :: !(Map (Id Column, Id Record) Cell)
+  , _cacheColumn        :: !(Map (Id Column) [CellContent])
+  , _cacheCompileResult :: !(Map (Id Column) DataCompileResult)
   }
 
 makeLenses ''Cache

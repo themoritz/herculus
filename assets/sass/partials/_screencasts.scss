@@ -25,8 +25,8 @@ $castWidth: 846px;
     display: inline-block;
     text-align: left;
     vertical-align: middle;
-    width: $tocWidth + $castWidth;
-    height: 650px;
+    width: $tocWidth + $castWidth + 40px;
+    height: 700px;
     border-radius: 6px;
     background-color: white;
     box-shadow: 0px 0px 15px 0px rgba(0, 0, 0, 0.5);
@@ -73,14 +73,22 @@ $castWidth: 846px;
       top: 0px;
       bottom: $controlsHeight;
       right: 0px;
+      box-sizing: border-box;
       .cast {
         overflow: hidden;
+        h1 {
+          font-size: 30px;
+          margin: 20px 20px 0px 20px;
+        }
         img {
+          box-shadow: 0px 0px 40px 0px rgba(0, 0, 0, 0.6);
+          margin: 10px 20px 30px 20px;
+          z-index: 10;
         }
       }
       .description {
-        padding: 10px;
-        border-top: 1px solid $medium-gray;
+        padding: 0px 20px;
+        z-index: -1;
         ul {
           padding-left: 25px;
           margin: 5px 0px;
@@ -104,6 +112,7 @@ $castWidth: 846px;
         font-size: 18px;
         .fa {
           margin-right: 10px;
+          color: $brand-dark;
         }
       }
     }

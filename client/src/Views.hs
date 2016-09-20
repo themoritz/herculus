@@ -69,9 +69,10 @@ screencasts = defineStatefulView "screencasts" (True, 0 :: Int) $ \(open, select
             ] $ do
           faIcon_ "rocket fa-fw"
           "Open the Tool!"
-      let (_, desc, img) = screencastContent !! selected
+      let (title, desc, img) = screencastContent !! selected
       cldiv_ "entry" $ do
-        cldiv_ "cast" $
+        cldiv_ "cast" $ do
+          h1_ $ elemText title
           img_ [ "src" $= img ] mempty
         cldiv_ "description" desc
       cldiv_ "controls" $ if selected == length screencastContent - 1
