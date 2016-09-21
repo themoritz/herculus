@@ -5,8 +5,7 @@ var config = require('./webpack.dev.config.js')
 
 config.entry = './entry.prod.js'
 
-config.plugins = [
-  new ExtractTextPlugin("css/bundle.css"),
+config.plugins.push(
   new WebpackShellPlugin({
     onBuildExit: [
       'cd ./assets/public/js && mv bundle.js app.js',
@@ -27,6 +26,6 @@ config.plugins = [
       warnings: false
     }
   })
-]
+)
 
 module.exports = config

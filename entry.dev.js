@@ -32,3 +32,8 @@ require('font-awesome-webpack!./font-awesome.config.js')
 
 // Styles
 require('./assets/sass/main.scss')
+
+// Git rev sanity check
+global.hexl$getClientGitRev = function () {
+  return process.env.GIT_REV
+}

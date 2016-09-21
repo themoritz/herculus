@@ -25,5 +25,10 @@ module.exports = {
   },
   plugins: [
     new ExtractTextPlugin("css/bundle.css"),
+    new webpack.DefinePlugin({
+      'process.env': {
+        'GIT_REV': JSON.stringify(process.env.GIT_REV || 'not defined')
+      }
+    })
   ]
 }
