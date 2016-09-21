@@ -6,7 +6,8 @@ module Lib.Api.Rest where
 import qualified Data.ByteString.Lazy as BL
 import           Data.Text
 
-import           Servant.API
+import           Servant.API          ((:<|>), (:>), Capture, Delete, Get, JSON,
+                                       PlainText, Post, ReqBody)
 
 import           Lib.Api.Rest.Report
 import           Lib.Model
@@ -14,6 +15,7 @@ import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Project
 import           Lib.Model.Record
+
 import           Lib.Model.Table
 import           Lib.Types
 
@@ -28,6 +30,7 @@ type Routes =
  :<|> TableData
  :<|> TableGetWhole
  :<|> TableSetName
+ :<|> TableDelete
 
  :<|> ColumnCreate
  :<|> ColumnDelete
@@ -52,11 +55,12 @@ type ProjectList          = "project"   :> "list"   :> Get '[JSON] [Entity Proje
 type ProjectSetName       = "project"   :> "setName" :> Capture "projectId" (Id Project) :> ReqBody '[JSON] Text :> Post '[JSON] ()
 
 type TableCreate          = "table"     :> "create" :> ReqBody '[JSON] Table :> Post '[JSON] (Id Table)
-type TableList            = "table"     :> "list" :> Capture "projectId" (Id Project) :> Get '[JSON] [Entity Table]
+type TableList            = "table"     :> "list"       :> Capture "projectId" (Id Project) :> Get '[JSON] [Entity Table]
 type TableListGlobal      = "table"     :> "listGlobal" :> Get '[JSON] [Entity Table]
-type TableData            = "table"     :> "data" :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Column, Id Record, CellContent)]
-type TableGetWhole        = "table"     :> "getWhole" :> Capture "tableId" (Id Table) :> Get '[JSON] ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
-type TableSetName         = "table"     :> "setName" :> Capture "tableId" (Id Table) :> ReqBody '[JSON] Text :> Post '[JSON] ()
+type TableData            = "table"     :> "data"       :> Capture "tableId" (Id Table)     :> Get '[JSON] [(Id Column, Id Record, CellContent)]
+type TableGetWhole        = "table"     :> "getWhole"   :> Capture "tableId" (Id Table)     :> Get '[JSON] ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
+type TableSetName         = "table"     :> "setName"    :> Capture "tableId" (Id Table)     :> ReqBody '[JSON] Text :> Post '[JSON] ()
+type TableDelete          = "table"     :> "delete"     :> Capture "tableId" (Id Table)     :> Delete '[JSON] ()
 
 type ColumnCreate         = "column"    :> "create"  :> ReqBody '[JSON] Column :> Post '[JSON] (Entity Column, [Entity Cell])
 type ColumnDelete         = "column"    :> "delete"  :> Capture "columnId" (Id Column) :> Get '[JSON] ()

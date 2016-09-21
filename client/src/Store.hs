@@ -95,6 +95,7 @@ data Action
   | TableAddRecordDone (Entity Record, [Entity Cell])
   | TableDeleteRecord (Id Record)
   | TableSetName (Id Table) Text
+  | TableDelete (Id Table)
   -- Column
   | ColumnRename (Id Column) Text
   -- Data column
@@ -280,6 +281,41 @@ instance StoreData State where
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right () -> pure []
         pure $ st & stateTables . at i . _Just . tableName .~ name
+
+      TableDelete tableId -> do
+        request api (Proxy :: Proxy Api.TableDelete) tableId $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right () -> pure []
+        -- clear all table dependencies
+        let emptyTableState = st & stateTables %~ Map.delete tableId
+              & stateColumns .~ Map.empty
+              & stateCells .~ Map.empty
+              & stateRecords .~ Map.empty
+              & stateTableId .~ Nothing
+            -- check of loading next table
+            newState = if st ^. stateTableId == Just tableId
+              then
+                if Map.size (st ^. stateTables) > 1
+                then
+                  -- grab next Id Table
+                  let tableIndex = Map.findIndex tableId (st ^. stateTables)
+                      nextTableIndex = if tableIndex + 1 >= Map.size (st ^. stateTables)
+                        then 0
+                        else tableIndex + 1
+                      (nextTableId, _) = Map.elemAt nextTableIndex (st ^. stateTables)
+                  in
+                    dispatch $ TablesLoadTable nextTableId
+                    emptyTableState
+                else
+                  emptyTableState
+              else
+                st
+          in
+            pure $ state ^. newState
+        -- pure $ st & stateTables %~ Map.delete i
+        --           & stateColumns %~ Map.filter (\column -> column ^. columnTableId /= i)
+        --           & stateRecords %~ Map.filter (\record -> recordTableId record /= i)
+        --           & stateCells %~ Map.filterWithKey (\(Coords columnId _) _ -> c /= i)
 
       -- Column
 

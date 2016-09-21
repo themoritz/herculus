@@ -60,6 +60,7 @@ handle =
   :<|> handleTableData
   :<|> handleTableGetWhole
   :<|> handleTableSetName
+  :<|> handleTableDelete
 
   :<|> handleColumnCreate
   :<|> handleColumnDelete
@@ -124,6 +125,9 @@ handleTableSetName tblId name = do
   table <- getById' tblId
   let table' = table & tableName .~ name
   update tblId $ const table'
+
+handleTableDelete :: MonadHexl m => Id Table -> m ()
+handleTableDelete = delete
 
 --
 
