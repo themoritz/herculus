@@ -20,6 +20,8 @@ module Monads
   ) where
 
 import           Control.Concurrent.STM      as STM
+import           Control.Lens                (over)
+import           Control.Lens.Prism          (_Left)
 import           Control.Monad.Except
 import           Control.Monad.Logger
 import           Control.Monad.Reader
@@ -213,7 +215,7 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
 instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
   sendWS msg = do
     connectionsRef <- asks envConnections
-    connections <- allConnections <$> (liftIO $ atomically $ readTVar connectionsRef)
+    connections <- allConnections <$> liftIO (atomically $ readTVar connectionsRef)
     forM_ connections $ \connection ->
       liftIO $ sendTextData connection $ encode msg
 
@@ -247,9 +249,8 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
   --
 
   getDefaultTemplate writer =
-    liftIO (Pandoc.getDefaultTemplate Nothing writer) >>= \case
-      Left exception -> pure $ Left $ show exception
-      Right template -> pure $ Right template
+    over _Left show <$>
+      liftIO (Pandoc.getDefaultTemplate Nothing writer)
 
   runLatex options source =
     liftIO $ Latex.makePDF options "pdflatex" source

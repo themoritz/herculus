@@ -29,6 +29,7 @@ library
                      , directory
                      , fast-logger
                      , filepath
+                     , interpolatedstring-perl6
                      , lens
                      , lib
                      , monad-control
