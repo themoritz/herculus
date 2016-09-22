@@ -8,6 +8,7 @@ import           Control.Arrow             (second)
 import           Control.Concurrent        (forkIO)
 import           Control.DeepSeq
 import           Control.Lens
+import           Control.Monad             (void, when)
 
 import           Data.Foldable             (foldl')
 import           Data.Map.Strict           (Map)
@@ -286,36 +287,26 @@ instance StoreData State where
         request api (Proxy :: Proxy Api.TableDelete) tableId $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right () -> pure []
-        -- clear all table dependencies
-        let emptyTableState = st & stateTables %~ Map.delete tableId
+
+            -- check of loading next table
+        if st ^. stateTableId == Just tableId
+          then do
+            when (Map.size (st ^. stateTables) > 1) $ do
+              -- grab next Id Table
+              let tableIndex = Map.findIndex tableId (st ^. stateTables)
+                  nextTableIndex = if tableIndex + 1 >= Map.size (st ^. stateTables)
+                    then 0
+                    else tableIndex + 1
+                  (nextTableId, _) = Map.elemAt nextTableIndex (st ^. stateTables)
+              void $ forkIO $ alterStore store $ TablesLoadTable nextTableId
+                      -- clear all table dependencies
+            pure $ st & stateTables %~ Map.delete tableId
               & stateColumns .~ Map.empty
               & stateCells .~ Map.empty
               & stateRecords .~ Map.empty
               & stateTableId .~ Nothing
-            -- check of loading next table
-            newState = if st ^. stateTableId == Just tableId
-              then
-                if Map.size (st ^. stateTables) > 1
-                then
-                  -- grab next Id Table
-                  let tableIndex = Map.findIndex tableId (st ^. stateTables)
-                      nextTableIndex = if tableIndex + 1 >= Map.size (st ^. stateTables)
-                        then 0
-                        else tableIndex + 1
-                      (nextTableId, _) = Map.elemAt nextTableIndex (st ^. stateTables)
-                  in
-                    dispatch $ TablesLoadTable nextTableId
-                    emptyTableState
-                else
-                  emptyTableState
-              else
-                st
-          in
-            pure $ state ^. newState
-        -- pure $ st & stateTables %~ Map.delete i
-        --           & stateColumns %~ Map.filter (\column -> column ^. columnTableId /= i)
-        --           & stateRecords %~ Map.filter (\record -> recordTableId record /= i)
-        --           & stateCells %~ Map.filterWithKey (\(Coords columnId _) _ -> c /= i)
+          else
+            pure $ st & stateTables %~ Map.delete tableId
 
       -- Column
 
