@@ -17,6 +17,8 @@ import           Data.Proxy
 import           Data.Text                 (Text, pack)
 import           Data.Typeable             (Typeable)
 
+import           Debug.Trace
+
 import           GHC.Generics
 
 import           React.Flux
@@ -215,7 +217,7 @@ instance StoreData State where
         st & stateTables . at i .~ Just t
 
       TablesLoadTable i -> do
-        request api (Proxy :: Proxy Api.TableGetWhole) i $ \case
+        trace "TablesLoadTable" $ request api (Proxy :: Proxy Api.TableGetWhole) i $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right res -> pure $ dispatch $ TableSet res
         pure $ st & stateTableId .~ Just i
@@ -292,15 +294,15 @@ instance StoreData State where
           then do
             let nextTable = Map.lookupLT tableId (st ^. stateTables)
                   <|> Map.lookupGT tableId (st ^. stateTables)
-
             _ <- forkIO $ case nextTable of
                  Just (nextTableId, _) -> alterStore store $ TablesLoadTable nextTableId
                  Nothing -> pure ()
+            traceM "M"
             pure $ st & stateTables %~ Map.delete tableId
               & stateColumns .~ Map.empty
               & stateCells .~ Map.empty
               & stateRecords .~ Map.empty
-              & stateTableId .~ Nothing
+              & stateTableId .~ (fst <$> nextTable)
           else
             pure $ st & stateTables %~ Map.delete tableId
 

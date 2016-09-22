@@ -15,7 +15,6 @@ import qualified Data.Text           as Text
 import           React.Flux
 import           React.Flux.Internal (toJSString)
 
-import           Lib.Model
 import           Lib.Model.Project
 import           Lib.Model.Table
 import           Lib.Types
@@ -241,7 +240,7 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
 
        button_
          [ "className" $= "pure link-on-dark"
-         , onClick $ \_ _ state' -> (dispatch $ TableDelete tableId, Just state')
+         , onClick $ \evt _ _ -> (stopPropagation evt : dispatch (TableDelete tableId), Nothing)
          ] $ faIcon_ "times"
 --
 
