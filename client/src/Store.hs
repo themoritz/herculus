@@ -4,11 +4,11 @@
 
 module Store where
 
+import           Control.Applicative       ((<|>))
 import           Control.Arrow             (second)
 import           Control.Concurrent        (forkIO)
 import           Control.DeepSeq
 import           Control.Lens
-import           Control.Monad             (void, when)
 
 import           Data.Foldable             (foldl')
 import           Data.Map.Strict           (Map)
@@ -288,18 +288,14 @@ instance StoreData State where
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right () -> pure []
 
-            -- check of loading next table
         if st ^. stateTableId == Just tableId
           then do
-            when (Map.size (st ^. stateTables) > 1) $ do
-              -- grab next Id Table
-              let tableIndex = Map.findIndex tableId (st ^. stateTables)
-                  nextTableIndex = if tableIndex + 1 >= Map.size (st ^. stateTables)
-                    then 0
-                    else tableIndex + 1
-                  (nextTableId, _) = Map.elemAt nextTableIndex (st ^. stateTables)
-              void $ forkIO $ alterStore store $ TablesLoadTable nextTableId
-                      -- clear all table dependencies
+            let nextTable = Map.lookupLT tableId (st ^. stateTables)
+                  <|> Map.lookupGT tableId (st ^. stateTables)
+
+            _ <- forkIO $ case nextTable of
+                 Just (nextTableId, _) -> alterStore store $ TablesLoadTable nextTableId
+                 Nothing -> pure ()
             pure $ st & stateTables %~ Map.delete tableId
               & stateColumns .~ Map.empty
               & stateCells .~ Map.empty
