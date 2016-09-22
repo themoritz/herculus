@@ -127,7 +127,13 @@ handleTableSetName tblId name = do
   update tblId $ const table'
 
 handleTableDelete :: MonadHexl m => Id Table -> m ()
-handleTableDelete = delete
+handleTableDelete tableId = do
+  delete tableId
+  deleteByQuery (Proxy::Proxy Column) query
+  deleteByQuery (Proxy::Proxy Cell) query
+  deleteByQuery (Proxy::Proxy Record) query
+  where
+    query = [ "tableId" =: toObjectId tableId]
 
 --
 
