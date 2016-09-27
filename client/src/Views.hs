@@ -206,11 +206,11 @@ initialTableViewState = TableViewState False "" False
 
 table :: ReactView (Id Table, Table, Bool)
 table = defineStatefulView "table" initialTableViewState $ \state (tableId, table', selected) ->
-  let saveHandler state' = (dispatch $ TableSetName tableId (tName state'), Just state' { tEditable = False })
-      inputKeyDownHandler _ evt state'
-        | keyENTER evt && not (Text.null $ tName state') = saveHandler state'
-        | keyESC evt = ([] , Just state' { tEditable = False })
-        | otherwise = ([], Just state')
+  let saveHandler st = (dispatch $ TableSetName tableId (tName st), Just st { tEditable = False })
+      inputKeyDownHandler _ evt st
+        | keyENTER evt && not (Text.null $ tName st) = saveHandler st
+        | keyESC evt = ([] , Just st { tEditable = False })
+        | otherwise = ([], Just st)
   in li_ [ classNames
              [ ("active", selected)
              , ("link", True)
@@ -225,9 +225,9 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
             , ("inp-error", tNameError state)
             ]
          , "value" &= tName state
-         , onChange $ \evt state' ->
+         , onChange $ \evt st ->
              let value = target evt "value"
-             in ([], Just state' { tName = value, tNameError = Text.null value})
+             in ([], Just st { tName = value, tNameError = Text.null value})
          , onKeyDown inputKeyDownHandler
          ]
      else div_ $ do
@@ -235,7 +235,7 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
 
        -- button_
        --   [ "className" $= "pure link-on-dark"
-       --   , onClick $ \_ _ state' -> ([], Just state' { tEditable = True, name = table'  ^. tableName })
+       --   , onClick $ \_ _ state -> ([], Just state { tEditable = True, name = table'  ^. tableName })
        --   ] $ faIcon_ "pencil"
 
        button_

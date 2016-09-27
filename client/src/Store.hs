@@ -6,7 +6,7 @@ module Store where
 
 import           Control.Applicative       ((<|>))
 import           Control.Arrow             (second)
-import           Control.Concurrent        (forkIO)
+import           Control.Concurrent        (forkIO, threadDelay)
 import           Control.DeepSeq
 import           Control.Lens
 
@@ -17,7 +17,6 @@ import           Data.Proxy
 import           Data.Text                 (Text, pack)
 import           Data.Typeable             (Typeable)
 
-import           Debug.Trace
 
 import           GHC.Generics
 
@@ -217,7 +216,7 @@ instance StoreData State where
         st & stateTables . at i .~ Just t
 
       TablesLoadTable i -> do
-        trace "TablesLoadTable" $ request api (Proxy :: Proxy Api.TableGetWhole) i $ \case
+        request api (Proxy :: Proxy Api.TableGetWhole) i $ \case
           Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
           Right res -> pure $ dispatch $ TableSet res
         pure $ st & stateTableId .~ Just i
@@ -292,12 +291,13 @@ instance StoreData State where
 
         if st ^. stateTableId == Just tableId
           then do
+            -- workaround of issue https://bitbucket.org/wuzzeb/react-flux/issues/24/
+            _ <- threadDelay 10
             let nextTable = Map.lookupLT tableId (st ^. stateTables)
                   <|> Map.lookupGT tableId (st ^. stateTables)
             _ <- forkIO $ case nextTable of
                  Just (nextTableId, _) -> alterStore store $ TablesLoadTable nextTableId
                  Nothing -> pure ()
-            traceM "M"
             pure $ st & stateTables %~ Map.delete tableId
               & stateColumns .~ Map.empty
               & stateCells .~ Map.empty
