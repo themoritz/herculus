@@ -294,15 +294,15 @@ instance StoreData State where
             -- workaround of issue https://bitbucket.org/wuzzeb/react-flux/issues/24/
             _ <- threadDelay 10
             let nextTable = Map.lookupLT tableId (st ^. stateTables)
-                  <|> Map.lookupGT tableId (st ^. stateTables)
+                        <|> Map.lookupGT tableId (st ^. stateTables)
             _ <- forkIO $ case nextTable of
-                 Just (nextTableId, _) -> alterStore store $ TablesLoadTable nextTableId
-                 Nothing -> pure ()
+                            Just (nextTableId, _) -> alterStore store $ TablesLoadTable nextTableId
+                            Nothing -> pure ()
             pure $ st & stateTables %~ Map.delete tableId
-              & stateColumns .~ Map.empty
-              & stateCells .~ Map.empty
-              & stateRecords .~ Map.empty
-              & stateTableId .~ (fst <$> nextTable)
+                      & stateColumns .~ Map.empty
+                      & stateCells .~ Map.empty
+                      & stateRecords .~ Map.empty
+                      & stateTableId .~ (fst <$> nextTable)
           else
             pure $ st & stateTables %~ Map.delete tableId
 
