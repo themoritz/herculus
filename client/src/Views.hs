@@ -176,9 +176,13 @@ project = defineStatefulView "project" initialProjectViewState $ \state (project
        span_ $ elemText $ project' ^. projectName
        button_
          [ "className" $= "pure link-on-dark"
-         , onClick $ \_ _ st -> ([], Just st { pEditable = True, pName = project' ^. projectName})
+         , onClick $ \ev _ st -> ([stopPropagation ev], Just st { pEditable = True, pName = project' ^. projectName})
          ] $ faIcon_ "pencil"
 
+       button_
+         [ "className" $= "pure link-on-dark"
+         , onClick $ \ev _ _ -> (stopPropagation ev : dispatch (ProjectDelete projectId), Nothing)
+         ] $ faIcon_ "times"
 --
 
 tables_ :: Map (Id Table) Table -> Maybe (Id Table) -> Id Project -> ReactElementM eh ()
@@ -225,8 +229,8 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
             , ("inp-error", tNameError state)
             ]
          , "value" &= tName state
-         , onChange $ \evt st ->
-             let value = target evt "value"
+         , onChange $ \ev st ->
+             let value = target ev "value"
              in ([], Just st { tName = value, tNameError = Text.null value})
          , onKeyDown inputKeyDownHandler
          ]
@@ -235,12 +239,12 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
 
        button_
          [ "className" $= "pure link-on-dark"
-         , onClick $ \_ _ state -> ([], Just state { tEditable = True, tName = table'  ^. tableName })
+         , onClick $ \ev _ st -> ([stopPropagation ev], Just st { tEditable = True, tName = table'  ^. tableName })
          ] $ faIcon_ "pencil"
 
        button_
          [ "className" $= "pure link-on-dark"
-         , onClick $ \evt _ _ -> (stopPropagation evt : dispatch (TableDelete tableId), Nothing)
+         , onClick $ \ev _ _ -> (stopPropagation ev : dispatch (TableDelete tableId), Nothing)
          ] $ faIcon_ "times"
 --
 

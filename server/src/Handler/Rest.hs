@@ -53,6 +53,7 @@ handle =
        handleProjectCreate
   :<|> handleProjectList
   :<|> handleProjectSetName
+  :<|> handleProjectDelete
 
   :<|> handleTableCreate
   :<|> handleTableList
@@ -95,6 +96,13 @@ handleProjectSetName projectId name = do
   project <- getById' projectId
   let updatedProject = project & projectName .~ name
   update projectId $ const updatedProject
+
+
+handleProjectDelete :: MonadHexl m => Id Project -> m ()
+handleProjectDelete projectId = do
+    tables <- handleTableList projectId
+    _ <- mapM (handleTableDelete . entityId) tables
+    delete projectId
 
 --
 
@@ -187,7 +195,7 @@ handleDataColUpdate c (typ, derived, code) = do
                                            . (dataColSourceCode .~ code)
       update c $ const updatedCol
 
-      updatedChilds <- if (dataCol ^. dataColType == typ)
+      updatedChilds <- if dataCol ^. dataColType == typ
         then pure []
         else compileColumnChildren c
 

@@ -17,7 +17,6 @@ import           Data.Proxy
 import           Data.Text                 (Text, pack)
 import           Data.Typeable             (Typeable)
 
-
 import           GHC.Generics
 
 import           React.Flux
@@ -79,6 +78,7 @@ data Action
   | ProjectsCreate Project
   | ProjectsAdd (Entity Project)
   | ProjectsLoadProject (Id Project)
+  | ProjectDelete (Id Project)
   -- Project
   | ProjectSetName (Id Project) Text
   -- Tables
@@ -195,6 +195,30 @@ instance StoreData State where
           Right () -> pure []
         pure $ st & stateProjects . at i . _Just . projectName .~name
 
+      ProjectDelete projectId -> do
+        request api (Proxy :: Proxy Api.ProjectDelete) projectId $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right () -> pure []
+
+        if st ^. stateProjectId == Just projectId
+          then do
+            -- workaround of issue https://bitbucket.org/wuzzeb/react-flux/issues/24/
+            _ <- threadDelay 10
+            let nextProject = Map.lookupLT projectId (st ^. stateProjects)
+                        <|> Map.lookupGT projectId (st ^. stateProjects)
+            _ <- forkIO $ case nextProject of
+                            Just (nextProjectId, _) -> alterStore store $ ProjectsLoadProject nextProjectId
+                            Nothing -> pure ()
+            pure $ st & stateProjects %~ Map.delete projectId
+                      & stateTables %~ Map.filter (\table -> (table ^. tableProjectId) /= projectId)
+                      & stateColumns .~ Map.empty
+                      & stateCells .~ Map.empty
+                      & stateRecords .~ Map.empty
+                      & stateTableId .~ Nothing
+                      & stateProjectId .~ (fst <$> nextProject)
+          else
+            pure $ st & stateProjects %~ Map.delete projectId
+
       -- Tables
 
       TablesSet ts -> do
@@ -298,6 +322,7 @@ instance StoreData State where
             _ <- forkIO $ case nextTable of
                             Just (nextTableId, _) -> alterStore store $ TablesLoadTable nextTableId
                             Nothing -> pure ()
+
             pure $ st & stateTables %~ Map.delete tableId
                       & stateColumns .~ Map.empty
                       & stateCells .~ Map.empty
