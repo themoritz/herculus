@@ -174,10 +174,10 @@ project = defineStatefulView "project" initialProjectViewState $ \state (project
           ]
      else div_ $ do
        span_ $ elemText $ project' ^. projectName
-       -- button_
-       --   [ "className" $= "pure link-on-dark"
-       --   , onClick $ \_ _ st -> ([], Just st { pEditable = True, pName = projectName project'})
-       --   ] $ faIcon_ "pencil"
+       button_
+         [ "className" $= "pure link-on-dark"
+         , onClick $ \_ _ st -> ([], Just st { pEditable = True, pName = project' ^. projectName})
+         ] $ faIcon_ "pencil"
 
 --
 
@@ -233,10 +233,10 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
      else div_ $ do
        span_ $ elemText $ table' ^. tableName
 
-       -- button_
-       --   [ "className" $= "pure link-on-dark"
-       --   , onClick $ \_ _ state -> ([], Just state { tEditable = True, name = table'  ^. tableName })
-       --   ] $ faIcon_ "pencil"
+       button_
+         [ "className" $= "pure link-on-dark"
+         , onClick $ \_ _ state -> ([], Just state { tEditable = True, tName = table'  ^. tableName })
+         ] $ faIcon_ "pencil"
 
        button_
          [ "className" $= "pure link-on-dark"
