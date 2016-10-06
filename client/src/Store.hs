@@ -6,7 +6,7 @@ module Store where
 
 import           Control.Applicative       ((<|>))
 import           Control.Arrow             (second)
-import           Control.Concurrent        (forkIO, threadDelay)
+import           Control.Concurrent        (forkIO)
 import           Control.DeepSeq
 import           Control.Lens
 
@@ -181,11 +181,8 @@ instance StoreData State where
       ProjectsAdd (Entity i p) -> pure $
         st & stateProjects . at i .~ Just p
 
-      ProjectsLoadProject i -> do
-        request api (Proxy :: Proxy Api.TableList) i $ \case
-          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
-          Right ts -> pure $ dispatch $ TablesSet ts
-        pure $ st & stateProjectId .~ Just i
+      ProjectsLoadProject i ->
+        loadProject st i
 
       -- Project
 
@@ -202,20 +199,19 @@ instance StoreData State where
 
         if st ^. stateProjectId == Just projectId
           then do
-            -- workaround of issue https://bitbucket.org/wuzzeb/react-flux/issues/24/
-            _ <- threadDelay 10
             let nextProject = Map.lookupLT projectId (st ^. stateProjects)
                         <|> Map.lookupGT projectId (st ^. stateProjects)
-            _ <- forkIO $ case nextProject of
-                            Just (nextProjectId, _) -> alterStore store $ ProjectsLoadProject nextProjectId
-                            Nothing -> pure ()
-            pure $ st & stateProjects %~ Map.delete projectId
-                      & stateTables %~ Map.filter (\table -> (table ^. tableProjectId) /= projectId)
-                      & stateColumns .~ Map.empty
-                      & stateCells .~ Map.empty
-                      & stateRecords .~ Map.empty
-                      & stateTableId .~ Nothing
-                      & stateProjectId .~ (fst <$> nextProject)
+                st' = st & stateProjects %~ Map.delete projectId
+                         & stateTables %~ Map.filter (\table -> (table ^. tableProjectId) /= projectId)
+                         & stateColumns .~ Map.empty
+                         & stateCells .~ Map.empty
+                         & stateRecords .~ Map.empty
+                         & stateTableId .~ Nothing
+                         & stateProjectId .~ (fst <$> nextProject)
+                st'' = case nextProject of
+                            Just (nextProjectId, _) -> loadProject st' nextProjectId
+                            Nothing -> pure st'
+            st''
           else
             pure $ st & stateProjects %~ Map.delete projectId
 
@@ -239,11 +235,8 @@ instance StoreData State where
       TablesAdd (Entity i t) -> pure $
         st & stateTables . at i .~ Just t
 
-      TablesLoadTable i -> do
-        request api (Proxy :: Proxy Api.TableGetWhole) i $ \case
-          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
-          Right res -> pure $ dispatch $ TableSet res
-        pure $ st & stateTableId .~ Just i
+      TablesLoadTable i ->
+        loadTable st i
 
       -- Table
 
@@ -315,19 +308,20 @@ instance StoreData State where
 
         if st ^. stateTableId == Just tableId
           then do
-            -- workaround of issue https://bitbucket.org/wuzzeb/react-flux/issues/24/
-            _ <- threadDelay 10
             let nextTable = Map.lookupLT tableId (st ^. stateTables)
                         <|> Map.lookupGT tableId (st ^. stateTables)
-            _ <- forkIO $ case nextTable of
-                            Just (nextTableId, _) -> alterStore store $ TablesLoadTable nextTableId
-                            Nothing -> pure ()
 
-            pure $ st & stateTables %~ Map.delete tableId
-                      & stateColumns .~ Map.empty
-                      & stateCells .~ Map.empty
-                      & stateRecords .~ Map.empty
-                      & stateTableId .~ (fst <$> nextTable)
+                st' = st & stateTables %~ Map.delete tableId
+                        & stateColumns .~ Map.empty
+                        & stateCells .~ Map.empty
+                        & stateRecords .~ Map.empty
+                        & stateTableId .~ (fst <$> nextTable)
+
+                st'' = case nextTable of
+                  Just (nextTableId, _) -> loadTable st' nextTableId
+                  Nothing -> pure st'
+
+            st''
           else
             pure $ st & stateTables %~ Map.delete tableId
 
@@ -376,3 +370,17 @@ instance StoreData State where
 
 toCellUpdate :: Entity Cell -> (Id Column, Id Record, CellContent)
 toCellUpdate (Entity _ (Cell content (Aspects _ c r))) = (c, r, content)
+
+loadTable :: State -> Id Table -> IO State
+loadTable st i = do
+  request api (Proxy :: Proxy Api.TableGetWhole) i $ \case
+    Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+    Right res -> pure $ dispatch $ TableSet res
+  pure $ st & stateTableId .~ Just i
+
+loadProject :: State -> Id Project -> IO State
+loadProject st i = do
+  request api (Proxy :: Proxy Api.TableList) i $ \case
+    Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+    Right ts -> pure $ dispatch $ TablesSet ts
+  pure $ st & stateProjectId .~ Just i
