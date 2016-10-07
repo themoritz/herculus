@@ -28,8 +28,7 @@ import           Control.DeepSeq     (NFData)
 import           GHC.Generics        (Generic)
 
 app :: ReactView ()
-app = defineControllerView "app" store $ \st () -> do
-  screencasts_
+app = defineControllerView "app" store $ \st () ->
   cldiv_ "container" $ do
     cldiv_ "menubar" $ do
       cldiv_ "logo" "Herculus"
@@ -48,79 +47,6 @@ app = defineControllerView "app" store $ \st () -> do
       , "className" $= "link-on-dark"
       , "target" $= "_blank"
       ] "Contact"
-
-screencasts_ :: ReactElementM eh ()
-screencasts_ = view screencasts () mempty
-
-screencasts :: ReactView ()
-screencasts = defineStatefulView "screencasts" (True, 0 :: Int) $ \(open, selected) () ->
-    if open
-    then cldiv_ "screencasts-container" $ cldiv_ "screencasts" $ do
-      cldiv_ "toc" $ ul_ $ do
-        for_ (zip [0..] screencastContent) $ \(i, (title, _, _)) ->
-          li_ [ onClick $ \_ _ -> const ([], Just (True, i))
-              , classNames [ ("active", i == selected) ]
-              ] $ cldiv_ "wrapper" $ do
-          cldiv_ "cell" $ faIcon_ "caret-right fa-fw"
-          cldiv_ "cell" $ elemText title
-        li_ [ onClick $ \_ _ -> const ([], Just (False, 0))
-            , "className" $= "goto-tool"
-            ] $ do
-          faIcon_ "rocket fa-fw"
-          "Open the Tool!"
-      let (title, desc, img) = screencastContent !! selected
-      cldiv_ "entry" $ do
-        cldiv_ "cast" $ do
-          h1_ $ elemText title
-          img_ [ "src" $= img ] mempty
-        cldiv_ "description" desc
-      cldiv_ "controls" $ if selected == length screencastContent - 1
-        then clbutton_ "" (const ([], Just (False, 0))) $ do
-               faIcon_ "rocket"
-               "Open the Tool!"
-        else clbutton_ "" (const ([], Just (True, selected + 1))) $ do
-               faIcon_ "arrow-right"
-               "Next"
-    else mempty
-  where
-    screencastContent =
-      [ ( "Spreadsheet-like Look and Feel"
-        , ul_ $ do
-            li_ "Quickly create tables and columns in a responsive interface"
-            li_ "Fill the cells with your data or use formulas"
-            li_ "Have changes to your data propagate automatically"
-        , "img/spreadsheet.final.gif"
-        )
-      , ( "Expressive Types"
-        , ul_ $ do
-            li_ "Choose the data type you need for each column"
-            li_ "Use the row type to have cells with records from other tables"
-            li_ "Use the date picker for date columns or the dropdown menu \
-                 \to select rows."
-            li_ "Select and edit more elaborate types like a list of rows of\
-                \ Books, with unlimited flexibility"
-        , "img/types.final.gif"
-        )
-      , ( "Powerful Formulas"
-        , ul_ $ do
-            li_ "Use formulas as simple as \"$A * $B\" or as \
-                \advanced as \"sum (map getPrice $Books)\""
-            li_ "Create custom formulas with a few lines of code using the\
-                \ expressive built-in language"
-            li_ "Have your formulas automatically type-checked to avoid bugs"
-        , "img/formulas.final.gif"
-        )
-      , ( "Automated Reports"
-        , ul_ $ do
-            li_ "Create a PDF-report from your data with a few clicks, or \
-                \choose any other output format"
-            li_ "Choose among different formatting languages and fine-tune \
-                \your custom template in detail"
-            li_ "Make use of the built-in template language to fill the \
-                \report with your own data"
-        , "img/reports.final.gif"
-        )
-      ]
 
 --
 
