@@ -181,8 +181,11 @@ instance StoreData State where
       ProjectsAdd (Entity i p) -> pure $
         st & stateProjects . at i .~ Just p
 
-      ProjectsLoadProject i ->
-        loadProject st i
+      ProjectsLoadProject i -> do
+        request api (Proxy :: Proxy Api.TableList) i $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right ts -> pure $ dispatch $ TablesSet ts
+        pure $ st & stateProjectId .~ Just i
 
       -- Project
 
@@ -209,7 +212,7 @@ instance StoreData State where
                          & stateTableId .~ Nothing
                          & stateProjectId .~ (fst <$> nextProject)
             case nextProject of
-              Just (nextProjectId, _) -> loadProject st' nextProjectId
+              Just (nextProjectId, _) -> React.Flux.transform (ProjectsLoadProject nextProjectId) st'
               Nothing -> pure st'
           else
             pure $ st & stateProjects %~ Map.delete projectId
@@ -234,8 +237,11 @@ instance StoreData State where
       TablesAdd (Entity i t) -> pure $
         st & stateTables . at i .~ Just t
 
-      TablesLoadTable i ->
-        loadTable st i
+      TablesLoadTable i -> do
+        request api (Proxy :: Proxy Api.TableGetWhole) i $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right res -> pure $ dispatch $ TableSet res
+        pure $ st & stateTableId .~ Just i
 
       -- Table
 
@@ -317,7 +323,7 @@ instance StoreData State where
                         & stateTableId .~ (fst <$> nextTable)
 
             case nextTable of
-              Just (nextTableId, _) -> loadTable st' nextTableId
+              Just (nextTableId, _) -> React.Flux.transform (TablesLoadTable nextTableId) st'
               Nothing -> pure st'
           else
             pure $ st & stateTables %~ Map.delete tableId
@@ -367,17 +373,3 @@ instance StoreData State where
 
 toCellUpdate :: Entity Cell -> (Id Column, Id Record, CellContent)
 toCellUpdate (Entity _ (Cell content (Aspects _ c r))) = (c, r, content)
-
-loadTable :: State -> Id Table -> IO State
-loadTable st i = do
-  request api (Proxy :: Proxy Api.TableGetWhole) i $ \case
-    Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
-    Right res -> pure $ dispatch $ TableSet res
-  pure $ st & stateTableId .~ Just i
-
-loadProject :: State -> Id Project -> IO State
-loadProject st i = do
-  request api (Proxy :: Proxy Api.TableList) i $ \case
-    Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
-    Right ts -> pure $ dispatch $ TablesSet ts
-  pure $ st & stateProjectId .~ Just i
