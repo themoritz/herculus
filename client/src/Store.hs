@@ -208,10 +208,9 @@ instance StoreData State where
                          & stateRecords .~ Map.empty
                          & stateTableId .~ Nothing
                          & stateProjectId .~ (fst <$> nextProject)
-                st'' = case nextProject of
-                            Just (nextProjectId, _) -> loadProject st' nextProjectId
-                            Nothing -> pure st'
-            st''
+            case nextProject of
+              Just (nextProjectId, _) -> loadProject st' nextProjectId
+              Nothing -> pure st'
           else
             pure $ st & stateProjects %~ Map.delete projectId
 
@@ -317,11 +316,9 @@ instance StoreData State where
                         & stateRecords .~ Map.empty
                         & stateTableId .~ (fst <$> nextTable)
 
-                st'' = case nextTable of
-                  Just (nextTableId, _) -> loadTable st' nextTableId
-                  Nothing -> pure st'
-
-            st''
+            case nextTable of
+              Just (nextTableId, _) -> loadTable st' nextTableId
+              Nothing -> pure st'
           else
             pure $ st & stateTables %~ Map.delete tableId
 
