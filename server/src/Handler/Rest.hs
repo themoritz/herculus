@@ -32,6 +32,7 @@ import           Lib.Compiler.Interpreter.Types
 import           Lib.Compiler.Typechecker.Types
 import           Lib.Compiler.Types
 import           Lib.Model
+import           Lib.Model.Auth                 (LoginData, LoginResponse)
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
@@ -50,7 +51,8 @@ import           Propagate
 
 handle :: MonadHexl m => ServerT Routes m
 handle =
-       handleProjectCreate
+       handleAuthLogin
+  :<|> handleProjectCreate
   :<|> handleProjectList
   :<|> handleProjectSetName
   :<|> handleProjectDelete
@@ -83,7 +85,17 @@ handle =
   :<|> handleCellGetReportHTML
   :<|> handleCellGetReportPlain
 
---
+-- Auth
+
+handleAuthLogin :: MonadHexl m => LoginData -> m LoginResponse
+handleAuthLogin (LoginData userName pwd) = do
+  -- lookup user - LoginFailed 'user unknown'
+  -- verify pwd - LoginFailed 'wrong pwd'
+  -- create session
+  -- return LoginSuccess
+  --
+
+-- Project
 
 handleProjectCreate :: MonadHexl m => Project -> m (Id Project)
 handleProjectCreate = create

@@ -28,6 +28,7 @@ library
                      , Lib.Api.WebSocket
                      , Lib.Types
                      , Lib.Model
+                     , Lib.Model.Auth
                      , Lib.Model.Table
                      , Lib.Model.Project
                      , Lib.Model.Record
@@ -58,6 +59,7 @@ library
                      , lens
                      , mtl
                      , parsec
+                     , pwstore-fast
                      , scientific
                      , servant
                      , text

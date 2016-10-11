@@ -16,11 +16,15 @@ import           Lib.Model.Column
 import           Lib.Model.Project
 import           Lib.Model.Record
 
+import           Lib.Model.Auth       (LoginData, LoginResponse)
 import           Lib.Model.Table
 import           Lib.Types
 
 type Routes =
-      ProjectCreate
+      AuthLogin
+ -- :<|> AuthLogout
+
+ :<|> ProjectCreate
  :<|> ProjectList
  :<|> ProjectSetName
  :<|> ProjectDelete
@@ -50,6 +54,8 @@ type Routes =
  :<|> CellGetReportPDF
  :<|> CellGetReportHTML
  :<|> CellGetReportPlain
+
+type AuthLogin            = "auth"      :> "login"          :> ReqBody '[JSON] LoginData        :> Post '[JSON] LoginResponse
 
 type ProjectCreate        = "project"   :> "create"         :> ReqBody '[JSON] Project          :> Post '[JSON] (Id Project)
 type ProjectList          = "project"   :> "list"           :> Get '[JSON] [Entity Project]
