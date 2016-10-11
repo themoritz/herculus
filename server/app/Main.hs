@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TypeOperators     #-}
@@ -28,7 +29,7 @@ import           Network.WebSockets
 import           ConnectionManager
 import           Handler.Rest
 import           Handler.WebSocket
-import           Lib.Api.Rest
+import           Lib.Api.Rest                   (Routes)
 import           Lib.Model.Cell
 import           Lib.Model.Class
 import           Lib.Model.Column
@@ -57,36 +58,34 @@ rest env path =
         Right a  -> pure a
 
 appErrToServantErr :: AppError -> ServantErr
-appErrToServantErr err = case err of
-    (ErrUser msg) -> err400 { errBody = toBS msg }
-    (ErrBug msg)  -> err500 { errBody = toBS msg }
+appErrToServantErr = \case
+    ErrUser msg -> err400 { errBody = toBS msg }
+    ErrBug  msg -> err500 { errBody = toBS msg }
   where toBS = fromStrict . encodeUtf8
 
 wsApp :: HexlEnv -> ServerApp
-wsApp env pending = if requestPath (pendingRequest pending) == "/websocket"
-  then do
-    connection <- acceptRequest pending
-    let connections = envConnections env
-    connectionId <- atomically $ do
-      mgr <- readTVar connections
-      let (i, mgr') = addConnection connection mgr
-      writeTVar connections mgr'
-      pure i
-    -- To keep connection alive in some browsers
-    forkPingThread connection 30
-    let disconnect = atomically $ modifyTVar connections $
-          removeConnection connectionId
-    flip finally disconnect $ forever $ do
-        message <- receiveData connection
-        case eitherDecode message of
-          Left err  -> putStrLn err
-          Right wsUp -> do
-            res <- runHexl env $ handleClientMessage wsUp
-            case res of
-              Left err -> print err
-              Right a  -> pure a
-
-  else rejectRequest pending "Wrong path"
+wsApp env pending =
+    if requestPath (pendingRequest pending) == "/websocket"
+        then handleRequest
+        else rejectRequest pending "Wrong path"
+  where
+    handleRequest = do
+      connection <- acceptRequest pending
+      let connections = envConnections env
+      connectionId <- atomically $ do
+        mgr <- readTVar connections
+        let (i, mgr') = addConnection connection mgr
+        writeTVar connections mgr'
+        pure i
+      -- To keep connection alive in some browsers
+      forkPingThread connection 30
+      let disconnect = atomically $ modifyTVar connections $
+            removeConnection connectionId
+      flip finally disconnect $ forever $
+            eitherDecode <$> receiveData connection >>= \case
+              Left msg -> putStrLn msg
+              Right wsUp -> runHexl env (handleClientMessage wsUp)
+                >>= either print pure
 
 main :: IO ()
 main = do
