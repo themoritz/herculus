@@ -55,7 +55,7 @@ login = defineStatefulView "login" initialLoginViewState $ \viewState st ->
             if validFormData then
               let loginData = LoginData (inpUserNameValue viewState) (inpPwdValue viewState)
               in
-                (dispatch (Login loginData ), Nothing)
+                (dispatch $ Login loginData, Nothing)
             else
               ([], Nothing)
         ] $ elemText "Submit"

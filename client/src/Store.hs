@@ -83,7 +83,9 @@ data Action
   | GlobalSendWebSocket WsUpMessage
   -- Session
   | Login LoginData
+  | LoggedIn SessionKey
   | Logout
+  | LoggedOut
   -- Cache
   | CacheRecordAdd (Id Table) (Id Record) [(Entity Column, CellContent)]
   | CacheRecordDelete (Id Table) (Id Record)
@@ -155,13 +157,22 @@ instance StoreData State where
         pure st
 
       -- Session
+
       Login loginData ->
-        -- send LoginData
+        request api (Proxy :: Proxy Api.AuthLogin) loginData $ \case
+          Left (_, e) -> pure $ dispatch $ GlobalSetError $ pack e
+          Right sKey -> pure $ dispatch $ LoggedIn sKey
         pure st
+
+      LoggedIn sKey -> pure $
+        st & stateSessionKey .~ sKey
 
       Logout ->
         -- send SessionKey
         pure st
+
+      LoggedOut ->
+        pure $ st & stateSessionKey .~ Nothing
 
       -- Cache
 
