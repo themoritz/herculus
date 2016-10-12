@@ -8,6 +8,7 @@ module Lib.Model.Auth
 ( PwHash
 , LoginData (..)
 , LoginResponse (..)
+, SessionKey
 ) where
 
 import           Control.DeepSeq      (NFData)
@@ -39,7 +40,7 @@ mkPwHash txt =
   PwHash <$> makePassword (Text.encodeUtf8 txt) 17
 
 data LoginData = LoginData { ldUserName :: Text, ldPassword :: Text  } -- OAuth
-  deriving (Generic, FromJSON, ToJSON)
+  deriving (Generic, FromJSON, ToJSON, NFData)
 
 type SessionKey = Text
 

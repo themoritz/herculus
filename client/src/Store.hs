@@ -23,6 +23,7 @@ import           React.Flux
 import           React.Flux.Addons.Servant
 
 import           Lib.Model
+import           Lib.Model.Auth            (LoginData (..), SessionKey)
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Project
@@ -46,6 +47,7 @@ data CellInfo = CellInfo
 
 data State = State
   { _stateError        :: Maybe Text
+  , _stateSessionKey   :: Maybe SessionKey
   , _stateWebSocket    :: Maybe JSWebSocket
   , _stateCacheRecords :: Map (Id Table) (Map (Id Record) (Map (Id Column) (Column, CellContent)))
   , _stateProjects     :: Map (Id Project) Project
@@ -60,7 +62,7 @@ data State = State
 makeLenses ''State
 
 store :: ReactStore State
-store = mkStore $ State Nothing Nothing Map.empty Map.empty Nothing Map.empty Nothing
+store = mkStore $ State Nothing Nothing Nothing Map.empty Map.empty Nothing Map.empty Nothing
   Map.empty Map.empty Map.empty
 
 data Action
@@ -68,6 +70,9 @@ data Action
   = GlobalSetError Text
   | GlobalInit Text -- WebSocket URL
   | GlobalSendWebSocket WsUpMessage
+  -- Session
+  | Login LoginData
+  | Logout
   -- Cache
   | CacheRecordAdd (Id Table) (Id Record) [(Entity Column, CellContent)]
   | CacheRecordDelete (Id Table) (Id Record)
@@ -136,6 +141,15 @@ instance StoreData State where
         case st ^. stateWebSocket of
           Nothing -> pure ()
           Just ws -> jsonWebSocketSend msg ws
+        pure st
+
+      -- Session
+      Login loginData ->
+        -- send LoginData
+        pure st
+
+      Logout ->
+        -- send SessionKey
         pure st
 
       -- Cache

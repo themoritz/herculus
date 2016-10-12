@@ -32,21 +32,38 @@ app = defineControllerView "app" store $ \st () ->
   cldiv_ "container" $ do
     cldiv_ "menubar" $ do
       cldiv_ "logo" "Herculus"
-      projects_ (st ^. stateProjects) (st ^. stateProjectId)
-      case st ^. stateProjectId of
+      case st ^. stateSessionKey of
         Nothing -> pure ()
-        Just prjId -> tables_ (st ^. stateTables) (st ^. stateTableId) prjId
+        Just _ -> projects_ (st ^. stateProjects) (st ^. stateProjectId)
+      case st ^. stateSessionKey of
+        Nothing -> pure ()
+        Just _ -> case st ^. stateProjectId of
+                    Nothing -> pure ()
+                    Just prjId -> tables_ (st ^. stateTables) (st ^. stateTableId) prjId
       case st ^. stateError of
         Nothing -> pure ()
         Just t -> do
           h3_ "Error"
           elemText t
-    cldiv_ "tableGrid" $ tableGrid_ st
+    cldiv_ "tableGrid" $
+      case st ^. stateSessionKey of
+        Nothing -> login_ st
+        Just _ -> tableGrid_ st
     cldiv_ "footer" $ a_
       [ "href" $= "mailto:Moritz <mdrexl@fastmail.fm>, Ruben <ruben.moor@gmail.com>"
       , "className" $= "link-on-dark"
       , "target" $= "_blank"
       ] "Contact"
+
+-- login
+
+login_ :: State -> ReactElementM eh ()
+login_ st = view login st mempty
+
+login :: ReactView State
+login = defineView "login" $ \st ->
+  span_ $ elemText "login view"
+
 
 --
 

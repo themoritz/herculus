@@ -32,7 +32,7 @@ import           Lib.Compiler.Interpreter.Types
 import           Lib.Compiler.Typechecker.Types
 import           Lib.Compiler.Types
 import           Lib.Model
-import           Lib.Model.Auth                 (LoginData, LoginResponse)
+import           Lib.Model.Auth                 (LoginData (..), LoginResponse)
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
@@ -88,7 +88,8 @@ handle =
 -- Auth
 
 handleAuthLogin :: MonadHexl m => LoginData -> m LoginResponse
-handleAuthLogin (LoginData userName pwd) = do
+handleAuthLogin (LoginData userName pwd) = undefined
+  -- do
   -- lookup user - LoginFailed 'user unknown'
   -- verify pwd - LoginFailed 'wrong pwd'
   -- create session
