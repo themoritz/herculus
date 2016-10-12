@@ -62,8 +62,19 @@ data State = State
 makeLenses ''State
 
 store :: ReactStore State
-store = mkStore $ State Nothing Nothing Nothing Map.empty Map.empty Nothing Map.empty Nothing
-  Map.empty Map.empty Map.empty
+store = mkStore State
+  { _stateError = Nothing
+  , _stateSessionKey = Nothing
+  , _stateWebSocket = Nothing
+  , _stateCacheRecords = Map.empty
+  , _stateProjects = Map.empty
+  , _stateProjectId = Nothing
+  , _stateTables = Map.empty
+  , _stateTableId = Nothing
+  , _stateCells = Map.empty
+  , _stateColumns = Map.empty
+  , _stateRecords = Map.empty
+  }
 
 data Action
   -- Global

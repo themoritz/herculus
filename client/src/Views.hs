@@ -20,7 +20,8 @@ import           Lib.Model.Table
 import           Lib.Types
 
 import           Store
-import           Views.Table
+import           Views.Auth.Login    (login_)
+import           Views.Table         (tableGrid_)
 
 import           Helper              (keyENTER, keyESC)
 
@@ -30,39 +31,57 @@ import           GHC.Generics        (Generic)
 app :: ReactView ()
 app = defineControllerView "app" store $ \st () ->
   cldiv_ "container" $ do
-    cldiv_ "menubar" $ do
-      cldiv_ "logo" "Herculus"
-      case st ^. stateSessionKey of
-        Nothing -> pure ()
-        Just _ -> projects_ (st ^. stateProjects) (st ^. stateProjectId)
-      case st ^. stateSessionKey of
-        Nothing -> pure ()
-        Just _ -> case st ^. stateProjectId of
-                    Nothing -> pure ()
-                    Just prjId -> tables_ (st ^. stateTables) (st ^. stateTableId) prjId
-      case st ^. stateError of
-        Nothing -> pure ()
-        Just t -> do
-          h3_ "Error"
-          elemText t
-    cldiv_ "tableGrid" $
-      case st ^. stateSessionKey of
-        Nothing -> login_ st
-        Just _ -> tableGrid_ st
-    cldiv_ "footer" $ a_
-      [ "href" $= "mailto:Moritz <mdrexl@fastmail.fm>, Ruben <ruben.moor@gmail.com>"
-      , "className" $= "link-on-dark"
-      , "target" $= "_blank"
-      ] "Contact"
+    appHeader_ st
+    appContent_ st
+    appFooter_ st
 
--- login
+-- header
 
-login_ :: State -> ReactElementM eh ()
-login_ st = view login st mempty
+appHeader_ :: State -> ReactElementM eh ()
+appHeader_ !st = view appHeader st mempty
 
-login :: ReactView State
-login = defineView "login" $ \st ->
-  span_ $ elemText "login view"
+appHeader :: ReactView State
+appHeader = defineView "login" $ \st ->
+  cldiv_ "menubar" $ do
+    cldiv_ "logo" "Herculus"
+    case st ^. stateSessionKey of
+      Nothing -> pure ()
+      Just _ -> projects_ (st ^. stateProjects) (st ^. stateProjectId)
+    case st ^. stateSessionKey of
+      Nothing -> pure ()
+      Just _ -> case st ^. stateProjectId of
+                  Nothing -> pure ()
+                  Just prjId -> tables_ (st ^. stateTables) (st ^. stateTableId) prjId
+    case st ^. stateError of
+      Nothing -> pure ()
+      Just t -> do
+        h3_ "Error"
+        elemText t
+
+-- content
+
+appFooter_ :: State -> ReactElementM eh ()
+appFooter_ !st = view appFooter st mempty
+
+appFooter :: ReactView State
+appFooter = defineView "login" $ \st ->
+  cldiv_ "footer" $ a_
+    [ "href" $= "mailto:Moritz <mdrexl@fastmail.fm>, Ruben <ruben.moor@gmail.com>"
+    , "className" $= "link-on-dark"
+    , "target" $= "_blank"
+    ] "Contact"
+
+-- content
+
+appContent_ :: State -> ReactElementM eh ()
+appContent_ !st = view appContent st mempty
+
+appContent :: ReactView State
+appContent = defineView "login" $ \st ->
+  cldiv_ "tableGrid" $
+    case st ^. stateSessionKey of
+      Nothing -> login_ st
+      Just _ -> tableGrid_ st
 
 
 --
