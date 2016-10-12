@@ -8,46 +8,79 @@ module Lib.Model.Auth
   ( PwHash
   , LoginData (..)
   , LoginResponse (..)
+  , SignupData (..)
+  , SignupResponse (..)
   , mkPwHash
-  , User
-  , userName
-  , userPwHash
+  , mkSession
+  , prolongSession
   , SessionKey
   , Session
   , sessionExpDate
   , sessionKey
   , sessionUserId
+  , User (..)
+  , userName
+  , userPwHash
+  , verifyPassword
   ) where
 
-import           Control.DeepSeq      (NFData)
-import           Control.Lens         (makeLenses)
-import           Crypto.PasswordStore (makePassword)
-import           Data.Aeson           (FromJSON, ToJSON)
-import           Data.Bson            ((=:))
-import qualified Data.Bson            as Bson
-import           Data.ByteString      (ByteString)
-import           Data.Text            (Text)
-import qualified Data.Text.Encoding   as Text
-import           GHC.Generics         (Generic)
-import           Lib.Types            (Id, fromObjectId, toObjectId)
+import           Control.DeepSeq        (NFData)
+import           Control.Lens           (makeLenses)
+import           Control.Monad.IO.Class (MonadIO, liftIO)
+import           Crypto.PasswordStore   (makePassword)
+import qualified Crypto.PasswordStore
+import           Data.Aeson             (FromJSON, ToJSON)
+import           Data.Bson              ((=:))
+import qualified Data.Bson              as Bson
+import           Data.ByteString        (ByteString)
+import qualified Data.ByteString.Base64 as Base64
+import           Data.Text              (Text)
+import qualified Data.Text.Encoding     as Text
+import           Data.Time.Clock        (addUTCTime)
+import           GHC.Generics           (Generic)
+import           Lib.Types              (Id, fromObjectId, toObjectId)
+import           System.Entropy         (getEntropy)
 
-import           Lib.Model.Class      (FromDocument (..), Model (..),
-                                       ToDocument (..))
-import           Lib.Types            (Time)
+import           Lib.Model.Class        (FromDocument (..), Model (..),
+                                         ToDocument (..))
+import           Lib.Types              (Time, addSeconds)
 
 -- Login
 
-data LoginData = LoginData { ldUserName :: Text, ldPassword :: Text  } -- OAuth
-  deriving (Generic, FromJSON, ToJSON, NFData)
+ -- TODO: OAuth
+data LoginData = LoginData
+  { ldUserName :: Text
+  , ldPassword :: Text
+  } deriving (Generic, FromJSON, ToJSON)
 
 type SessionKey = Text
 
-data LoginResponse = LoginSuccess SessionKey | LoginFailed Text
+data LoginResponse
+  = LoginSuccess SessionKey
+  | LoginFailed Text
+  deriving (Generic, FromJSON, ToJSON)
+
+data SignupData = SignupData
+  { suUserName :: Text
+  , suPassword :: Text
+  } deriving (Generic, FromJSON, ToJSON)
+
+data SignupResponse
+  = SignupSuccess SessionKey
+  | SignupFailed Text
   deriving (Generic, FromJSON, ToJSON)
 
 -- TODO: a "user" object that is available to auth protected handlers
 --       the `User` below is not quite it, because it also contains the password
 --       Maybe a different ADT. It's just `Id User` for now
+
+mkPwHash :: MonadIO m => Text -> m PwHash
+mkPwHash txt =
+  liftIO $ PwHash <$> makePassword (Text.encodeUtf8 txt) 17
+
+verifyPassword :: Text -> PwHash -> Bool
+verifyPassword str (PwHash bs2) =
+  Crypto.PasswordStore.verifyPassword (Text.encodeUtf8 str) bs2
 
 -- User
 
@@ -89,10 +122,6 @@ instance Bson.Val PwHash where
   cast' (Bson.String txt) = Just $ fromTextToPwHash txt
   cast' _ = Nothing
 
-mkPwHash :: Text -> IO PwHash
-mkPwHash txt =
-  PwHash <$> makePassword (Text.encodeUtf8 txt) 17
-
 -- Session
 
 data Session = Session
@@ -100,6 +129,16 @@ data Session = Session
   , _sessionKey     :: SessionKey
   , _sessionExpDate :: Time
   } deriving (Generic, NFData)
+
+mkSession :: MonadIO m => Id User -> Time -> m Session
+mkSession userId created = do
+  key <- liftIO $ Text.decodeUtf8 . Base64.encode <$> getEntropy 32
+  -- session expiry in seconds
+  pure $ Session userId key (addSeconds 600 created)
+
+prolongSession :: Session -> Session
+prolongSession session@Session{ _sessionExpDate = expiry } =
+  session { _sessionExpDate = addSeconds 600 expiry }
 
 instance Model Session where
   collectionName = const "sessions"

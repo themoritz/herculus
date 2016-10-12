@@ -20,7 +20,7 @@ import           Data.Serialize
 import           Data.Text          (Text, pack, unpack)
 import           Data.Text.Encoding
 import           Data.Time.Calendar (Day (..))
-import           Data.Time.Clock    (UTCTime (..))
+import           Data.Time.Clock    (NominalDiffTime, UTCTime (..), addUTCTime)
 import           Data.Time.Format   (defaultTimeLocale, parseTimeM)
 import qualified Data.Time.Format   as T (formatTime)
 import           Data.Typeable      (Typeable)
@@ -144,6 +144,10 @@ parseTime f str =
 
 formatTime :: Text -> Time -> Text
 formatTime f (Time t) = pack $ T.formatTime defaultTimeLocale (unpack f) t
+
+-- usage: addSeconds 600 ...
+addSeconds :: NominalDiffTime -> Time -> Time
+addSeconds d (Time utc) = Time $ addUTCTime d utc
 
 --
 

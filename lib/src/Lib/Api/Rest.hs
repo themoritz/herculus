@@ -15,6 +15,7 @@ import           Servant.Server.Experimental.Auth (AuthServerData)
 import           Lib.Api.Rest.Report
 import           Lib.Model
 import           Lib.Model.Auth                   (LoginData, LoginResponse,
+                                                   SignupData, SignupResponse,
                                                    User)
 import           Lib.Model.Cell
 import           Lib.Model.Column
@@ -25,7 +26,8 @@ import           Lib.Types
 
 type Routes =
       AuthLogin
- -- :<|> AuthLogout
+ :<|> AuthLogout
+ :<|> AuthSignup
 
  :<|> ProjectCreate
  :<|> ProjectList
@@ -61,6 +63,8 @@ type Routes =
 type instance AuthServerData (AuthProtect "cookie-auth") = Id User
 
 type AuthLogin            = "auth"      :> "login"          :> ReqBody '[JSON] LoginData        :> Post '[JSON] LoginResponse
+type AuthLogout           = AuthProtect "cookie-auth" :> "auth"      :> "logout"         :> Get '[JSON] ()
+type AuthSignup           = "auth"      :> "signup"         :> ReqBody '[JSON] SignupData       :> Post '[JSON] SignupResponse
 
 type ProjectCreate        = AuthProtect "cookie-auth" :> "project"   :> "create"         :> ReqBody '[JSON] Project          :> Post '[JSON] (Id Project)
 type ProjectList          = "project"   :> "list"           :> Get '[JSON] [Entity Project]

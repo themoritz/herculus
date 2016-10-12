@@ -9,7 +9,9 @@ module Handler.Rest where
 import           Control.Arrow                  (second)
 import           Control.Lens
 import           Control.Monad                  (unless, void, when)
-
+import           Control.Monad.Except           (ExceptT (ExceptT), lift,
+                                                 runExceptT)
+import           Control.Monad.IO.Class         (MonadIO)
 import qualified Data.ByteString.Lazy           as BL
 import qualified Data.ByteString.Lazy.Char8     as BL8
 import           Data.List                      (union)
@@ -17,13 +19,10 @@ import           Data.Maybe                     (catMaybes, isNothing, mapMaybe)
 import           Data.Monoid
 import           Data.Text                      (Text, pack, unpack)
 import           Data.Traversable
-
+import           Database.MongoDB               ((=:))
+import           Servant
 import qualified Text.Pandoc                    as Pandoc
 import qualified Text.Pandoc.Error              as Pandoc
-
-import           Servant
-
-import           Database.MongoDB               ((=:))
 
 import           Lib.Api.Rest
 import           Lib.Api.WebSocket
@@ -32,8 +31,13 @@ import           Lib.Compiler.Interpreter.Types
 import           Lib.Compiler.Typechecker.Types
 import           Lib.Compiler.Types
 import           Lib.Model
-import           Lib.Model.Auth                 (LoginData (..), LoginResponse,
-                                                 User)
+import           Lib.Model.Auth                 (LoginData (..),
+                                                 LoginResponse (..), Session,
+                                                 SignupData (..),
+                                                 SignupResponse (..),
+                                                 User (User), mkPwHash,
+                                                 mkSession, sessionKey,
+                                                 userPwHash, verifyPassword)
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
@@ -50,9 +54,11 @@ import           Cache
 import           Monads
 import           Propagate
 
-handle :: MonadHexl m => ServerT Routes m
+handle :: ServerT Routes (HexlT IO)
 handle =
        handleAuthLogin
+  :<|> handleAuthLogout
+  :<|> handleAuthSignup
 
   :<|> handleProjectCreate
   :<|> handleProjectList
@@ -89,14 +95,46 @@ handle =
 
 -- Auth
 
-handleAuthLogin :: MonadHexl m => LoginData -> m LoginResponse
-handleAuthLogin (LoginData userName pwd) = undefined
-  -- do
-  -- lookup user - LoginFailed 'user unknown'
-  -- verify pwd - LoginFailed 'wrong pwd'
-  -- create session
-  -- return LoginSuccess
-  --
+handleAuthLogin :: (MonadIO m, MonadHexl m) => LoginData -> m LoginResponse
+handleAuthLogin (LoginData userName pwd) = do
+    eUserId <- runExceptT $ do
+      Entity userId user <- getUser
+      checkPassword_ user
+      checkSessionExists_ userId
+      pure userId
+    case eUserId of
+      Left  err    -> pure $ LoginFailed err
+      Right userId -> do
+        now <- getCurrentTime
+        session <- mkSession userId now
+        _ <- create session
+        pure $ LoginSuccess $ session ^. sessionKey
+  where
+    getUser = ExceptT $ getOneByQuery [ "name" =: userName ]
+    checkPassword_ user =
+      if verifyPassword pwd (user ^. userPwHash)
+        then pure ()
+        else throwError "wrong password"
+    checkSessionExists_ userId =
+      lift (getOneByQuery [ "userId" =: userId ]) >>= \case
+        Left  _                     -> pure ()
+        Right (_ :: Entity Session) -> throwError "already logged in"
+
+handleAuthLogout :: MonadHexl m => Id User -> m ()
+handleAuthLogout userId =
+  getOneByQuery [ "userId" =: userId ] >>= \case
+    Left  msg -> throwError $ ErrBug msg
+    Right (Entity sessionId _) -> delete (sessionId :: Id Session)
+
+handleAuthSignup :: (MonadIO m, MonadHexl m) => SignupData -> m SignupResponse
+handleAuthSignup (SignupData userName pwd) = do
+  getOneByQuery [ "name" =: userName ] >>= \case
+    Right (_ :: Entity User) -> pure $ SignupFailed "username already exists"
+    Left _  -> do
+      _ <- create . User userName =<< mkPwHash pwd
+      handleAuthLogin (LoginData userName pwd) >>= \case
+        LoginSuccess key -> pure $ SignupSuccess key
+        LoginFailed  msg -> pure $ SignupFailed  $ "signup failed: " <> msg
 
 -- Project
 

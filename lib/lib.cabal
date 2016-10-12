@@ -54,6 +54,7 @@ library
                      , cereal
                      , containers
                      , deepseq
+                     , entropy
                      , http-api-data
                      , http-media
                      , lens

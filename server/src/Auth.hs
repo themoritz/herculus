@@ -20,6 +20,7 @@ import           Servant.Server.Experimental.Auth (AuthHandler, mkAuthHandler)
 import           HexlNat                          (hexlToServant)
 import           Lib.Model                        (Entity (..))
 import           Lib.Model.Auth                   (SessionKey, User,
+                                                   prolongSession,
                                                    sessionExpDate,
                                                    sessionUserId)
 import           Lib.Types                        (Id)
@@ -37,7 +38,7 @@ lookUpSession sessionKey =
       now <- getCurrentTime
       if now > session ^. sessionExpDate
         then delete sessionId $> Left "session expired"
-        else pure $ Right $ session ^. sessionUserId
+        else update sessionId prolongSession $> Right (session ^. sessionUserId)
 
 authHandler :: HexlEnv -> AuthMiddleware
 authHandler env = mkAuthHandler $ hexlToServant env $ \request ->
