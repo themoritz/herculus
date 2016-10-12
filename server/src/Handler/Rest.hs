@@ -32,7 +32,8 @@ import           Lib.Compiler.Interpreter.Types
 import           Lib.Compiler.Typechecker.Types
 import           Lib.Compiler.Types
 import           Lib.Model
-import           Lib.Model.Auth                 (LoginData (..), LoginResponse)
+import           Lib.Model.Auth                 (LoginData (..), LoginResponse,
+                                                 User)
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
@@ -52,6 +53,7 @@ import           Propagate
 handle :: MonadHexl m => ServerT Routes m
 handle =
        handleAuthLogin
+
   :<|> handleProjectCreate
   :<|> handleProjectList
   :<|> handleProjectSetName
@@ -98,8 +100,8 @@ handleAuthLogin (LoginData userName pwd) = undefined
 
 -- Project
 
-handleProjectCreate :: MonadHexl m => Project -> m (Id Project)
-handleProjectCreate = create
+handleProjectCreate :: MonadHexl m => Id User -> Project -> m (Id Project)
+handleProjectCreate _ = create
 
 handleProjectList :: MonadHexl m => m [Entity Project]
 handleProjectList = listAll

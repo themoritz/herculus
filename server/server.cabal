@@ -15,6 +15,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     Monads
                      , Propagate
+                     , Auth
                      , Cache
                      , Latex
                      , Options
@@ -22,6 +23,7 @@ library
                      , ConnectionManager
                      , Handler.WebSocket
                      , Handler.Rest
+                     , HexlNat
   build-depends:       aeson
                      , base >= 4.7 && < 5
                      , bytestring
@@ -41,12 +43,14 @@ library
                      , pandoc
                      , pretty-show
                      , servant-server
+                     , servant
                      , stm
                      , text
                      , time
                      , transformers
                      , transformers-base
                      , websockets
+                     , wai
   default-language:    Haskell2010
   default-extensions:  OverloadedStrings
                      , LambdaCase

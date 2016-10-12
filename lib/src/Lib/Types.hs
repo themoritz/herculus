@@ -130,7 +130,7 @@ formatNumber f n = case unsafePerformIO (try $ evaluate $ printf (unpack f) n) o
 --
 
 newtype Time = Time UTCTime
-  deriving (NFData, Eq, Ord, ToJSON, FromJSON)
+  deriving (NFData, Eq, Ord, ToJSON, FromJSON, Val)
 
 instance Show Time where
   show = unpack . formatTime "%F"

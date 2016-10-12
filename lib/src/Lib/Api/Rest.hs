@@ -1,22 +1,25 @@
 {-# LANGUAGE DataKinds     #-}
+{-# LANGUAGE TypeFamilies  #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Lib.Api.Rest where
 
-import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy             as BL
 import           Data.Text
-
-import           Servant.API          ((:<|>), (:>), Capture, Delete, Get, JSON,
-                                       PlainText, Post, ReqBody)
+import           Servant.API                      ((:<|>), (:>), Capture,
+                                                   Delete, Get, JSON, PlainText,
+                                                   Post, ReqBody)
+import           Servant.API.Experimental.Auth    (AuthProtect)
+import           Servant.Server.Experimental.Auth (AuthServerData)
 
 import           Lib.Api.Rest.Report
 import           Lib.Model
+import           Lib.Model.Auth                   (LoginData, LoginResponse,
+                                                   User)
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Project
 import           Lib.Model.Record
-
-import           Lib.Model.Auth       (LoginData, LoginResponse)
 import           Lib.Model.Table
 import           Lib.Types
 
@@ -55,9 +58,11 @@ type Routes =
  :<|> CellGetReportHTML
  :<|> CellGetReportPlain
 
+type instance AuthServerData (AuthProtect "cookie-auth") = Id User
+
 type AuthLogin            = "auth"      :> "login"          :> ReqBody '[JSON] LoginData        :> Post '[JSON] LoginResponse
 
-type ProjectCreate        = "project"   :> "create"         :> ReqBody '[JSON] Project          :> Post '[JSON] (Id Project)
+type ProjectCreate        = AuthProtect "cookie-auth" :> "project"   :> "create"         :> ReqBody '[JSON] Project          :> Post '[JSON] (Id Project)
 type ProjectList          = "project"   :> "list"           :> Get '[JSON] [Entity Project]
 type ProjectSetName       = "project"   :> "setName"        :> Capture "projectId" (Id Project) :> ReqBody '[JSON] Text :> Post '[JSON] ()
 type ProjectDelete        = "project"   :> "delete"         :> Capture "projectId" (Id Project) :> Delete '[JSON] ()

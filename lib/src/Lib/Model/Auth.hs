@@ -5,39 +5,37 @@
 
 
 module Lib.Model.Auth
-( PwHash
-, LoginData (..)
-, LoginResponse (..)
-, SessionKey
-) where
+  ( PwHash
+  , LoginData (..)
+  , LoginResponse (..)
+  , mkPwHash
+  , User
+  , userName
+  , userPwHash
+  , SessionKey
+  , Session
+  , sessionExpDate
+  , sessionKey
+  , sessionUserId
+  ) where
 
 import           Control.DeepSeq      (NFData)
 import           Control.Lens         (makeLenses)
-import           Data.ByteString      (ByteString)
-import           Data.Text            (Text)
-import           Lib.Types            (Id, fromObjectId, toObjectId)
-
+import           Crypto.PasswordStore (makePassword)
 import           Data.Aeson           (FromJSON, ToJSON)
 import           Data.Bson            ((=:))
 import qualified Data.Bson            as Bson
-
-import           GHC.Generics         (Generic)
-
+import           Data.ByteString      (ByteString)
+import           Data.Text            (Text)
 import qualified Data.Text.Encoding   as Text
+import           GHC.Generics         (Generic)
+import           Lib.Types            (Id, fromObjectId, toObjectId)
 
 import           Lib.Model.Class      (FromDocument (..), Model (..),
                                        ToDocument (..))
-
-import           Crypto.PasswordStore (makePassword)
-import           Data.Time.Clock      (UTCTime)
-
-
+import           Lib.Types            (Time)
 
 -- Login
-
-mkPwHash :: Text -> IO PwHash
-mkPwHash txt =
-  PwHash <$> makePassword (Text.encodeUtf8 txt) 17
 
 data LoginData = LoginData { ldUserName :: Text, ldPassword :: Text  } -- OAuth
   deriving (Generic, FromJSON, ToJSON, NFData)
@@ -46,6 +44,10 @@ type SessionKey = Text
 
 data LoginResponse = LoginSuccess SessionKey | LoginFailed Text
   deriving (Generic, FromJSON, ToJSON)
+
+-- TODO: a "user" object that is available to auth protected handlers
+--       the `User` below is not quite it, because it also contains the password
+--       Maybe a different ADT. It's just `Id User` for now
 
 -- User
 
@@ -87,12 +89,16 @@ instance Bson.Val PwHash where
   cast' (Bson.String txt) = Just $ fromTextToPwHash txt
   cast' _ = Nothing
 
+mkPwHash :: Text -> IO PwHash
+mkPwHash txt =
+  PwHash <$> makePassword (Text.encodeUtf8 txt) 17
+
 -- Session
 
 data Session = Session
   { _sessionUserId  :: Id User
   , _sessionKey     :: SessionKey
-  , _sessionExpDate :: UTCTime
+  , _sessionExpDate :: Time
   } deriving (Generic, NFData)
 
 instance Model Session where
@@ -100,7 +106,7 @@ instance Model Session where
 
 instance ToDocument Session where
   toDocument Session
-   { _sessionUserId = userId
+    { _sessionUserId = userId
     , _sessionKey = sessionKey
     , _sessionExpDate = sessionExpDate
     } =
@@ -117,5 +123,4 @@ instance FromDocument Session where
 
 
 makeLenses ''User
-
 makeLenses ''Session
