@@ -4,19 +4,18 @@
 
 module Lib.Api.Rest where
 
-import qualified Data.ByteString.Lazy             as BL
+import qualified Data.ByteString.Lazy          as BL
 import           Data.Text
-import           Servant.API                      ((:<|>), (:>), Capture,
-                                                   Delete, Get, JSON, PlainText,
-                                                   Post, ReqBody)
-import           Servant.API.Experimental.Auth    (AuthProtect)
-import           Servant.Server.Experimental.Auth (AuthServerData)
+import           Servant.API                   ((:<|>), (:>), Capture, Delete,
+                                                Get, JSON, PlainText, Post,
+                                                ReqBody)
+import           Servant.API.Experimental.Auth (AuthProtect)
 
 import           Lib.Api.Rest.Report
 import           Lib.Model
-import           Lib.Model.Auth                   (LoginData, LoginResponse,
-                                                   SignupData, SignupResponse,
-                                                   User)
+import           Lib.Model.Auth                (LoginData, LoginResponse,
+                                                SignupData, SignupResponse,
+                                                User)
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Project
@@ -60,13 +59,14 @@ type Routes =
  :<|> CellGetReportHTML
  :<|> CellGetReportPlain
 
-type instance AuthServerData (AuthProtect "cookie-auth") = Id User
+type SessionProtect = AuthProtect "cookie-auth"
+type SessionData = Id User
 
 type AuthLogin            = "auth"      :> "login"          :> ReqBody '[JSON] LoginData        :> Post '[JSON] LoginResponse
-type AuthLogout           = AuthProtect "cookie-auth" :> "auth"      :> "logout"         :> Get '[JSON] ()
+type AuthLogout           = SessionProtect :> "auth"      :> "logout"         :> Get '[JSON] ()
 type AuthSignup           = "auth"      :> "signup"         :> ReqBody '[JSON] SignupData       :> Post '[JSON] SignupResponse
 
-type ProjectCreate        = AuthProtect "cookie-auth" :> "project"   :> "create"         :> ReqBody '[JSON] Project          :> Post '[JSON] (Id Project)
+type ProjectCreate        = SessionProtect :> "project"   :> "create"         :> ReqBody '[JSON] Project          :> Post '[JSON] (Id Project)
 type ProjectList          = "project"   :> "list"           :> Get '[JSON] [Entity Project]
 type ProjectSetName       = "project"   :> "setName"        :> Capture "projectId" (Id Project) :> ReqBody '[JSON] Text :> Post '[JSON] ()
 type ProjectDelete        = "project"   :> "delete"         :> Capture "projectId" (Id Project) :> Delete '[JSON] ()

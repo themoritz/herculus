@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeFamilies #-}
 -- | server-side auth logic, including database queries
 
 module Auth
@@ -18,11 +19,13 @@ import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding               as Text
 import           Database.MongoDB                 ((=:))
 import           Network.Wai                      (Request, requestHeaders)
-import           Servant.Server.Experimental.Auth (AuthHandler, mkAuthHandler)
+import           Servant.Server.Experimental.Auth (AuthHandler, AuthServerData,
+                                                   mkAuthHandler)
 import           System.Entropy                   (getEntropy)
 
 
 import           HexlNat                          (hexlToServant)
+import           Lib.Api.Rest                     (SessionData, SessionProtect)
 import           Lib.Model                        (Entity (..))
 import           Lib.Model.Auth                   (SessionKey, User,
                                                    sessionExpDate,
@@ -32,7 +35,8 @@ import           Lib.Types                        (Id, Time, addSeconds)
 import           Monads                           (AppError (..), HexlEnv,
                                                    MonadDB (..))
 
-type AuthMiddleware = AuthHandler Request (Id User)
+type AuthMiddleware = AuthHandler Request SessionData
+type instance AuthServerData SessionProtect = SessionData
 
 --
 

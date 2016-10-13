@@ -62,7 +62,6 @@ library
                      , pwstore-fast
                      , scientific
                      , servant
-                     , servant-server
                      , text
                      , time
                      , transformers

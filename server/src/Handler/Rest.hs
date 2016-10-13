@@ -121,7 +121,7 @@ handleAuthLogin (LoginData userName pwd) = do
         Left  _                     -> pure ()
         Right (_ :: Entity Session) -> throwError "already logged in"
 
-handleAuthLogout :: MonadHexl m => Id User -> m ()
+handleAuthLogout :: MonadHexl m => SessionData -> m ()
 handleAuthLogout userId =
   getOneByQuery [ "userId" =: userId ] >>= \case
     Left  msg -> throwError $ ErrBug msg
@@ -139,7 +139,7 @@ handleAuthSignup (SignupData userName pwd) = do
 
 -- Project
 
-handleProjectCreate :: MonadHexl m => Id User -> Project -> m (Id Project)
+handleProjectCreate :: MonadHexl m => SessionData -> Project -> m (Id Project)
 handleProjectCreate _ = create
 
 handleProjectList :: MonadHexl m => m [Entity Project]
