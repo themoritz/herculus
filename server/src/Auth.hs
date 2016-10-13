@@ -3,10 +3,14 @@
 module Auth
   ( authHandler
   , AuthMiddleware
+  , mkSession
+  , prolongSession
   ) where
 
 import           Control.Lens                     ((^.))
 import           Control.Monad.Except             (throwError)
+import           Control.Monad.IO.Class           (MonadIO, liftIO)
+import qualified Data.ByteString.Base64           as Base64
 import           Data.Functor                     (($>))
 import qualified Data.List                        as List
 import           Data.Text                        (Text)
@@ -15,19 +19,41 @@ import qualified Data.Text.Encoding               as Text
 import           Database.MongoDB                 ((=:))
 import           Network.Wai                      (Request, requestHeaders)
 import           Servant.Server.Experimental.Auth (AuthHandler, mkAuthHandler)
+import           System.Entropy                   (getEntropy)
 
 
 import           HexlNat                          (hexlToServant)
 import           Lib.Model                        (Entity (..))
 import           Lib.Model.Auth                   (SessionKey, User,
-                                                   prolongSession,
                                                    sessionExpDate,
                                                    sessionUserId)
-import           Lib.Types                        (Id)
+import           Lib.Model.Auth                   (Session (..))
+import           Lib.Types                        (Id, Time, addSeconds)
 import           Monads                           (AppError (..), HexlEnv,
                                                    MonadDB (..))
 
 type AuthMiddleware = AuthHandler Request (Id User)
+
+--
+
+-- these two function might as well go in to the shared lib
+-- in Lib.Model.Auth
+-- However, getEntropy uses the entropy package that doesn't
+-- build well with ghcjs (and shouldn't have to)
+
+mkSession :: MonadIO m => Id User -> Time -> m Session
+mkSession userId created = do
+  key <- liftIO $ Text.decodeUtf8 . Base64.encode <$> getEntropy 32
+  -- session expiry in seconds
+  pure $ Session userId key (addSeconds 600 created)
+
+prolongSession :: Session -> Session
+prolongSession session@Session{ _sessionExpDate = expiry } =
+  session { _sessionExpDate = addSeconds 600 expiry }
+
+--
+
+-- handling auth middleware
 
 lookUpSession :: MonadDB m => SessionKey -> m (Either Text (Id User))
 lookUpSession sessionKey =

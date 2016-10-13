@@ -26,9 +26,11 @@ library
                      , HexlNat
   build-depends:       aeson
                      , base >= 4.7 && < 5
+                     , base64-bytestring
                      , bytestring
                      , containers
                      , directory
+                     , entropy
                      , fast-logger
                      , filepath
                      , interpolatedstring-perl6

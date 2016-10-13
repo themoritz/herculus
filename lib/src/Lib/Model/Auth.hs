@@ -11,10 +11,8 @@ module Lib.Model.Auth
   , SignupData (..)
   , SignupResponse (..)
   , mkPwHash
-  , mkSession
-  , prolongSession
   , SessionKey
-  , Session
+  , Session (..)
   , sessionExpDate
   , sessionKey
   , sessionUserId
@@ -33,17 +31,14 @@ import           Data.Aeson             (FromJSON, ToJSON)
 import           Data.Bson              ((=:))
 import qualified Data.Bson              as Bson
 import           Data.ByteString        (ByteString)
-import qualified Data.ByteString.Base64 as Base64
 import           Data.Text              (Text)
 import qualified Data.Text.Encoding     as Text
-import           Data.Time.Clock        (addUTCTime)
 import           GHC.Generics           (Generic)
 import           Lib.Types              (Id, fromObjectId, toObjectId)
-import           System.Entropy         (getEntropy)
 
 import           Lib.Model.Class        (FromDocument (..), Model (..),
                                          ToDocument (..))
-import           Lib.Types              (Time, addSeconds)
+import           Lib.Types              (Time)
 
 -- Login
 
@@ -129,16 +124,6 @@ data Session = Session
   , _sessionKey     :: SessionKey
   , _sessionExpDate :: Time
   } deriving (Generic, NFData)
-
-mkSession :: MonadIO m => Id User -> Time -> m Session
-mkSession userId created = do
-  key <- liftIO $ Text.decodeUtf8 . Base64.encode <$> getEntropy 32
-  -- session expiry in seconds
-  pure $ Session userId key (addSeconds 600 created)
-
-prolongSession :: Session -> Session
-prolongSession session@Session{ _sessionExpDate = expiry } =
-  session { _sessionExpDate = addSeconds 600 expiry }
 
 instance Model Session where
   collectionName = const "sessions"

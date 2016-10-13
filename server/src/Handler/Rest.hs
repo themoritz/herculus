@@ -36,8 +36,8 @@ import           Lib.Model.Auth                 (LoginData (..),
                                                  SignupData (..),
                                                  SignupResponse (..),
                                                  User (User), mkPwHash,
-                                                 mkSession, sessionKey,
-                                                 userPwHash, verifyPassword)
+                                                 sessionKey, userPwHash,
+                                                 verifyPassword)
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
@@ -50,6 +50,7 @@ import           Lib.Template.Interpreter
 import           Lib.Template.Types
 import           Lib.Types
 
+import           Auth                           (mkSession)
 import           Cache
 import           Monads
 import           Propagate
@@ -134,7 +135,7 @@ handleAuthSignup (SignupData userName pwd) = do
       _ <- create . User userName =<< mkPwHash pwd
       handleAuthLogin (LoginData userName pwd) >>= \case
         LoginSuccess key -> pure $ SignupSuccess key
-        LoginFailed  msg -> pure $ SignupFailed  $ "signup failed: " <> msg
+        LoginFailed  msg -> throwError $ ErrBug $ "signed up, but login failed: " <> msg
 
 -- Project
 
