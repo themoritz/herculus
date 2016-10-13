@@ -155,4 +155,4 @@ instance Serialize Utf8Text where
 
 --
 
-type Name = String
+type Name = Text

@@ -27,88 +27,95 @@ import           Lib.Compiler.Types
 
 --
 
-newtype TVar = TV Text
+-- In paper: k
+data Kind
+  = KindStar
+  | KindFun Kind Kind
   deriving (Eq, Ord)
 
-instance Show TVar where
-  show (TV a) = unpack a
-
-data TNullary
-  = TyBool
-  | TyNumber
-  | TyString
-  | TyTime
+-- In paper: alpha
+newtype TypeVar = TypeVar Text
   deriving (Eq, Ord)
 
-instance Show TNullary where
-  show = \case
-    TyBool   -> "Bool"
-    TyNumber -> "Number"
-    TyString -> "String"
-    TyTime   -> "Time"
-
-data TUnary
-  = TyList
-  | TyMaybe
+-- In paper: Xi
+newtype TypeConstructor = TypeConstructor Text
   deriving (Eq, Ord)
 
-instance Show TUnary where
-  show = \case
-    TyList  -> "List"
-    TyMaybe -> "Maybe"
+newtype ClassName = ClassName Text
+  deriving (Eq, Ord)
 
-data Type
-  = TyVar TVar
-  | TyNullary TNullary
-  | TyUnary TUnary Type
-  | TyArr Type Type
-  | TyRecord Type
-  | TyRow (Ref Column) Type Type
-  | TyNoRow
+-- In paper: tau
+data SimpleType
+  = TyVar TypeVar
+  | TyApp TypeConstructor (Maybe SimpleType)
+  | TyFun SimpleType SimpleType
+  | TyRecord SimpleType
+  | TyRecordCons (Ref Column) SimpleType SimpleType
+  | TyRecordNil
   deriving (Ord)
 
-instance Eq Type where
+-- In paper: rho, "(Foo a) => ..."
+newtype ConstrainedType = Constraints [(ClassName, TypeVar)] SimpleType
+
+-- In paper: sigma, "forall a. ..."
+newtype PolymorphicType = ForAll [TypeVar] ConstrainedType
+
+instance Eq SimpleType where
   TyVar a == TyVar b = a == b
-  TyNullary a == TyNullary b = a == b
-  TyUnary a s == TyUnary b t = a == b && s == t
-  TyArr s t == TyArr s' t' = s == s' && t == t'
+  TyApp c1 a1 == TyApp c2 a2 = c1 == c2 && a1 == a2
   TyRecord s == TyRecord t = rowMap s == rowMap t
-    where rowMap :: Type -> Map (Ref Column) Type
+    where rowMap :: SimpleType -> Map (Ref Column) SimpleType
           rowMap = Map.fromList . go
-          go TyNoRow = []
+          go TyRecordNil = []
           go (TyVar _) = []
-          go (TyRow n t' rest) = (n,t') : go rest
-  TyNoRow == TyNoRow = True
+          go (TyRecordCons n t' rest) = (n,t') : go rest
+  TyRecordCons _ _ _ == TyRecordCons _ _ _ = error "eq SimpleType: should not happen"
+  TyRecordNil == TyRecordNil = True
   _ == _ = False
 
+instance Show Kind where
+  show KindStar = "*"
+  show (KindFun from to) = "(" <> show from <> " -> " <> show to <> ")"
 
-instance Show Type where
+instance Show TypeVar where
+  show (TypeVar a) = unpack a
+
+instance Show TypeConstructor where
+  show (TypeConstructor name) = unpack name
+
+instance Show ClassName where
+  show (ClassName name) = unpack name
+
+instance Show SimpleType where
   show (TyVar a) = show a
-  show (TyNullary c) = show c
-  show (TyUnary t t1) = show t <> " (" <> show t1 <> ")"
-  show (TyArr a b) = "(" <> show a <> " -> " <> show b <> ")"
+  show (TyApp cons marg) = case arg of
+    Just arg -> "(" <> show cons <> " " <> show arg <> ")"
+    Nothing  -> show cons
+  show (TyFun a b) = "(" <> show a <> " -> " <> show b <> ")"
   show (TyRecord r) = "{" <> show r <> "}"
-  show (TyRow name t r) = show name <> " : " <> show t <> ", " <> show r
-  show (TyNoRow) = "-"
+  show (TyRecordCons name t r) = show name <> " : " <> show t <> ", " <> show r
+  show (TyRecordNil) = "-"
 
-data Scheme = Forall [TVar] Type
+instance Show ConstrainedType where
+  show (Constraints consts body) =
+      "(" <> intercalate ", " (map showConst consts) <> " => " <> show body
+    where showConst (cls, t) = show cls <> " " <> show t
 
-instance Show Scheme where
-  show (Forall as t) = "forall " <> intercalate " " (map show as) <> ". " <> show t
-
-typeOfDataType :: Applicative m => (Id Table -> m Type) -> DataType -> m Type
-typeOfDataType f = \case
-  DataBool       -> pure $ TyNullary TyBool
-  DataString     -> pure $ TyNullary TyString
-  DataNumber     -> pure $ TyNullary TyNumber
-  DataTime       -> pure $ TyNullary TyTime
-  (DataRecord t) -> TyRecord <$> f t
-  (DataList t)   -> TyUnary TyList <$> typeOfDataType f t
-  (DataMaybe t)  -> TyUnary TyMaybe <$> typeOfDataType f t
+instance Show PolymorphicType where
+  show (ForAll as t) =
+    "forall " <> intercalate " " (map show as) <> ". " <> show t
 
 --
 
-newtype Context = Context (Map Name Scheme)
+-- Names by which the implementations can be accessed in the interpretation env
+data TypeClassDict = TypeClassDict Name
+
+data Context = Context
+  { _contextVariables        :: Map Name PolymorphicType
+  , _contextTypeConstructors :: Map TypeConstructor Kind
+  , _contextTypeClasses      :: Map ClassName (Map Name PolymorphicType)
+  , _contextTypeClassDicts   :: Map ClassName (Map SimpleType TypeClassDict)
+  }
   deriving (Show)
 
 extend :: (Name, Scheme) -> Context -> Context
@@ -122,7 +129,7 @@ getScheme x (Context env) = Map.lookup x env
 
 --
 
-type Subst = Map TVar Type
+type Substitution = Map TypeVar SimpleType
 
 nullSubst :: Subst
 nullSubst = Map.empty
