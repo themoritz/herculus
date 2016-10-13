@@ -30,15 +30,14 @@ import qualified Crypto.PasswordStore
 import           Data.Aeson             (FromJSON, ToJSON)
 import           Data.Bson              ((=:))
 import qualified Data.Bson              as Bson
-import           Data.ByteString        (ByteString)
 import           Data.Text              (Text)
 import qualified Data.Text.Encoding     as Text
 import           GHC.Generics           (Generic)
-import           Lib.Types              (Id, fromObjectId, toObjectId)
 
+import           Lib.Base64             (Base64, mkBase64Unsafe, unBase64)
 import           Lib.Model.Class        (FromDocument (..), Model (..),
                                          ToDocument (..))
-import           Lib.Types              (Time)
+import           Lib.Types              (Id, Time, fromObjectId, toObjectId)
 
 -- Login
 
@@ -48,7 +47,7 @@ data LoginData = LoginData
   , ldPassword :: Text
   } deriving (Generic, FromJSON, ToJSON, NFData)
 
-type SessionKey = Text
+type SessionKey = Base64
 
 data LoginResponse
   = LoginSuccess SessionKey
@@ -70,12 +69,11 @@ data SignupResponse
 --       Maybe a different ADT. It's just `Id User` for now
 
 mkPwHash :: MonadIO m => Text -> m PwHash
-mkPwHash txt =
-  liftIO $ PwHash <$> makePassword (Text.encodeUtf8 txt) 17
+mkPwHash txt = liftIO $ mkBase64Unsafe <$> makePassword (Text.encodeUtf8 txt) 17
 
 verifyPassword :: Text -> PwHash -> Bool
-verifyPassword str (PwHash bs2) =
-  Crypto.PasswordStore.verifyPassword (Text.encodeUtf8 str) bs2
+verifyPassword str pwHash =
+  Crypto.PasswordStore.verifyPassword (Text.encodeUtf8 str) (unBase64 pwHash)
 
 -- User
 
@@ -101,21 +99,7 @@ instance ToDocument User where
 instance FromDocument User where
   parseDocument doc = User <$> Bson.lookup "name" doc <*> Bson.lookup "pwHash" doc
 
-newtype PwHash = PwHash {unPwHash :: ByteString} deriving (Generic, Show, Eq, NFData)
-
-fromPwHashToText :: PwHash -> Text
-fromPwHashToText =
-  Text.decodeUtf8 . unPwHash
-
-fromTextToPwHash :: Text -> PwHash
-fromTextToPwHash =
-  PwHash . Text.encodeUtf8
-
-
-instance Bson.Val PwHash where
-  val pwHash = Bson.String $ fromPwHashToText pwHash
-  cast' (Bson.String txt) = Just $ fromTextToPwHash txt
-  cast' _ = Nothing
+type PwHash = Base64
 
 -- Session
 
