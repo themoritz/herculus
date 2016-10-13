@@ -11,8 +11,7 @@ import qualified Data.Text       as Text
 
 import           React.Flux      (ReactElementM, ReactView, button_, classNames,
                                   cldiv_, defineStatefulView, elemText, input_,
-                                  onChange, onClick, span_, target, view, ($=),
-                                  (&=))
+                                  onChange, onClick, target, view, ($=), (&=))
 
 import           Lib.Model.Auth  (LoginData (..))
 import           Store           (Action (Login), State, dispatch)

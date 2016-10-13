@@ -21,10 +21,13 @@ import           Data.Typeable             (Typeable)
 import           GHC.Generics
 
 import           React.Flux
-import           React.Flux.Addons.Servant
+import           React.Flux.Addons.Servant (ApiRequestConfig (..),
+                                            HandleResponse,
+                                            RequestTimeout (NoTimeout), request)
 
 import           Lib.Model
-import           Lib.Model.Auth            (LoginData (..), SessionKey)
+import           Lib.Model.Auth            (LoginData (..), LoginResponse (LoginFailed, LoginSuccess),
+                                            SessionKey)
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Project
@@ -165,11 +168,13 @@ instance StoreData State where
 
       Login loginData -> do
         request api (Proxy :: Proxy Api.AuthLogin) loginData $ mkCallback $
-          \sessionKey -> [LoggedIn sessionKey]
+          \loginResponse -> case loginResponse of
+                        LoginSuccess sessionKey -> [LoggedIn sessionKey]
+                        LoginFailed txt -> [GlobalSetError txt]
         pure st
 
       LoggedIn sKey -> pure $
-        st & stateSessionKey .~ sKey
+        st & stateSessionKey .~ Just sKey
 
       Logout ->
         -- send SessionKey

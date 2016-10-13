@@ -66,7 +66,8 @@ type AuthLogin            = "auth"      :> "login"          :> ReqBody '[JSON] L
 type AuthLogout           = SessionProtect :> "auth"      :> "logout"         :> Get '[JSON] ()
 type AuthSignup           = "auth"      :> "signup"         :> ReqBody '[JSON] SignupData       :> Post '[JSON] SignupResponse
 
-type ProjectCreate        = SessionProtect :> "project"   :> "create"         :> ReqBody '[JSON] Project          :> Post '[JSON] (Id Project)
+-- type ProjectCreate        = SessionProtect :> "project"   :> "create"         :> ReqBody '[JSON] Project          :> Post '[JSON] (Id Project)
+type ProjectCreate        = "project"   :> "create"         :> ReqBody '[JSON] Project          :> Post '[JSON] (Id Project)
 type ProjectList          = "project"   :> "list"           :> Get '[JSON] [Entity Project]
 type ProjectSetName       = "project"   :> "setName"        :> Capture "projectId" (Id Project) :> ReqBody '[JSON] Text :> Post '[JSON] ()
 type ProjectDelete        = "project"   :> "delete"         :> Capture "projectId" (Id Project) :> Delete '[JSON] ()

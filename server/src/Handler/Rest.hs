@@ -9,11 +9,11 @@ module Handler.Rest where
 import           Control.Arrow                  (second)
 import           Control.Lens
 import           Control.Monad                  (unless, void, when)
-import           Control.Monad.Except           (ExceptT (ExceptT), lift,
-                                                 runExceptT)
+import           Control.Monad.Except           (ExceptT (ExceptT), runExceptT)
 import           Control.Monad.IO.Class         (MonadIO)
 import qualified Data.ByteString.Lazy           as BL
 import qualified Data.ByteString.Lazy.Char8     as BL8
+import           Data.Functor                   (($>))
 import           Data.List                      (union)
 import           Data.Maybe                     (catMaybes, isNothing, mapMaybe)
 import           Data.Monoid
@@ -101,14 +101,15 @@ handleAuthLogin (LoginData userName pwd) = do
     eUserId <- runExceptT $ do
       Entity userId user <- getUser
       checkPassword_ user
-      checkSessionExists_ userId
       pure userId
     case eUserId of
       Left  err    -> pure $ LoginFailed err
       Right userId -> do
-        now <- getCurrentTime
-        session <- mkSession userId now
-        _ <- create session
+        session <- getOneByQuery [ "userId" =: userId ] >>= \case
+          Right (Entity _ session)  -> pure session
+          Left _ -> do
+            session <- mkSession userId
+            create session $> session
         pure $ LoginSuccess $ session ^. sessionKey
   where
     getUser = ExceptT $ getOneByQuery [ "name" =: userName ]
@@ -116,10 +117,6 @@ handleAuthLogin (LoginData userName pwd) = do
       if verifyPassword pwd (user ^. userPwHash)
         then pure ()
         else throwError "wrong password"
-    checkSessionExists_ userId =
-      lift (getOneByQuery [ "userId" =: userId ]) >>= \case
-        Left  _                     -> pure ()
-        Right (_ :: Entity Session) -> throwError "already logged in"
 
 handleAuthLogout :: MonadHexl m => SessionData -> m ()
 handleAuthLogout userId =
@@ -128,7 +125,7 @@ handleAuthLogout userId =
     Right (Entity sessionId _) -> delete (sessionId :: Id Session)
 
 handleAuthSignup :: (MonadIO m, MonadHexl m) => SignupData -> m SignupResponse
-handleAuthSignup (SignupData userName pwd) = do
+handleAuthSignup (SignupData userName pwd) =
   getOneByQuery [ "name" =: userName ] >>= \case
     Right (_ :: Entity User) -> pure $ SignupFailed "username already exists"
     Left _  -> do
@@ -139,8 +136,9 @@ handleAuthSignup (SignupData userName pwd) = do
 
 -- Project
 
-handleProjectCreate :: MonadHexl m => SessionData -> Project -> m (Id Project)
-handleProjectCreate _ = create
+-- handleProjectCreate :: MonadHexl m => SessionData -> Project -> m (Id Project)
+handleProjectCreate :: MonadHexl m => Project -> m (Id Project)
+handleProjectCreate = create
 
 handleProjectList :: MonadHexl m => m [Entity Project]
 handleProjectList = listAll

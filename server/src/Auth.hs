@@ -17,6 +17,7 @@ import qualified Data.List                        as List
 import           Data.Text                        (Text)
 import qualified Data.Text                        as Text
 import qualified Data.Text.Encoding               as Text
+import qualified Data.Time.Clock                  as Clock (getCurrentTime)
 import           Database.MongoDB                 ((=:))
 import           Network.Wai                      (Request, requestHeaders)
 import           Servant.Server.Experimental.Auth (AuthHandler, AuthServerData,
@@ -27,11 +28,10 @@ import           System.Entropy                   (getEntropy)
 import           HexlNat                          (hexlToServant)
 import           Lib.Api.Rest                     (SessionData, SessionProtect)
 import           Lib.Model                        (Entity (..))
-import           Lib.Model.Auth                   (SessionKey, User,
-                                                   sessionExpDate,
+import           Lib.Model.Auth                   (Session (..), SessionKey,
+                                                   User, sessionExpDate,
                                                    sessionUserId)
-import           Lib.Model.Auth                   (Session (..))
-import           Lib.Types                        (Id, Time, addSeconds)
+import           Lib.Types                        (Id, Time (Time), addSeconds)
 import           Monads                           (AppError (..), HexlEnv,
                                                    MonadDB (..))
 
@@ -45,11 +45,12 @@ type instance AuthServerData SessionProtect = SessionData
 -- However, getEntropy uses the entropy package that doesn't
 -- build well with ghcjs (and shouldn't have to)
 
-mkSession :: MonadIO m => Id User -> Time -> m Session
-mkSession userId created = do
-  key <- liftIO $ Text.decodeUtf8 . Base64.encode <$> getEntropy 32
+mkSession :: MonadIO m => Id User -> m Session
+mkSession userId = liftIO $ do
+  created <- addSeconds 600 . Time <$> Clock.getCurrentTime
+  key <- Text.decodeUtf8 . Base64.encode <$> getEntropy 32
   -- session expiry in seconds
-  pure $ Session userId key (addSeconds 600 created)
+  pure $ Session userId key created
 
 prolongSession :: Session -> Session
 prolongSession session@Session{ _sessionExpDate = expiry } =

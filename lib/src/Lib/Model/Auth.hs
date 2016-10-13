@@ -46,7 +46,7 @@ import           Lib.Types              (Time)
 data LoginData = LoginData
   { ldUserName :: Text
   , ldPassword :: Text
-  } deriving (Generic, FromJSON, ToJSON)
+  } deriving (Generic, FromJSON, ToJSON, NFData)
 
 type SessionKey = Text
 
