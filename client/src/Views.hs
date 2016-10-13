@@ -20,7 +20,7 @@ import           Lib.Model.Table
 import           Lib.Types
 
 import           Store
-import           Views.Auth.Login    (login_)
+import           Views.Auth          (login_, logout_)
 import           Views.Table         (tableGrid_)
 
 import           Helper              (keyENTER, keyESC)
@@ -65,11 +65,14 @@ appFooter_ !st = view appFooter st mempty
 
 appFooter :: ReactView State
 appFooter = defineView "login" $ \st ->
-  cldiv_ "footer" $ a_
-    [ "href" $= "mailto:Moritz <mdrexl@fastmail.fm>, Ruben <ruben.moor@gmail.com>"
-    , "className" $= "link-on-dark"
-    , "target" $= "_blank"
-    ] "Contact"
+  cldiv_ "footer" $ do
+    a_ [ "href" $= "mailto:Moritz <mdrexl@fastmail.fm>, Ruben <ruben.moor@gmail.com>"
+      , "className" $= "link-on-dark"
+      , "target" $= "_blank"
+      ] "Contact"
+    case st ^. stateSessionKey of
+      Nothing -> pure ()
+      Just _ -> logout_ st
 
 -- content
 

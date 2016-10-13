@@ -17,7 +17,7 @@ executable client
                      , Config
                      , Store
                      , Views
-                     , Views.Auth.Login
+                     , Views.Auth
                      , Views.Table
                      , Views.Column
                      , Views.Record

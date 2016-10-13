@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric  #-}
 
-module Views.Auth.Login where
+module Views.Auth where
 
 import           Control.DeepSeq (NFData)
 import           GHC.Generics    (Generic)
@@ -10,11 +10,13 @@ import           Data.Text       (Text)
 import qualified Data.Text       as Text
 
 import           React.Flux      (ReactElementM, ReactView, button_, classNames,
-                                  cldiv_, defineStatefulView, elemText, input_,
-                                  onChange, onClick, target, view, ($=), (&=))
+                                  cldiv_, defineStatefulView, defineView,
+                                  elemText, input_, onChange, onClick, span_,
+                                  target, view, ($=), (&=))
 
 import           Lib.Model.Auth  (LoginData (..))
-import           Store           (Action (Login), State, dispatch)
+import           Store           (Action (Login, Logout), State, dispatch)
+
 
 login_ :: State -> ReactElementM eh ()
 login_ !st = view login st mempty
@@ -25,7 +27,8 @@ data LoginViewState = LoginViewState
   } deriving (Generic, Show, NFData)
 
 initialLoginViewState :: LoginViewState
-initialLoginViewState = LoginViewState "" ""
+-- initialLoginViewState = LoginViewState "" ""
+initialLoginViewState = LoginViewState "jens" "admin"
 
 login :: ReactView State
 login = defineStatefulView "login" initialLoginViewState $ \viewState st ->
@@ -58,3 +61,19 @@ login = defineStatefulView "login" initialLoginViewState $ \viewState st ->
             else
               ([], Nothing)
         ] $ elemText "Submit"
+
+
+logout_ :: State -> ReactElementM eh ()
+logout_ !st = view logout st mempty
+
+logout :: ReactView State
+logout = defineView "login" $ \st -> do
+  span_ [ "className" $= "user"
+    ] $ elemText "User"
+
+  button_
+    [ classNames
+      [ ("btn", True)
+      ]
+    , onClick $ \_ _ -> dispatch Logout
+    ] $ elemText "Logout"
