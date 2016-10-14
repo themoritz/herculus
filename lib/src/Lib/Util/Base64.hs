@@ -1,6 +1,7 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric  #-}
 
-module Lib.Base64
+module Lib.Util.Base64
   ( Base64
   , mkBase64
   , mkBase64'
@@ -12,15 +13,16 @@ import           Control.DeepSeq        (NFData)
 import           Data.Aeson             (FromJSON (..), ToJSON (..))
 import qualified Data.Bson              as Bson
 import           Data.ByteString        (ByteString)
-import           Data.ByteString.Base64 as Base64
+import qualified Data.ByteString.Base64 as Base64
 import           Data.Text              (Text)
 import qualified Data.Text              as Text
-import           Data.Text.Encoding     as Text
+import qualified Data.Text.Encoding     as Text
+import           GHC.Generics           (Generic)
 
 -- | a wrapper around ByteString that only holds
 --   valid base64-encoded bytestrings if used correctly
 newtype Base64 = Base64 { unBase64 :: ByteString }
-  deriving (NFData, Show, Eq)
+  deriving (Generic, NFData, Show, Eq)
 
 instance Bson.Val Base64 where
   val = Bson.val . Text.decodeUtf8 . unBase64

@@ -34,10 +34,11 @@ import           Data.Text              (Text)
 import qualified Data.Text.Encoding     as Text
 import           GHC.Generics           (Generic)
 
-import           Lib.Base64             (Base64, mkBase64Unsafe, unBase64)
 import           Lib.Model.Class        (FromDocument (..), Model (..),
                                          ToDocument (..))
 import           Lib.Types              (Id, Time, fromObjectId, toObjectId)
+import           Lib.Util.Base64        (Base64, mkBase64Unsafe, unBase64)
+
 
 -- Login
 
