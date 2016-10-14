@@ -51,10 +51,12 @@ library
                      , base64-bytestring
                      , bson
                      , bytestring
+                     , case-insensitive
                      , cereal
                      , containers
                      , deepseq
                      , http-api-data
+                     , http-types
                      , http-media
                      , lens
                      , mtl

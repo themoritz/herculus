@@ -5,7 +5,10 @@
 module Lib.Api.Rest where
 
 import qualified Data.ByteString.Lazy          as BL
+import           Data.CaseInsensitive          (original)
 import           Data.Text
+import qualified Data.Text.Encoding            as Text
+import           Network.HTTP.Types.Header     (HeaderName)
 import           Servant.API                   ((:<|>), (:>), Capture, Delete,
                                                 Get, JSON, PlainText, Post,
                                                 ReqBody)
@@ -62,12 +65,18 @@ type Routes =
 type SessionProtect = AuthProtect "cookie-auth"
 type SessionData = Id User
 
+sessionHeader :: HeaderName
+sessionHeader = "servant-auth-cookie"
+
+sessionHeaderStr :: Text
+sessionHeaderStr = Text.decodeUtf8 $ original sessionHeader
+
 type AuthLogin            = "auth"      :> "login"          :> ReqBody '[JSON] LoginData        :> Post '[JSON] LoginResponse
 type AuthLogout           = SessionProtect :> "auth"      :> "logout"         :> Get '[JSON] ()
 type AuthSignup           = "auth"      :> "signup"         :> ReqBody '[JSON] SignupData       :> Post '[JSON] SignupResponse
 
--- type ProjectCreate        = SessionProtect :> "project"   :> "create"         :> ReqBody '[JSON] Project          :> Post '[JSON] (Id Project)
-type ProjectCreate        = "project"   :> "create"         :> ReqBody '[JSON] Project          :> Post '[JSON] (Id Project)
+type ProjectCreate        = SessionProtect :> "project"   :> "create"         :> ReqBody '[JSON] Project          :> Post '[JSON] (Id Project)
+-- type ProjectCreate        = "project"   :> "create"         :> ReqBody '[JSON] Project          :> Post '[JSON] (Id Project)
 type ProjectList          = "project"   :> "list"           :> Get '[JSON] [Entity Project]
 type ProjectSetName       = "project"   :> "setName"        :> Capture "projectId" (Id Project) :> ReqBody '[JSON] Text :> Post '[JSON] ()
 type ProjectDelete        = "project"   :> "delete"         :> Capture "projectId" (Id Project) :> Delete '[JSON] ()

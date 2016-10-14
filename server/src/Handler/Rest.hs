@@ -50,7 +50,7 @@ import           Lib.Template.Interpreter
 import           Lib.Template.Types
 import           Lib.Types
 
-import           Auth                           (mkSession)
+import           Auth                           (mkSession, prolongSession)
 import           Cache
 import           Monads
 import           Propagate
@@ -97,26 +97,28 @@ handle =
 -- Auth
 
 handleAuthLogin :: (MonadIO m, MonadHexl m) => LoginData -> m LoginResponse
-handleAuthLogin (LoginData userName pwd) = do
-    eUserId <- runExceptT $ do
+handleAuthLogin (LoginData userName pwd) =
+    checkLogin >>= \case
+      Left  err    -> pure $ LoginFailed err
+      Right userId -> do
+        session <- getSession userId
+        pure $ LoginSuccess $ session ^. sessionKey
+  where
+    checkLogin = runExceptT $ do
       Entity userId user <- getUser
       checkPassword_ user
       pure userId
-    case eUserId of
-      Left  err    -> pure $ LoginFailed err
-      Right userId -> do
-        session <- getOneByQuery [ "userId" =: userId ] >>= \case
-          Right (Entity _ session)  -> pure session
-          Left _ -> do
-            session <- mkSession userId
-            create session $> session
-        pure $ LoginSuccess $ session ^. sessionKey
-  where
     getUser = ExceptT $ getOneByQuery [ "name" =: userName ]
     checkPassword_ user =
       if verifyPassword pwd (user ^. userPwHash)
         then pure ()
         else throwError "wrong password"
+
+    getSession userId = getOneByQuery [ "userId" =: userId ] >>= \case
+      Right (Entity _ session) -> prolongSession session
+      Left _ -> do
+        session <- mkSession userId
+        create session $> session
 
 handleAuthLogout :: MonadHexl m => SessionData -> m ()
 handleAuthLogout userId =
@@ -136,9 +138,9 @@ handleAuthSignup (SignupData userName pwd) =
 
 -- Project
 
--- handleProjectCreate :: MonadHexl m => SessionData -> Project -> m (Id Project)
-handleProjectCreate :: MonadHexl m => Project -> m (Id Project)
-handleProjectCreate = create
+handleProjectCreate :: MonadHexl m => SessionData -> Project -> m (Id Project)
+-- handleProjectCreate :: MonadHexl m => Project -> m (Id Project)
+handleProjectCreate _ = create
 
 handleProjectList :: MonadHexl m => m [Entity Project]
 handleProjectList = listAll

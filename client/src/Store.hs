@@ -4,42 +4,41 @@
 
 module Store where
 
-import           Control.Applicative       ((<|>))
-import           Control.Arrow             (second)
-import           Control.Concurrent        (forkIO)
-import           Control.DeepSeq           (NFData)
+import           Control.Applicative              ((<|>))
+import           Control.Arrow                    (second)
+import           Control.Concurrent               (forkIO)
+import           Control.DeepSeq                  (NFData)
 import           Control.Lens
-
-import           Data.Foldable             (foldl')
-import           Data.Map.Strict           (Map)
-import qualified Data.Map.Strict           as Map
+import           Data.Foldable                    (foldl')
+import           Data.Map.Strict                  (Map)
+import qualified Data.Map.Strict                  as Map
 import           Data.Proxy
-import           Data.Text                 (Text)
-import qualified Data.Text                 as Text
-import           Data.Typeable             (Typeable)
-
+import           Data.Text                        (Text)
+import qualified Data.Text                        as Text
+import           Data.Typeable                    (Typeable)
 import           GHC.Generics
-
 import           React.Flux
-import           React.Flux.Addons.Servant (ApiRequestConfig (..),
-                                            HandleResponse,
-                                            RequestTimeout (NoTimeout), request)
+import           React.Flux.Addons.Servant        (ApiRequestConfig (..),
+                                                   HandleResponse,
+                                                   RequestTimeout (NoTimeout),
+                                                   request)
+import           Servant.Client.Experimental.Auth (AuthClientData,
+                                                   mkAuthenticateReq)
+import           Servant.Common.Req               (Req, addHeader)
+import           WebSocket
 
+import qualified Config
+import           Lib.Api.Rest                     as Api
+import           Lib.Api.WebSocket
 import           Lib.Model
-import           Lib.Model.Auth            (LoginData (..), LoginResponse (LoginFailed, LoginSuccess),
-                                            SessionKey)
+import           Lib.Model.Auth                   (LoginData (..), LoginResponse (LoginFailed, LoginSuccess),
+                                                   SessionKey)
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Project
 import           Lib.Model.Record
 import           Lib.Model.Table
 import           Lib.Types
-
-import           Lib.Api.Rest              as Api
-import           Lib.Api.WebSocket
-
-import qualified Config
-import           WebSocket
 
 data Coords = Coords (Id Column) (Id Record)
   deriving (Eq, Ord, Show)
@@ -130,6 +129,11 @@ data Action
   | CellSetValue (Id Column) (Id Record) Value
   deriving (Typeable, Generic, NFData)
 
+type instance AuthClientData Api.SessionProtect = SessionKey
+
+mkAuthHeader :: AuthClientData Api.SessionProtect -> (Text, SessionKey)
+mkAuthHeader sessionKey = (Api.sessionHeaderStr, sessionKey)
+
 api :: ApiRequestConfig Routes
 api = ApiRequestConfig Config.apiUrl NoTimeout
 
@@ -217,7 +221,11 @@ instance StoreData State where
             projectsMap = Map.fromList $ map entityToTuple ps
 
       ProjectsCreate project -> do
-        request api (Proxy :: Proxy Api.ProjectCreate) project $ mkCallback $
+        let sessionKey = st ^. stateSessionKey
+        request api
+                (Proxy :: Proxy Api.ProjectCreate)
+                (mkAuthenticateReq sessionKey mkAuthHeader)
+                project $ mkCallback $
           \projectId -> [ProjectsAdd $ Entity projectId project]
         pure st
 

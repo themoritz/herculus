@@ -18,6 +18,7 @@ import           Data.Text              (Text)
 import qualified Data.Text              as Text
 import qualified Data.Text.Encoding     as Text
 import           GHC.Generics           (Generic)
+import           Web.HttpApiData        (ToHttpApiData (..))
 
 -- | a wrapper around ByteString that only holds
 --   valid base64-encoded bytestrings if used correctly
@@ -33,6 +34,11 @@ instance FromJSON Base64 where
 
 instance ToJSON Base64 where
   toJSON = toJSON . Text.decodeUtf8 . unBase64
+
+instance ToHttpApiData Base64 where
+  toUrlPiece = toUrlPiece . Text.decodeUtf8 . unBase64
+  toHeader = unBase64
+  toQueryParam = toQueryParam . Text.decodeUtf8 . unBase64
 
 -- safely build a base64 object by base64 encoding a bytestring
 mkBase64 :: ByteString -> Base64

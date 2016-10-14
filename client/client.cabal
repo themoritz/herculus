@@ -12,8 +12,7 @@ cabal-version:       >=1.10
 
 executable client
   main-is:             Main.hs
-  other-modules:       React.Flux.Addons.Servant
-                     , WebSocket
+  other-modules:       WebSocket
                      , Config
                      , Store
                      , Views
@@ -43,7 +42,9 @@ executable client
                      , lib
                      , mtl
                      , react-flux
+                     , react-flux-servant
                      , servant
+                     , servant-client
                      , text
                      , transformers
   hs-source-dirs:      src

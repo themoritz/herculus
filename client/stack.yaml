@@ -18,6 +18,10 @@ packages:
 - location: ../lib
   extra-dep: true
 
+- location:
+    hg: https://rubenmoor@bitbucket.org/rubenmoor/react-flux-servant
+    commit: tip
+
 extra-deps:
 - react-flux-1.2.1
 - ghcjs-dom-0.3.1.0
