@@ -247,7 +247,7 @@ unify cs = do
     unifyOne t1 t2 = throwError $ pack $ "type mismatch: " <> show t1 <> ", " <> show t2
 
     bind :: TVar -> Type -> InferT m Subst
-    bind a t | t == TyVar a     = pure nullSubst
+    bind a t | t == TyVar a    = pure nullSubst
              | occursCheck a t = throwError "occurs check: infinite type"
              | otherwise       = pure $ Map.singleton a t
 

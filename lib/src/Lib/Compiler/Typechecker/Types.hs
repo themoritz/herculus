@@ -2,21 +2,25 @@
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE FlexibleContexts            #-}
 
 module Lib.Compiler.Typechecker.Types where
 
-import           Control.Lens         hiding (Context, op)
+import           Control.Lens          hiding (Context, op)
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 
-import           Data.List            (intercalate)
-import           Data.Map             (Map)
-import qualified Data.Map             as Map
-import           Data.Monoid          ((<>))
-import           Data.Set             (Set)
-import qualified Data.Set             as Set
-import           Data.Text            (Text, unpack)
+import           Data.List             (intercalate)
+import           Data.Map              (Map)
+import qualified Data.Map              as Map
+import           Data.Monoid           ((<>))
+import           Data.Set              (Set)
+import qualified Data.Set              as Set
+import           Data.Sequence         (Seq)
+import qualified Data.Sequence         as Seq
+import           Data.Text             (Text, unpack, pack)
+import qualified Data.UnionFind.IntMap as UF
 
 import           Lib.Types
 
@@ -34,37 +38,37 @@ data Kind
   deriving (Eq, Ord)
 
 -- In paper: alpha
-newtype TypeVar = TypeVar Text
+newtype TypeVar = TypeVar Int
   deriving (Eq, Ord)
 
 -- In paper: Xi
-newtype TypeConstructor = TypeConstructor Text
+newtype TypeConst = TypeConst Text
   deriving (Eq, Ord)
 
 newtype ClassName = ClassName Text
   deriving (Eq, Ord)
 
 -- In paper: tau
-data SimpleType
+data MonoType
   = TyVar TypeVar
-  | TyApp TypeConstructor (Maybe SimpleType)
-  | TyFun SimpleType SimpleType
-  | TyRecord SimpleType
-  | TyRecordCons (Ref Column) SimpleType SimpleType
+  | TyConst TypeConst
+  | TyApp MonoType MonoType
+  | TyFun MonoType MonoType
+  | TyRecord MonoType
+  | TyRecordCons (Ref Column) MonoType MonoType
   | TyRecordNil
   deriving (Ord)
 
--- In paper: rho, "(Foo a) => ..."
-newtype ConstrainedType = Constraints [(ClassName, TypeVar)] SimpleType
+type Qualifier = (ClassName, MonoType)
 
 -- In paper: sigma, "forall a. ..."
-newtype PolymorphicType = ForAll [TypeVar] ConstrainedType
+data PolyType = ForAll [TypeVar] [Qualifier] MonoType
 
-instance Eq SimpleType where
+instance Eq MonoType where
   TyVar a == TyVar b = a == b
   TyApp c1 a1 == TyApp c2 a2 = c1 == c2 && a1 == a2
   TyRecord s == TyRecord t = rowMap s == rowMap t
-    where rowMap :: SimpleType -> Map (Ref Column) SimpleType
+    where rowMap :: MonoType -> Map (Ref Column) MonoType
           rowMap = Map.fromList . go
           go TyRecordNil = []
           go (TyVar _) = []
@@ -75,109 +79,97 @@ instance Eq SimpleType where
 
 instance Show Kind where
   show KindStar = "*"
-  show (KindFun from to) = "(" <> show from <> " -> " <> show to <> ")"
+  show (KindFun arg res) = "(" <> show arg <> " -> " <> show res <> ")"
 
 instance Show TypeVar where
-  show (TypeVar a) = unpack a
+  show (TypeVar a) = show a
 
-instance Show TypeConstructor where
-  show (TypeConstructor name) = unpack name
+instance Show TypeConst where
+  show (TypeConst name) = unpack name
 
 instance Show ClassName where
   show (ClassName name) = unpack name
 
-instance Show SimpleType where
+instance Show MonoType where
   show (TyVar a) = show a
-  show (TyApp cons marg) = case arg of
-    Just arg -> "(" <> show cons <> " " <> show arg <> ")"
-    Nothing  -> show cons
+  show (TyConst c) = show c
+  show (TyApp f arg) = "(" <> show f <> " " <> show arg <> ")"
   show (TyFun a b) = "(" <> show a <> " -> " <> show b <> ")"
   show (TyRecord r) = "{" <> show r <> "}"
   show (TyRecordCons name t r) = show name <> " : " <> show t <> ", " <> show r
   show (TyRecordNil) = "-"
 
-instance Show ConstrainedType where
-  show (Constraints consts body) =
-      "(" <> intercalate ", " (map showConst consts) <> " => " <> show body
-    where showConst (cls, t) = show cls <> " " <> show t
-
-instance Show PolymorphicType where
-  show (ForAll as t) =
-    "forall " <> intercalate " " (map show as) <> ". " <> show t
+instance Show PolyType where
+  show (ForAll as qs t) =
+      "forall " <> intercalate " " (map show as) <> ". " <>
+      "(" <> intercalate ", " (map showQuali qs) <> ")" <>
+      "=> " <> show t
+    where showQuali (cls, t') = show cls <> " " <> show t'
 
 --
+
+data Constraint
+  = Unify Point Point
+  | Generalize Name Point (Set TypeVar)
+  | Instantiate Point (Either Name PolyType)
+  | Skolemize Point (Either Name PolyType) (Set TypeVar)
+  | ProveQualifier Qualifier
+  | AssumeQualifier Qualifier
+
+type Point = UF.Point MonoType
 
 -- Names by which the implementations can be accessed in the interpretation env
 data TypeClassDict = TypeClassDict Name
 
-data Context = Context
-  { _contextVariables        :: Map Name PolymorphicType
-  , _contextTypeConstructors :: Map TypeConstructor Kind
-  , _contextTypeClasses      :: Map ClassName (Map Name PolymorphicType)
-  , _contextTypeClassDicts   :: Map ClassName (Map SimpleType TypeClassDict)
+data InferState = InferState
+  { _inferContext          :: Map Name PolyType
+  , _inferCount            :: Int
+  , _inferPointSupply      :: UF.PointSupply MonoType
+  , _inferConstraints      :: Seq Constraint
+
+  -- Later ...
+  , _inferTypeConstructors :: Map TypeConst Kind
+  -- ^ Kinds of type constructors, eg List : * -> *
+  , _inferTypeClasses      :: Map ClassName (Map Name PolyType)
+  , _inferTypeClassDicts   :: Map ClassName (Map MonoType TypeClassDict)
   }
-  deriving (Show)
 
-extend :: (Name, Scheme) -> Context -> Context
-extend (x, s) (Context env) = Context $ Map.insert x s env
+makeLenses ''InferState
 
-remove :: Name -> Context -> Context
-remove x (Context env) = Context $ Map.delete x env
+lookupPolyType :: (MonadError TypeError m, MonadState InferState m) => Name -> m PolyType
+lookupPolyType name = do
+  ctx <- use inferContext
+  case Map.lookup name ctx of
+    Just t -> pure t
+    Nothing -> throwError $ "not in scope: " <> name
 
-getScheme :: Name -> Context -> Maybe Scheme
-getScheme x (Context env) = Map.lookup x env
+inLocalContext :: MonadState InferState m => (Name, PolyType) -> m a -> m a
+inLocalContext (name, poly) m = do
+  oldContext <- use inferContext
+  inferContext %= Map.insert name poly
+  res <- m
+  inferContext .= oldContext
+  pure res
 
---
+fresh :: MonadState InferState m => m Point
+fresh = do
+  c <- inferCount <+= 1
+  supply <- use inferPointSupply
+  let (supply', point) = UF.fresh supply $ TyVar $ TypeVar c
+  inferPointSupply .= supply'
+  pure point
 
-type Substitution = Map TypeVar SimpleType
+find :: MonadState InferState m => Point -> m Point
+find p = (flip UF.repr p) <$> use inferPointSupply
 
-nullSubst :: Subst
-nullSubst = Map.empty
+findType :: MonadState InferState m => Point -> m MonoType
+findType p = (flip UF.descriptor p) <$> use inferPointSupply
 
-compose :: Subst -> Subst -> Subst
-compose s2 s1 = Map.map (apply s2) s1 `Map.union` s2
+union :: MonadState InferState m => Point -> Point -> m ()
+union a b = inferPointSupply %= \s -> UF.union s a b
 
-class Substitutable a where
-  apply :: Subst -> a -> a
-  ftv :: a -> Set TVar
-
-instance Substitutable Type where
-  apply s t@(TyVar a)      = Map.findWithDefault t a s
-  apply _ (TyNullary s)    = TyNullary s
-  apply s (TyUnary n t)    = TyUnary n (apply s t)
-  apply s (TyArr t1 t2)    = TyArr (apply s t1) (apply s t2)
-  apply s (TyRecord r)     = TyRecord (apply s r)
-  apply s (TyRow name t r) = TyRow name (apply s t) (apply s r)
-  apply _ (TyNoRow)        = TyNoRow
-
-  ftv (TyVar a)     = Set.singleton a
-  ftv (TyNullary _) = Set.empty
-  ftv (TyUnary _ t) = ftv t
-  ftv (TyArr t1 t2) = ftv t1 `Set.union` ftv t2
-  ftv (TyRecord r)  = ftv r
-  ftv (TyRow _ t r) = ftv t `Set.union` ftv r
-  ftv (TyNoRow)     = Set.empty
-
-instance Substitutable Scheme where
-  apply s (Forall as t) = let s' = foldr Map.delete s as
-                          in Forall as (apply s' t)
-  ftv (Forall as t) = ftv t `Set.difference` Set.fromList as
-
-instance Substitutable a => Substitutable [a] where
-  apply s = map (apply s)
-  ftv = foldr (Set.union . ftv) Set.empty
-
-instance (Substitutable a, Substitutable b) => Substitutable (a, b) where
-  apply s (a, b) = (apply s a, apply s b)
-  ftv (a, b) = ftv a `Set.union` ftv b
-
-instance Substitutable Context where
-  apply s (Context env) = Context $ Map.map (apply s) env
-  ftv (Context env) = ftv $ Map.elems env
-
---
-
-data TypedExpr = TExpr ::: Type
+logConstraint :: MonadState InferState m => Constraint -> m ()
+logConstraint c = inferConstraints %= flip (Seq.|>) c
 
 --
 
@@ -185,20 +177,14 @@ data TypecheckEnv m = TypecheckEnv
   { envResolveColumnRef        :: Ref Column -> m (Maybe (Id Column, DataCol))
   , envResolveColumnOfTableRef :: Ref Table -> Ref Column -> m (Maybe (Id Column, DataCol))
   , envResolveTableRef         :: Ref Table -> m (Maybe (Id Table, [(Id Column, DataCol)]))
-  , envGetTableRows            :: Id Table -> m Type
+  , envGetTableRows            :: Id Table -> m MonoType
   , envOwnTableId              :: Id Table
   }
 
 --
 
-data InferState = InferState
-  { _inferCount   :: Int
-  , _inferContext :: Context
-  }
-
-makeLenses ''InferState
-
 type TypeError = Text
+data TypedExpr = TExpr ::: MonoType
 
 newtype InferT m a = InferT
   { unInferT :: ReaderT (TypecheckEnv m) (StateT InferState (ExceptT TypeError m)) a

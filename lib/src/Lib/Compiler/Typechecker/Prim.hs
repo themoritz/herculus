@@ -2,23 +2,26 @@ module Lib.Compiler.Typechecker.Prim where
 
 import           Lib.Compiler.Typechecker.Types
 
-tyList :: TypeConstructor
-tyList = TypeConstructor "List"
+mkSimpleTypeConst :: Text -> SimpleType
+mkSimpleTypeConst = TyConst . TypeConst
 
-tyMaybe :: TypeConstructor
-tyMaybe = TypeConstructor "Maybe"
+tyList :: SimpleType
+tyList = mkSimpleTypeConst "List"
+
+tyMaybe :: SimpleType
+tyMaybe = mkSimpleTypeConst "Maybe"
 
 tyNumber :: SimpleType
-tyNumber = TyApp (TypeConstructor "Number") Nothing
+tyNumber = mkSimpleTypeConst "Number"
 
 tyString :: SimpleType
-tyString = TyApp (TypeConstructor "String") Nothing
+tyString = mkSimpleTypeConst "String"
 
 tyTime :: SimpleType
-tyTime = TyApp (TypeConstructor "Time") Nothing
+tyTime = mkSimpleTypeConst "Time"
 
 tyBool :: SimpleType
-tyBool = TyApp (TypeConstructor "Bool") Nothing
+tyBool = mkSimpleTypeConst "Bool"
 
 typeOfDataType :: Applicative m => (Id Table -> m SimpleType) -> DataType -> m SimpleType
 typeOfDataType f = \case
@@ -27,8 +30,18 @@ typeOfDataType f = \case
   DataNumber     -> pure tyNumber
   DataTime       -> pure tyTime
   (DataRecord t) -> TyRecord <$> f t
-  (DataList t)   -> TyApp tyList . Just <$> typeOfDataType f t
-  (DataMaybe t)  -> TyApp tyMaybe . Just <$> typeOfDataType f t
+  (DataList t)   -> TyApp tyList <$> typeOfDataType f t
+  (DataMaybe t)  -> TyApp tyMaybe <$> typeOfDataType f t
+
+primTypeConstructors :: Map TypeConstructor Kind
+primTypeConstructors = Map.fromList
+  [ (TypeConst "List" , KindFun KindStar KindStar)
+  , (TypeConst "Maybe" , KindFun KindStar KindStar)
+  , (TypeConst "Number" , KindStar)
+  , (TypeConst "String", KindStar)
+  , (TypeConst "Time", KindStar)
+  , (TypeConst "Bool", KindStar)
+  ]
 
 primTypeClasses :: Map ClassName (Map Name PolymorphicType)
 primTypeClasses = Map.fromList
