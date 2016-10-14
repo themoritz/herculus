@@ -37,7 +37,7 @@ import           GHC.Generics           (Generic)
 import           Lib.Model.Class        (FromDocument (..), Model (..),
                                          ToDocument (..))
 import           Lib.Types              (Id, Time, fromObjectId, toObjectId)
-import           Lib.Util.Base64        (Base64, mkBase64Unsafe, unBase64)
+import           Lib.Util.Base64        (Base64, toBase64Unsafe, unBase64)
 
 
 -- Login
@@ -70,7 +70,7 @@ data SignupResponse
 --       Maybe a different ADT. It's just `Id User` for now
 
 mkPwHash :: MonadIO m => Text -> m PwHash
-mkPwHash txt = liftIO $ mkBase64Unsafe <$> makePassword (Text.encodeUtf8 txt) 17
+mkPwHash txt = liftIO $ toBase64Unsafe <$> makePassword (Text.encodeUtf8 txt) 17
 
 verifyPassword :: Text -> PwHash -> Bool
 verifyPassword str pwHash =

@@ -23,7 +23,7 @@ import           System.Entropy                   (getEntropy)
 
 import           HexlNat                          (hexlToServant)
 import           Lib.Api.Rest                     (SessionData, SessionProtect)
-import           Lib.Base64                       (mkBase64, mkBase64')
+import           Lib.Base64                       (mkBase64, toBase64)
 import           Lib.Model                        (Entity (..))
 import           Lib.Model.Auth                   (Session (..), SessionKey,
                                                    User, sessionExpDate,
@@ -71,7 +71,7 @@ authHandler :: HexlEnv -> AuthMiddleware
 authHandler env = mkAuthHandler $ hexlToServant env $ \request ->
     case List.lookup "servant-auth-cookie" (requestHeaders request) of
       Nothing -> throwError $ ErrUnauthorized "Missing header 'servant-auth-cookie'"
-      Just bs -> case mkBase64' bs of
+      Just bs -> case toBase64 bs of
         Left  err -> throwError $ ErrForbidden err
         Right key -> lookUpSession key
                        >>= either (throwError . ErrForbidden) pure

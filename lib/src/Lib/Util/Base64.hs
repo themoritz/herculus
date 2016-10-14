@@ -4,8 +4,8 @@
 module Lib.Util.Base64
   ( Base64
   , mkBase64
-  , mkBase64'
-  , mkBase64Unsafe
+  , toBase64
+  , toBase64Unsafe
   , unBase64
   ) where
 
@@ -40,13 +40,13 @@ mkBase64 = Base64 . Base64.encode
 
 -- unsafely build a base64 object, use only when the bytestring
 -- is a valid base64 encoded object already
-mkBase64Unsafe :: ByteString -> Base64
-mkBase64Unsafe = Base64
+toBase64Unsafe :: ByteString -> Base64
+toBase64Unsafe = Base64
 
 -- | the safe variant of mkBase64Unsafe
 --   Build a base64 object from a base64-encoded bytestring.
 --   Fail if the object is not valid base64.
-mkBase64' :: ByteString -> Either Text Base64
-mkBase64' bs = case Base64.decode bs of
+toBase64 :: ByteString -> Either Text Base64
+toBase64 bs = case Base64.decode bs of
   Left err -> Left $ Text.pack err
   Right _  -> Right $ Base64 bs
