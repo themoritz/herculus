@@ -8,15 +8,12 @@ module Auth
   , prolongSession
   ) where
 
-import           Control.Lens                     ((^.))
+import           Control.Lens                     ((%~), (&), (^.))
 import           Control.Monad.Except             (throwError)
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
-import qualified Data.ByteString.Base64           as Base64
 import           Data.Functor                     (($>))
 import qualified Data.List                        as List
 import           Data.Text                        (Text)
-import qualified Data.Text                        as Text
-import qualified Data.Text.Encoding               as Text
 import qualified Data.Time.Clock                  as Clock (getCurrentTime)
 import           Database.MongoDB                 ((=:))
 import           Network.Wai                      (Request, requestHeaders)
@@ -24,9 +21,9 @@ import           Servant.Server.Experimental.Auth (AuthHandler, AuthServerData,
                                                    mkAuthHandler)
 import           System.Entropy                   (getEntropy)
 
-
 import           HexlNat                          (hexlToServant)
 import           Lib.Api.Rest                     (SessionData, SessionProtect)
+import           Lib.Base64                       (mkBase64, mkBase64')
 import           Lib.Model                        (Entity (..))
 import           Lib.Model.Auth                   (Session (..), SessionKey,
                                                    User, sessionExpDate,
@@ -47,14 +44,13 @@ type instance AuthServerData SessionProtect = SessionData
 
 mkSession :: MonadIO m => Id User -> m Session
 mkSession userId = liftIO $ do
-  created <- addSeconds 600 . Time <$> Clock.getCurrentTime
-  key <- Text.decodeUtf8 . Base64.encode <$> getEntropy 32
   -- session expiry in seconds
+  created <- addSeconds 600 . Time <$> Clock.getCurrentTime
+  key <- mkBase64 <$> getEntropy 32
   pure $ Session userId key created
 
 prolongSession :: Session -> Session
-prolongSession session@Session{ _sessionExpDate = expiry } =
-  session { _sessionExpDate = addSeconds 600 expiry }
+prolongSession session = session & sessionExpDate %~ addSeconds 600
 
 --
 
@@ -75,7 +71,7 @@ authHandler :: HexlEnv -> AuthMiddleware
 authHandler env = mkAuthHandler $ hexlToServant env $ \request ->
     case List.lookup "servant-auth-cookie" (requestHeaders request) of
       Nothing -> throwError $ ErrUnauthorized "Missing header 'servant-auth-cookie'"
-      Just bs -> case Text.decodeUtf8' bs of
-        Left  err -> throwError $ ErrForbidden $ Text.pack $ show err
+      Just bs -> case mkBase64' bs of
+        Left  err -> throwError $ ErrForbidden err
         Right key -> lookUpSession key
                        >>= either (throwError . ErrForbidden) pure
