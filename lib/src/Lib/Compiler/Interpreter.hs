@@ -19,7 +19,7 @@ import           Lib.Compiler.Types
 
 -- Prelude
 
-prelude :: Monad m => Map String (Result m)
+prelude :: Monad m => Map Name (Result m)
 prelude = Map.fromList
   [ ( "zero"
     , RValue $ VNumber $ Number 0

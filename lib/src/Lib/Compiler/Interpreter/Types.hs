@@ -16,11 +16,11 @@ import           Lib.Model.Record
 import           Lib.Model.Table
 import           Lib.Types
 
-type TermEnv m = Map String (Result m)
+type TermEnv m = Map Name (Result m)
 
 data Result m
   = RValue Value
-  | RClosure String TExpr (TermEnv m)
+  | RClosure Name TExpr (TermEnv m)
   | RPrelude (TermEnv m -> Result m -> InterpretT m (Result m))
 
 type EvalError = Text

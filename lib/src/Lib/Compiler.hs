@@ -9,14 +9,16 @@ import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Types
 
+import           Lib.Compiler.Types
 import           Lib.Compiler.Interpreter
 import           Lib.Compiler.Interpreter.Types
 import           Lib.Compiler.Parser
 import           Lib.Compiler.Typechecker
 import           Lib.Compiler.Typechecker.Types
+import           Lib.Compiler.Typechecker.Prim
 
 compile :: Monad m => Text -> TypecheckEnv m
-        -> m (Either Text TypedExpr)
+        -> m (Either Text (TExpr, Type))
 compile inp env = case parseExpr inp of
   Left e -> pure $ Left e
   Right e' -> runInfer env e'
@@ -36,7 +38,8 @@ testTypecheckEnv = TypecheckEnv
                                            , [ (nullObjectId, testDataCol)
                                              ]
                                            )
-  , envGetTableRows = \_ -> pure $ TyRow (Ref "A") (TyNullary TyNumber) TyNoRow
+  -- , envGetTableRows = \_ -> pure $ TyRecordCons (Ref "A") tyNumber TyRecordNil
+  , envGetTableRows = \_ -> pure tyBool
   , envOwnTableId = nullObjectId
   }
 
@@ -51,7 +54,7 @@ testEvalEnv = EvalEnv
 test :: String -> IO ()
 test inp = compile (pack inp) testTypecheckEnv >>= \case
   Left e -> putStrLn $ unpack e
-  Right (e' ::: typ) -> do
+  Right (e', typ) -> do
     putStrLn $ "Type: " ++ show typ
     case interpret e' testEvalEnv of
       Left e -> putStrLn $ unpack e

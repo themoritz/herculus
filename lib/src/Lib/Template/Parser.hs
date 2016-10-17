@@ -65,7 +65,7 @@ tplFor = do
     pure (name, hexlExpr)
   body <- template
   instr "endfor" $ pure ()
-  pure $ PTplFor name hexlExpr body
+  pure $ PTplFor (pack name) hexlExpr body
 
 tplIf :: Parser PTplExpr
 tplIf = do

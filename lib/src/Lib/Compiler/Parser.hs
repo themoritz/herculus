@@ -97,7 +97,7 @@ let' = do
   e <- expr
   _ <- P.lexeme lexer (char ';')
   body <- expr
-  pure $ PLet name (foldr PLam e args) body
+  pure $ PLet (pack name) (foldr PLam e (map pack args)) body
 
 lam :: Parser PExpr
 lam = do
@@ -105,10 +105,10 @@ lam = do
   vars <- many1 $ P.identifier lexer
   _ <- P.lexeme lexer $ string "->"
   body <- expr
-  pure $ foldr PLam body vars
+  pure $ foldr PLam body (map pack vars)
 
 var :: Parser PExpr
-var = PVar <$> P.identifier lexer
+var = PVar . pack <$> P.identifier lexer
 
 lit :: Parser PExpr
 lit = PLit <$> (stringLit <|> numberLit <|> boolLit)
