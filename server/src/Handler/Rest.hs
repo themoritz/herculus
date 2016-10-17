@@ -142,32 +142,32 @@ handleProjectCreate :: MonadHexl m => SessionData -> Project -> m (Id Project)
 -- handleProjectCreate :: MonadHexl m => Project -> m (Id Project)
 handleProjectCreate _ = create
 
-handleProjectList :: MonadHexl m => m [Entity Project]
-handleProjectList = listAll
+handleProjectList :: MonadHexl m => SessionData -> m [Entity Project]
+handleProjectList _ = listAll
 
-handleProjectSetName :: MonadHexl m => Id Project -> Text -> m ()
-handleProjectSetName projectId name = do
+handleProjectSetName :: MonadHexl m => SessionData -> Id Project -> Text -> m ()
+handleProjectSetName _ projectId name = do
   project <- getById' projectId
   let updatedProject = project & projectName .~ name
   update projectId $ const updatedProject
 
 
-handleProjectDelete :: MonadHexl m => Id Project -> m ()
-handleProjectDelete projectId = do
-    tables <- handleTableList projectId
-    _ <- mapM (handleTableDelete . entityId) tables
+handleProjectDelete :: MonadHexl m => SessionData -> Id Project -> m ()
+handleProjectDelete sessionData projectId = do
+    tables <- handleTableList sessionData projectId
+    _ <- mapM (\table -> handleTableDelete sessionData (entityId table)) tables
     delete projectId
 
 --
 
-handleTableCreate :: MonadHexl m => Table -> m (Id Table)
-handleTableCreate = create
+handleTableCreate :: MonadHexl m => SessionData -> Table -> m (Id Table)
+handleTableCreate _ = create
 
-handleTableList :: MonadHexl m => Id Project -> m [Entity Table]
-handleTableList projId = listByQuery [ "projectId" =: toObjectId projId ]
+handleTableList :: MonadHexl m => SessionData -> Id Project -> m [Entity Table]
+handleTableList _ projId = listByQuery [ "projectId" =: toObjectId projId ]
 
-handleTableListGlobal :: MonadHexl m => m [Entity Table]
-handleTableListGlobal = listByQuery [ ]
+handleTableListGlobal :: MonadHexl m => SessionData -> m [Entity Table]
+handleTableListGlobal _ = listByQuery [ ]
 
 handleTableData :: MonadHexl m => Id Table -> m [(Id Column, Id Record, CellContent)]
 handleTableData tblId = do
@@ -175,21 +175,21 @@ handleTableData tblId = do
   let go (Cell v (Aspects _ c r)) = (c, r, v)
   pure $ map (go . entityVal) cells
 
-handleTableGetWhole :: MonadHexl m => Id Table
+handleTableGetWhole :: MonadHexl m => SessionData -> Id Table
                     -> m ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
-handleTableGetWhole tblId =
+handleTableGetWhole _ tblId =
   (,,) <$> handleColumnList tblId
        <*> handleRecordList tblId
        <*> handleTableData tblId
 
-handleTableSetName :: MonadHexl m => Id Table -> Text -> m ()
-handleTableSetName tblId name = do
+handleTableSetName :: MonadHexl m => SessionData -> Id Table -> Text -> m ()
+handleTableSetName _ tblId name = do
   table <- getById' tblId
   let table' = table & tableName .~ name
   update tblId $ const table'
 
-handleTableDelete :: MonadHexl m => Id Table -> m ()
-handleTableDelete tableId = do
+handleTableDelete :: MonadHexl m => SessionData -> Id Table -> m ()
+handleTableDelete _ tableId = do
     delete tableId
     deleteByQuery (Proxy::Proxy Column) query
     deleteByQuery (Proxy::Proxy Cell) query

@@ -71,22 +71,22 @@ sessionHeader = "servant-auth-cookie"
 sessionHeaderStr :: Text
 sessionHeaderStr = Text.decodeUtf8 $ original sessionHeader
 
-type AuthLogin            = "auth"      :> "login"          :> ReqBody '[JSON] LoginData        :> Post '[JSON] LoginResponse
-type AuthLogout           = SessionProtect :> "auth"        :> "logout"                         :> Get '[JSON] ()
-type AuthSignup           = "auth"      :> "signup"         :> ReqBody '[JSON] SignupData       :> Post '[JSON] SignupResponse
+type AuthLogin            = "auth"          :> "login"      :> ReqBody '[JSON] LoginData        :> Post '[JSON] LoginResponse
+type AuthLogout           = SessionProtect  :> "auth"       :> "logout"                         :> Get '[JSON] ()
+type AuthSignup           = "auth"          :> "signup"     :> ReqBody '[JSON] SignupData       :> Post '[JSON] SignupResponse
 
-type ProjectCreate        = SessionProtect :> "project"   :> "create"         :> ReqBody '[JSON] Project          :> Post '[JSON] (Id Project)
-type ProjectList          = "project"   :> "list"           :> Get '[JSON] [Entity Project]
-type ProjectSetName       = "project"   :> "setName"        :> Capture "projectId" (Id Project) :> ReqBody '[JSON] Text :> Post '[JSON] ()
-type ProjectDelete        = "project"   :> "delete"         :> Capture "projectId" (Id Project) :> Delete '[JSON] ()
+type ProjectCreate        = SessionProtect  :> "project"    :> "create"   :> ReqBody '[JSON] Project          :> Post '[JSON] (Id Project)
+type ProjectList          = SessionProtect  :> "project"    :> "list"     :> Get '[JSON] [Entity Project]
+type ProjectSetName       = SessionProtect  :> "project"    :> "setName"  :> Capture "projectId" (Id Project) :> ReqBody '[JSON] Text :> Post '[JSON] ()
+type ProjectDelete        = SessionProtect  :> "project"    :> "delete"   :> Capture "projectId" (Id Project) :> Delete '[JSON] ()
 
-type TableCreate          = "table"     :> "create"         :> ReqBody '[JSON] Table            :> Post '[JSON] (Id Table)
-type TableList            = "table"     :> "list"           :> Capture "projectId" (Id Project) :> Get '[JSON] [Entity Table]
-type TableListGlobal      = "table"     :> "listGlobal"     :> Get '[JSON] [Entity Table]
-type TableData            = "table"     :> "data"           :> Capture "tableId" (Id Table)     :> Get '[JSON] [(Id Column, Id Record, CellContent)]
-type TableGetWhole        = "table"     :> "getWhole"       :> Capture "tableId" (Id Table)     :> Get '[JSON] ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
-type TableSetName         = "table"     :> "setName"        :> Capture "tableId" (Id Table)     :> ReqBody '[JSON] Text :> Post '[JSON] ()
-type TableDelete          = "table"     :> "delete"         :> Capture "tableId" (Id Table)     :> Delete '[JSON] ()
+type TableCreate          = SessionProtect  :> "table"      :> "create"   :> ReqBody '[JSON] Table            :> Post '[JSON] (Id Table)
+type TableList            = SessionProtect  :> "table"      :> "list"           :> Capture "projectId" (Id Project) :> Get '[JSON] [Entity Table]
+type TableListGlobal      = SessionProtect  :> "table"      :> "listGlobal"     :> Get '[JSON] [Entity Table]
+type TableData            = "table"      :> "data"           :> Capture "tableId" (Id Table)     :> Get '[JSON] [(Id Column, Id Record, CellContent)]
+type TableGetWhole        = SessionProtect  :> "table"      :> "getWhole"       :> Capture "tableId" (Id Table)     :> Get '[JSON] ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
+type TableSetName         = SessionProtect  :> "setName"        :> Capture "tableId" (Id Table)     :> ReqBody '[JSON] Text :> Post '[JSON] ()
+type TableDelete          = SessionProtect  :> "table"      :> "delete"         :> Capture "tableId" (Id Table)     :> Delete '[JSON] ()
 
 type ColumnCreate         = "column"    :> "create"         :> ReqBody '[JSON] Column           :> Post '[JSON] (Entity Column, [Entity Cell])
 type ColumnDelete         = "column"    :> "delete"         :> Capture "columnId" (Id Column)   :> Get '[JSON] ()

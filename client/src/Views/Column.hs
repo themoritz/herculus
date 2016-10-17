@@ -26,12 +26,15 @@ import           Text.Read                 (readMaybe)
 
 import           Lib.Api.Rest              (TableListGlobal)
 import           Lib.Model
+import           Lib.Model.Auth            (SessionKey)
 import           Lib.Model.Column
 import           Lib.Model.Table
 import           Lib.Types
 import           React.Flux.Addons.Servant (request)
 
-import           Store
+import           Store                     (Action (ColumnRename, DataColUpdate, GlobalSetError, ReportColUpdate, TableDeleteColumn),
+                                            State, api, dispatch, session,
+                                            stateSessionKey, store)
 import           Views.Combinators
 import           Views.Common              (EditBoxProps (..), editBox_)
 import           Views.Foreign
@@ -61,7 +64,7 @@ data ColConfAction
   | ColumnSetTmpFormula        (Id Column) Text
   | ColumnUnsetTmpFormula      (Id Column)
   | ColumnSetVisibility        (Id Column) Bool
-  | ColumnGetTableCache
+  | ColumnGetTableCache        (Maybe SessionKey)
   | ColumnSetTableCache        TableCache
   | ColumnSetTmpReportLang     (Id Column) (Maybe ReportLanguage)
   | ColumnUnsetTmpReportLang   (Id Column)
@@ -91,11 +94,11 @@ instance StoreData ColConfState where
       True  -> st & ccsVisible %~ Set.insert i
       False -> st & ccsVisible %~ Set.delete i
 
-    ColumnGetTableCache -> do
+    ColumnGetTableCache sKey -> do
       when (Map.null $ st ^. ccsTableCache) $
-        request api (Proxy :: Proxy TableListGlobal) $ pure . \case
-          Left (_, e) -> dispatch $ GlobalSetError $ Text.pack e
-          Right ts    -> [SomeStoreAction colConfStore $ ColumnSetTableCache $ toTableMap ts]
+        request api (Proxy :: Proxy TableListGlobal) (session sKey) $ pure . \case
+                      Left (_, e) -> dispatch $ GlobalSetError $ Text.pack e
+                      Right ts    -> [SomeStoreAction colConfStore $ ColumnSetTableCache $ toTableMap ts]
       pure st
     ColumnSetTableCache m ->
       pure $ st & ccsTableCache .~ m
@@ -200,11 +203,11 @@ recordTableId _                = Nothing
 
 --
 
-column_ :: Entity Column -> ReactElementM eh ()
-column_ !c = view column c mempty
+column_ :: State -> Entity Column -> ReactElementM eh ()
+column_ !st !c = view column (st, c) mempty
 
-column :: ReactView (Entity Column)
-column = defineView "column" $ \c@(Entity i col) -> cldiv_ "column" $ do
+column :: ReactView (State, Entity Column)
+column = defineView "column" $ \(st, c@(Entity i col)) -> cldiv_ "column" $ do
   cldiv_ "head" $ do
     editBox_ EditBoxProps
       { editBoxValue       = col ^. columnName
@@ -214,35 +217,35 @@ column = defineView "column" $ \c@(Entity i col) -> cldiv_ "column" $ do
       , editBoxValidator   = Just
       , editBoxOnSave      = dispatch . ColumnRename i
       }
-    columnInfo_ c
-  columnConfig_ c
+    columnInfo_ st c
+  columnConfig_ st c
 
 -- column info, a summary of datatype and isDerived
 
-columnInfo_ :: Entity Column -> ReactElementM eh ()
-columnInfo_ !c = view columnInfo c mempty
+columnInfo_ :: State -> Entity Column -> ReactElementM eh ()
+columnInfo_ !st !c = view columnInfo (st, c) mempty
 
-columnInfo :: ReactView (Entity Column)
-columnInfo = defineView "column info" $ \(Entity _ col) ->
+columnInfo :: ReactView (State, Entity Column)
+columnInfo = defineView "column info" $ \(st, Entity _ col) ->
   cldiv_ "info" $
     case col ^. columnKind of
       ColumnData dat -> do
         case dat ^. dataColIsDerived of
           Derived    -> faIcon_ "superscript fa-fw"
           NotDerived -> faIcon_ "i-cursor fa-fw"
-        dataTypeInfo_ $ dat ^. dataColType
+        dataTypeInfo_ st (dat ^. dataColType)
       ColumnReport rep -> do
         faIcon_ "file-text-o"
         reportInfo_ rep
 
 -- configure column
 
-columnConfig_ :: Entity Column -> ReactElementM eh ()
-columnConfig_ !c = view columnConfig c mempty
+columnConfig_ :: State -> Entity Column -> ReactElementM eh ()
+columnConfig_ !st !c = view columnConfig (st, c )mempty
 
-columnConfig :: ReactView (Entity Column)
+columnConfig :: ReactView (State, Entity Column)
 columnConfig = defineControllerView "column configuration" colConfStore $
-  \state (Entity i col) -> cldiv_ "config" $ do
+  \state (st, Entity i col) -> cldiv_ "config" $ do
     let mError = case col ^. columnKind of
           ColumnData dat ->
             case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of
@@ -264,7 +267,7 @@ columnConfig = defineControllerView "column configuration" colConfStore $
       ] ) $ faIcon_ "gear fa-2x"
     when (Set.member i $ state ^. ccsVisible) $
       case col ^. columnKind of
-        ColumnData   dat -> dataColConf_ i dat
+        ColumnData   dat -> dataColConf_ st i dat
         ColumnReport rep -> reportColConf_ i rep
 
 -- column kind: report
@@ -381,34 +384,34 @@ inputTemplate = defineView "input template" $ \(i, t, lang) -> do
 
 -- column kind: data
 
-dataTypeInfo_ :: DataType -> ReactElementM eh ()
-dataTypeInfo_ !dt = view dataTypeInfo dt mempty
+dataTypeInfo_ :: State -> DataType -> ReactElementM eh ()
+dataTypeInfo_ !st !dt = view dataTypeInfo (st, dt) mempty
 
-dataTypeInfo :: ReactView DataType
+dataTypeInfo :: ReactView (State, DataType)
 dataTypeInfo = defineControllerView "datatype info" colConfStore $
-  \state dt -> span_ [ "className" $= "dataType" ] $
+  \state (st, dt) -> span_ [ "className" $= "dataType" ] $
     case dt of
       DataBool     -> "Bool"
       DataString   -> "String"
       DataNumber   -> "Number"
       DataTime     -> "Time"
-      DataRecord t -> do onDidMount_ [SomeStoreAction colConfStore ColumnGetTableCache] mempty
+      DataRecord t -> do onDidMount_ [SomeStoreAction colConfStore (ColumnGetTableCache $ st ^. stateSessionKey)] mempty
                          let tblName = Map.lookup t (state ^. ccsTableCache)
                                     ?: "missing table"
                          elemText $ "Row from " <> tblName
       DataList   d -> do "List ("
-                         dataTypeInfo_ d
+                         dataTypeInfo_ st d
                          ")"
       DataMaybe  d -> do "Maybe ("
-                         dataTypeInfo_ d
+                         dataTypeInfo_ st d
                          ")"
 
-dataColConf_ :: Id Column -> DataCol -> ReactElementM eh ()
-dataColConf_ !i !d = view dataColConf (i, d) mempty
+dataColConf_ :: State -> Id Column -> DataCol -> ReactElementM eh ()
+dataColConf_ !st !i !d = view dataColConf (st, i, d) mempty
 
-dataColConf :: ReactView (Id Column, DataCol)
+dataColConf :: ReactView (State, Id Column, DataCol)
 dataColConf = defineControllerView "data column configuration" colConfStore $
-  \state (i, dat) -> cldiv_ "dialog data" $ do
+  \state (st, i, dat) -> cldiv_ "dialog data" $ do
       let mError = case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of
             (Derived, CompileResultError msg) -> Just msg
             _                                 -> Nothing
@@ -417,7 +420,7 @@ dataColConf = defineControllerView "data column configuration" colConfStore $
           dt = state ^. ccsTmpDataType . at i ?: dat ^. dataColType
       cldiv_ "bodyWrapper" $ cldiv_ "body" $ do
         cldiv_ "datatype" $
-          selDatatype_ i dat (state ^. ccsTableCache)
+          selDatatype_ st i dat (state ^. ccsTableCache)
         cldiv_ "formula" $ do
           checkIsFormula_ i isDerived
           -- input field for formula
@@ -469,19 +472,19 @@ confButtons = defineView "column configuration buttons" $
 
 -- select datatype
 
-selDatatype_ :: Id Column -> DataCol -> TableCache -> ReactElementM eh ()
-selDatatype_  i dat m = view selDatatype (i, dat, m) mempty
+selDatatype_ :: State -> Id Column -> DataCol -> TableCache -> ReactElementM eh ()
+selDatatype_  !st !i !dat !m = view selDatatype (st, i, dat, m) mempty
 
-selDatatype :: ReactView (Id Column, DataCol, TableCache)
-selDatatype = defineView "selectDataType" $ \(i, dat, tables) ->
-    selBranch_ (Just $ dat ^. dataColType) tables $
+selDatatype :: ReactView (State, Id Column, DataCol, TableCache)
+selDatatype = defineView "selectDataType" $ \(st, i, dat, tables) ->
+    selBranch_ st (Just $ dat ^. dataColType) tables $
       \dt -> [SomeStoreAction colConfStore $ ColumnSetTmpDataType i dt]
 
-selBranch_ :: Maybe DataType -> TableCache -> SelBranchCallback -> ReactElementM eh ()
-selBranch_ mDt tables cb = view selBranch (mDt, tables, cb) mempty
+selBranch_ :: State -> Maybe DataType -> TableCache -> SelBranchCallback -> ReactElementM eh ()
+selBranch_ !st !mDt !tables !cb = view selBranch (st, mDt, tables, cb) mempty
 
-selBranch :: ReactView (Maybe DataType, TableCache, SelBranchCallback)
-selBranch = defineStatefulView "selBranch" Nothing $ \curBranch (mDt, tables, cb) -> do
+selBranch :: ReactView (State, Maybe DataType, TableCache, SelBranchCallback)
+selBranch = defineStatefulView "selBranch" Nothing $ \curBranch (st, mDt, tables, cb) -> do
   let defDt = DataNumber
       selectedBranch = curBranch <|> toBranch <$> mDt ?: toBranch defDt
   cldiv_ "selBranch" $ select_
@@ -497,17 +500,17 @@ selBranch = defineStatefulView "selBranch" Nothing $ \curBranch (mDt, tables, cb
         Nothing      -> error "selBranch: unexpected: Nothing"
     ] $ optionsFor_ branches
   case selectedBranch of
-    BMaybe  -> selBranch_ (subType =<< mDt) tables (cb . DataMaybe)
-    BList   -> selBranch_ (subType =<< mDt) tables (cb . DataList)
-    BRecord -> selTable_  (recordTableId =<< mDt) tables (cb . DataRecord)
+    BMaybe  -> selBranch_ st (subType =<< mDt) tables (cb . DataMaybe)
+    BList   -> selBranch_ st (subType =<< mDt) tables (cb . DataList)
+    BRecord -> selTable_ st (recordTableId =<< mDt) tables (cb . DataRecord)
     _       -> pure ()
 
-selTable_ :: Maybe (Id Table) -> TableCache -> SelTableCallback -> ReactElementM eh ()
-selTable_ mTableId tables cb = view selTable (mTableId, tables, cb) mempty
+selTable_ :: State -> Maybe (Id Table) -> TableCache -> SelTableCallback -> ReactElementM eh ()
+selTable_ !st !mTableId !tables !cb = view selTable (st, mTableId, tables, cb) mempty
 
-selTable :: ReactView (Maybe (Id Table), TableCache, SelTableCallback)
-selTable = defineView "select table" $ \(mTableId, tables, cb) -> do
-  onDidMount_ [SomeStoreAction colConfStore ColumnGetTableCache] mempty
+selTable :: ReactView (State, Maybe (Id Table), TableCache, SelTableCallback)
+selTable = defineView "select table" $ \(st, mTableId, tables, cb) -> do
+  onDidMount_ [SomeStoreAction colConfStore (ColumnGetTableCache $ st ^. stateSessionKey)] mempty
   select_
     [ "defaultValue" &= fromMaybe "" (show <$> mTableId)
     , onChange $ \evt -> maybe [] cb $ readMaybe $ target evt "value"

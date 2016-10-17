@@ -92,7 +92,7 @@ tableGrid = defineView "tableGrid" $ \st -> do
             faButton_ "bars" $ fromMaybe [] $
               dispatch . TableAddColumn . emptyReportCol <$> st ^. stateTableId
         | y == 0 && 0 < x && x <= numCols =
-            column_ $ getColumn (x - 1)
+            column_ st (getColumn (x - 1))
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $
             renderCell (x - 1) (y - 1)
         | otherwise = cldiv_ "empty" mempty

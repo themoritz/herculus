@@ -174,7 +174,8 @@ instance StoreData State where
           WsDownColumnsChanged cs     -> pure $ dispatch $ TableUpdateColumns cs
           WsDownRecordCreated t r dat -> pure $ dispatch $ CacheRecordAdd t r dat
           WsDownRecordDeleted t r     -> pure $ dispatch $ CacheRecordDelete t r
-        request api (Proxy :: Proxy Api.ProjectList) $ mkCallback $
+        request api (Proxy :: Proxy Api.ProjectList)
+          (session $ st ^. stateSessionKey) $ mkCallback $
           \projects -> [ProjectsSet projects]
         pure $ st & stateWebSocket .~ Just ws
 
@@ -198,7 +199,7 @@ instance StoreData State where
 
       Logout -> do
         request api (Proxy :: Proxy Api.AuthLogout)
-          (session $ st ^. stateSessionKey) $ mkCallback $ \_ -> [LoggedOut]
+          (session $ st ^. stateSessionKey) $ mkCallback $ const [LoggedOut]
         pure st
 
       LoggedOut ->
@@ -249,20 +250,23 @@ instance StoreData State where
         st & stateProjects . at i .~ Just p
 
       ProjectsLoadProject i -> do
-        request api (Proxy :: Proxy Api.TableList) i $ mkCallback $
-          \tables -> [TablesSet tables]
+        request api (Proxy :: Proxy Api.TableList)
+                    (session $ st ^. stateSessionKey) i $ mkCallback $
+                    \tables -> [TablesSet tables]
         pure $ st & stateProjectId .~ Just i
 
       -- Project
 
       ProjectSetName i name -> do
-        request api (Proxy :: Proxy Api.ProjectSetName) i name $ mkCallback $
-          \_ -> []
+        request api (Proxy :: Proxy Api.ProjectSetName)
+                    (session $ st ^. stateSessionKey)
+                    i name $ mkCallback $ const []
         pure $ st & stateProjects . at i . _Just . projectName .~ name
 
       ProjectDelete projectId -> do
-        request api (Proxy :: Proxy Api.ProjectDelete) projectId $ mkCallback $
-          \_ -> []
+        request api (Proxy :: Proxy Api.ProjectDelete)
+                    (session $ st ^. stateSessionKey) projectId $ mkCallback $
+                    const []
 
         if st ^. stateProjectId == Just projectId
           then do
@@ -293,16 +297,19 @@ instance StoreData State where
             tablesMap = Map.fromList $ map entityToTuple ts
 
       TablesCreate table -> do
-        request api (Proxy :: Proxy Api.TableCreate) table $ mkCallback $
-          \tableId -> [TablesAdd $ Entity tableId table]
+        request api (Proxy :: Proxy Api.TableCreate)
+                    (session $ st ^. stateSessionKey)
+                    table $ mkCallback $
+                    \tableId -> [TablesAdd $ Entity tableId table]
         pure st
 
       TablesAdd (Entity i t) -> pure $
         st & stateTables . at i .~ Just t
 
       TablesLoadTable i -> do
-        request api (Proxy :: Proxy Api.TableGetWhole) i $ mkCallback $
-          \table -> [TableSet table]
+        request api (Proxy :: Proxy Api.TableGetWhole)
+                    (session $ st ^. stateSessionKey) i $ mkCallback $
+                    \table -> [TableSet table]
         pure $ st & stateTableId .~ Just i
 
       -- Table
@@ -335,7 +342,7 @@ instance StoreData State where
 
       TableDeleteColumn i -> do
         request api (Proxy :: Proxy Api.ColumnDelete) i $ mkCallback $
-          \_ -> []
+          const []
         pure $ st & stateColumns %~ Map.delete i
                   & stateCells %~ Map.filterWithKey
                              (\(Coords c _) _ -> c /= i)
@@ -353,19 +360,21 @@ instance StoreData State where
 
       TableDeleteRecord i -> do
         request api (Proxy :: Proxy Api.RecordDelete) i $ mkCallback $
-          \_ -> []
+          const []
         pure $ st & stateRecords %~ Map.delete i
                   & stateCells %~ Map.filterWithKey
                              (\(Coords _ r) _ -> r /= i)
 
       TableSetName i name -> do
-        request api (Proxy :: Proxy Api.TableSetName) i name $ mkCallback $
-          \_ -> []
+        request api (Proxy :: Proxy Api.TableSetName)
+                    (session $ st ^. stateSessionKey)
+                    i name $ mkCallback $ const []
         pure $ st & stateTables . at i . _Just . tableName .~ name
 
       TableDelete tableId -> do
-        request api (Proxy :: Proxy Api.TableDelete) tableId $ mkCallback $
-          \_ -> []
+        request api (Proxy :: Proxy Api.TableDelete)
+                    (session $ st ^. stateSessionKey)
+                    tableId $ mkCallback $ const []
 
         if st ^. stateTableId == Just tableId
           then do
@@ -388,14 +397,14 @@ instance StoreData State where
 
       ColumnRename i n -> do
         request api (Proxy :: Proxy Api.ColumnSetName) i n $ mkCallback $
-          \_ -> []
+          const []
         pure $ st & stateColumns . at i . _Just . columnName .~ n
 
       -- Data column
 
       DataColUpdate i payload@(dt, inpTyp, src) -> do
         request api (Proxy :: Proxy Api.DataColUpdate) i payload $ mkCallback $
-          \_ -> []
+          const []
         pure $ st & stateColumns . at i . _Just . columnKind . _ColumnData
                  %~ (dataColType .~ dt)
                   . (dataColIsDerived .~ inpTyp)
@@ -405,7 +414,7 @@ instance StoreData State where
 
       ReportColUpdate i payload@(templ, format, lang) -> do
         request api (Proxy :: Proxy Api.ReportColUpdate) i payload $ mkCallback $
-          \_ -> []
+          const []
         pure $ st & stateColumns . at i . _Just . columnKind . _ColumnReport
                  %~ (reportColLanguage .~ lang)
                   . (reportColFormat .~ format)
@@ -415,7 +424,7 @@ instance StoreData State where
 
       CellSetValue c r val -> do
         request api (Proxy :: Proxy Api.CellSet) c r val $ mkCallback $
-          \_ -> []
+          const []
         pure $ st & stateCells %~ fillEntries [(c, r, CellValue val)]
 
     where
