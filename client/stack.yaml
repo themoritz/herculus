@@ -19,8 +19,8 @@ packages:
   extra-dep: true
 
 - location:
-    hg: https://rubenmoor@bitbucket.org/rubenmoor/react-flux-servant
-    commit: tip
+    hg: https://bitbucket.org/rubenmoor/react-flux-servant
+    commit: 5bdfec9
 
 extra-deps:
 - react-flux-1.2.1

@@ -49,7 +49,7 @@ mkBase64 = Base64 . Base64.encode
 toBase64Unsafe :: ByteString -> Base64
 toBase64Unsafe = Base64
 
--- | the safe variant of mkBase64Unsafe
+-- | the safe variant of toBase64Unsafe
 --   Build a base64 object from a base64-encoded bytestring.
 --   Fail if the object is not valid base64.
 toBase64 :: ByteString -> Either Text Base64
