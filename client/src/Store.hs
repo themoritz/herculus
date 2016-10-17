@@ -24,6 +24,7 @@ import           React.Flux.Addons.Servant      (ApiRequestConfig (..),
                                                  RequestTimeout (NoTimeout),
                                                  request)
 import           React.Flux.Addons.Servant.Auth (AuthClientData,
+                                                 AuthenticateReq,
                                                  mkAuthenticateReq)
 import           WebSocket
 
@@ -144,6 +145,10 @@ mkAuthHeader Nothing = (Api.sessionHeaderStr, "")
 mkAuthHeader (Just sessionKey) =
   (Api.sessionHeaderStr, Text.decodeUtf8 $ unBase64 sessionKey)
 
+session :: Maybe SessionKey -> AuthenticateReq Api.SessionProtect
+session key =
+  mkAuthenticateReq key mkAuthHeader
+
 api :: ApiRequestConfig Routes
 api = ApiRequestConfig Config.apiUrl NoTimeout
 
@@ -154,6 +159,7 @@ mkCallback :: (a -> [Action]) -> HandleResponse a
 mkCallback cb = pure . \case
   Left  (_, e) -> dispatch $ GlobalSetError $ Text.pack e
   Right x      -> SomeStoreAction store <$> cb x
+
 
 instance StoreData State where
   type StoreAction State = Action
@@ -191,9 +197,8 @@ instance StoreData State where
         st & stateSessionKey .~ Just sKey
 
       Logout -> do
-        let sessionKey = st ^. stateSessionKey
         request api (Proxy :: Proxy Api.AuthLogout)
-          (mkAuthenticateReq sessionKey mkAuthHeader) $ mkCallback $ \_ -> [LoggedOut]
+          (session $ st ^. stateSessionKey) $ mkCallback $ \_ -> [LoggedOut]
         pure st
 
       LoggedOut ->
@@ -233,10 +238,9 @@ instance StoreData State where
             projectsMap = Map.fromList $ map entityToTuple ps
 
       ProjectsCreate project -> do
-        let sessionKey = st ^. stateSessionKey
         request api
                 (Proxy :: Proxy Api.ProjectCreate)
-                (mkAuthenticateReq sessionKey mkAuthHeader)
+                (session $ st ^. stateSessionKey)
                 project $ mkCallback $
           \projectId -> [ProjectsAdd $ Entity projectId project]
         pure st
