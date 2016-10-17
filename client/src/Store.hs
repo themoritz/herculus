@@ -190,8 +190,10 @@ instance StoreData State where
       LoggedIn sKey -> pure $
         st & stateSessionKey .~ Just sKey
 
-      Logout ->
-        -- send SessionKey
+      Logout -> do
+        let sessionKey = st ^. stateSessionKey
+        request api (Proxy :: Proxy Api.AuthLogout)
+          (mkAuthenticateReq sessionKey mkAuthHeader) $ mkCallback $ \_ -> [LoggedOut]
         pure st
 
       LoggedOut ->
