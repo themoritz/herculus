@@ -429,8 +429,9 @@ instance StoreData State where
       -- Cell
 
       CellSetValue c r val -> do
-        request api (Proxy :: Proxy Api.CellSet) c r val $ mkCallback $
-          const []
+        request api (Proxy :: Proxy Api.CellSet)
+                    (session $ st ^. stateSessionKey) c r val $ mkCallback $
+                    const []
         pure $ st & stateCells %~ fillEntries [(c, r, CellValue val)]
 
     where

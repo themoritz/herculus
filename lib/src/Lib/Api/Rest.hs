@@ -101,7 +101,7 @@ type RecordData           = SessionProtect  :> "record"     :> "data"       :> C
 type RecordList           = SessionProtect  :> "record"     :> "list"       :> Capture "tableId" (Id Table)     :> Get '[JSON] [Entity Record]
 type RecordListWithData   = SessionProtect  :> "record"     :> "listWithData" :> Capture "tableId" (Id Table)     :> Get '[JSON] [(Id Record, [(Entity Column, CellContent)])]
 
-type CellSet              = "cell"      :> "set"            :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record) :> ReqBody '[JSON] Value  :> Post '[JSON] ()
-type CellGetReportPDF     = "cell"      :> "getReportPDF"   :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record)                           :> Get '[PDF] BL.ByteString
-type CellGetReportHTML    = "cell"      :> "getReportHTML"  :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record)                           :> Get '[HTML] Text
-type CellGetReportPlain   = "cell"      :> "getReportPlain" :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record)                           :> Get '[PlainText] Text
+type CellSet              = SessionProtect  :> "cell"       :> "set"            :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record) :> ReqBody '[JSON] Value  :> Post '[JSON] ()
+type CellGetReportPDF     = SessionProtect  :> "cell"       :> "getReportPDF"   :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record)                           :> Get '[PDF] BL.ByteString
+type CellGetReportHTML    = SessionProtect  :> "cell"       :> "getReportHTML"  :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record)                           :> Get '[HTML] Text
+type CellGetReportPlain   = SessionProtect  :> "cell"       :> "getReportPlain" :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record)                           :> Get '[PlainText] Text

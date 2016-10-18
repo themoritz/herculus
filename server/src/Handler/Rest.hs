@@ -367,8 +367,8 @@ handleRecordListWithData sessionData tblId = do
 
 --
 
-handleCellSet :: MonadHexl m => Id Column -> Id Record -> Value -> m ()
-handleCellSet c r val = do
+handleCellSet :: MonadHexl m => SessionData -> Id Column -> Id Record -> Value -> m ()
+handleCellSet _ c r val = do
   Entity i cell <- getOneByQuery'
     [ "aspects.columnId" =: toObjectId c
     , "aspects.recordId" =: toObjectId r
@@ -379,8 +379,8 @@ handleCellSet c r val = do
   -- TODO: fork this
   propagate [RootCellChanges [(c, r)]]
 
-handleCellGetReportPDF :: MonadHexl m => Id Column -> Id Record -> m BL.ByteString
-handleCellGetReportPDF c r = do
+handleCellGetReportPDF :: MonadHexl m => SessionData -> Id Column -> Id Record -> m BL.ByteString
+handleCellGetReportPDF _ c r = do
   (repCol, plain) <- evalReport c r
   case repCol ^. reportColLanguage of
     Nothing -> throwError $ ErrUser "Cannot generate PDF from plain text"
@@ -417,8 +417,8 @@ handleCellGetReportPDF c r = do
               "Source: " <> (pack . show) (Pandoc.writeLaTeX options pandoc)
             Right pdf -> pure pdf
 
-handleCellGetReportHTML :: MonadHexl m => Id Column -> Id Record -> m Text
-handleCellGetReportHTML c r = do
+handleCellGetReportHTML :: MonadHexl m => SessionData -> Id Column -> Id Record -> m Text
+handleCellGetReportHTML _ c r = do
   col <- getById' c
   (repCol, plain) <- evalReport c r
   case repCol ^. reportColLanguage of
@@ -441,8 +441,8 @@ handleCellGetReportHTML c r = do
                 }
           pure $ pack $ Pandoc.writeHtmlString options pandoc
 
-handleCellGetReportPlain :: MonadHexl m => Id Column -> Id Record -> m Text
-handleCellGetReportPlain c r = snd <$> evalReport c r
+handleCellGetReportPlain :: MonadHexl m => SessionData -> Id Column -> Id Record -> m Text
+handleCellGetReportPlain _ c r = snd <$> evalReport c r
 
 getPandocReader :: ReportLanguage -> ReportFormat
   -> Maybe (Pandoc.ReaderOptions -> String -> Either Pandoc.PandocError Pandoc.Pandoc)

@@ -30,6 +30,7 @@ tableGrid = defineView "tableGrid" $ \st -> do
       cols = st ^. stateColumns
       recs = st ^. stateRecords
       tableId = st ^. stateTableId
+      sKey = st ^. stateSessionKey
 
       numCols = Map.size cols
       numRecs = Map.size recs
@@ -47,7 +48,7 @@ tableGrid = defineView "tableGrid" $ \st -> do
           Just (c, col) -> case col ^. columnKind of
             ColumnReport rep ->
               case  Map.lookup y recByIndex of
-                Just (r, _) -> reportCell_ $ ReportCellProps c r rep
+                Just (r, _) -> reportCell_ $ ReportCellProps sKey c r rep
                 Nothing     -> mempty
             ColumnData   dat -> do
               let mRC = do (r, _)  <- Map.lookup y recByIndex
@@ -93,7 +94,7 @@ tableGrid = defineView "tableGrid" $ \st -> do
             faButton_ "bars" $ fromMaybe [] $
               dispatch . TableAddColumn . emptyReportCol <$> tableId
         | y == 0 && 0 < x && x <= numCols =
-            column_ (st ^. stateSessionKey) (getColumn (x - 1))
+            column_ sKey (getColumn (x - 1))
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $
             renderCell (x - 1) (y - 1)
         | otherwise = cldiv_ "empty" mempty
