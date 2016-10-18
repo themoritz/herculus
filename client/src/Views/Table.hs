@@ -29,6 +29,7 @@ tableGrid = defineView "tableGrid" $ \st -> do
   let cells = st ^. stateCells
       cols = st ^. stateColumns
       recs = st ^. stateRecords
+      tableId = st ^. stateTableId
 
       numCols = Map.size cols
       numRecs = Map.size recs
@@ -88,11 +89,11 @@ tableGrid = defineView "tableGrid" $ \st -> do
             record_ $ getRecord (y - 1)
         | y == 0 && x == (numCols + 1) = cldiv_ "column-new" $ do
             faButton_ "plus-circle" $ fromMaybe [] $
-              dispatch . TableAddColumn . emptyDataCol <$> st ^. stateTableId
+              dispatch . TableAddColumn . emptyDataCol <$> tableId
             faButton_ "bars" $ fromMaybe [] $
-              dispatch . TableAddColumn . emptyReportCol <$> st ^. stateTableId
+              dispatch . TableAddColumn . emptyReportCol <$> tableId
         | y == 0 && 0 < x && x <= numCols =
-            column_ st (getColumn (x - 1))
+            column_ (st ^. stateSessionKey) (getColumn (x - 1))
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $
             renderCell (x - 1) (y - 1)
         | otherwise = cldiv_ "empty" mempty
