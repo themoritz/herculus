@@ -169,18 +169,18 @@ handleTableList _ projId = listByQuery [ "projectId" =: toObjectId projId ]
 handleTableListGlobal :: MonadHexl m => SessionData -> m [Entity Table]
 handleTableListGlobal _ = listByQuery [ ]
 
-handleTableData :: MonadHexl m => Id Table -> m [(Id Column, Id Record, CellContent)]
-handleTableData tblId = do
+handleTableData :: MonadHexl m => SessionData -> Id Table -> m [(Id Column, Id Record, CellContent)]
+handleTableData _ tblId = do
   cells <- listByQuery [ "aspects.tableId" =: toObjectId tblId ]
   let go (Cell v (Aspects _ c r)) = (c, r, v)
   pure $ map (go . entityVal) cells
 
 handleTableGetWhole :: MonadHexl m => SessionData -> Id Table
                     -> m ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
-handleTableGetWhole _ tblId =
-  (,,) <$> handleColumnList tblId
+handleTableGetWhole sessionData tblId =
+  (,,) <$> handleColumnList sessionData tblId
        <*> handleRecordList tblId
-       <*> handleTableData tblId
+       <*> handleTableData sessionData tblId
 
 handleTableSetName :: MonadHexl m => SessionData -> Id Table -> Text -> m ()
 handleTableSetName _ tblId name = do
@@ -199,8 +199,8 @@ handleTableDelete _ tableId = do
 
 --
 
-handleColumnCreate :: MonadHexl m => Column -> m (Entity Column, [Entity Cell])
-handleColumnCreate newCol = do
+handleColumnCreate :: MonadHexl m => SessionData -> Column -> m (Entity Column, [Entity Cell])
+handleColumnCreate _ newCol = do
   c <- create newCol
   case newCol ^. columnKind of
     ColumnData dataCol -> do
@@ -214,8 +214,8 @@ handleColumnCreate newCol = do
       pure (Entity c newCol, cells)
     ColumnReport _ -> pure (Entity c newCol, [])
 
-handleColumnDelete :: MonadHexl m => Id Column -> m ()
-handleColumnDelete colId = do
+handleColumnDelete :: MonadHexl m => SessionData -> Id Column -> m ()
+handleColumnDelete _ colId = do
   delete colId
   deleteByQuery (Proxy :: Proxy Cell)
     [ "aspects.columnId" =: toObjectId colId
@@ -226,11 +226,11 @@ handleColumnDelete colId = do
   sendWS $ WsDownColumnsChanged newChilds
   propagate [RootWholeColumns $ map entityId newChilds]
 
-handleColumnList :: MonadHexl m => Id Table -> m [Entity Column]
-handleColumnList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
+handleColumnList :: MonadHexl m => SessionData -> Id Table -> m [Entity Column]
+handleColumnList _ tblId = listByQuery [ "tableId" =: toObjectId tblId ]
 
-handleColumnSetName :: MonadHexl m => Id Column -> Text -> m ()
-handleColumnSetName c name = do
+handleColumnSetName :: MonadHexl m => SessionData -> Id Column -> Text -> m ()
+handleColumnSetName _ c name = do
   update c $ columnName .~ name
   newChilds <- compileColumnChildren c
   sendWS $ WsDownColumnsChanged newChilds
@@ -238,8 +238,8 @@ handleColumnSetName c name = do
 
 --
 
-handleDataColUpdate :: MonadHexl m => Id Column -> (DataType, IsDerived, Text) -> m ()
-handleDataColUpdate c (typ, derived, code) = do
+handleDataColUpdate :: MonadHexl m => SessionData -> Id Column -> (DataType, IsDerived, Text) -> m ()
+handleDataColUpdate _ c (typ, derived, code) = do
   oldCol <- getById' c
   case oldCol ^? columnKind . _ColumnData of
     Nothing -> throwError $ ErrBug "Called dataColUpdate for column other than data"
@@ -267,8 +267,8 @@ handleDataColUpdate c (typ, derived, code) = do
       sendWS $ WsDownColumnsChanged $ newSelf <> updatedChilds
       propagate [RootWholeColumns $ propSelf <> map entityId updatedChilds]
 
-handleReportColUpdate :: MonadHexl m => Id Column -> (Text, ReportFormat, Maybe ReportLanguage) -> m ()
-handleReportColUpdate c (template, format, lang) = do
+handleReportColUpdate :: MonadHexl m => SessionData -> Id Column -> (Text, ReportFormat, Maybe ReportLanguage) -> m ()
+handleReportColUpdate _ c (template, format, lang) = do
   oldCol <- getById' c
   when (isNothing (oldCol ^? columnKind . _ColumnReport)) $
     throwError $ ErrBug "Called ReportColUpdate for column other than report"

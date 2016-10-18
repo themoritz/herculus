@@ -332,8 +332,9 @@ instance StoreData State where
           filter (\(Entity _ c) -> st ^. stateTableId == Just (c ^. columnTableId)) entries
 
       TableAddColumn col -> do
-        request api (Proxy :: Proxy Api.ColumnCreate) col $ mkCallback $
-          \column -> [TableAddColumnDone column]
+        request api (Proxy :: Proxy Api.ColumnCreate)
+                    (session $ st ^. stateSessionKey) col $ mkCallback $
+                    \column -> [TableAddColumnDone column]
         pure st
 
       TableAddColumnDone (Entity i c, cells) -> pure $
@@ -341,8 +342,8 @@ instance StoreData State where
            & stateCells %~ fillEntries (map toCellUpdate cells)
 
       TableDeleteColumn i -> do
-        request api (Proxy :: Proxy Api.ColumnDelete) i $ mkCallback $
-          const []
+        request api (Proxy :: Proxy Api.ColumnDelete)
+                    (session $ st ^. stateSessionKey) i $ mkCallback $ const []
         pure $ st & stateColumns %~ Map.delete i
                   & stateCells %~ Map.filterWithKey
                              (\(Coords c _) _ -> c /= i)
@@ -396,15 +397,16 @@ instance StoreData State where
       -- Column
 
       ColumnRename i n -> do
-        request api (Proxy :: Proxy Api.ColumnSetName) i n $ mkCallback $
-          const []
+        request api (Proxy :: Proxy Api.ColumnSetName)
+                    (session $ st ^. stateSessionKey) i n $ mkCallback $ const []
         pure $ st & stateColumns . at i . _Just . columnName .~ n
 
       -- Data column
 
       DataColUpdate i payload@(dt, inpTyp, src) -> do
-        request api (Proxy :: Proxy Api.DataColUpdate) i payload $ mkCallback $
-          const []
+        request api (Proxy :: Proxy Api.DataColUpdate)
+                    (session $ st ^. stateSessionKey) i payload $ mkCallback $
+                    const []
         pure $ st & stateColumns . at i . _Just . columnKind . _ColumnData
                  %~ (dataColType .~ dt)
                   . (dataColIsDerived .~ inpTyp)
@@ -413,8 +415,9 @@ instance StoreData State where
       -- Report column
 
       ReportColUpdate i payload@(templ, format, lang) -> do
-        request api (Proxy :: Proxy Api.ReportColUpdate) i payload $ mkCallback $
-          const []
+        request api (Proxy :: Proxy Api.ReportColUpdate)
+                    (session $ st ^. stateSessionKey) i payload $ mkCallback $
+                    const []
         pure $ st & stateColumns . at i . _Just . columnKind . _ColumnReport
                  %~ (reportColLanguage .~ lang)
                   . (reportColFormat .~ format)
