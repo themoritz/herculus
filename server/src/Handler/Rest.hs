@@ -155,7 +155,7 @@ handleProjectSetName _ projectId name = do
 handleProjectDelete :: MonadHexl m => SessionData -> Id Project -> m ()
 handleProjectDelete sessionData projectId = do
     tables <- handleTableList sessionData projectId
-    _ <- mapM (\table -> handleTableDelete sessionData (entityId table)) tables
+    _ <- mapM (handleTableDelete sessionData . entityId) tables
     delete projectId
 
 --

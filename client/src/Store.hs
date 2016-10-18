@@ -128,6 +128,9 @@ data Action
   | DataColUpdate (Id Column) (DataType, IsDerived, Text)
   -- Report column
   | ReportColUpdate (Id Column) (Text, ReportFormat, Maybe ReportLanguage)
+  | GetReportFormatPlain (Id Column) (Id Record)
+  | GetReportFormatPDF (Id Column) (Id Record)
+  | GetReportFormatHTML (Id Column) (Id Record)
   -- Cell
   | CellSetValue (Id Column) (Id Record) Value
   deriving (Typeable, Generic, NFData)
@@ -425,6 +428,27 @@ instance StoreData State where
                  %~ (reportColLanguage .~ lang)
                   . (reportColFormat .~ format)
                   . (reportColTemplate .~ templ)
+
+      GetReportFormatPlain columnId recordId -> do
+        request api (Proxy :: Proxy Api.CellGetReportPlain)
+                    (session $ st ^. stateSessionKey) columnId recordId $
+                    mkCallback $ const []
+                    -- TODO open window to show result
+        pure st
+
+      GetReportFormatPDF columnId recordId -> do
+        request api (Proxy :: Proxy Api.CellGetReportPDF)
+                    (session $ st ^. stateSessionKey) columnId recordId $
+                    mkCallback $ const []
+                    -- TODO open window to show result
+        pure st
+
+      GetReportFormatHTML columnId recordId -> do
+        request api (Proxy :: Proxy Api.CellGetReportHTML)
+                    (session $ st ^. stateSessionKey) columnId recordId $
+                    mkCallback $ const []
+                    -- TODO open window to show result
+        pure st
 
       -- Cell
 

@@ -8,7 +8,7 @@ import           Control.Lens        hiding (view)
 import           Data.Proxy
 import           Data.Text           (Text, pack)
 
-import           Servant.Utils.Links
+import           Servant.Utils.Links (URI, safeLink, uriPath)
 
 import           React.Flux
 
@@ -18,9 +18,10 @@ import           Lib.Model.Column
 import           Lib.Model.Record
 import           Lib.Types
 
-import           Store               (session, stateSessionKey, store)
+import           Store               (Action (GetReportFormatHTML, GetReportFormatPDF, GetReportFormatPlain),
+                                      dispatch, session, stateSessionKey, store)
 
-import           Views.Combinators
+import           Views.Combinators   (clspan_, faButton_)
 
 data ReportCellProps = ReportCellProps
   { sKey                :: !(Maybe SessionKey)
@@ -40,29 +41,14 @@ reportCell = defineView "reportCell" $ \ReportCellProps{..} -> cldiv_ "reportCel
     CompileResultError _ -> clspan_ "error" "Error"
     CompileResultOk _ -> case reportCellColReport ^. reportColFormat of
       ReportFormatPlain ->
-        a_ [ "href" &= getPlain sKey reportCellColId reportCellRecId
-           , "target" $= "_blank"
-           ] $ faIcon_ "file-text-o fa-lg"
+        faButton_ "file-plain-o" $ dispatch $ GetReportFormatPDF reportCellColId reportCellRecId
       ReportFormatPDF ->
-        a_ [ "href" &= getPDF sKey reportCellColId reportCellRecId
-           , "target" $= "_blank"
-           ] $ faIcon_ "file-pdf-o fa-lg"
+        faButton_ "file-pdf-o" $ dispatch $ GetReportFormatPDF reportCellColId reportCellRecId
       ReportFormatHTML ->
-        a_ [ "href" &= getHTML sKey reportCellColId reportCellRecId
-           , "target" $= "_blank"
-           ] $ faIcon_ "file-code-o fa-lg"
+        faButton_ "file-text-o" $ dispatch $ GetReportFormatHTML reportCellColId reportCellRecId
 
 api :: Proxy Routes
 api = Proxy
-
-getPlain :: Maybe SessionKey -> Id Column -> Id Record -> Text
-getPlain sKey c r = toPath $ safeLink api (Proxy :: Proxy CellGetReportPlain) (session sKey) c r
-
-getPDF :: Maybe SessionKey -> Id Column -> Id Record -> Text
-getPDF sKey c r = toPath $ safeLink api (Proxy :: Proxy CellGetReportPDF) (session sKey) c r
-
-getHTML :: Maybe SessionKey -> Id Column -> Id Record -> Text
-getHTML sKey c r = toPath $ safeLink api (Proxy :: Proxy CellGetReportHTML) (session sKey) c r
 
 toPath :: URI -> Text
 toPath = pack . ('/':) . uriPath
