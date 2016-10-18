@@ -199,7 +199,8 @@ instance StoreData State where
 
       Logout -> do
         request api (Proxy :: Proxy Api.AuthLogout)
-          (session $ st ^. stateSessionKey) $ mkCallback $ const [LoggedOut]
+                    (session $ st ^. stateSessionKey) $ mkCallback $
+                    const [LoggedOut]
         pure st
 
       LoggedOut ->
@@ -218,8 +219,9 @@ instance StoreData State where
       CacheRecordsGet t -> case st ^. stateCacheRecords . at t of
         Just _  -> pure st
         Nothing -> do
-          request api (Proxy :: Proxy Api.RecordListWithData) t $ mkCallback $
-            \rs -> [CacheRecordsSet t rs]
+          request api (Proxy :: Proxy Api.RecordListWithData)
+                      (session $ st ^. stateSessionKey) t $ mkCallback $
+                      \rs -> [CacheRecordsSet t rs]
           pure st
 
       CacheRecordsSet t recs -> do
@@ -351,8 +353,9 @@ instance StoreData State where
       TableAddRecord -> do
         case st ^. stateTableId of
           Nothing -> pure ()
-          Just t -> request api (Proxy :: Proxy Api.RecordCreate) t $ mkCallback $
-            \record -> [TableAddRecordDone record]
+          Just t -> request api (Proxy :: Proxy Api.RecordCreate)
+                            (session $ st ^. stateSessionKey) t $ mkCallback $
+                            \record -> [TableAddRecordDone record]
         pure st
 
       TableAddRecordDone (Entity i r, cells) -> pure $
@@ -360,8 +363,8 @@ instance StoreData State where
            & stateCells %~ fillEntries (map toCellUpdate cells)
 
       TableDeleteRecord i -> do
-        request api (Proxy :: Proxy Api.RecordDelete) i $ mkCallback $
-          const []
+        request api (Proxy :: Proxy Api.RecordDelete)
+                    (session $ st ^. stateSessionKey) i $ mkCallback $ const []
         pure $ st & stateRecords %~ Map.delete i
                   & stateCells %~ Map.filterWithKey
                              (\(Coords _ r) _ -> r /= i)

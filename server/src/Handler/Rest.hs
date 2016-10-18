@@ -179,7 +179,7 @@ handleTableGetWhole :: MonadHexl m => SessionData -> Id Table
                     -> m ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
 handleTableGetWhole sessionData tblId =
   (,,) <$> handleColumnList sessionData tblId
-       <*> handleRecordList tblId
+       <*> handleRecordList sessionData tblId
        <*> handleTableData sessionData tblId
 
 handleTableSetName :: MonadHexl m => SessionData -> Id Table -> Text -> m ()
@@ -280,8 +280,8 @@ handleReportColUpdate _ c (template, format, lang) = do
 
 --
 
-handleRecordCreate :: MonadHexl m => Id Table -> m (Entity Record, [Entity Cell])
-handleRecordCreate t = do
+handleRecordCreate :: MonadHexl m => SessionData -> Id Table -> m (Entity Record, [Entity Cell])
+handleRecordCreate _ t = do
   let newRec = Record t
   r <- create newRec
   cols <- listByQuery [ "tableId" =: toObjectId t ]
@@ -313,8 +313,8 @@ handleRecordCreate t = do
     map (second $ cellContent . entityVal) $ catMaybes newCells
   pure (Entity r newRec, map snd $ catMaybes newCells)
 
-handleRecordDelete :: MonadHexl m => Id Record -> m ()
-handleRecordDelete recId = do
+handleRecordDelete :: MonadHexl m => SessionData -> Id Record -> m ()
+handleRecordDelete _ recId = do
   record <- getById' recId
   delete recId
   sendWS $ WsDownRecordDeleted (recordTableId record) recId
@@ -347,8 +347,8 @@ handleRecordDelete recId = do
     , RootCellChanges $ map (\(Cell _ (Aspects _ c r)) -> (c, r)) cellChanges
     ]
 
-handleRecordData :: MonadHexl m => Id Record -> m [(Entity Column, CellContent)]
-handleRecordData recId = do
+handleRecordData :: MonadHexl m => SessionData -> Id Record -> m [(Entity Column, CellContent)]
+handleRecordData _ recId = do
   cells <- listByQuery
     [ "aspects.recordId" =: toObjectId recId ]
   for cells $ \(Entity _ cell) -> do
@@ -356,14 +356,14 @@ handleRecordData recId = do
     col <- getById' i
     pure (Entity i col, cellContent cell)
 
-handleRecordList :: MonadHexl m => Id Table -> m [Entity Record]
-handleRecordList tblId = listByQuery [ "tableId" =: toObjectId tblId ]
+handleRecordList :: MonadHexl m => SessionData -> Id Table -> m [Entity Record]
+handleRecordList _ tblId = listByQuery [ "tableId" =: toObjectId tblId ]
 
-handleRecordListWithData :: MonadHexl m => Id Table
-                         -> m [(Id Record, [(Entity Column, CellContent)])]
-handleRecordListWithData tblId = do
+handleRecordListWithData :: MonadHexl m => SessionData -> Id Table
+                          -> m [(Id Record, [(Entity Column, CellContent)])]
+handleRecordListWithData sessionData tblId = do
   recs <- listByQuery [ "tableId" =: toObjectId tblId ]
-  for recs $ \r -> (entityId r,) <$> handleRecordData (entityId r)
+  for recs $ \r -> (entityId r,) <$> handleRecordData sessionData (entityId r)
 
 --
 

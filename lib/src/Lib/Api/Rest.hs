@@ -95,11 +95,11 @@ type ColumnSetName        = SessionProtect  :> "column"     :> "setName"    :> C
 type DataColUpdate        = SessionProtect  :> "dataCol"    :> "update"     :> Capture "columnId" (Id Column)   :> ReqBody '[JSON] (DataType, IsDerived, Text)                :> Post '[JSON] ()
 type ReportColUpdate      = SessionProtect  :> "reportCol"  :> "update"     :> Capture "columnId" (Id Column)   :> ReqBody '[JSON] (Text, ReportFormat, Maybe ReportLanguage) :> Post '[JSON] ()
 
-type RecordCreate         = "record"    :> "create"         :> ReqBody '[JSON] (Id Table)       :> Post '[JSON] (Entity Record, [Entity Cell])
-type RecordDelete         = "record"    :> "delete"         :> Capture "recordId" (Id Record)   :> Get '[JSON] ()
-type RecordData           = "record"    :> "data"           :> Capture "recordId" (Id Record)   :> Get '[JSON] [(Entity Column, CellContent)]
-type RecordList           = "record"    :> "list"           :> Capture "tableId" (Id Table)     :> Get '[JSON] [Entity Record]
-type RecordListWithData   = "record"    :> "listWithData"   :> Capture "tableId" (Id Table)     :> Get '[JSON] [(Id Record, [(Entity Column, CellContent)])]
+type RecordCreate         = SessionProtect  :> "record"     :> "create"     :> ReqBody '[JSON] (Id Table)       :> Post '[JSON] (Entity Record, [Entity Cell])
+type RecordDelete         = SessionProtect  :> "record"     :> "delete"     :> Capture "recordId" (Id Record)   :> Get '[JSON] ()
+type RecordData           = SessionProtect  :> "record"     :> "data"       :> Capture "recordId" (Id Record)   :> Get '[JSON] [(Entity Column, CellContent)]
+type RecordList           = SessionProtect  :> "record"     :> "list"       :> Capture "tableId" (Id Table)     :> Get '[JSON] [Entity Record]
+type RecordListWithData   = SessionProtect  :> "record"     :> "listWithData" :> Capture "tableId" (Id Table)     :> Get '[JSON] [(Id Record, [(Entity Column, CellContent)])]
 
 type CellSet              = "cell"      :> "set"            :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record) :> ReqBody '[JSON] Value  :> Post '[JSON] ()
 type CellGetReportPDF     = "cell"      :> "getReportPDF"   :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record)                           :> Get '[PDF] BL.ByteString
