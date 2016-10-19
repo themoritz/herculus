@@ -13,6 +13,11 @@ cabal-version:       >=1.10
 executable client
   main-is:             Main.hs
   other-modules:       WebSocket
+                     , Action
+                     , Action.RecordCache
+                     , Action.RecordCache.Types
+                     , Action.Column
+                     , Action.Column.Types
                      , Config
                      , Store
                      , Views

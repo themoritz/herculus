@@ -1,47 +1,32 @@
-{-# LANGUAGE DeriveAnyClass  #-}
-{-# LANGUAGE DeriveGeneric   #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Store where
 
-import           Control.Applicative            ((<|>))
-import           Control.Arrow                  (second)
-import           Control.Concurrent             (forkIO)
-import           Control.DeepSeq                (NFData)
+import           Control.Applicative ((<|>))
+import           Control.Arrow       (second)
+import           Control.Concurrent  (forkIO)
 import           Control.Lens
-import           Data.Foldable                  (foldl')
-import           Data.Map.Strict                (Map)
-import qualified Data.Map.Strict                as Map
+import           Data.Foldable       (foldl')
+import           Data.Map.Strict     (Map)
+import qualified Data.Map.Strict     as Map
 import           Data.Proxy
-import           Data.Text                      (Text)
-import qualified Data.Text                      as Text
-import qualified Data.Text.Encoding             as Text
-import           Data.Typeable                  (Typeable)
-import           GHC.Generics
+import           Data.Text           (Text)
+import qualified Data.Text           as Text
 import           React.Flux
-import           React.Flux.Addons.Servant      (ApiRequestConfig (..),
-                                                 HandleResponse,
-                                                 RequestTimeout (NoTimeout),
-                                                 request)
-import           React.Flux.Addons.Servant.Auth (AuthClientData,
-                                                 AuthenticateReq,
-                                                 mkAuthenticateReq)
 import           WebSocket
 
-import qualified Config
-import           Lib.Api.Rest                   as Api
-import           Lib.Api.WebSocket
 import           Lib.Model
-import           Lib.Model.Auth                 (LoginData (..),
-                                                 LoginResponse (..), SessionKey)
+import           Lib.Model.Auth      (LoginData (..), LoginResponse (..),
+                                      SessionKey)
 import           Lib.Model.Cell
-import           Lib.Model.Column
 import           Lib.Model.Project
 import           Lib.Model.Record
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Lib.Util.Base64                (unBase64)
+import           Action              (Action (..), TableCache)
+import qualified Action.Column       as Column
+import qualified Action.RecordCache  as RecordCache
 
 data Coords = Coords (Id Column) (Id Record)
   deriving (Eq, Ord, Show)
@@ -54,15 +39,23 @@ data CellInfo = CellInfo
 data State = State
   { _stateError        :: Maybe Text
   , _stateSessionKey   :: Maybe SessionKey
+
   , _stateWebSocket    :: Maybe JSWebSocket
-  , _stateCacheRecords :: Map (Id Table) (Map (Id Record) (Map (Id Column) (Column, CellContent)))
+
+  , _stateCacheRecords :: Map (Id Table) RecordCache.State
+
   , _stateProjects     :: Map (Id Project) Project
   , _stateProjectId    :: Maybe (Id Project)
+
   , _stateTables       :: Map (Id Table) Table
   , _stateTableId      :: Maybe (Id Table)
+
   , _stateCells        :: Map Coords CellContent
-  , _stateColumns      :: Map (Id Column) Column
   , _stateRecords      :: Map (Id Record) Record
+
+  -- for column config
+  , _stateTableCache   :: TableCache
+  , _stateColumns      :: Map (Id Column) ColumnState
   }
 
 makeLenses ''State
@@ -81,88 +74,6 @@ store = mkStore State
   , _stateColumns = Map.empty
   , _stateRecords = Map.empty
   }
-
-data Action
-  -- Global
-  = GlobalSetError Text
-  | GlobalInit Text -- WebSocket URL
-  | GlobalSendWebSocket WsUpMessage
-  -- Session
-  | Login LoginData
-  | LoggedIn SessionKey
-  | Logout
-  | LoggedOut
-  -- Cache
-  | CacheRecordAdd (Id Table) (Id Record) [(Entity Column, CellContent)]
-  | CacheRecordDelete (Id Table) (Id Record)
-  | CacheRecordsGet (Id Table)
-  | CacheRecordsSet (Id Table) [(Id Record, [(Entity Column, CellContent)])]
-  -- Projects
-  | ProjectsSet [Entity Project]
-  | ProjectsCreate Project
-  | ProjectsAdd (Entity Project)
-  | ProjectsLoadProject (Id Project)
-  | ProjectDelete (Id Project)
-  -- Project
-  | ProjectSetName (Id Project) Text
-  -- Tables
-  | TablesSet [Entity Table]
-  | TablesCreate Table
-  | TablesAdd (Entity Table)
-  | TablesLoadTable (Id Table)
-  -- Table
-  | TableSet ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
-  | TableUpdateCells [Cell]
-  | TableUpdateColumns [Entity Column]
-  | TableAddColumn Column
-  | TableAddColumnDone (Entity Column, [Entity Cell])
-  | TableDeleteColumn (Id Column)
-  | TableAddRecord
-  | TableAddRecordDone (Entity Record, [Entity Cell])
-  | TableDeleteRecord (Id Record)
-  | TableSetName (Id Table) Text
-  | TableDelete (Id Table)
-  -- Column
-  | ColumnRename (Id Column) Text
-  -- Data column
-  | DataColUpdate (Id Column) (DataType, IsDerived, Text)
-  -- Report column
-  | ReportColUpdate (Id Column) (Text, ReportFormat, Maybe ReportLanguage)
-  | GetReportFormatPlain (Id Column) (Id Record)
-  | GetReportFormatPDF (Id Column) (Id Record)
-  | GetReportFormatHTML (Id Column) (Id Record)
-  -- Cell
-  | CellSetValue (Id Column) (Id Record) Value
-  deriving (Typeable, Generic, NFData)
-
--- TODO: 'Maybe' here is not entirely correct
--- every authenticated request requires 'Just "some-session-key"
--- it is convenient though, because `Maybe SessionKey` is available
--- in the store, thus we can have the server take care of illegal
--- client requests due to bad state (i.e. authenticated request, while
--- no session key available)
-type instance AuthClientData Api.SessionProtect = Maybe SessionKey
-
-mkAuthHeader :: AuthClientData Api.SessionProtect -> (Text, Text)
-mkAuthHeader Nothing = (Api.sessionHeaderStr, "")
-mkAuthHeader (Just sessionKey) =
-  (Api.sessionHeaderStr, Text.decodeUtf8 $ unBase64 sessionKey)
-
-session :: Maybe SessionKey -> AuthenticateReq Api.SessionProtect
-session key =
-  mkAuthenticateReq key mkAuthHeader
-
-api :: ApiRequestConfig Routes
-api = ApiRequestConfig Config.apiUrl NoTimeout
-
-dispatch :: Action -> [SomeStoreAction]
-dispatch a = [SomeStoreAction store a]
-
-mkCallback :: (a -> [Action]) -> HandleResponse a
-mkCallback cb = pure . \case
-  Left  (_, e) -> dispatch $ GlobalSetError $ Text.pack e
-  Right x      -> SomeStoreAction store <$> cb x
-
 
 instance StoreData State where
   type StoreAction State = Action
@@ -211,26 +122,12 @@ instance StoreData State where
 
       -- Cache
 
-      CacheRecordAdd t r record -> do
-        let toCol (Entity c col, content) = (c, (col, content))
-            recMap = Map.fromList . map toCol $ record
-        pure $ st & stateCacheRecords . at t . _Just . at r .~ Just recMap
-
-      CacheRecordDelete t r ->
-        pure $ st & stateCacheRecords . at t . _Just . at r .~ Nothing
-
-      CacheRecordsGet t -> case st ^. stateCacheRecords . at t of
-        Just _  -> pure st
-        Nothing -> do
-          request api (Proxy :: Proxy Api.RecordListWithData)
-                      (session $ st ^. stateSessionKey) t $ mkCallback $
-                      \rs -> [CacheRecordsSet t rs]
-          pure st
-
-      CacheRecordsSet t recs -> do
-        let toCol (Entity c col, content) = (c, (col, content))
-            recMaps = map (second $ Map.fromList . map toCol) recs
-        pure $ st & stateCacheRecords . at t .~ Just (Map.fromList recMaps)
+      RecordCacheAction tableId action -> do
+        let update = RecordCache.runAction (mkCallback store GlobalSetError)
+                                           (st ^. stateSessionKey)
+                                           tableId
+                                           action
+        st & stateCacheRecords . at tableId %%~ update
 
       -- Projects
 
@@ -402,32 +299,14 @@ instance StoreData State where
 
       -- Column
 
-      ColumnRename i n -> do
-        request api (Proxy :: Proxy Api.ColumnSetName)
-                    (session $ st ^. stateSessionKey) i n $ mkCallback $ const []
-        pure $ st & stateColumns . at i . _Just . columnName .~ n
-
-      -- Data column
-
-      DataColUpdate i payload@(dt, inpTyp, src) -> do
-        request api (Proxy :: Proxy Api.DataColUpdate)
-                    (session $ st ^. stateSessionKey) i payload $ mkCallback $
-                    const []
-        pure $ st & stateColumns . at i . _Just . columnKind . _ColumnData
-                 %~ (dataColType .~ dt)
-                  . (dataColIsDerived .~ inpTyp)
-                  . (dataColSourceCode .~ src)
-
-      -- Report column
-
-      ReportColUpdate i payload@(templ, format, lang) -> do
-        request api (Proxy :: Proxy Api.ReportColUpdate)
-                    (session $ st ^. stateSessionKey) i payload $ mkCallback $
-                    const []
-        pure $ st & stateColumns . at i . _Just . columnKind . _ColumnReport
-                 %~ (reportColLanguage .~ lang)
-                  . (reportColFormat .~ format)
-                  . (reportColTemplate .~ templ)
+      GetTableCache sKey -> do
+        when (Map.null $ st ^. ccsTableCache) $
+          request api (Proxy :: Proxy TableListGlobal) (session sKey) $ pure . \case
+                        Left (_, e) -> dispatch $ GlobalSetError $ Text.pack e
+                        Right ts    -> [SomeStoreAction columnStore $ SetTableCache $ toTableMap ts]
+        pure st
+      SetTableCache m ->
+        pure $ st & ccsTableCache .~ m
 
       GetReportFormatPlain columnId recordId -> do
         request api (Proxy :: Proxy Api.CellGetReportPlain)
