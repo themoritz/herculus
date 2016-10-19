@@ -8,22 +8,28 @@ module Auth
   , prolongSession
   ) where
 
+import           Control.Applicative              ((<|>))
 import           Control.Lens                     ((&), (.~), (^.))
+import           Control.Monad                    (join)
 import           Control.Monad.Except             (throwError)
 import           Control.Monad.IO.Class           (MonadIO, liftIO)
 import           Data.Functor                     (($>))
 import qualified Data.List                        as List
+import           Data.Monoid                      ((<>))
 import           Data.Text                        (Text)
 import qualified Data.Time.Clock                  as Clock
 import           Database.MongoDB                 ((=:))
-import           Network.Wai                      (Request, requestHeaders)
+import           Network.Wai                      (Request, queryString,
+                                                   requestHeaders)
 import           Servant.Server.Experimental.Auth (AuthHandler, AuthServerData,
                                                    mkAuthHandler)
 import           System.Entropy                   (getEntropy)
 
 import           HexlNat                          (hexlToServant)
 import           Lib.Api.Rest                     (SessionData, SessionProtect,
-                                                   sessionHeader)
+                                                   sessionParam,
+                                                   sessionParamBStr,
+                                                   sessionParamStr)
 import           Lib.Model                        (Entity (..))
 import           Lib.Model.Auth                   (Session (..), SessionKey,
                                                    User, sessionExpDate,
@@ -80,9 +86,11 @@ lookUpSession sessionKey =
                 pure $ Right (session' ^. sessionUserId)
 
 authHandler :: HexlEnv -> AuthMiddleware
-authHandler env = mkAuthHandler $ hexlToServant env $ \request ->
-    case List.lookup sessionHeader (requestHeaders request) of
-      Nothing -> throwError $ ErrUnauthorized "Missing header 'servant-auth-cookie'"
+authHandler env = mkAuthHandler $ hexlToServant env $ \request -> do
+    let mSessionHeader =        List.lookup sessionParam     (requestHeaders request)
+        mSessionQuery  = join $ List.lookup sessionParamBStr (queryString    request)
+    case mSessionHeader <|> mSessionQuery of
+      Nothing -> throwError $ ErrUnauthorized $ "Missing session parameter " <> sessionParamStr
       Just bs -> case toBase64 bs of
         Left  err -> throwError $ ErrForbidden err
         Right key -> lookUpSession key

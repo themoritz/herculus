@@ -4,7 +4,8 @@
 
 module Lib.Api.Rest where
 
-import qualified Data.ByteString.Lazy          as BL
+import qualified Data.ByteString               as BS
+import qualified Data.ByteString.Lazy          as LBS
 import           Data.CaseInsensitive          (original)
 import           Data.Text
 import qualified Data.Text.Encoding            as Text
@@ -65,11 +66,14 @@ type Routes =
 type SessionProtect = AuthProtect "cookie-auth"
 type SessionData = Id User
 
-sessionHeader :: HeaderName
-sessionHeader = "servant-auth-cookie"
+sessionParam :: HeaderName
+sessionParam = "servant-auth-cookie"
 
-sessionHeaderStr :: Text
-sessionHeaderStr = Text.decodeUtf8 $ original sessionHeader
+sessionParamStr :: Text
+sessionParamStr = Text.decodeUtf8 sessionParamBStr
+
+sessionParamBStr :: BS.ByteString
+sessionParamBStr = original sessionParam
 
 type AuthLogin            = "auth"          :> "login"      :> ReqBody '[JSON] LoginData        :> Post '[JSON] LoginResponse
 type AuthLogout           = SessionProtect  :> "auth"       :> "logout"                         :> Get '[JSON] ()
@@ -102,6 +106,6 @@ type RecordList           = SessionProtect  :> "record"     :> "list"       :> C
 type RecordListWithData   = SessionProtect  :> "record"     :> "listWithData" :> Capture "tableId" (Id Table)     :> Get '[JSON] [(Id Record, [(Entity Column, CellContent)])]
 
 type CellSet              = SessionProtect  :> "cell"       :> "set"            :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record) :> ReqBody '[JSON] Value  :> Post '[JSON] ()
-type CellGetReportPDF     = SessionProtect  :> "cell"       :> "getReportPDF"   :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record)                           :> Get '[PDF] BL.ByteString
+type CellGetReportPDF     = SessionProtect  :> "cell"       :> "getReportPDF"   :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record)                           :> Get '[PDF] LBS.ByteString
 type CellGetReportHTML    = SessionProtect  :> "cell"       :> "getReportHTML"  :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record)                           :> Get '[HTML] Text
 type CellGetReportPlain   = SessionProtect  :> "cell"       :> "getReportPlain" :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record)                           :> Get '[PlainText] Text
