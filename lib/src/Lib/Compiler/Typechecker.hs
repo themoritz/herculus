@@ -33,68 +33,97 @@ import           Lib.Types
 
 newInferState :: InferState
 newInferState = InferState
-  { _inferContext = Context Map.empty
+  { _inferContext = Context Map.empty primPreludeTypeClasses
   , _inferCount = 0
   , _inferPointSupply = UF.newPointSupply
   -- , _inferTypeClasses = primTypeClasses
   -- , _inferTypeClassDicts = primTypeClassDicts
   }
 
-runInfer :: Monad m => TypecheckEnv m -> PExpr -> m (Either TypeError (TExpr, Type))
+runInfer :: Monad m => TypecheckEnv m -> PExpr -> m (Either TypeError (CExpr, PolyType Type))
 runInfer env expr =
   let action = do
-        e ::: t <- infer expr
-        t' <- pointToType t
-        pure (e, t')
+        loadPrelude
+        e ::: (preds, point) <- infer expr
+        poly <- generalize preds point
+        c <- replaceTypeClassDicts e
+        t <- polyFromPoint poly
+        pure (c, t)
   in  runExceptT $ evalStateT (runReaderT (unInferT action) env) newInferState
 
 --
+
+replaceTypeClassDicts :: Monad m => TExpr -> InferT m CExpr
+replaceTypeClassDicts expr = case expr of
+  TLam x e -> CLam x <$> replaceTypeClassDicts e
+  TApp f e -> CApp <$> replaceTypeClassDicts f <*> replaceTypeClassDicts e
+  TLet x e body -> CLet x <$> replaceTypeClassDicts e <*> replaceTypeClassDicts body
+  TIf c t e -> CIf <$> replaceTypeClassDicts c <*> replaceTypeClassDicts t <*> replaceTypeClassDicts e
+  TVar n -> pure $ CVar n
+  TLit l -> pure $ CLit l
+  TPrjRecord e r -> do
+    e' <- replaceTypeClassDicts e
+    pure $ CPrjRecord e' r
+  TTypeClassDict (IsIn c point) -> do
+    t <- findType point
+    case t of
+      TyConst typeConst -> do
+        classCtx <- use (inferContext . contextClasses)
+        case Map.lookup c classCtx >>= Map.lookup typeConst of
+          Nothing -> throwError $ (pack . show) typeConst <> " does not implement " <> (pack . show) c
+          Just name -> pure $ CVar name
+      _ -> do
+        debugPoint point
+        throwError $ "predicate type did not resolve to a type constant. class: " <> (pack . show) c
+
 
 infer :: Monad m => PExpr -> InferT m TypedExpr
 infer expr = case expr of
   PLam x e -> do
     xPoint <- freshPoint
-    e' ::: bodyPoint <- inLocalContext (x, ForAll [] [] xPoint) (infer e)
+    e' ::: (bodyPreds, bodyPoint) <- inLocalContext (x, ForAll [] [] xPoint) (infer e)
     arrPoint <- arr xPoint bodyPoint
-    pure $ TLam x e' ::: arrPoint
+    pure $ TLam x e' ::: (bodyPreds, arrPoint)
   PApp f arg -> do
-    f' ::: fPoint <- infer f
-    arg' ::: argPoint <- infer arg
+    f' ::: (fPreds, fPoint) <- infer f
+    arg' ::: (argPreds, argPoint) <- infer arg
     resultPoint <- freshPoint
     arrPoint <- arr argPoint resultPoint
     unify fPoint arrPoint
-    pure $ TApp f' arg' ::: resultPoint
+    pure $ TApp f' arg' ::: (fPreds <> argPreds, resultPoint)
   PLet x e rest -> do
-    e' ::: ePoint <- infer e
-    poly <- generalize ePoint
-    rest' ::: restPoint <- inLocalContext (x, poly) (infer rest)
-    pure $ TLet x e' rest' ::: restPoint
+    e' ::: (ePreds, ePoint) <- infer e
+    poly <- generalize ePreds ePoint -- <- this is where predicates might disappear
+    rest' ::: restTuple <- inLocalContext (x, poly) (infer rest)
+    pure $ TLet x e' rest' ::: restTuple
   PIf cond e1 e2 -> do
-    cond' ::: condPoint <- infer cond
-    e1' ::: e1Point <- infer e1
-    e2' ::: e2Point <- infer e2
+    cond' ::: (condPreds, condPoint) <- infer cond
+    e1' ::: (e1Preds, e1Point) <- infer e1
+    e2' ::: (e2Preds, e2Point) <- infer e2
     boolPoint <- mkPoint tyBool
     unify condPoint boolPoint
     unify e1Point e2Point
-    pure $ TIf cond' e1' e2' ::: e1Point
+    pure $ TIf cond' e1' e2' ::: (condPreds <> e1Preds <> e2Preds, e1Point)
   PVar x -> do
-    poly <- lookupName x
-    xPoint <- instantiate poly
-    pure $ TVar x ::: xPoint
+    poly <- lookupPolyType x
+    (xPreds, xPoint) <- instantiate poly
+    -- for every predicate, insert implementation argument (which includes type for later lookup)
+    let varWithDicts = foldl TApp (TVar x) (map TTypeClassDict xPreds)
+    pure $ varWithDicts ::: (xPreds, xPoint)
   PLit l -> do
     t <- case l of
       LNumber _ -> mkPoint tyNumber
       LBool _   -> mkPoint tyBool
       LString _ -> mkPoint tyString
-    pure $ TLit l ::: t
+    pure $ TLit l ::: ([], t)
   PPrjRecord e name -> do
-    e' ::: ePoint <- infer e
+    e' ::: (ePreds, ePoint) <- infer e
     resultPoint <- freshPoint
     tailPoint <- freshPoint
     consPoint <- mkPoint $ TyRecordCons name resultPoint tailPoint
     recordPoint <- mkPoint $ TyRecord consPoint
     s <- unify ePoint recordPoint
-    pure $ TPrjRecord e' name ::: resultPoint
+    pure $ TPrjRecord e' name ::: (ePreds, resultPoint)
   -- PColumnRef colRef -> do
   --   f <- asks envResolveColumnRef
   --   lift (f colRef) >>= \case
@@ -122,14 +151,16 @@ infer expr = case expr of
   --       tblRows <- lift $ getRows i
   --       pure $ TTableRef i (map fst cols) ::: TyUnary TyList (TyRecord tblRows)
 
-generalize :: MonadState InferState m => Point -> m PolyType
-generalize pt = do
+generalize :: MonadState InferState m => [Predicate Point] -> Point -> m (PolyType Point)
+generalize preds pt = do
   context <- use inferContext
-  freeTypeVariables <- Set.difference <$> ftv pt <*> ftv context
-  pure $ ForAll (Set.toList freeTypeVariables) [] pt
+  let allTypeVariables = Set.union <$> ftv preds <*> ftv pt
+  freeTypeVariables <- Set.difference <$> allTypeVariables <*> ftv context
+  -- reduce using entailment -> split
+  pure $ ForAll (Set.toList freeTypeVariables) preds pt
 
-instantiate :: MonadState InferState m => PolyType -> m Point
-instantiate (ForAll as _ p) = do
+instantiate :: MonadState InferState m => PolyType Point -> m ([Predicate Point], Point)
+instantiate (ForAll as predicates p) = do
   pool <- mapM (\a -> (a,) <$> freshPoint) as
   let replace p' = do
         t <- findType p'
@@ -142,7 +173,8 @@ instantiate (ForAll as _ p) = do
           TyRecord r -> (TyRecord <$> replace r) >>= mkPoint
           TyRecordCons n h t' -> (TyRecordCons n <$> replace h <*> replace t') >>= mkPoint
           TyRecordNil -> pure p'
-  replace p
+      replacePred (IsIn c pred) = IsIn c <$> replace pred
+  (,) <$> mapM replacePred predicates <*> replace p
 
 unify :: Monad m => Point -> Point -> InferT m ()
 unify a b = do

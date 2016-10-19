@@ -26,27 +26,28 @@ data PTplExpr
   | PTplShow PExpr
   deriving (Show)
 
-newtype TTemplate = TTemplate [TTplExpr]
+newtype CTemplate = CTemplate [CTplExpr]
   deriving (Eq, Show, Generic, NFData)
 
-instance ToJSON TTemplate
-instance FromJSON TTemplate
+instance ToJSON CTemplate
+instance FromJSON CTemplate
 
-data TTplExpr
-  = TTplText Text
-  | TTplFor Name TExpr TTemplate
-  | TTplIf TExpr TTemplate TTemplate
-  | TTplShow TExpr
+-- Compiled template using core expressions
+data CTplExpr
+  = CTplText Text
+  | CTplFor Name CExpr CTemplate
+  | CTplIf CExpr CTemplate CTemplate
+  | CTplShow CExpr
   deriving (Eq, Show, Generic, NFData)
 
-instance ToJSON TTplExpr
-instance FromJSON TTplExpr
+instance ToJSON CTplExpr
+instance FromJSON CTplExpr
 
-collectTplDependencies :: TTemplate -> [(Id Column, DependencyType)]
+collectTplDependencies :: CTemplate -> [(Id Column, DependencyType)]
 collectTplDependencies = go
-  where go (TTemplate tpls) = concatMap goOne tpls
+  where go (CTemplate tpls) = concatMap goOne tpls
         goOne e' = case e' of
-          TTplText _ -> []
-          TTplFor _ e body -> collectDependencies e <> go body
-          TTplIf e then' else' -> collectDependencies e <> go then' <> go else'
-          TTplShow e -> collectDependencies e
+          CTplText _ -> []
+          CTplFor _ e body -> collectDependencies e <> go body
+          CTplIf e then' else' -> collectDependencies e <> go then' <> go else'
+          CTplShow e -> collectDependencies e

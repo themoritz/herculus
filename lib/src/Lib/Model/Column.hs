@@ -125,7 +125,7 @@ data ReportCol = ReportCol
 reportColTemplate :: Lens' ReportCol Text
 reportColTemplate = lens _reportColTemplate (\r t -> r { _reportColTemplate = t})
 
-reportColCompiledTemplate :: Lens' ReportCol (CompileResult TTemplate)
+reportColCompiledTemplate :: Lens' ReportCol ReportCompileResult
 reportColCompiledTemplate = lens _reportColCompiledTemplate (\r ct -> r { _reportColCompiledTemplate = ct})
 
 reportColLanguage :: Lens' ReportCol (Maybe ReportLanguage)
@@ -171,7 +171,7 @@ dataColIsDerived = lens _dataColIsDerived (\d iD -> d { _dataColIsDerived = iD }
 dataColSourceCode :: Lens' DataCol Text
 dataColSourceCode = lens _dataColSourceCode (\d s -> d { _dataColSourceCode = s })
 
-dataColCompileResult :: Lens' DataCol (CompileResult TExpr)
+dataColCompileResult :: Lens' DataCol DataCompileResult
 dataColCompileResult = lens _dataColCompileResult (\d cr -> d { _dataColCompileResult = cr })
 
 instance ToJSON DataCol
@@ -183,8 +183,8 @@ data CompileResult a
   | CompileResultError Text
   deriving (Eq, Show, Generic, NFData)
 
-type DataCompileResult = CompileResult TExpr
-type ReportCompileResult = CompileResult TTemplate
+type DataCompileResult = CompileResult CExpr
+type ReportCompileResult = CompileResult CTemplate
 
 instance ToJSON a => ToJSON (CompileResult a)
 instance FromJSON a => FromJSON (CompileResult a)

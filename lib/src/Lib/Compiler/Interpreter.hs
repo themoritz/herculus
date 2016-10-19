@@ -37,9 +37,17 @@ prelude = Map.fromList
   , ( "not"
     , RPrelude $ \_ (RValue (VBool b)) -> pure $ RValue $ VBool $ not b
     )
+  -- Begin class Show
   , ( "show"
+    , RPrelude $ \_ dict -> pure dict
+    )
+  , ( "showNumber"
     , RPrelude $ \_ (RValue (VNumber n)) -> pure $ RValue $ VString $ pack $ show n
     )
+  , ( "showBool"
+    , RPrelude $ \_ (RValue (VBool b)) -> pure $ RValue $ VString $ pack $ show b
+    )
+  -- End
   , ( "formatNumber"
     , RPrelude $ \_ (RValue (VString f)) -> pure $ RPrelude $ \_ (RValue (VNumber n)) ->
         pure $ RValue $ VString $ formatNumber f n
@@ -89,61 +97,31 @@ prelude = Map.fromList
 
 -- Interpreter
 
-eval :: Monad m => TermEnv m -> TExpr -> InterpretT m (Result m)
+eval :: Monad m => TermEnv m -> CExpr -> InterpretT m (Result m)
 eval env expr = case expr of
-  TLam x body -> do
+  CLam x body -> do
     pure $ RClosure x body env
-  TApp f arg -> do
+  CApp f arg -> do
     argVal <- eval env arg
     eval env f >>= \case
       RClosure x body cl -> eval (Map.insert x argVal cl) body
       RPrelude f' -> f' env argVal
-  TLet x e body -> do
+  CLet x e body -> do
     eVal <- eval env e
     eval (Map.insert x eVal env) body
-  TIf cond e1 e2 -> do
+  CIf cond e1 e2 -> do
     RValue (VBool bVal) <- eval env cond
     if bVal then eval env e1 else eval env e2
-  TVar x -> do
+  CVar x -> do
     let Just v = Map.lookup x env
     pure v
-  TLit l -> do
+  CLit l -> do
     let v = case l of
           LNumber v' -> VNumber v'
           LBool v' -> VBool v'
           LString v' -> VString v'
     pure $ RValue v
-  TBinop op l r -> do
-    let numOp o = do
-          RValue (VNumber a) <- eval env l
-          RValue (VNumber b) <- eval env r
-          pure $ RValue $ VNumber $ a `o` b
-        timOp o = do
-          RValue (VTime a) <- eval env l
-          RValue (VTime b) <- eval env r
-          pure $ RValue $ VBool $ a `o` b
-        bolOp o = do
-          RValue (VBool a) <- eval env l
-          RValue (VBool b) <- eval env r
-          pure $ RValue $ VBool $ a `o` b
-        strOp o = do
-          RValue (VString a) <- eval env l
-          RValue (VString b) <- eval env r
-          pure $ RValue $ VBool $ a `o` b
-    case op of
-      Add       -> numOp (+)
-      Sub       -> numOp (-)
-      Mul       -> numOp (*)
-      -- Div TODO: catch div by 0 error
-      Equal     -> strOp (==)
-      NotEqual  -> strOp (/=)
-      LessEq    -> timOp (<=)
-      GreaterEq -> timOp (>=)
-      Less      -> timOp (<)
-      Greater   -> timOp (>)
-      And       -> bolOp (&&)
-      Or        -> bolOp (||)
-  TPrjRecord e name -> do
+  CPrjRecord e name -> do
     RValue (VRecord mRecId) <- eval env e
     case mRecId of
       Nothing -> throwError "dependent cell not ready (invalid reference))"
@@ -152,23 +130,23 @@ eval env expr = case expr of
         lift (f recId name) >>= \case
           Nothing -> throwError "dependent cell not ready"
           Just val -> pure $ RValue val
-  TColumnRef colId -> do
+  CColumnRef colId -> do
     f <- asks envGetCellValue
     lift (f colId) >>= \case
       Nothing -> throwError "dependent cell not ready"
       Just val -> pure $ RValue val
-  TWholeColumnRef colId -> do
+  CWholeColumnRef colId -> do
     f <- asks envGetColumnValues
     mVals <- lift $ f colId
     fmap (RValue . VList) $ for mVals $ \case
       Nothing -> throwError "dependent cell not ready"
       Just val -> pure val
-  TTableRef tblId _ -> do
+  CTableRef tblId _ -> do
     f <- asks envGetTableRecords
     records <- lift $ f tblId
     pure $ RValue $ VList $ map (VRecord . Just) records
 
-interpret :: Monad m => TExpr -> EvalEnv m -> m (Either Text Value)
+interpret :: Monad m => CExpr -> EvalEnv m -> m (Either Text Value)
 interpret expr env = do
   result <- runInterpretT env (eval prelude expr)
   case result of

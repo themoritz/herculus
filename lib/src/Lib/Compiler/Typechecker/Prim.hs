@@ -3,11 +3,13 @@
 module Lib.Compiler.Typechecker.Prim where
 
 import           Control.Monad.State
+import           Control.Lens
 
 import           Data.Map                       (Map)
 import qualified Data.Map                       as Map
 import           Data.Text                      (Text)
 
+import           Lib.Compiler.Types
 import           Lib.Compiler.Typechecker.Types
 import           Lib.Model.Column
 import           Lib.Model.Table
@@ -46,6 +48,9 @@ tyTime = mkMonoTypeConst "Time" nullaryType
 tyBool :: (MonoType a)
 tyBool = mkMonoTypeConst "Bool" nullaryType
 
+tyArr :: Type -> Type -> Type
+tyArr a b = Type (TyApp (Type (TyApp (Type tyFun) a)) b)
+
 arr :: MonadState InferState m => Point -> Point -> m Point
 arr a b = do
   fn <- mkPoint tyFun
@@ -61,6 +66,33 @@ arr a b = do
 --   (DataRecord t) -> TyRecord <$> f t
 --   (DataList t)   -> TyApp tyList <$> typeOfDataType f t
 --   (DataMaybe t)  -> TyApp tyMaybe <$> typeOfDataType f t
+
+primPrelude :: [(Name, PolyType Type)]
+primPrelude =
+  [ ( "show"
+    , ForAll [TypeVar 1 KindStar] [IsIn (ClassName "Show") (Type (TyVar (TypeVar 1 KindStar)))]
+        (tyArr (Type (TyVar (TypeVar 1 KindStar))) (Type tyString))
+    )
+  ]
+
+primPreludeTypeClasses :: Map ClassName (Map TypeConst Name)
+primPreludeTypeClasses = Map.fromList
+  [ ( ClassName "Show"
+    , Map.fromList
+      [ ( (TypeConst "Number" KindStar)
+        , "showNumber"
+        )
+      , ( (TypeConst "Bool" KindStar)
+        , "showBool"
+        )
+      ]
+    )
+  ]
+
+loadPrelude :: MonadState InferState m => m ()
+loadPrelude = forM_ primPrelude $ \(n, poly) -> do
+  polyPoint <- polyToPoint poly
+  inferContext . contextTypes %= Map.insert n polyPoint
 
 -- primContext :: Map Name PolyType
 -- primContext = Map.fromList

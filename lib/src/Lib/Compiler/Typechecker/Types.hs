@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE FlexibleContexts            #-}
+{-# LANGUAGE FlexibleInstances            #-}
 
 module Lib.Compiler.Typechecker.Types where
 
@@ -34,94 +35,17 @@ import           Lib.Compiler.Types
 
 --
 
-data Kind
-  = KindStar
-  | KindFun Kind Kind
-  deriving (Eq, Ord)
+data Context = Context
+  { _contextTypes :: Map Name (PolyType Point)
+  , _contextClasses :: Map ClassName (Map TypeConst Name) -- classname -> instance -> implementation
+  }
 
-data TypeVar = TypeVar Int Kind
-  deriving (Eq, Ord)
-
-data TypeConst = TypeConst Text Kind
-  deriving (Eq, Ord)
-
-newtype ClassName = ClassName Text
-  deriving (Eq, Ord)
-
-
-data Point = Point (UF.Point (MonoType Point))
-data Type = Type (MonoType Type)
-
-data MonoType a
-  = TyVar TypeVar
-  | TyConst TypeConst
-  | TyApp a a
-  | TyRecord a
-  | TyRecordCons (Ref Column) a a
-  | TyRecordNil
-  deriving (Ord)
-
-type Qualifier = (ClassName, Point)
-
--- "forall a. ..."
-data PolyType = ForAll [TypeVar] [Qualifier] Point
-
-data Context = Context (Map Name PolyType)
-
-instance Eq a => Eq (MonoType a) where
-  TyVar a == TyVar b = a == b
-  TyApp c1 a1 == TyApp c2 a2 = c1 == c2 && a1 == a2
-  TyRecord s == TyRecord t = False --rowMap s == rowMap t
-    -- where rowMap :: a -> Map (Ref Column) a
-    --       rowMap = Map.fromList . go
-    --       go TyRecordNil = []
-    --       go (TyVar _) = []
-    --       go (TyRecordCons n t' rest) = (n,t') : go rest
-  TyRecordCons _ _ _ == TyRecordCons _ _ _ = error "eq SimpleType: should not happen"
-  TyRecordNil == TyRecordNil = True
-  _ == _ = False
-
-instance Show Type where
-  show (Type t) = case t of
-    TyVar a -> show a
-    TyConst c -> show c
-    TyApp (Type (TyApp (Type (TyConst (TypeConst "(->)" _))) a)) b -> "(" <> show a <> " -> " <> show b <> ")"
-    TyApp f arg -> "(" <> show f <> " " <> show arg <> ")"
-    TyRecord r -> "{" <> show r <> "}"
-    TyRecordCons name t r -> show name <> " : " <> show t <> ", " <> show r
-    TyRecordNil -> "-"
-
-instance Show Kind where
-  show KindStar = "*"
-  show (KindFun arg res) = "(" <> show arg <> " -> " <> show res <> ")"
-
-instance Show TypeVar where
-  show (TypeVar a k) = show a -- <> " : " <> show k
-
-instance Show TypeConst where
-  show (TypeConst n k) = unpack n -- <> " : " <> show k
-
-instance Show ClassName where
-  show (ClassName name) = unpack name
-
--- instance Show PolyType where
-  -- show (ForAll as qs t) =
-      -- "forall " <> intercalate " " (map show as) <> ". " <>
-      -- "(" <> intercalate ", " (map showQuali qs) <> ")" <>
-      -- "=> " <> show t
-    -- where showQuali (cls, t') = show cls <> " " <> show t'
-
--- Names by which the implementations can be accessed in the interpretation env
-data TypeClassDict = TypeClassDict Name
+makeLenses ''Context
 
 data InferState = InferState
   { _inferContext          :: Context
   , _inferCount            :: Int
   , _inferPointSupply      :: UF.PointSupply (MonoType Point)
-
-  -- Later ...
-  -- , _inferTypeClasses      :: Map ClassName (Map Name PolyType)
-  -- , _inferTypeClassDicts   :: Map ClassName (Map (MonoType Point) TypeClassDict)
   }
 
 makeLenses ''InferState
@@ -143,8 +67,11 @@ instance Types a => Types (MonoType a) where
   ftv (TyRecordCons _ t r) = Set.union <$> ftv t <*> ftv r
   ftv (TyRecordNil) = pure Set.empty
 
-instance Types PolyType where
-  ftv (ForAll _ _ pt) = ftv pt
+instance Types a => Types [a] where
+  ftv = foldlM (\vs a -> Set.union <$> pure vs <*> ftv a) Set.empty
+
+instance Types a => Types (PolyType a) where
+  ftv (ForAll as preds pt) = Set.difference <$> ftv pt <*> ftv as
 
 instance Types Point where
   ftv pt = findType pt >>= ftv
@@ -152,24 +79,34 @@ instance Types Point where
 instance Types Type where
   ftv (Type t) = ftv t
 
+instance Types a => Types (Predicate a) where
+  ftv (IsIn _ t) = ftv t
+
 instance Types Context where
-  ftv (Context m) = foldlM (\vs poly -> Set.union <$> pure vs <*> ftv poly) Set.empty m
+  ftv (Context types classes) = foldlM (\vs poly -> Set.union <$> pure vs <*> ftv poly) Set.empty types
 
 
-lookupName :: (MonadError TypeError m, MonadState InferState m) => Name -> m PolyType
-lookupName name = do
-  Context ctx <- use inferContext
+lookupPolyType :: (MonadError TypeError m, MonadState InferState m) => Name -> m (PolyType Point)
+lookupPolyType name = do
+  ctx <- use (inferContext . contextTypes)
   case Map.lookup name ctx of
     Just t -> pure t
     Nothing -> throwError $ "not in scope: " <> name
 
-inLocalContext :: MonadState InferState m => (Name, PolyType) -> m a -> m a
+inLocalContext :: MonadState InferState m => (Name, PolyType Point) -> m a -> m a
 inLocalContext (name, poly) m = do
   oldContext <- use inferContext
-  inferContext %= \(Context ctx) -> Context $ Map.insert name poly ctx
+  inferContext . contextTypes %= Map.insert name poly
   res <- m
   inferContext .= oldContext
   pure res
+
+dryRun :: MonadState s m => m a -> m a
+dryRun action = do
+  old <- get
+  result <- action
+  put old
+  pure result
 
 freshPoint :: MonadState InferState m => m Point
 freshPoint = do
@@ -205,9 +142,30 @@ pointToType p = do
     TyConst c -> pure $ TyConst c
     TyApp l r -> TyApp <$> pointToType l <*> pointToType r
     TyRecord r -> TyRecord <$> pointToType r
-    TyRecordCons ref t r -> TyRecordCons <$> pure ref <*> pointToType t <*> pointToType r
+    TyRecordCons ref t r -> TyRecordCons ref <$> pointToType t <*> pointToType r
     TyRecordNil -> pure TyRecordNil
   pure $ Type t
+
+typeToPoint :: MonadState InferState m => Type -> m Point
+typeToPoint (Type t) = case t of
+  TyVar v -> mkPoint $ TyVar v
+  TyConst c -> mkPoint $ TyConst c
+  TyApp l r -> (TyApp <$> typeToPoint l <*> typeToPoint r) >>= mkPoint
+  TyRecord r -> (TyRecord <$> typeToPoint r) >>= mkPoint
+  TyRecordCons ref t r -> (TyRecordCons ref <$> typeToPoint t <*> typeToPoint r) >>= mkPoint
+  TyRecordNil -> mkPoint TyRecordNil
+
+polyFromPoint :: MonadState InferState m => PolyType Point -> m (PolyType Type)
+polyFromPoint (ForAll as preds point) = do
+  let t = pointToType point
+      transformPred (IsIn c p) = IsIn c <$> pointToType p
+  ForAll as <$> mapM transformPred preds <*> t
+
+polyToPoint :: MonadState InferState m => PolyType Type -> m (PolyType Point)
+polyToPoint (ForAll as preds t) = do
+  let point = typeToPoint t
+      transformPred (IsIn c p) = IsIn c <$> typeToPoint p
+  ForAll as <$> mapM transformPred preds <*> point
 
 union :: MonadState InferState m => Point -> Point -> m ()
 union (Point a) (Point b) = inferPointSupply %= \s -> UF.union s a b
@@ -225,7 +183,7 @@ data TypecheckEnv m = TypecheckEnv
 --
 
 type TypeError = Text
-data TypedExpr = TExpr ::: Point
+data TypedExpr = TExpr ::: ([Predicate Point], Point)
 
 newtype InferT m a = InferT
   { unInferT :: ReaderT (TypecheckEnv m) (StateT InferState (ExceptT TypeError m)) a

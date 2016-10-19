@@ -20,7 +20,7 @@ type TermEnv m = Map Name (Result m)
 
 data Result m
   = RValue Value
-  | RClosure Name TExpr (TermEnv m)
+  | RClosure Name CExpr (TermEnv m)
   | RPrelude (TermEnv m -> Result m -> InterpretT m (Result m))
 
 type EvalError = Text
