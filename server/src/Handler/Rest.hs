@@ -33,7 +33,7 @@ import           Lib.Compiler.Types
 import           Lib.Model
 import           Lib.Model.Auth                 (LoginData (..),
                                                  LoginResponse (..), Session,
-                                                 SignupData (..),
+                                                 SessionKey, SignupData (..),
                                                  SignupResponse (..),
                                                  User (User), mkPwHash,
                                                  sessionKey, userPwHash,
@@ -379,7 +379,7 @@ handleCellSet _ c r val = do
   -- TODO: fork this
   propagate [RootCellChanges [(c, r)]]
 
-handleCellGetReportPDF :: MonadHexl m => SessionData -> Id Column -> Id Record -> m BL.ByteString
+handleCellGetReportPDF :: MonadHexl m => SessionKey -> Id Column -> Id Record -> m BL.ByteString
 handleCellGetReportPDF _ c r = do
   (repCol, plain) <- evalReport c r
   case repCol ^. reportColLanguage of
@@ -417,7 +417,7 @@ handleCellGetReportPDF _ c r = do
               "Source: " <> (pack . show) (Pandoc.writeLaTeX options pandoc)
             Right pdf -> pure pdf
 
-handleCellGetReportHTML :: MonadHexl m => SessionData -> Id Column -> Id Record -> m Text
+handleCellGetReportHTML :: MonadHexl m => SessionKey -> Id Column -> Id Record -> m Text
 handleCellGetReportHTML _ c r = do
   col <- getById' c
   (repCol, plain) <- evalReport c r
@@ -441,7 +441,7 @@ handleCellGetReportHTML _ c r = do
                 }
           pure $ pack $ Pandoc.writeHtmlString options pandoc
 
-handleCellGetReportPlain :: MonadHexl m => SessionData -> Id Column -> Id Record -> m Text
+handleCellGetReportPlain :: MonadHexl m => SessionKey -> Id Column -> Id Record -> m Text
 handleCellGetReportPlain _ c r = snd <$> evalReport c r
 
 getPandocReader :: ReportLanguage -> ReportFormat

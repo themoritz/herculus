@@ -18,8 +18,8 @@ import           Servant.API.Experimental.Auth (AuthProtect)
 import           Lib.Api.Rest.Report
 import           Lib.Model
 import           Lib.Model.Auth                (LoginData, LoginResponse,
-                                                SignupData, SignupResponse,
-                                                User)
+                                                SessionKey, SignupData,
+                                                SignupResponse, User)
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Project
@@ -105,7 +105,7 @@ type RecordData           = SessionProtect  :> "record"     :> "data"       :> C
 type RecordList           = SessionProtect  :> "record"     :> "list"       :> Capture "tableId" (Id Table)     :> Get '[JSON] [Entity Record]
 type RecordListWithData   = SessionProtect  :> "record"     :> "listWithData" :> Capture "tableId" (Id Table)     :> Get '[JSON] [(Id Record, [(Entity Column, CellContent)])]
 
-type CellSet              = SessionProtect  :> "cell"       :> "set"            :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record) :> ReqBody '[JSON] Value  :> Post '[JSON] ()
-type CellGetReportPDF     = SessionProtect  :> "cell"       :> "getReportPDF"   :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record)                           :> Get '[PDF] LBS.ByteString
-type CellGetReportHTML    = SessionProtect  :> "cell"       :> "getReportHTML"  :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record)                           :> Get '[HTML] Text
-type CellGetReportPlain   = SessionProtect  :> "cell"       :> "getReportPlain" :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record)                           :> Get '[PlainText] Text
+type CellSet              = SessionProtect  :> "cell" :> "set"  :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record) :> ReqBody '[JSON] Value          :> Post '[JSON] ()
+type CellGetReportPDF     = "cell"          :> "getReportPDF"   :> Capture "sessionKey" SessionKey  :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record) :> Get '[PDF] LBS.ByteString
+type CellGetReportHTML    = "cell"          :> "getReportHTML"  :> Capture "sessionKey" SessionKey  :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record) :> Get '[HTML] Text
+type CellGetReportPlain   = "cell"          :> "getReportPlain" :> Capture "sessionKey" SessionKey  :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record) :> Get '[PlainText] Text

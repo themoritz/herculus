@@ -18,8 +18,7 @@ import           Lib.Model.Column
 import           Lib.Model.Record
 import           Lib.Types
 
-import           Store               (Action (GetReportFormatHTML, GetReportFormatPDF, GetReportFormatPlain),
-                                      dispatch, session, stateSessionKey, store)
+import           Store               (dispatch, session, stateSessionKey, store)
 
 import           Views.Combinators   (clspan_, faButton_)
 
@@ -41,14 +40,32 @@ reportCell = defineView "reportCell" $ \ReportCellProps{..} -> cldiv_ "reportCel
     CompileResultError _ -> clspan_ "error" "Error"
     CompileResultOk _ -> case reportCellColReport ^. reportColFormat of
       ReportFormatPlain ->
-        faButton_ "file-plain-o" $ dispatch $ GetReportFormatPDF reportCellColId reportCellRecId
+        a_ [ "href" &= getPlain sKey reportCellColId reportCellRecId
+          , "target" $= "_blank"
+          ] $ faIcon_ "file-text-o fa-lg"
       ReportFormatPDF ->
-        faButton_ "file-pdf-o" $ dispatch $ GetReportFormatPDF reportCellColId reportCellRecId
+        a_ [ "href" &= getPDF sKey reportCellColId reportCellRecId
+          , "target" $= "_blank"
+          ] $ faIcon_ "file-pdf-o fa-lg"
       ReportFormatHTML ->
-        faButton_ "file-text-o" $ dispatch $ GetReportFormatHTML reportCellColId reportCellRecId
+        a_ [ "href" &= getHTML sKey reportCellColId reportCellRecId
+          , "target" $= "_blank"
+          ] $ faIcon_ "file-code-o fa-lg"
 
-api :: Proxy Routes
-api = Proxy
+getPlain :: Maybe SessionKey -> Id Column -> Id Record -> Text
+getPlain sKey columnId recordId = case sKey of
+  -- TODO get Strings from SessionKey + Id Column + Id Record
+  Just sKey -> pack ("/cell/getReportPlain?sessionKey=" ++ sKey ++ "&columnId=" ++ columnId "&recordId=" ++ recordId)
+  Nothing   -> pack "#"
 
-toPath :: URI -> Text
-toPath = pack . ('/':) . uriPath
+getPDF :: Maybe SessionKey -> Id Column -> Id Record -> Text
+getPDF sKey columnId recordId = case sKey of
+  -- TODO get Strings from SessionKey + Id Column + Id Record
+  Just sKey -> pack ("/cell/getReportPDF?sessionKey=" ++ sKey ++ "&columnId=" ++ columnId "&recordId=" ++ recordId)
+  Nothing   -> pack "#"
+
+getHTML :: Maybe SessionKey -> Id Column -> Id Record -> Text
+getHTML sKey columnId recordId = case sKey of
+  -- TODO get Strings from SessionKey + Id Column + Id Record
+  Just sKey -> pack ("/cell/getReportHTML?sessionKey=" ++ sKey ++ "&columnId=" ++ columnId "&recordId=" ++ recordId)
+  Nothing   -> pack "#"
