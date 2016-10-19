@@ -171,8 +171,8 @@ inLocalContext (name, poly) m = do
   inferContext .= oldContext
   pure res
 
-fresh :: MonadState InferState m => m Point
-fresh = do
+freshPoint :: MonadState InferState m => m Point
+freshPoint = do
   c <- inferCount <+= 1
   mkPoint $ TyVar $ TypeVar c KindStar
 
