@@ -13,7 +13,9 @@ import           Lib.Model.Column
 import           Lib.Model.Table
 import           Lib.Types
 
+import           Action            (Action (TableAddRecord, TableAddColumn))
 import           Store
+import qualified Store.Column      as Column
 import           Views.Cell
 import           Views.Column
 import           Views.Combinators
@@ -27,7 +29,7 @@ tableGrid_ !st = view tableGrid st mempty
 tableGrid :: ReactView State
 tableGrid = defineView "tableGrid" $ \st -> do
   let cells = st ^. stateCells
-      cols = st ^. stateColumns
+      cols = Column._stColumn <$> st ^. stateColumns
       recs = st ^. stateRecords
       tableId = st ^. stateTableId
       sKey = st ^. stateSessionKey
@@ -59,8 +61,8 @@ tableGrid = defineView "tableGrid" $ \st -> do
                 Nothing           -> mempty
 
       emptyDataCol :: Id Table -> Column
-      emptyDataCol tableId = Column
-        { _columnTableId = tableId
+      emptyDataCol i = Column
+        { _columnTableId = i
         , _columnName    = ""
         , _columnKind    = ColumnData DataCol
           { _dataColType          = DataNumber
@@ -71,8 +73,8 @@ tableGrid = defineView "tableGrid" $ \st -> do
         }
 
       emptyReportCol :: Id Table -> Column
-      emptyReportCol tableId = Column
-        { _columnTableId = tableId
+      emptyReportCol i = Column
+        { _columnTableId = i
         , _columnName = ""
         , _columnKind = ColumnReport ReportCol
           { _reportColTemplate         = ""

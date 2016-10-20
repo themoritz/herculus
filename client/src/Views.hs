@@ -3,15 +3,14 @@
 
 module Views where
 
+import           Control.DeepSeq     (NFData)
 import           Control.Lens        hiding (view)
-
+import           Data.Foldable       (for_)
 import           Data.Map.Strict     (Map)
 import qualified Data.Map.Strict     as Map
-
-import           Data.Foldable       (for_)
 import           Data.Text           (Text)
 import qualified Data.Text           as Text
-
+import           GHC.Generics        (Generic)
 import           React.Flux
 import           React.Flux.Internal (toJSString)
 
@@ -19,14 +18,11 @@ import           Lib.Model.Project
 import           Lib.Model.Table
 import           Lib.Types
 
+import           Action              (Action (..))
+import           Helper              (keyENTER, keyESC)
 import           Store
 import           Views.Auth          (login_, logout_)
 import           Views.Table         (tableGrid_)
-
-import           Helper              (keyENTER, keyESC)
-
-import           Control.DeepSeq     (NFData)
-import           GHC.Generics        (Generic)
 
 app :: ReactView ()
 app = defineControllerView "app" store $ \st () ->
