@@ -54,18 +54,22 @@ reportCell = defineView "reportCell" $ \ReportCellProps{..} -> cldiv_ "reportCel
 
 getPlain :: Maybe SessionKey -> Id Column -> Id Record -> Text
 getPlain sKey columnId recordId = case sKey of
-  -- TODO get Strings from SessionKey + Id Column + Id Record
-  Just sKey -> pack ("/cell/getReportPlain?sessionKey=" ++ sKey ++ "&columnId=" ++ columnId "&recordId=" ++ recordId)
+  Just sKey -> pack $ getReportPath "getReportPlain" sKey columnId recordId
   Nothing   -> pack "#"
 
 getPDF :: Maybe SessionKey -> Id Column -> Id Record -> Text
 getPDF sKey columnId recordId = case sKey of
-  -- TODO get Strings from SessionKey + Id Column + Id Record
-  Just sKey -> pack ("/cell/getReportPDF?sessionKey=" ++ sKey ++ "&columnId=" ++ columnId "&recordId=" ++ recordId)
+  Just sKey -> pack $ getReportPath "getReportPDF" sKey columnId recordId
   Nothing   -> pack "#"
 
 getHTML :: Maybe SessionKey -> Id Column -> Id Record -> Text
 getHTML sKey columnId recordId = case sKey of
-  -- TODO get Strings from SessionKey + Id Column + Id Record
-  Just sKey -> pack ("/cell/getReportHTML?sessionKey=" ++ sKey ++ "&columnId=" ++ columnId "&recordId=" ++ recordId)
+  Just sKey -> pack $ getReportPath "getReportHTML" sKey columnId recordId
   Nothing   -> pack "#"
+
+getReportPath :: String -> SessionKey -> Id Column -> Id Record -> String
+getReportPath folder sKey columnId recordId =
+  "/cell/" ++ folder ++
+  "?sessionKey=" ++ show sKey ++
+  "&columnId=" ++ show columnId ++
+  "&recordId=" ++ show recordId
