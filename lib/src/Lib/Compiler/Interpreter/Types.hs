@@ -21,6 +21,7 @@ type TermEnv m = Map Name (Result m)
 data Result m
   = RValue Value
   | RClosure Name CExpr (TermEnv m)
+  | RInstanceDict (Map Name (Result m))
   | RPrelude (TermEnv m -> Result m -> InterpretT m (Result m))
 
 type EvalError = Text

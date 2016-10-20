@@ -51,11 +51,20 @@ tyBool = mkMonoTypeConst "Bool" nullaryType
 tyArr :: Type -> Type -> Type
 tyArr a b = Type (TyApp (Type (TyApp (Type tyFun) a)) b)
 
+tyApp :: MonoType Type -> Type -> Type
+tyApp f arg = Type $ TyApp (Type f) arg
+
 arr :: MonadState InferState m => Point -> Point -> m Point
 arr a b = do
   fn <- mkPoint tyFun
   a' <- mkPoint $ TyApp fn a
   mkPoint $ TyApp a' b
+
+typeVar :: Int -> TypeVar
+typeVar i = TypeVar i KindStar
+
+tyVar :: Int -> Type
+tyVar = Type . TyVar . typeVar
 
 -- typeOfDataType :: Applicative m => (Id Table -> m (MonoType a)) -> DataType -> m (MonoType a)
 -- typeOfDataType f = \case
@@ -67,24 +76,6 @@ arr a b = do
 --   (DataList t)   -> TyApp tyList <$> typeOfDataType f t
 --   (DataMaybe t)  -> TyApp tyMaybe <$> typeOfDataType f t
 
-primPrelude :: [(Name, PolyType Type)]
-primPrelude =
-  [ ( "show"
-    , ForAll [TypeVar 1 KindStar] [IsIn (ClassName "Show") (Type (TyVar (TypeVar 1 KindStar)))]
-        (tyArr (Type (TyVar (TypeVar 1 KindStar))) (Type tyString))
-    )
-  ]
-
-primPreludeDicts :: [(Predicate Type, Name)]
-primPreludeDicts =
-  [ ( IsIn (ClassName "Show") $ Type tyNumber
-    , "showNumber"
-    )
-  , ( IsIn (ClassName "Show") $ Type tyBool
-    , "showBool"
-    )
-  ]
-
 loadPrelude :: MonadState InferState m => m ()
 loadPrelude = do
   forM_ primPrelude $ \(n, poly) -> do
@@ -93,70 +84,76 @@ loadPrelude = do
   forM_ primPreludeDicts $ \(p, n) ->
     inferContext . contextInstanceDicts %= Map.insert p n
 
--- primContext :: Map Name PolyType
--- primContext = Map.fromList
---   [ ( "zero"
---     , Forall [] $ TyNullary TyNumber
---     )
---   , ( "double"
---     , Forall [] $ TyNullary TyNumber `TyArr` TyNullary TyNumber
---     )
---   , ( "sum"
---     , Forall [] $ TyUnary TyList (TyNullary TyNumber) `TyArr` TyNullary TyNumber
---     )
---   , ( "length"
---     , Forall [] $ TyUnary TyList (TyVar (TV "_a")) `TyArr` TyNullary TyNumber
---     )
---   , ( "not"
---     , Forall [] $ TyNullary TyBool `TyArr` TyNullary TyBool
---     )
---   , ( "show"
---     , Forall [] $ TyNullary TyNumber `TyArr` TyNullary TyString
---     )
---   , ( "formatNumber"
---     , Forall [] $ TyNullary TyString `TyArr` (TyNullary TyNumber `TyArr` TyNullary TyString)
---     )
---   , ( "formatTime"
---     , Forall [] $ TyNullary TyString `TyArr` (TyNullary TyTime `TyArr` TyNullary TyString)
---     )
---   , ( "map"
---     , Forall [TV "_a", TV "_b"] $
---         (TyVar (TV "_a") `TyArr` TyVar (TV "_b")) `TyArr`
---         (TyUnary TyList (TyVar (TV "_a")) `TyArr` TyUnary TyList (TyVar (TV "_b")))
---     )
---   , ( "filter"
---     , Forall [TV "_a"] $
---         (TyVar (TV "_a") `TyArr` TyNullary TyBool) `TyArr`
---         (TyUnary TyList (TyVar (TV "_a")) `TyArr` TyUnary TyList (TyVar (TV "_a")))
---     )
---   , ( "find"
---     , Forall [TV "_a"] $
---         (TyVar (TV "_a") `TyArr` TyNullary TyBool) `TyArr`
---         (TyUnary TyList (TyVar (TV "_a")) `TyArr` TyUnary TyMaybe (TyVar (TV "_a")))
---     )
---   ]
+primPreludeDicts :: [(Predicate Type, Name)]
+primPreludeDicts =
+  [ ( IsIn (ClassName "Show") $ Type tyNumber
+    , "$ShowNumber"
+    )
+  , ( IsIn (ClassName "Show") $ Type tyBool
+    , "$ShowBool"
+    )
+  , ( IsIn (ClassName "Eq") $ Type tyNumber
+    , "$EqNumber"
+    )
+  , ( IsIn (ClassName "Eq") $ Type tyBool
+    , "$EqBool"
+    )
+  , ( IsIn (ClassName "Eq") $ Type tyTime
+    , "$EqTime"
+    )
+  , ( IsIn (ClassName "Eq") $ Type tyString
+    , "$EqString"
+    )
+  ]
 
--- primTypeClasses :: Map ClassName (Map Name PolyType)
--- primTypeClasses = Map.fromList
---   [ ( ClassName "Eq"
---     , Map.fromList
---       [ ( "=="
---         , ForAll [TypeVar "a"] [] $ TyFun (TyVar (TypeVar "a")) (TyFun (TyVar (TypeVar "a")) tyBool)
---         )
---       ]
---     )
---   ]
-
--- primTypeClassDicts :: Map ClassName (Map MonoType TypeClassDict)
--- primTypeClassDicts = Map.fromList
---   [ ( ClassName "Eq"
---     , Map.fromList
---       [ ( tyNumber
---         , TypeClassDict "eqNumber"
---         )
---       , ( tyString
---         , TypeClassDict "eqString"
---         )
---       ]
---     )
---   ]
+primPrelude :: [(Name, PolyType Type)]
+primPrelude =
+  [ ( "sum"
+    , ForAll [] [] $
+        Type (TyApp (Type tyList) (Type tyNumber)) `tyArr` Type tyNumber
+    )
+  , ( "length"
+    , ForAll [typeVar 1] [] $
+        tyApp tyList (tyVar 1) `tyArr` Type tyNumber
+    )
+  , ( "not"
+    , ForAll [] [] $
+        Type tyBool `tyArr` Type tyBool
+    )
+  , ( "show"
+    , ForAll [typeVar 1] [IsIn (ClassName "Show") (tyVar 1)] $
+        tyVar 1 `tyArr` Type tyString
+    )
+  , ( "=="
+    , ForAll [typeVar 1] [IsIn (ClassName "Eq") (tyVar 1)] $
+        tyVar 1 `tyArr` (tyVar 1 `tyArr` Type tyBool)
+    )
+  , ( "/="
+    , ForAll [typeVar 1] [IsIn (ClassName "Eq") (tyVar 1)] $
+        tyVar 1 `tyArr` (tyVar 1 `tyArr` Type tyBool)
+    )
+  , ( "<="
+    , ForAll [typeVar 1] [IsIn (ClassName "Ord") (tyVar 1)] $
+        tyVar 1 `tyArr` (tyVar 1 `tyArr` Type tyBool)
+    )
+  , ( "formatNumber"
+    , ForAll [] [] $
+        Type tyString `tyArr` (Type tyNumber `tyArr` Type tyString)
+    )
+  , ( "formatTime"
+    , ForAll [] [] $
+        Type tyString `tyArr` (Type tyTime `tyArr` Type tyString)
+    )
+  , ( "map"
+    , ForAll [typeVar 1, typeVar 2] [] $
+        (tyVar 1 `tyArr` tyVar 2) `tyArr` (tyApp tyList (tyVar 1) `tyArr` tyApp tyList (tyVar 2))
+    )
+  , ( "filter"
+    , ForAll [typeVar 1] [] $
+        (tyVar 1 `tyArr` Type tyBool) `tyArr` (tyApp tyList (tyVar 1) `tyArr` tyApp tyList (tyVar 1))
+    )
+  , ( "find"
+    , ForAll [typeVar 1] [] $
+        (tyVar 1 `tyArr` Type tyBool) `tyArr` (tyApp tyList (tyVar 1) `tyArr` tyApp tyMaybe (tyVar 1))
+    )
+  ]

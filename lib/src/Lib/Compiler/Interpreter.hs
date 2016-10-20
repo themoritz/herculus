@@ -17,17 +17,19 @@ import           Lib.Types
 import           Lib.Compiler.Interpreter.Types
 import           Lib.Compiler.Types
 
+-- Helper
+
+classFunction :: Monad m => Name -> (Name, Result m)
+classFunction name =
+  ( name
+  , RPrelude $ \_ (RInstanceDict d) -> let Just f = Map.lookup name d in pure f
+  )
+
 -- Prelude
 
 prelude :: Monad m => Map Name (Result m)
 prelude = Map.fromList
-  [ ( "zero"
-    , RValue $ VNumber $ Number 0
-    )
-  , ( "double"
-    , RPrelude $ \_ (RValue (VNumber x)) -> pure $ RValue $ VNumber $ 2 * x
-    )
-  , ( "sum"
+  [ ( "sum"
     , RPrelude $ \_ (RValue (VList xs)) -> pure $
         RValue $ VNumber $ sum $ map (\(VNumber v) -> v) xs
     )
@@ -37,17 +39,80 @@ prelude = Map.fromList
   , ( "not"
     , RPrelude $ \_ (RValue (VBool b)) -> pure $ RValue $ VBool $ not b
     )
-  -- Begin class Show
-  , ( "show"
-    , RPrelude $ \_ dict -> pure dict
+  -- Class show
+  , classFunction "show"
+  , ( "$ShowNumber"
+    , RInstanceDict $ Map.fromList
+      [ ( "show"
+        , RPrelude $ \_ (RValue (VNumber n)) -> pure $ RValue $ VString $ pack $ show n
+        )
+      ]
     )
-  , ( "showNumber"
-    , RPrelude $ \_ (RValue (VNumber n)) -> pure $ RValue $ VString $ pack $ show n
+  , ( "$ShowBool"
+    , RInstanceDict $ Map.fromList
+      [ ( "show"
+        , RPrelude $ \_ (RValue (VBool b)) -> pure $ RValue $ VString $ pack $ show b
+        )
+      ]
     )
-  , ( "showBool"
-    , RPrelude $ \_ (RValue (VBool b)) -> pure $ RValue $ VString $ pack $ show b
+  -- Class Eq
+  , classFunction "=="
+  , ( "/="
+    , RPrelude $ \_ dict -> undefined -- TODO:
     )
-  -- End
+  -- Instances Eq
+  , ( "$EqNumber"
+    , RInstanceDict $ Map.fromList
+      [ ( "=="
+        , RPrelude $ \_ (RValue (VNumber a)) -> pure $ RPrelude $ \_ (RValue (VNumber b)) ->
+            pure $ RValue $ VBool $ a == b
+        )
+      ]
+    )
+  , ( "$EqBool"
+    , RInstanceDict $ Map.fromList
+      [ ( "=="
+        , RPrelude $ \_ (RValue (VBool a)) -> pure $ RPrelude $ \_ (RValue (VBool b)) ->
+            pure $ RValue $ VBool $ a == b
+        )
+      ]
+    )
+  , ( "$EqTime"
+    , RInstanceDict $ Map.fromList
+      [ ( "=="
+        , RPrelude $ \_ (RValue (VTime a)) -> pure $ RPrelude $ \_ (RValue (VTime b)) ->
+            pure $ RValue $ VBool $ a == b
+        )
+      ]
+    )
+  , ( "$EqString"
+    , RInstanceDict $ Map.fromList
+      [ ( "=="
+        , RPrelude $ \_ (RValue (VString a)) -> pure $ RPrelude $ \_ (RValue (VString b)) ->
+            pure $ RValue $ VBool $ a == b
+        )
+      ]
+    )
+  -- Class Ord
+  , classFunction "<="
+  -- Instances Ord
+  , ( "$OrdNumber"
+    , RInstanceDict $ Map.fromList
+      [ ( "<="
+        , RPrelude $ \_ (RValue (VNumber a)) -> pure $ RPrelude $ \_ (RValue (VNumber b)) ->
+            pure $ RValue $ VBool $ a <= b
+        )
+      ]
+    )
+  , ( "$OrdTime"
+    , RInstanceDict $ Map.fromList
+      [ ( "<="
+        , RPrelude $ \_ (RValue (VTime a)) -> pure $ RPrelude $ \_ (RValue (VTime b)) ->
+            pure $ RValue $ VBool $ a <= b
+        )
+      ]
+    )
+  --
   , ( "formatNumber"
     , RPrelude $ \_ (RValue (VString f)) -> pure $ RPrelude $ \_ (RValue (VNumber n)) ->
         pure $ RValue $ VString $ formatNumber f n
