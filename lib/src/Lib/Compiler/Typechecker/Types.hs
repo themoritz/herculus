@@ -2,8 +2,9 @@
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TemplateHaskell            #-}
-{-# LANGUAGE FlexibleContexts            #-}
-{-# LANGUAGE FlexibleInstances            #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE TupleSections          #-}
 
 module Lib.Compiler.Typechecker.Types where
 
@@ -37,7 +38,7 @@ import           Lib.Compiler.Types
 
 data Context = Context
   { _contextTypes :: Map Name (PolyType Point)
-  , _contextClasses :: Map ClassName (Map TypeConst Name) -- classname -> instance -> implementation
+  , _contextInstanceDicts :: Map (Predicate Type) Name -- predicate -> instance dictionary
   }
 
 makeLenses ''Context
@@ -94,13 +95,32 @@ lookupPolyType name = do
     Nothing -> throwError $ "not in scope: " <> name
 
 inLocalContext :: MonadState InferState m => (Name, PolyType Point) -> m a -> m a
-inLocalContext (name, poly) m = do
-  oldContext <- use inferContext
+inLocalContext (name, poly) action = do
+  oldContext <- use (inferContext . contextTypes)
   inferContext . contextTypes %= Map.insert name poly
-  res <- m
-  inferContext .= oldContext
+  res <- action
+  inferContext . contextTypes .= oldContext
   pure res
 
+getInstanceDict :: (MonadError TypeError m, MonadState InferState m) => Predicate Point -> m Name
+getInstanceDict pred = do
+  typePred <- predicateFromPoint pred
+  dicts <- use (inferContext . contextInstanceDicts)
+  case Map.lookup typePred dicts of
+    Just n -> pure n
+    Nothing -> throwError $ "no instance dictionary found: " <> (pack . show) typePred
+
+-- no unification within action!
+withInstanceDicts :: MonadState InferState m => [(Predicate Point, Name)] -> m a -> m a
+withInstanceDicts dicts action = do
+  old <- use (inferContext . contextInstanceDicts)
+  typeDicts <- mapM (\(p, n) -> (,n) <$> predicateFromPoint p) dicts
+  inferContext . contextInstanceDicts %= Map.union (Map.fromList typeDicts)
+  res <- action
+  inferContext . contextInstanceDicts .= old
+  pure res
+
+-- used?
 dryRun :: MonadState s m => m a -> m a
 dryRun action = do
   old <- get
@@ -112,6 +132,11 @@ freshPoint :: MonadState InferState m => m Point
 freshPoint = do
   c <- inferCount <+= 1
   mkPoint $ TyVar $ TypeVar c KindStar
+
+freshDictName :: MonadState InferState m => ClassName -> m Name
+freshDictName (ClassName n) = do
+  c <- inferCount <+= 1
+  pure $ "$" <> n <> (pack . show) c
 
 mkPoint :: MonadState InferState m => MonoType Point -> m Point
 mkPoint c = do
@@ -154,6 +179,12 @@ typeToPoint (Type t) = case t of
   TyRecord r -> (TyRecord <$> typeToPoint r) >>= mkPoint
   TyRecordCons ref t r -> (TyRecordCons ref <$> typeToPoint t <*> typeToPoint r) >>= mkPoint
   TyRecordNil -> mkPoint TyRecordNil
+
+predicateFromPoint :: MonadState InferState m => Predicate Point -> m (Predicate Type)
+predicateFromPoint (IsIn c p) = IsIn c <$> pointToType p
+
+predicateToPoint :: MonadState InferState m => Predicate Type -> m (Predicate Point)
+predicateToPoint (IsIn c t) = IsIn c <$> typeToPoint t
 
 polyFromPoint :: MonadState InferState m => PolyType Point -> m (PolyType Type)
 polyFromPoint (ForAll as preds point) = do

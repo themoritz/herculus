@@ -18,7 +18,7 @@ import           Lib.Compiler.Typechecker.Types
 import           Lib.Compiler.Typechecker.Prim
 
 compile :: Monad m => Text -> TypecheckEnv m
-        -> m (Either Text (CExpr, PolyType Type))
+        -> m (Either Text (TExpr, PolyType Type))
 compile inp env = case parseExpr inp of
   Left e -> pure $ Left e
   Right e' -> runInfer env e'
@@ -54,8 +54,8 @@ testEvalEnv = EvalEnv
 test :: String -> IO ()
 test inp = compile (pack inp) testTypecheckEnv >>= \case
   Left e -> putStrLn $ unpack e
-  Right (c, typ) -> do
+  Right (e, typ) -> do
     putStrLn $ "Type: " ++ show typ
-    case interpret c testEvalEnv of
+    case interpret (toCoreExpr e) testEvalEnv of
       Left e -> putStrLn $ unpack e
       Right val -> putStrLn $ "Val: " ++ show val

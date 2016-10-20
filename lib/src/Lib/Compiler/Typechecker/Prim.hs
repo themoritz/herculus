@@ -75,24 +75,23 @@ primPrelude =
     )
   ]
 
-primPreludeTypeClasses :: Map ClassName (Map TypeConst Name)
-primPreludeTypeClasses = Map.fromList
-  [ ( ClassName "Show"
-    , Map.fromList
-      [ ( (TypeConst "Number" KindStar)
-        , "showNumber"
-        )
-      , ( (TypeConst "Bool" KindStar)
-        , "showBool"
-        )
-      ]
+primPreludeDicts :: [(Predicate Type, Name)]
+primPreludeDicts =
+  [ ( IsIn (ClassName "Show") $ Type tyNumber
+    , "showNumber"
+    )
+  , ( IsIn (ClassName "Show") $ Type tyBool
+    , "showBool"
     )
   ]
 
 loadPrelude :: MonadState InferState m => m ()
-loadPrelude = forM_ primPrelude $ \(n, poly) -> do
-  polyPoint <- polyToPoint poly
-  inferContext . contextTypes %= Map.insert n polyPoint
+loadPrelude = do
+  forM_ primPrelude $ \(n, poly) -> do
+    polyPoint <- polyToPoint poly
+    inferContext . contextTypes %= Map.insert n polyPoint
+  forM_ primPreludeDicts $ \(p, n) ->
+    inferContext . contextInstanceDicts %= Map.insert p n
 
 -- primContext :: Map Name PolyType
 -- primContext = Map.fromList

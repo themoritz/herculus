@@ -17,6 +17,8 @@ import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 
+import Debug.Trace (traceShowM)
+
 import qualified Data.Map                       as Map
 import           Data.Monoid
 import qualified Data.Set                       as Set
@@ -33,48 +35,39 @@ import           Lib.Types
 
 newInferState :: InferState
 newInferState = InferState
-  { _inferContext = Context Map.empty primPreludeTypeClasses
+  { _inferContext = Context Map.empty Map.empty
   , _inferCount = 0
   , _inferPointSupply = UF.newPointSupply
   -- , _inferTypeClasses = primTypeClasses
   -- , _inferTypeClassDicts = primTypeClassDicts
   }
 
-runInfer :: Monad m => TypecheckEnv m -> PExpr -> m (Either TypeError (CExpr, PolyType Type))
+runInfer :: Monad m => TypecheckEnv m -> PExpr -> m (Either TypeError (TExpr, PolyType Type))
 runInfer env expr =
   let action = do
         loadPrelude
         e ::: (preds, point) <- infer expr
         poly <- generalize preds point
-        c <- replaceTypeClassDicts e
         t <- polyFromPoint poly
+        traceShowM t
+        c <- replaceTypeClassDicts e
         pure (c, t)
   in  runExceptT $ evalStateT (runReaderT (unInferT action) env) newInferState
 
 --
 
-replaceTypeClassDicts :: Monad m => TExpr -> InferT m CExpr
+replaceTypeClassDicts :: Monad m => TExpr -> InferT m TExpr
 replaceTypeClassDicts expr = case expr of
-  TLam x e -> CLam x <$> replaceTypeClassDicts e
-  TApp f e -> CApp <$> replaceTypeClassDicts f <*> replaceTypeClassDicts e
-  TLet x e body -> CLet x <$> replaceTypeClassDicts e <*> replaceTypeClassDicts body
-  TIf c t e -> CIf <$> replaceTypeClassDicts c <*> replaceTypeClassDicts t <*> replaceTypeClassDicts e
-  TVar n -> pure $ CVar n
-  TLit l -> pure $ CLit l
+  TLam x e -> TLam x <$> replaceTypeClassDicts e
+  TApp f e -> TApp <$> replaceTypeClassDicts f <*> replaceTypeClassDicts e
+  TLet x e body -> TLet x <$> replaceTypeClassDicts e <*> replaceTypeClassDicts body
+  TIf c t e -> TIf <$> replaceTypeClassDicts c <*> replaceTypeClassDicts t <*> replaceTypeClassDicts e
+  TVar n -> pure $ TVar n
+  TLit l -> pure $ TLit l
   TPrjRecord e r -> do
     e' <- replaceTypeClassDicts e
-    pure $ CPrjRecord e' r
-  TTypeClassDict (IsIn c point) -> do
-    t <- findType point
-    case t of
-      TyConst typeConst -> do
-        classCtx <- use (inferContext . contextClasses)
-        case Map.lookup c classCtx >>= Map.lookup typeConst of
-          Nothing -> throwError $ (pack . show) typeConst <> " does not implement " <> (pack . show) c
-          Just name -> pure $ CVar name
-      _ -> do
-        debugPoint point
-        throwError $ "predicate type did not resolve to a type constant. class: " <> (pack . show) c
+    pure $ TPrjRecord e' r
+  TTypeClassDict pred -> TVar <$> getInstanceDict pred
 
 
 infer :: Monad m => PExpr -> InferT m TypedExpr
@@ -93,9 +86,15 @@ infer expr = case expr of
     pure $ TApp f' arg' ::: (fPreds <> argPreds, resultPoint)
   PLet x e rest -> do
     e' ::: (ePreds, ePoint) <- infer e
-    poly <- generalize ePreds ePoint -- <- this is where predicates might disappear
-    rest' ::: restTuple <- inLocalContext (x, poly) (infer rest)
-    pure $ TLet x e' rest' ::: restTuple
+    poly@(ForAll _ preds _) <- generalize ePreds ePoint -- <- this is where predicates might disappear
+    -- abstract (polymorphic) dicts, put them in scope, and replace them
+    -- (plus the non-polymorphic ones) in the body of e
+    dicts <- mapM (\pred@(IsIn c _) -> (pred,) <$> freshDictName c) preds
+    e'' <- withInstanceDicts dicts $ replaceTypeClassDicts e'
+    let e''' = foldr TLam e'' (map snd dicts)
+    --
+    rest' ::: restTuple <- inLocalContext (x, poly) $ infer rest
+    pure $ TLet x e''' rest' ::: restTuple
   PIf cond e1 e2 -> do
     cond' ::: (condPreds, condPoint) <- infer cond
     e1' ::: (e1Preds, e1Point) <- infer e1
@@ -153,6 +152,11 @@ infer expr = case expr of
 
 generalize :: MonadState InferState m => [Predicate Point] -> Point -> m (PolyType Point)
 generalize preds pt = do
+  traceShowM "Generalize:"
+  forM_ preds $ \(IsIn c p) -> do
+    traceShowM c
+    debugPoint p
+  debugPoint pt
   context <- use inferContext
   let allTypeVariables = Set.union <$> ftv preds <*> ftv pt
   freeTypeVariables <- Set.difference <$> allTypeVariables <*> ftv context

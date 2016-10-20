@@ -36,9 +36,11 @@ newtype ClassName = ClassName Text
   deriving (Eq, Ord)
 
 data Predicate a = IsIn ClassName a
+  deriving (Eq, Ord)
 
 data Point = Point (UF.Point (MonoType Point))
 data Type = Type (MonoType Type)
+  deriving (Eq, Ord)
 
 data MonoType a
   = TyVar TypeVar
@@ -47,6 +49,7 @@ data MonoType a
   | TyRecord a
   | TyRecordCons (Ref Column) a a
   | TyRecordNil
+  deriving (Ord)
 
 instance Eq a => Eq (MonoType a) where
   TyVar a == TyVar b = a == b
@@ -63,8 +66,6 @@ instance Eq a => Eq (MonoType a) where
 
 -- "forall a. ..."
 data PolyType a = ForAll [TypeVar] [Predicate a] a
-
-type Class a = [Predicate a]
 
 instance Show Type where
   show (Type t) = case t of
@@ -89,12 +90,14 @@ instance Show TypeConst where
 instance Show ClassName where
   show (ClassName name) = unpack name
 
+instance Show a => Show (Predicate a) where
+  show (IsIn cls t') = show cls <> " " <> show t'
+
 instance Show (PolyType Type) where
   show (ForAll as preds t) =
-      "forall " <> intercalate " " (map show as) <> ". " <>
-      "(" <> intercalate ", " (map showPred preds) <> ") " <>
-      "=> " <> show t
-    where showPred (IsIn cls t') = show cls <> " " <> show t'
+    "forall " <> intercalate " " (map show as) <> ". " <>
+    "(" <> intercalate ", " (map show preds) <> ") " <>
+    "=> " <> show t
 
 --
 
@@ -175,6 +178,19 @@ data CExpr
 
 instance ToJSON CExpr
 instance FromJSON CExpr
+
+toCoreExpr :: TExpr -> CExpr
+toCoreExpr = \case
+  TLam x e -> CLam x (toCoreExpr e)
+  TApp f arg -> CApp (toCoreExpr f) (toCoreExpr arg)
+  TLet x e body -> CLet x (toCoreExpr e) (toCoreExpr body)
+  TIf c t e -> CIf (toCoreExpr c) (toCoreExpr t) (toCoreExpr e)
+  TVar x -> CVar x
+  TLit l -> CLit l
+  TPrjRecord e r -> CPrjRecord (toCoreExpr e) r
+  TColumnRef c -> CColumnRef c
+  TWholeColumnRef c -> CWholeColumnRef c
+  TTableRef t cs -> CTableRef t cs
 
 --
 
