@@ -3,25 +3,21 @@ module Views.ReportCell
   , reportCell_
   ) where
 
-import           Control.Lens        hiding (view)
+import           Control.Lens      hiding (view)
 
-import           Data.Proxy
-import           Data.Text           (Text, pack)
+import           Data.Monoid       ((<>))
+import           Data.Text         (Text)
+import qualified Data.Text         as Text
+import           React.Flux        (ReactElementM, ReactView, a_, cldiv_,
+                                    defineView, faIcon_, view, ($=), (&=))
+import           Web.HttpApiData   (toUrlPiece)
 
-import           Servant.Utils.Links (URI, safeLink, uriPath)
-
-import           React.Flux
-
-import           Lib.Api.Rest
-import           Lib.Model.Auth      (SessionKey)
+import           Lib.Model.Auth    (SessionKey)
 import           Lib.Model.Column
 import           Lib.Model.Record
 import           Lib.Types
 
-import           Store               (Action (GetReportFormatHTML, GetReportFormatPDF, GetReportFormatPlain),
-                                      dispatch, session, stateSessionKey, store)
-
-import           Views.Combinators   (clspan_, faButton_)
+import           Views.Combinators (clspan_)
 
 data ReportCellProps = ReportCellProps
   { sKey                :: !(Maybe SessionKey)
@@ -29,7 +25,6 @@ data ReportCellProps = ReportCellProps
   , reportCellRecId     :: !(Id Record)
   , reportCellColReport :: !ReportCol
   }
-
 
 reportCell_ :: ReportCellProps -> ReactElementM eh ()
 reportCell_ !p = view reportCell p mempty
@@ -41,14 +36,30 @@ reportCell = defineView "reportCell" $ \ReportCellProps{..} -> cldiv_ "reportCel
     CompileResultError _ -> clspan_ "error" "Error"
     CompileResultOk _ -> case reportCellColReport ^. reportColFormat of
       ReportFormatPlain ->
-        faButton_ "file-plain-o" $ dispatch $ GetReportFormatPDF reportCellColId reportCellRecId
+        a_ [ "href" &= getPlain sKey reportCellColId reportCellRecId
+          , "target" $= "_blank"
+          ] $ faIcon_ "file-text-o fa-lg"
       ReportFormatPDF ->
-        faButton_ "file-pdf-o" $ dispatch $ GetReportFormatPDF reportCellColId reportCellRecId
+        a_ [ "href" &= getPDF sKey reportCellColId reportCellRecId
+          , "target" $= "_blank"
+          ] $ faIcon_ "file-pdf-o fa-lg"
       ReportFormatHTML ->
-        faButton_ "file-text-o" $ dispatch $ GetReportFormatHTML reportCellColId reportCellRecId
+        a_ [ "href" &= getHTML sKey reportCellColId reportCellRecId
+          , "target" $= "_blank"
+          ] $ faIcon_ "file-code-o fa-lg"
 
-api :: Proxy Routes
-api = Proxy
+getPlain :: Maybe SessionKey -> Id Column -> Id Record -> Text
+getPlain = getReportPath "getReportPlain"
 
-toPath :: URI -> Text
-toPath = pack . ('/':) . uriPath
+getPDF :: Maybe SessionKey -> Id Column -> Id Record -> Text
+getPDF = getReportPath "getReportPDF"
+
+getHTML :: Maybe SessionKey -> Id Column -> Id Record -> Text
+getHTML = getReportPath "getReportHTML"
+
+getReportPath :: Text -> Maybe SessionKey -> Id Column -> Id Record -> Text
+getReportPath folder sKey columnId recordId =
+  "/cell/" <> folder <>
+  "?sessionKey=" <> toUrlPiece sKey <>
+  "&columnId=" <> (Text.pack . show) columnId <>
+  "&recordId=" <> (Text.pack . show) recordId

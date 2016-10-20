@@ -2,31 +2,36 @@
 
 module Store where
 
-import           Control.Applicative ((<|>))
-import           Control.Arrow       (second)
-import           Control.Concurrent  (forkIO)
+import           Control.Applicative       ((<|>))
+import           Control.Concurrent        (forkIO)
 import           Control.Lens
-import           Data.Foldable       (foldl')
-import           Data.Map.Strict     (Map)
-import qualified Data.Map.Strict     as Map
+import           Control.Monad             (when)
+import           Data.Foldable             (foldl')
+import           Data.Map.Strict           (Map)
+import qualified Data.Map.Strict           as Map
 import           Data.Proxy
-import           Data.Text           (Text)
-import qualified Data.Text           as Text
+import           Data.Text                 (Text)
+import qualified Data.Text                 as Text
 import           React.Flux
+import           React.Flux.Addons.Servant (HandleResponse, request)
 import           WebSocket
 
+import qualified Lib.Api.Rest              as Api
+import           Lib.Api.WebSocket         (WsDownMessage (..))
 import           Lib.Model
-import           Lib.Model.Auth      (LoginData (..), LoginResponse (..),
-                                      SessionKey)
-import           Lib.Model.Cell
+import           Lib.Model.Auth            (LoginResponse (..), SessionKey)
+import           Lib.Model.Cell            (Aspects (..), Cell (..),
+                                            CellContent (..))
+import           Lib.Model.Column          (Column, columnTableId)
 import           Lib.Model.Project
 import           Lib.Model.Record
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Action              (Action (..), TableCache)
-import qualified Action.Column       as Column
-import qualified Action.RecordCache  as RecordCache
+import           Action                    (Action (..), TableCache, api,
+                                            session)
+import qualified Action.Column             as Column
+import qualified Action.RecordCache        as RecordCache
 
 data Coords = Coords (Id Column) (Id Record)
   deriving (Eq, Ord, Show)
@@ -55,7 +60,7 @@ data State = State
 
   -- for column config
   , _stateTableCache   :: TableCache
-  , _stateColumns      :: Map (Id Column) ColumnState
+  , _stateColumns      :: Map (Id Column) Column.State
   }
 
 makeLenses ''State
@@ -71,8 +76,9 @@ store = mkStore State
   , _stateTables = Map.empty
   , _stateTableId = Nothing
   , _stateCells = Map.empty
-  , _stateColumns = Map.empty
   , _stateRecords = Map.empty
+  , _stateTableCache = Map.empty
+  , _stateColumns = Map.empty
   }
 
 instance StoreData State where
@@ -86,11 +92,11 @@ instance StoreData State where
         ws <- jsonWebSocketNew wsUrl $ \case
           WsDownCellsChanged cs       -> pure $ dispatch $ TableUpdateCells cs
           WsDownColumnsChanged cs     -> pure $ dispatch $ TableUpdateColumns cs
-          WsDownRecordCreated t r dat -> pure $ dispatch $ CacheRecordAdd t r dat
-          WsDownRecordDeleted t r     -> pure $ dispatch $ CacheRecordDelete t r
+          WsDownRecordCreated t r dat -> pure $ dispatch $ RecordCacheAction t $ RecordCache.Add r dat
+          WsDownRecordDeleted t r     -> pure $ dispatch $ RecordCacheAction t $ RecordCache.Delete r
         request api (Proxy :: Proxy Api.ProjectList)
-          (session $ st ^. stateSessionKey) $ mkCallback $
-          \projects -> [ProjectsSet projects]
+          (session $ st ^. stateSessionKey) $ mkCallback GlobalSetError $
+            \projects -> [ProjectsSet projects]
         pure $ st & stateWebSocket .~ Just ws
 
       GlobalSendWebSocket msg -> do
@@ -102,7 +108,7 @@ instance StoreData State where
       -- Session
 
       Login loginData -> do
-        request api (Proxy :: Proxy Api.AuthLogin) loginData $ mkCallback $
+        request api (Proxy :: Proxy Api.AuthLogin) loginData $ mkCallback GlobalSetError $
           \loginResponse -> case loginResponse of
                         LoginSuccess sessionKey -> [LoggedIn sessionKey]
                         LoginFailed txt -> [GlobalSetError txt]
@@ -113,7 +119,7 @@ instance StoreData State where
 
       Logout -> do
         request api (Proxy :: Proxy Api.AuthLogout)
-                    (session $ st ^. stateSessionKey) $ mkCallback $
+                    (session $ st ^. stateSessionKey) $ mkCallback GlobalSetError $
                     const [LoggedOut]
         pure st
 
@@ -122,12 +128,27 @@ instance StoreData State where
 
       -- Cache
 
-      RecordCacheAction tableId action -> do
-        let update = RecordCache.runAction (mkCallback store GlobalSetError)
+      -- TODO: %%~ update
+      RecordCacheAction tableId a -> do
+        let cache :: RecordCache.State
+            Just cache = st ^. stateCacheRecords . at tableId
+        cache' <- RecordCache.runAction (mkCallback GlobalSetError)
                                            (st ^. stateSessionKey)
                                            tableId
-                                           action
-        st & stateCacheRecords . at tableId %%~ update
+                                           a
+                                           cache
+        pure $ st & stateCacheRecords . at tableId .~ Just cache'
+
+      -- Column
+
+      ColumnAction columnId a -> do
+        let Just col = st ^. stateColumns . at columnId
+        col' <- Column.runAction (mkCallback GlobalSetError)
+                         (st ^. stateSessionKey)
+                         columnId
+                         a
+                         col
+        pure $ st & stateColumns . at columnId .~ Just col'
 
       -- Projects
 
@@ -144,7 +165,7 @@ instance StoreData State where
         request api
                 (Proxy :: Proxy Api.ProjectCreate)
                 (session $ st ^. stateSessionKey)
-                project $ mkCallback $
+                project $ mkCallback GlobalSetError $
           \projectId -> [ProjectsAdd $ Entity projectId project]
         pure st
 
@@ -153,7 +174,7 @@ instance StoreData State where
 
       ProjectsLoadProject i -> do
         request api (Proxy :: Proxy Api.TableList)
-                    (session $ st ^. stateSessionKey) i $ mkCallback $
+                    (session $ st ^. stateSessionKey) i $ mkCallback GlobalSetError $
                     \tables -> [TablesSet tables]
         pure $ st & stateProjectId .~ Just i
 
@@ -162,12 +183,12 @@ instance StoreData State where
       ProjectSetName i name -> do
         request api (Proxy :: Proxy Api.ProjectSetName)
                     (session $ st ^. stateSessionKey)
-                    i name $ mkCallback $ const []
+                    i name $ mkCallback GlobalSetError $ const []
         pure $ st & stateProjects . at i . _Just . projectName .~ name
 
       ProjectDelete projectId -> do
         request api (Proxy :: Proxy Api.ProjectDelete)
-                    (session $ st ^. stateSessionKey) projectId $ mkCallback $
+                    (session $ st ^. stateSessionKey) projectId $ mkCallback GlobalSetError $
                     const []
 
         if st ^. stateProjectId == Just projectId
@@ -201,7 +222,7 @@ instance StoreData State where
       TablesCreate table -> do
         request api (Proxy :: Proxy Api.TableCreate)
                     (session $ st ^. stateSessionKey)
-                    table $ mkCallback $
+                    table $ mkCallback GlobalSetError $
                     \tableId -> [TablesAdd $ Entity tableId table]
         pure st
 
@@ -210,42 +231,43 @@ instance StoreData State where
 
       TablesLoadTable i -> do
         request api (Proxy :: Proxy Api.TableGetWhole)
-                    (session $ st ^. stateSessionKey) i $ mkCallback $
+                    (session $ st ^. stateSessionKey) i $ mkCallback GlobalSetError $
                     \table -> [TableSet table]
         pure $ st & stateTableId .~ Just i
 
       -- Table
 
       TableSet (cols, recs, entries) -> pure $
-        st & stateColumns .~ Map.fromList (map entityToTuple cols)
+        st & stateColumns .~ (Column.mkState <$> Map.fromList (map entityToTuple cols))
            & stateRecords .~ Map.fromList (map entityToTuple recs)
            & stateCells   .~ fillEntries entries Map.empty
 
       TableUpdateCells cells -> pure $
         let toEntry (Cell content (Aspects _ c r)) = (c, r, content)
             setRecordInCache st'' (Cell content (Aspects t c r)) =
-              st'' & stateCacheRecords . at t . _Just . at r . _Just . at c . _Just . _2 .~ content
+              st'' & stateCacheRecords . at t . _Just
+                   . RecordCache.recordCache . at r . _Just . at c . _Just . _2 .~ content
             st' = foldl' setRecordInCache st cells
         in st' & stateCells %~ fillEntries (map toEntry cells)
 
       TableUpdateColumns entries -> pure $
         st & stateColumns %~ \cols ->
-          foldl' (\cols' (Entity i c) -> Map.insert i c cols') cols $
+          foldl' (\cols' (Entity i c) -> Map.insert i (Column.mkState c) cols') cols $
           filter (\(Entity _ c) -> st ^. stateTableId == Just (c ^. columnTableId)) entries
 
       TableAddColumn col -> do
         request api (Proxy :: Proxy Api.ColumnCreate)
-                    (session $ st ^. stateSessionKey) col $ mkCallback $
+                    (session $ st ^. stateSessionKey) col $ mkCallback GlobalSetError $
                     \column -> [TableAddColumnDone column]
         pure st
 
       TableAddColumnDone (Entity i c, cells) -> pure $
-        st & stateColumns %~ Map.insert i c
+        st & stateColumns %~ Map.insert i (Column.mkState c)
            & stateCells %~ fillEntries (map toCellUpdate cells)
 
       TableDeleteColumn i -> do
         request api (Proxy :: Proxy Api.ColumnDelete)
-                    (session $ st ^. stateSessionKey) i $ mkCallback $ const []
+                    (session $ st ^. stateSessionKey) i $ mkCallback GlobalSetError $ const []
         pure $ st & stateColumns %~ Map.delete i
                   & stateCells %~ Map.filterWithKey
                              (\(Coords c _) _ -> c /= i)
@@ -254,7 +276,7 @@ instance StoreData State where
         case st ^. stateTableId of
           Nothing -> pure ()
           Just t -> request api (Proxy :: Proxy Api.RecordCreate)
-                            (session $ st ^. stateSessionKey) t $ mkCallback $
+                            (session $ st ^. stateSessionKey) t $ mkCallback GlobalSetError $
                             \record -> [TableAddRecordDone record]
         pure st
 
@@ -264,7 +286,7 @@ instance StoreData State where
 
       TableDeleteRecord i -> do
         request api (Proxy :: Proxy Api.RecordDelete)
-                    (session $ st ^. stateSessionKey) i $ mkCallback $ const []
+                    (session $ st ^. stateSessionKey) i $ mkCallback GlobalSetError $ const []
         pure $ st & stateRecords %~ Map.delete i
                   & stateCells %~ Map.filterWithKey
                              (\(Coords _ r) _ -> r /= i)
@@ -272,13 +294,13 @@ instance StoreData State where
       TableSetName i name -> do
         request api (Proxy :: Proxy Api.TableSetName)
                     (session $ st ^. stateSessionKey)
-                    i name $ mkCallback $ const []
+                    i name $ mkCallback GlobalSetError $ const []
         pure $ st & stateTables . at i . _Just . tableName .~ name
 
       TableDelete tableId -> do
         request api (Proxy :: Proxy Api.TableDelete)
                     (session $ st ^. stateSessionKey)
-                    tableId $ mkCallback $ const []
+                    tableId $ mkCallback GlobalSetError $ const []
 
         if st ^. stateTableId == Just tableId
           then do
@@ -300,40 +322,19 @@ instance StoreData State where
       -- Column
 
       GetTableCache sKey -> do
-        when (Map.null $ st ^. ccsTableCache) $
-          request api (Proxy :: Proxy TableListGlobal) (session sKey) $ pure . \case
-                        Left (_, e) -> dispatch $ GlobalSetError $ Text.pack e
-                        Right ts    -> [SomeStoreAction columnStore $ SetTableCache $ toTableMap ts]
+        let toTableMap = Map.fromList . map (\(Entity tableId table) -> (tableId, table ^. tableName))
+        when (Map.null $ st ^. stateTableCache) $
+          request api (Proxy :: Proxy Api.TableListGlobal) (session sKey) $
+                  mkCallback GlobalSetError $ \tables -> [SetTableCache $ toTableMap tables]
         pure st
       SetTableCache m ->
-        pure $ st & ccsTableCache .~ m
-
-      GetReportFormatPlain columnId recordId -> do
-        request api (Proxy :: Proxy Api.CellGetReportPlain)
-                    (session $ st ^. stateSessionKey) columnId recordId $
-                    mkCallback $ const []
-                    -- TODO open window to show result
-        pure st
-
-      GetReportFormatPDF columnId recordId -> do
-        request api (Proxy :: Proxy Api.CellGetReportPDF)
-                    (session $ st ^. stateSessionKey) columnId recordId $
-                    mkCallback $ const []
-                    -- TODO open window to show result
-        pure st
-
-      GetReportFormatHTML columnId recordId -> do
-        request api (Proxy :: Proxy Api.CellGetReportHTML)
-                    (session $ st ^. stateSessionKey) columnId recordId $
-                    mkCallback $ const []
-                    -- TODO open window to show result
-        pure st
+        pure $ st & stateTableCache .~ m
 
       -- Cell
 
       CellSetValue c r val -> do
         request api (Proxy :: Proxy Api.CellSet)
-                    (session $ st ^. stateSessionKey) c r val $ mkCallback $
+                    (session $ st ^. stateSessionKey) c r val $ mkCallback GlobalSetError $
                     const []
         pure $ st & stateCells %~ fillEntries [(c, r, CellValue val)]
 
@@ -343,3 +344,13 @@ instance StoreData State where
 
 toCellUpdate :: Entity Cell -> (Id Column, Id Record, CellContent)
 toCellUpdate (Entity _ (Cell content (Aspects _ c r))) = (c, r, content)
+
+dispatch :: Action -> [SomeStoreAction]
+dispatch a = [SomeStoreAction store a]
+
+mkCallback :: (Text -> Action)
+           -> (a -> [Action])
+           -> HandleResponse a
+mkCallback cbFail cbSuccess = pure . \case
+  Left  (_, e) -> dispatch $ cbFail $ Text.pack e
+  Right x      -> SomeStoreAction store <$> cbSuccess x

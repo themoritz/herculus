@@ -1,10 +1,15 @@
-{-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE RankNTypes      #-}
 {-# LANGUAGE TemplateHaskell #-}
 -- |
 
-module Action.RecordCache where
+module Action.RecordCache
+  ( Action.RecordCache.Types.Action (..)
+  , runAction
+  , recordCache
+  , State
+  ) where
 
+import           Control.Arrow             (second)
 import           Control.Lens
 import           Control.Monad             (when)
 import           Data.Map                  (Map)
@@ -20,7 +25,8 @@ import           Lib.Model.Table           (Table)
 import           Lib.Types                 (Id)
 import           React.Flux.Addons.Servant (request)
 
-import           Action                    (Callback, api)
+import           Action                    (Action (RecordCacheAction),
+                                            Callback, api, session)
 import           Action.RecordCache.Types  (Action (..))
 
 data State = State
@@ -28,10 +34,10 @@ data State = State
 
 makeLenses ''State
 
-runAction :: Callback s
+runAction :: Callback
           -> Maybe SessionKey
           -> Id Table
-          -> Action
+          -> Action.RecordCache.Types.Action
           -> State -> IO State
 runAction mkCallback sessionKey tableId = \case
     Add recordId record ->
@@ -52,4 +58,4 @@ runAction mkCallback sessionKey tableId = \case
     Set recs ->
       let toCol (Entity c col, content) = (c, (col, content))
           recMaps = map (second $ Map.fromList . map toCol) recs
-      in  \cache -> pure $ cache & recordCache .~ Just (Map.fromList recMaps)
+      in  \cache -> pure $ cache & recordCache .~ Map.fromList recMaps

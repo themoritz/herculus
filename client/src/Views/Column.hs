@@ -1,50 +1,39 @@
-{-# LANGUAGE DeriveAnyClass  #-}
-{-# LANGUAGE DeriveGeneric   #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric  #-}
 
 module Views.Column where
 
-import           Control.Lens              hiding (view)
+import           Control.Applicative ((<|>))
+import           Control.DeepSeq     (NFData)
+import           Control.Lens        hiding (view)
+import           Control.Monad       (join, when)
+import           Data.Foldable       (for_)
+import           Data.Map            (Map)
+import qualified Data.Map            as Map
+import           Data.Maybe          (fromMaybe, isJust)
+import           Data.Monoid         ((<>))
+import           Data.Text           (Text)
+import           GHC.Generics        (Generic)
 import           React.Flux
+import           Text.Read           (readMaybe)
 
-import           Control.Applicative       ((<|>))
-import           Control.DeepSeq           (NFData)
-import           Control.Monad             (when)
-import           Data.Foldable             (for_)
-import           Data.Map                  (Map)
-import qualified Data.Map                  as Map
-import           Data.Maybe                (fromMaybe, isJust)
-import           Data.Monoid               ((<>))
-import           Data.Proxy
-import           Data.Set                  (Set)
-import qualified Data.Set                  as Set
-import           Data.Text                 (Text)
-import qualified Data.Text                 as Text
-import           Data.Typeable             (Typeable)
-import           GHC.Generics              (Generic)
-import           Text.Read                 (readMaybe)
-
-import           Lib.Api.Rest              (TableListGlobal)
 import           Lib.Model
-import           Lib.Model.Auth            (SessionKey)
+import           Lib.Model.Auth      (SessionKey)
 import           Lib.Model.Column
 import           Lib.Model.Table
 import           Lib.Types
-import           React.Flux.Addons.Servant (request)
 
-import           Store                     (Action (ColumnRename, DataColUpdate, GlobalSetError, ReportColUpdate, TableDeleteColumn),
-                                            api, dispatch, session,
-                                            stateSessionKey, store)
+import           Action              (Action (ColumnAction, TableDeleteColumn, GetTableCache),
+                                      TableCache)
+import           Store               (dispatch, stateColumns, stateTableCache,
+                                      store)
 import           Views.Combinators
-import           Views.Common              (EditBoxProps (..), editBox_)
+import           Views.Common        (EditBoxProps (..), editBox_)
 import           Views.Foreign
 
+import           Action.Column
+
 -- state of column controller view
-
--- helper
-
-toTableMap :: [Entity Table] -> TableCache
-toTableMap = Map.fromList . map (\(Entity tableId table) -> (tableId, table ^. tableName))
 
 --
 
@@ -130,7 +119,7 @@ column = defineView "column" $ \(sKey, c@(Entity i col)) -> cldiv_ "column" $ do
       , editBoxClassName   = "columnName"
       , editBoxShow        = id
       , editBoxValidator   = Just
-      , editBoxOnSave      = dispatch . ColumnRename i
+      , editBoxOnSave      = dispatch . ColumnAction i . Rename
       }
     columnInfo_ sKey c
   columnConfig_ sKey c
@@ -156,11 +145,11 @@ columnInfo = defineView "column info" $ \(sKey, Entity _ col) ->
 -- configure column
 
 columnConfig_ :: Maybe SessionKey -> Entity Column -> ReactElementM eh ()
-columnConfig_ !sKey !c = view columnConfig (sKey, c )mempty
+columnConfig_ !sKey !c = view columnConfig (sKey, c) mempty
 
 columnConfig :: ReactView (Maybe SessionKey, Entity Column)
-columnConfig = defineControllerView "column configuration" colConfStore $
-  \state (sKey, Entity i col) -> cldiv_ "config" $ do
+columnConfig = defineControllerView "column configuration" store $
+  \st (sKey, Entity i col) -> cldiv_ "config" $ do
     let mError = case col ^. columnKind of
           ColumnData dat ->
             case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of
@@ -178,9 +167,10 @@ columnConfig = defineControllerView "column configuration" colConfStore $
           , ("error", isJust mError)
           ]
       , onClick $ \_ _ ->
-          [ SomeStoreAction colConfStore $ ColumnSetVisibility i True ]
+          [ SomeStoreAction store $ ColumnAction i $ SetVisibility True ]
       ] ) $ faIcon_ "gear fa-2x"
-    when (Set.member i $ state ^. ccsVisible) $
+    -- TODO: check what this does
+    when (st ^. stateColumns . at i ^? _Just . stVisible == Just True) $
       case col ^. columnKind of
         ColumnData   dat -> dataColConf_ sKey i dat
         ColumnReport rep -> reportColConf_ i rep
@@ -210,14 +200,14 @@ reportColConf_ :: Id Column -> ReportCol -> ReactElementM eh ()
 reportColConf_ !i !r = view reportColConf (i, r) mempty
 
 reportColConf :: ReactView (Id Column, ReportCol)
-reportColConf = defineControllerView "report column config" colConfStore $
-  \state (i, rep) -> cldiv_ "dialog report" $ do
+reportColConf = defineControllerView "report column config" store $
+  \st (i, rep) -> cldiv_ "dialog report" $ do
     let mError = case rep ^. reportColCompiledTemplate of
           CompileResultError msg -> Just msg
           _                      -> Nothing
-        lang = state ^. ccsTmpReportLanguage . at i ?: rep ^. reportColLanguage
-        format = state ^. ccsTmpReportFormat . at i ?: rep ^. reportColFormat
-        template = state ^. ccsTmpReportTemplate . at i ?: rep ^. reportColTemplate
+        lang = join (st ^. stateColumns . at i ^? _Just . stTmpReportLanguage) ?: rep ^. reportColLanguage
+        format = join (st ^. stateColumns . at i ^? _Just . stTmpReportFormat) ?: rep ^. reportColFormat
+        template = join (st ^. stateColumns . at i ^? _Just . stTmpReportTemplate) ?: rep ^. reportColTemplate
     cldiv_ "bodyWrapper" $ do
       cldiv_ "body" $ do
         cldiv_ "language" $ selReportLanguage_ i lang
@@ -228,20 +218,20 @@ reportColConf = defineControllerView "report column config" colConfStore $
     for_ mError $ \errMsg -> cldiv_ "error" $ do
       clspan_ "title" "Error"
       cldiv_  "body" $ elemText errMsg
-    let cancelActions =
-          [ SomeStoreAction colConfStore $ ColumnSetVisibility i False
-          , SomeStoreAction colConfStore $ ColumnUnsetTmpReportLang i
-          , SomeStoreAction colConfStore $ ColumnUnsetTmpReportFormat i
-          , SomeStoreAction colConfStore $ ColumnUnsetTmpReportTemplate i
+    let cancelActions = SomeStoreAction store . ColumnAction i <$>
+          [ SetVisibility False
+          , UnsetTmpReportLang
+          , UnsetTmpReportFormat
+          , UnsetTmpReportTemplate
           ]
         deleteActions = [ SomeStoreAction store $ TableDeleteColumn i ]
-        saveActions   =
+        saveActions   = SomeStoreAction store . ColumnAction i <$>
           -- hide dialog
-          [ SomeStoreAction colConfStore $ ColumnSetVisibility i False
-          , SomeStoreAction store        $ ReportColUpdate i (template, format, lang)
-          , SomeStoreAction colConfStore $ ColumnUnsetTmpReportLang i
-          , SomeStoreAction colConfStore $ ColumnUnsetTmpReportFormat i
-          , SomeStoreAction colConfStore $ ColumnUnsetTmpReportTemplate i
+          [ SetVisibility False
+          , ReportColUpdate (template, format, lang)
+          , UnsetTmpReportLang
+          , UnsetTmpReportFormat
+          , UnsetTmpReportTemplate
           -- datatype selection
           ]
     confButtons_ cancelActions deleteActions saveActions
@@ -258,7 +248,7 @@ selReportLanguage = defineView "select report lang" $ \(i, lang) ->
       , onInput $ \evt ->
           let lang' = readMaybe (target evt "value") -- Maybe (Maybe a)
                 ?: Nothing -- unexpected
-          in  [SomeStoreAction colConfStore $ ColumnSetTmpReportLang i lang' ]
+          in  [SomeStoreAction store $ ColumnAction i $ SetTmpReportLang lang' ]
       ] $ optionsFor_ reportLangs
 
 selReportFormat_ :: Id Column -> ReportFormat -> ReactElementM eh ()
@@ -273,7 +263,7 @@ selReportFormat = defineView "select report format" $ \(i, format) ->
       , onInput $ \evt ->
           let format' = readMaybe (target evt "value")
                 ?: ReportFormatPlain -- unexpected
-          in  [SomeStoreAction colConfStore $ ColumnSetTmpReportFormat i format' ]
+          in  [SomeStoreAction store $ ColumnAction i $ SetTmpReportFormat format' ]
       ] $ optionsFor_ reportFormats
 
 inputTemplate_ :: Id Column -> Text -> Maybe ReportLanguage -> ReactElementM eh ()
@@ -294,7 +284,7 @@ inputTemplate = defineView "input template" $ \(i, t, lang) -> do
           , codemirrorReadOnly = CodemirrorEnabled
           , codemirrorValue = t
           , codemirrorOnChange = \v ->
-              [ SomeStoreAction colConfStore $ ColumnSetTmpReportTemplate i v ]
+              [ SomeStoreAction store $ ColumnAction i $ SetTmpReportTemplate v ]
           }
 
 -- column kind: data
@@ -303,15 +293,15 @@ dataTypeInfo_ :: Maybe SessionKey -> DataType -> ReactElementM eh ()
 dataTypeInfo_ !sKey !dt = view dataTypeInfo (sKey, dt) mempty
 
 dataTypeInfo :: ReactView (Maybe SessionKey, DataType)
-dataTypeInfo = defineControllerView "datatype info" colConfStore $
-  \state (sKey, dt) -> span_ [ "className" $= "dataType" ] $
+dataTypeInfo = defineControllerView "datatype info" store $
+  \st (sKey, dt) -> span_ [ "className" $= "dataType" ] $
     case dt of
       DataBool     -> "Bool"
       DataString   -> "String"
       DataNumber   -> "Number"
       DataTime     -> "Time"
-      DataRecord t -> do onDidMount_ [SomeStoreAction colConfStore (ColumnGetTableCache sKey)] mempty
-                         let tblName = Map.lookup t (state ^. ccsTableCache)
+      DataRecord t -> do onDidMount_ [SomeStoreAction store $ GetTableCache sKey ] mempty
+                         let tblName = Map.lookup t (st ^. stateTableCache)
                                     ?: "missing table"
                          elemText $ "Row from " <> tblName
       DataList   d -> do "List ("
@@ -325,17 +315,20 @@ dataColConf_ :: Maybe SessionKey -> Id Column -> DataCol -> ReactElementM eh ()
 dataColConf_ !sKey !i !d = view dataColConf (sKey, i, d) mempty
 
 dataColConf :: ReactView (Maybe SessionKey, Id Column, DataCol)
-dataColConf = defineControllerView "data column configuration" colConfStore $
-  \state (sKey, i, dat) -> cldiv_ "dialog data" $ do
+dataColConf = defineControllerView "data column configuration" store $
+  \st (sKey, i, dat) -> cldiv_ "dialog data" $ do
       let mError = case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of
             (Derived, CompileResultError msg) -> Just msg
             _                                 -> Nothing
-          isDerived = state ^. ccsTmpIsFormula . at i ?: dat ^. dataColIsDerived
-          formula = state ^. ccsTmpFormula . at i ?: dat ^. dataColSourceCode
-          dt = state ^. ccsTmpDataType . at i ?: dat ^. dataColType
+          isDerived = join (st ^. stateColumns . at i ^? _Just . stTmpIsFormula)
+            ?: dat ^. dataColIsDerived
+          formula = join (st ^. stateColumns . at i ^? _Just . stTmpFormula)
+            ?: dat ^. dataColSourceCode
+          dt = join (st ^. stateColumns . at i ^? _Just . stTmpDataType)
+            ?: dat ^. dataColType
       cldiv_ "bodyWrapper" $ cldiv_ "body" $ do
         cldiv_ "datatype" $
-          selDatatype_ sKey i dat (state ^. ccsTableCache)
+          selDatatype_ sKey i dat (st ^. stateTableCache)
         cldiv_ "formula" $ do
           checkIsFormula_ i isDerived
           -- input field for formula
@@ -343,23 +336,23 @@ dataColConf = defineControllerView "data column configuration" colConfStore $
       for_ mError $ \errMsg -> cldiv_ "error" $ do
         clspan_ "title" "Error"
         cldiv_  "body" $ elemText errMsg
-      let cancelActions =
-            [ SomeStoreAction colConfStore $ ColumnSetVisibility i False
-            , SomeStoreAction colConfStore $ ColumnUnsetTmpDataType i
-            , SomeStoreAction colConfStore $ ColumnUnsetTmpFormula i
-            , SomeStoreAction colConfStore $ ColumnUnsetTmpIsFormula i
+      let cancelActions = SomeStoreAction store . ColumnAction i <$>
+            [ SetVisibility False
+            , UnsetTmpDataType
+            , UnsetTmpFormula
+            , UnsetTmpIsFormula
             ]
           -- TODO: figure out what changed before initiating ajax
           -- in the Nothing case: nothing has changed
           deleteActions = [ SomeStoreAction store $ TableDeleteColumn i ]
-          saveActions =
+          saveActions = SomeStoreAction store . ColumnAction i <$>
             -- hide dialog
-            [ SomeStoreAction colConfStore $ ColumnSetVisibility i False
+            [ SetVisibility False
             -- is formula and formula
-            , SomeStoreAction store        $ DataColUpdate i (dt, isDerived, formula)
-            , SomeStoreAction colConfStore $ ColumnUnsetTmpDataType i
-            , SomeStoreAction colConfStore $ ColumnUnsetTmpIsFormula i
-            , SomeStoreAction colConfStore $ ColumnUnsetTmpFormula i
+            , DataColUpdate (dt, isDerived, formula)
+            , UnsetTmpDataType
+            , UnsetTmpIsFormula
+            , UnsetTmpFormula
             ]
       confButtons_ cancelActions deleteActions saveActions
 
@@ -393,7 +386,7 @@ selDatatype_  !sKey !i !dat !m = view selDatatype (sKey, i, dat, m) mempty
 selDatatype :: ReactView (Maybe SessionKey, Id Column, DataCol, TableCache)
 selDatatype = defineView "selectDataType" $ \(sKey, i, dat, tables) ->
     selBranch_ sKey (Just $ dat ^. dataColType) tables $
-      \dt -> [SomeStoreAction colConfStore $ ColumnSetTmpDataType i dt]
+      \dt -> [SomeStoreAction store $ ColumnAction i $ SetTmpDataType dt]
 
 selBranch_ :: Maybe SessionKey -> Maybe DataType -> TableCache -> SelBranchCallback -> ReactElementM eh ()
 selBranch_ !sKey !mDt !tables !cb = view selBranch (sKey, mDt, tables, cb) mempty
@@ -425,7 +418,7 @@ selTable_ !sKey !mTableId !tables !cb = view selTable (sKey, mTableId, tables, c
 
 selTable :: ReactView (Maybe SessionKey, Maybe (Id Table), TableCache, SelTableCallback)
 selTable = defineView "select table" $ \(sKey, mTableId, tables, cb) -> do
-  onDidMount_ [SomeStoreAction colConfStore (ColumnGetTableCache sKey)] mempty
+  onDidMount_ [SomeStoreAction store $ GetTableCache sKey] mempty
   select_
     [ "defaultValue" &= fromMaybe "" (show <$> mTableId)
     , onChange $ \evt -> maybe [] cb $ readMaybe $ target evt "value"
@@ -448,7 +441,7 @@ checkIsFormula = defineView "checkIsFormula" $ \(i, isDerived) -> do
       , onChange $ \_ ->
           -- flip the checked status
           let newInpType = if checked then NotDerived else Derived
-          in  [ SomeStoreAction colConfStore $ ColumnSetTmpIsFormula i newInpType ]
+          in  [ SomeStoreAction store $ ColumnAction i $ SetTmpIsFormula newInpType ]
       ]
     span_ [] "Use formula"
 
@@ -473,7 +466,7 @@ inputFormula = defineView "input formula" $ \(i, formula, inpTyp) -> do
           , codemirrorReadOnly = readOnly
           , codemirrorValue = formula
           , codemirrorOnChange = \v ->
-              [ SomeStoreAction colConfStore $ ColumnSetTmpFormula i v ]
+              [ SomeStoreAction store $ ColumnAction i $ SetTmpFormula v ]
           }
 
 --

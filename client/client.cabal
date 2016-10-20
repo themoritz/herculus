@@ -43,6 +43,7 @@ executable client
                      , deepseq
                      , ghcjs-dom
                      , ghcjs-base
+                     , http-api-data
                      , lens
                      , lib
                      , mtl

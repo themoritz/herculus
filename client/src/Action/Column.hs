@@ -2,7 +2,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 -- |
 
-module Action.Column where
+module Action.Column
+  ( module Action.Column.Types
+  , module Action.Column
+  ) where
 
 import           Control.Lens
 import           Data.Proxy                (Proxy (..))
@@ -24,58 +27,70 @@ import           Action                    (Callback, api, session)
 import           Action.Column.Types       (Action (..))
 
 data State = State
-  { _column            :: Column
-  , _tmpDataType       :: Maybe DataType
-  , _tmpIsFormula      :: Maybe IsDerived
-  , _tmpFormula        :: Maybe Text
-  , _visible           :: Bool
-  , _tmpReportLanguage :: Maybe (Maybe ReportLanguage)
-  , _tmpReportFormat   :: Maybe ReportFormat
-  , _tmpReportTemplate :: Maybe Text
+  { _stColumn            :: Column
+  , _stTmpDataType       :: Maybe DataType
+  , _stTmpIsFormula      :: Maybe IsDerived
+  , _stTmpFormula        :: Maybe Text
+  , _stVisible           :: Bool
+  , _stTmpReportLanguage :: Maybe (Maybe ReportLanguage)
+  , _stTmpReportFormat   :: Maybe ReportFormat
+  , _stTmpReportTemplate :: Maybe Text
   }
 
 makeLenses ''State
 
-runAction :: Callback s
+mkState :: Column -> State
+mkState c = State
+  { _stColumn = c
+  , _stTmpDataType = Nothing
+  , _stTmpIsFormula = Nothing
+  , _stTmpFormula = Nothing
+  , _stVisible = False
+  , _stTmpReportLanguage = Nothing
+  , _stTmpReportFormat = Nothing
+  , _stTmpReportTemplate = Nothing
+  }
+
+runAction :: Callback
           -> Maybe SessionKey
           -> Id Column
           -> Action
           -> State -> IO State
 runAction mkCallback sessionKey columnId action st = case action of
     SetTmpDataType dt ->
-      pure $ st & tmpDataType .~ Just dt
+      pure $ st & stTmpDataType .~ Just dt
     UnsetTmpDataType ->
-      pure $ st & tmpDataType .~ Nothing
+      pure $ st & stTmpDataType .~ Nothing
     SetTmpIsFormula it ->
-      pure $ st & tmpIsFormula .~ Just it
+      pure $ st & stTmpIsFormula .~ Just it
     UnsetTmpIsFormula ->
-      pure $ st & tmpIsFormula .~ Nothing
+      pure $ st & stTmpIsFormula .~ Nothing
     SetTmpFormula s ->
-      pure $ st & tmpFormula .~ Just s
+      pure $ st & stTmpFormula .~ Just s
     UnsetTmpFormula ->
-      pure $ st & tmpFormula .~ Nothing
+      pure $ st & stTmpFormula .~ Nothing
     SetVisibility b ->
-      pure $ st & visible .~ b
+      pure $ st & stVisible .~ b
     SetTmpReportLang lang ->
-      pure $ st & tmpReportLanguage .~ Just lang
+      pure $ st & stTmpReportLanguage .~ Just lang
     UnsetTmpReportLang ->
-      pure $ st & tmpReportLanguage .~ Nothing
+      pure $ st & stTmpReportLanguage .~ Nothing
     SetTmpReportFormat format ->
-      pure $ st & tmpReportFormat .~ Just format
+      pure $ st & stTmpReportFormat .~ Just format
     UnsetTmpReportFormat ->
-      pure $ st & tmpReportFormat .~ Nothing
+      pure $ st & stTmpReportFormat .~ Nothing
     SetTmpReportTemplate templ ->
-      pure $ st & tmpReportTemplate .~ Just templ
+      pure $ st & stTmpReportTemplate .~ Just templ
     UnsetTmpReportTemplate ->
-      pure $ st & tmpReportTemplate .~ Nothing
+      pure $ st & stTmpReportTemplate .~ Nothing
     Rename n -> do
       request api (Proxy :: Proxy Api.ColumnSetName)
                   (session sessionKey) columnId n $ mkCallback $ const []
-      pure $ st & column . columnName .~ n
+      pure $ st & stColumn . columnName .~ n
     DataColUpdate payload@(dt, inpTyp, src) -> do
       request api (Proxy :: Proxy Api.DataColUpdate)
                   (session sessionKey) columnId payload $ mkCallback $ const []
-      pure $ st & column . columnKind . _ColumnData
+      pure $ st & stColumn . columnKind . _ColumnData
                %~ (dataColType .~ dt)
                 . (dataColIsDerived .~ inpTyp)
                 . (dataColSourceCode .~ src)
@@ -85,7 +100,7 @@ runAction mkCallback sessionKey columnId action st = case action of
     ReportColUpdate payload@(templ, format, lang) -> do
       request api (Proxy :: Proxy Api.ReportColUpdate)
                   (session sessionKey) columnId payload $ mkCallback $ const []
-      pure $ st & column . columnKind . _ColumnReport
+      pure $ st & stColumn . columnKind . _ColumnReport
                %~ (reportColLanguage .~ lang)
                 . (reportColFormat .~ format)
                 . (reportColTemplate .~ templ)

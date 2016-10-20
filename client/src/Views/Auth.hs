@@ -14,8 +14,9 @@ import           React.Flux      (ReactElementM, ReactView, button_, classNames,
                                   elemText, input_, onChange, onClick, span_,
                                   target, view, ($=), (&=))
 
+import           Action          (Action (Login, Logout))
 import           Lib.Model.Auth  (LoginData (..))
-import           Store           (Action (Login, Logout), State, dispatch)
+import           Store           (State, dispatch)
 
 
 login_ :: State -> ReactElementM eh ()
