@@ -7,19 +7,19 @@ module Views.Cell
   ) where
 
 import           Control.DeepSeq
-import           Control.Lens       hiding (view)
-import           Control.Monad      (when)
+import           Control.Lens      hiding (view)
+import           Control.Monad     (when)
 
 import           Data.Foldable
-import           Data.Map.Strict    (Map)
-import qualified Data.Map.Strict    as Map
+import           Data.Map.Strict   (Map)
+import qualified Data.Map.Strict   as Map
 import           Data.Maybe
 import           Data.Monoid
-import           Data.Text          (Text, intercalate, pack, unpack)
+import           Data.Text         (Text, intercalate, pack, unpack)
 
 import           GHC.Generics
 
-import           Text.Read          (readMaybe)
+import           Text.Read         (readMaybe)
 
 import           React.Flux
 
@@ -29,9 +29,9 @@ import           Lib.Model.Record
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Action             (Action (CellSetValue, RecordCacheAction))
-import qualified Action.RecordCache as RecordCache
+import           Action            (Action (CellSetValue, RecordCacheAction))
 import           Store
+import qualified Store.RecordCache as RecordCache
 import           Views.Combinators
 import           Views.Common
 import           Views.Foreign
@@ -233,7 +233,7 @@ cellRecord :: ReactView ( Mode, IsDerived, Maybe (Id Record), Id Table
 cellRecord = defineControllerView "cellRecord" store $
   \st (mode, inpType, mr, t, cb) -> cldiv_ "record" $ do
     onDidMount_ (dispatch $ RecordCacheAction t RecordCache.Get) mempty
-    let records = fromMaybe Map.empty $ st ^. stateCacheRecords . RecordCache.recordCache . at t
+    let records = st ^. stateCacheRecords . at t . _Just . RecordCache.recordCache
         showPairs = intercalate ", " .
                     map (\(c, v) -> (c ^. columnName) <> ": " <> (pack . show) v) .
                     Map.elems

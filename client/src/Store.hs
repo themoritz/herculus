@@ -30,8 +30,8 @@ import           Lib.Types
 
 import           Action                    (Action (..), TableCache, api,
                                             session)
-import qualified Action.Column             as Column
-import qualified Action.RecordCache        as RecordCache
+import qualified Store.Column              as Column
+import qualified Store.RecordCache         as RecordCache
 
 data Coords = Coords (Id Column) (Id Record)
   deriving (Eq, Ord, Show)

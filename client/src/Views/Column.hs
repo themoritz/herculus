@@ -31,7 +31,7 @@ import           Views.Combinators
 import           Views.Common        (EditBoxProps (..), editBox_)
 import           Views.Foreign
 
-import           Action.Column
+import           Store.Column
 
 -- state of column controller view
 

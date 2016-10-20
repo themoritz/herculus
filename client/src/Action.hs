@@ -32,8 +32,8 @@ import           Lib.Model.Table                (Table)
 import           Lib.Types                      (Id)
 import           Lib.Util.Base64                (unBase64)
 
-import qualified Action.Column.Types            as Column
-import qualified Action.RecordCache.Types       as RecordCache
+import qualified Action.Column                  as Column
+import qualified Action.RecordCache             as RecordCache
 
 type instance AuthClientData Api.SessionProtect = Maybe SessionKey
 
@@ -48,7 +48,6 @@ session key = mkAuthenticateReq key mkAuthHeader
 api :: ApiRequestConfig Routes
 api = ApiRequestConfig Config.apiUrl NoTimeout
 
--- type Callback s = forall a. (a -> [StoreAction s]) -> HandleResponse a
 type Callback = forall b. ((b -> [Action]) -> HandleResponse b)
 
 type TableCache = Map (Id Table) Text
