@@ -6,6 +6,7 @@ module Lib.Compiler.Interpreter where
 import           Control.Monad.Except
 import           Control.Monad.Reader
 
+import Data.Monoid ((<>))
 import           Data.Map                       (Map)
 import qualified Data.Map                       as Map
 import           Data.Text                      (Text, pack)
@@ -147,6 +148,15 @@ prelude = Map.fromList
       ]
     )
   --
+  , ( "||"
+    , RPrelude $ \_ (RValue (VBool a)) -> pure $ RPrelude $ \_ (RValue (VBool b)) ->
+        pure $ RValue $ VBool $ a || b
+    )
+  , ( "&&"
+    , RPrelude $ \_ (RValue (VBool a)) -> pure $ RPrelude $ \_ (RValue (VBool b)) ->
+        pure $ RValue $ VBool $ a && b
+    )
+  --
   , ( "formatNumber"
     , RPrelude $ \_ (RValue (VString f)) -> pure $ RPrelude $ \_ (RValue (VNumber n)) ->
         pure $ RValue $ VString $ formatNumber f n
@@ -164,6 +174,7 @@ prelude = Map.fromList
               RPrelude f' -> do
                 RValue v <- f' env (RValue x)
                 pure v
+              _ -> throwError "Prelude `map`: pattern match failure. Please report this as a bug!"
         RValue . VList <$> traverse f xs
     )
   , ( "filter"
@@ -175,6 +186,7 @@ prelude = Map.fromList
               RPrelude f' -> do
                 RValue (VBool b) <- f' env (RValue x)
                 pure b
+              _ -> throwError "Prelude `filter`: pattern match failure. Please report this as a bug!"
         RValue . VList <$> filterM p xs
     )
   , ( "find"
@@ -186,6 +198,7 @@ prelude = Map.fromList
               RPrelude f' -> do
                 RValue (VBool b) <- f' env (RValue x)
                 pure b
+              _ -> throwError "Prelude `find`: pattern match failure. Please report this as a bug!"
             findM _ [] = pure Nothing
             findM p' (x:xs') = do
               b <- p' x
@@ -205,6 +218,7 @@ eval env expr = case expr of
     eval env f >>= \case
       RClosure x body cl -> eval (Map.insert x argVal cl) body
       RPrelude f' -> f' env argVal
+      _ -> throwError "Interpreter `App`: pattern match failure. Please report this as a bug!"
   CLet x e body -> do
     eVal <- eval env e
     eval (Map.insert x eVal env) body
@@ -212,8 +226,9 @@ eval env expr = case expr of
     RValue (VBool bVal) <- eval env cond
     if bVal then eval env e1 else eval env e2
   CVar x -> do
-    let Just v = Map.lookup x env
-    pure v
+    case Map.lookup x env of
+      Nothing -> throwError $ "Interpreter `Var`: " <> (pack . show) x <> " not found in env. Please report this as a bug!"
+      Just v -> pure v
   CLit l -> do
     let v = case l of
           LNumber v' -> VNumber v'
@@ -223,22 +238,22 @@ eval env expr = case expr of
   CPrjRecord e name -> do
     RValue (VRecord mRecId) <- eval env e
     case mRecId of
-      Nothing -> throwError "dependent cell not ready (invalid reference))"
+      Nothing -> throwError "Dependent cell not ready (invalid reference)"
       Just recId -> do
         f <- asks envGetRecordValue
         lift (f recId name) >>= \case
-          Nothing -> throwError "dependent cell not ready"
+          Nothing -> throwError "Dependent cell not ready"
           Just val -> pure $ RValue val
   CColumnRef colId -> do
     f <- asks envGetCellValue
     lift (f colId) >>= \case
-      Nothing -> throwError "dependent cell not ready"
+      Nothing -> throwError "Dependent cell not ready"
       Just val -> pure $ RValue val
   CWholeColumnRef colId -> do
     f <- asks envGetColumnValues
     mVals <- lift $ f colId
     fmap (RValue . VList) $ for mVals $ \case
-      Nothing -> throwError "dependent cell not ready"
+      Nothing -> throwError "Dependent cell not ready"
       Just val -> pure val
   CTableRef tblId _ -> do
     f <- asks envGetTableRecords
@@ -251,5 +266,6 @@ interpret expr env = do
   case result of
     Left e -> pure $ Left e
     Right (RValue v) -> pure $ Right v
-    Right (RClosure _ _ _) -> pure $ Left "did not expect closure"
-    Right (RPrelude _) -> pure $ Left "did not expect prelude function"
+    Right (RClosure _ _ _) -> pure $ Left "Interpret result: Did not expect closure. Please report this as a bug!"
+    Right (RPrelude _) -> pure $ Left "Interpret result: Did not expect prelude function. Please report this as a bug!"
+    _ -> pure $ Left "Interpret result: Pattern match failure. Please report this as a bug!"

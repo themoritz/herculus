@@ -45,7 +45,7 @@ runInfer env expr =
   let action = do
         loadPrelude
         e ::: (preds, point) <- infer expr
-        poly <- generalize preds point
+        (_, poly) <- generalize preds point
         t <- polyFromPoint poly
         traceShowM t
         c <- replaceTypeClassDicts e
@@ -66,20 +66,25 @@ replaceTypeClassDicts expr = case expr of
   TPrjRecord e r -> do
     e' <- replaceTypeClassDicts e
     pure $ TPrjRecord e' r
-  TTypeClassDict predicate -> TVar <$> getInstanceDict predicate
+  TTypeClassDict predicate -> lookupInstanceDict predicate >>= \case
+    Just n -> pure $ TVar n
+    Nothing -> do
+      typePred <- predicateFromPoint predicate
+      throwError $ "no instance dictionary found: " <> (pack . show) typePred
   TColumnRef r -> pure $ TColumnRef r
   TWholeColumnRef r -> pure $ TWholeColumnRef r
   TTableRef t c -> pure $ TTableRef t c
 
-inferAndGeneralize :: Monad m => PExpr -> InferT m (TExpr, PolyType Point)
+inferAndGeneralize :: Monad m => PExpr -> InferT m (TExpr, [Predicate Point], PolyType Point)
 inferAndGeneralize e = do
   e' ::: (ePreds, ePoint) <- infer e
-  poly@(ForAll _ preds _) <- generalize ePreds ePoint
-  -- abstract (polymorphic) dicts, put them in scope, and replace them
-  -- (plus the non-polymorphic ones) in the body of e
-  dicts <- mapM (\predicate@(IsIn c _) -> (predicate,) <$> freshDictName c) preds
+  (deferred, poly@(ForAll _ retained _)) <- generalize ePreds ePoint
+  -- Abstract (polymorphic) dicts
+  dicts <- mapM (\predicate@(IsIn c _) -> (predicate,) <$> freshDictName c) retained
+  -- Put them in scope, and replace them (plus all non-polymorphic ones) in the body of e
+  -- FIXME: need to do this globally after inference is done.
   e'' <- withInstanceDicts dicts $ replaceTypeClassDicts e'
-  pure (foldr TLam e'' (map snd dicts), poly)
+  pure (foldr TLam e'' (map snd dicts), deferred, poly)
 
 inferAndDesugar :: Monad m => PExpr -> InferT m (CExpr, Point)
 inferAndDesugar e = do
@@ -101,9 +106,9 @@ infer expr = case expr of
     unify fPoint arrPoint
     pure $ TApp f' arg' ::: (fPreds <> argPreds, resultPoint)
   PLet x e rest -> do
-    (e', poly) <- inferAndGeneralize e
-    rest' ::: restTuple <- inLocalContext (x, poly) $ infer rest
-    pure $ TLet x e' rest' ::: restTuple
+    (e', deferred, poly) <- inferAndGeneralize e
+    rest' ::: (restPreds, restPoint) <- inLocalContext (x, poly) $ infer rest
+    pure $ TLet x e' rest' ::: (restPreds <> deferred, restPoint)
   PIf cond e1 e2 -> do
     cond' ::: (condPreds, condPoint) <- infer cond
     e1' ::: (e1Preds, e1Point) <- infer e1
@@ -115,7 +120,8 @@ infer expr = case expr of
   PVar x -> do
     poly <- lookupPolyType x
     (xPreds, xPoint) <- instantiate poly
-    -- for every predicate, insert implementation argument (which includes type for later lookup)
+    -- For every predicate, insert instance dictionary node
+    -- (which includes the predicate for later lookup)
     let varWithDicts = foldl TApp (TVar x) (map TTypeClassDict xPreds)
     pure $ varWithDicts ::: (xPreds, xPoint)
   PLit l -> do
@@ -161,19 +167,58 @@ infer expr = case expr of
         listPoint <- mkList tblRows
         pure $ TTableRef i (map fst cols) ::: ([], listPoint)
 
--- TODO: Split predicates into deferred and retained (in particular remove trivial preds)
-generalize :: MonadState InferState m => [Predicate Point] -> Point -> m (PolyType Point)
+-- Entailment
+
+entailByInstance :: MonadState InferState m => Predicate Point -> m Bool
+entailByInstance predicate = lookupInstanceDict predicate >>= \case
+  Nothing -> pure False
+  Just _ -> pure True
+
+entail :: MonadState InferState m => [Predicate Point] -> Predicate Point -> m Bool
+entail ps p = (||) <$> entailByInstance p <*> elemPred ps
+  where
+    elemPred []    = pure False
+    elemPred (h:t) = (||) <$> elemPred t <*> predsEquivalent h p
+    predsEquivalent (IsIn c1 p1) (IsIn c2 p2) = (&&) (c1 == c2) <$> equivalent p1 p2
+
+-- Context reduction
+
+reduce :: MonadState InferState m => [Predicate Point] -> m [Predicate Point]
+reduce = go []
+  where
+    go rs [] = pure rs
+    go rs (p:ps) = entail (rs <> ps) p >>= \case
+      True -> go rs ps
+      False -> go (p:rs) ps
+
+--
+
+-- | Returns a list of deferred predicates and the generalized polytype
+generalize :: MonadState InferState m => [Predicate Point] -> Point -> m ([Predicate Point], PolyType Point)
 generalize preds pt = do
-  traceShowM ("Generalize:" :: String)
-  forM_ preds $ \(IsIn c p) -> do
-    traceShowM c
-    debugPoint p
-  debugPoint pt
-  context <- use inferContext
-  let allTypeVariables = Set.union <$> ftv preds <*> ftv pt
-  freeTypeVariables <- Set.difference <$> allTypeVariables <*> ftv context
-  -- reduce using entailment -> split
-  pure $ ForAll (Set.toList freeTypeVariables) preds pt
+    traceShowM ("Generalize:" :: String)
+    forM_ preds $ \(IsIn c p) -> do
+      traceShowM c
+      debugPoint p
+    debugPoint pt
+    context <- use inferContext
+    reducedPreds <- reduce preds
+    contextVars <- ftv context
+    (deferred, retained) <- partitionM reducedPreds $ \p -> do
+      free <- ftv p
+      pure $ all (`Set.member` contextVars) free
+    let allTypeVariables = Set.union <$> ftv retained <*> ftv pt
+    freeTypeVariables <- Set.difference <$> allTypeVariables <*> pure contextVars
+    pure (deferred, ForAll (Set.toList freeTypeVariables) retained pt)
+  where
+    partitionM :: Monad m => [a] -> (a -> m Bool) -> m ([a], [a])
+    partitionM [] _ = pure ([], [])
+    partitionM (h:t) p = do
+      (as, bs) <- partitionM t p
+      p h >>= \case
+        True  -> pure (h:as, bs)
+        False -> pure (as, h:bs)
+
 
 instantiate :: MonadState InferState m => PolyType Point -> m ([Predicate Point], Point)
 instantiate (ForAll as predicates p) = do

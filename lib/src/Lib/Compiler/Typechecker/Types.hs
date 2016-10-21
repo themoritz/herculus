@@ -100,13 +100,11 @@ inLocalContext (name, poly) action = do
   inferContext . contextTypes .= oldContext
   pure res
 
-getInstanceDict :: (MonadError TypeError m, MonadState InferState m) => Predicate Point -> m Name
-getInstanceDict predicate = do
+lookupInstanceDict :: MonadState InferState m => Predicate Point -> m (Maybe Name)
+lookupInstanceDict predicate = do
   typePred <- predicateFromPoint predicate
   dicts <- use (inferContext . contextInstanceDicts)
-  case Map.lookup typePred dicts of
-    Just n -> pure n
-    Nothing -> throwError $ "no instance dictionary found: " <> (pack . show) typePred
+  pure $ Map.lookup typePred dicts
 
 -- no unification within action!
 withInstanceDicts :: MonadState InferState m => [(Predicate Point, Name)] -> m a -> m a
