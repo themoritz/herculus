@@ -213,7 +213,6 @@ data TypecheckEnv m = TypecheckEnv
 
 --
 
-type TypeError = Text
 data TypedExpr = TExpr ::: ([Predicate Point], Point)
 
 newtype InferT m a = InferT

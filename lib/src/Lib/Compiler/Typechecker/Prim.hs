@@ -5,7 +5,6 @@ module Lib.Compiler.Typechecker.Prim where
 import           Control.Monad.State
 import           Control.Lens
 
-import           Data.Map                       (Map)
 import qualified Data.Map                       as Map
 import           Data.Text                      (Text)
 
@@ -66,15 +65,15 @@ typeVar i = TypeVar i KindStar
 tyVar :: Int -> Type
 tyVar = Type . TyVar . typeVar
 
--- typeOfDataType :: Applicative m => (Id Table -> m (MonoType a)) -> DataType -> m (MonoType a)
--- typeOfDataType f = \case
---   DataBool       -> pure tyBool
---   DataString     -> pure tyString
---   DataNumber     -> pure tyNumber
---   DataTime       -> pure tyTime
---   (DataRecord t) -> TyRecord <$> f t
---   (DataList t)   -> TyApp tyList <$> typeOfDataType f t
---   (DataMaybe t)  -> TyApp tyMaybe <$> typeOfDataType f t
+typeOfDataType :: Applicative m => (Id Table -> m Type) -> DataType -> m Type
+typeOfDataType f = \case
+  DataBool       -> pure $ Type tyBool
+  DataString     -> pure $ Type tyString
+  DataNumber     -> pure $ Type tyNumber
+  DataTime       -> pure $ Type tyTime
+  (DataRecord t) -> Type . TyRecord <$> f t
+  (DataList t)   -> Type . TyApp (Type tyList) <$> typeOfDataType f t
+  (DataMaybe t)  -> Type . TyApp (Type tyMaybe) <$> typeOfDataType f t
 
 loadPrelude :: MonadState InferState m => m ()
 loadPrelude = do
@@ -104,6 +103,12 @@ primPreludeDicts =
   , ( IsIn (ClassName "Eq") $ Type tyString
     , "$EqString"
     )
+  , ( IsIn (ClassName "Ord") $ Type tyNumber
+    , "$OrdNumber"
+    )
+  , ( IsIn (ClassName "Ord") $ Type tyTime
+    , "$OrdTime"
+    )
   ]
 
 primPrelude :: [(Name, PolyType Type)]
@@ -120,6 +125,18 @@ primPrelude =
     , ForAll [] [] $
         Type tyBool `tyArr` Type tyBool
     )
+  , ( "*"
+    , ForAll [] [] $
+        Type tyNumber `tyArr` (Type tyNumber `tyArr` Type tyNumber)
+    )
+  , ( "+"
+    , ForAll [] [] $
+        Type tyNumber `tyArr` (Type tyNumber `tyArr` Type tyNumber)
+    )
+  , ( "-"
+    , ForAll [] [] $
+        Type tyNumber `tyArr` (Type tyNumber `tyArr` Type tyNumber)
+    )
   , ( "show"
     , ForAll [typeVar 1] [IsIn (ClassName "Show") (tyVar 1)] $
         tyVar 1 `tyArr` Type tyString
@@ -128,11 +145,23 @@ primPrelude =
     , ForAll [typeVar 1] [IsIn (ClassName "Eq") (tyVar 1)] $
         tyVar 1 `tyArr` (tyVar 1 `tyArr` Type tyBool)
     )
-  , ( "/="
+  , ( "!="
     , ForAll [typeVar 1] [IsIn (ClassName "Eq") (tyVar 1)] $
         tyVar 1 `tyArr` (tyVar 1 `tyArr` Type tyBool)
     )
   , ( "<="
+    , ForAll [typeVar 1] [IsIn (ClassName "Ord") (tyVar 1)] $
+        tyVar 1 `tyArr` (tyVar 1 `tyArr` Type tyBool)
+    )
+  , ( ">="
+    , ForAll [typeVar 1] [IsIn (ClassName "Ord") (tyVar 1)] $
+        tyVar 1 `tyArr` (tyVar 1 `tyArr` Type tyBool)
+    )
+  , ( "<"
+    , ForAll [typeVar 1] [IsIn (ClassName "Ord") (tyVar 1)] $
+        tyVar 1 `tyArr` (tyVar 1 `tyArr` Type tyBool)
+    )
+  , ( ">"
     , ForAll [typeVar 1] [IsIn (ClassName "Ord") (tyVar 1)] $
         tyVar 1 `tyArr` (tyVar 1 `tyArr` Type tyBool)
     )
@@ -155,5 +184,13 @@ primPrelude =
   , ( "find"
     , ForAll [typeVar 1] [] $
         (tyVar 1 `tyArr` Type tyBool) `tyArr` (tyApp tyList (tyVar 1) `tyArr` tyApp tyMaybe (tyVar 1))
+    )
+  , ( "&&"
+    , ForAll [] [] $
+        Type tyBool `tyArr` (Type tyBool `tyArr` Type tyBool)
+    )
+  , ( "||"
+    , ForAll [] [] $
+        Type tyBool `tyArr` (Type tyBool `tyArr` Type tyBool)
     )
   ]

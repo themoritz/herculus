@@ -2,14 +2,19 @@
 {-# LANGUAGE DeriveGeneric  #-}
 {-# LANGUAGE TupleSections  #-}
 {-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE StandaloneDeriving  #-}
 
 module Lib.Compiler.Types where
 
 import           Control.DeepSeq
+import Control.Monad.Except
 
 import           Data.Aeson
 import Data.List (intercalate)
 import           Data.Monoid
+import Data.Map (Map)
+import qualified Data.Map as Map
 import           Data.Text                    (Text, unpack)
 
 import           GHC.Generics
@@ -20,6 +25,8 @@ import           Lib.Model.Table
 import           Lib.Types
 import qualified Data.UnionFind.IntMap as UF
 
+
+type TypeError = Text
 
 data Kind
   = KindStar
@@ -49,17 +56,18 @@ data MonoType a
   | TyRecord a
   | TyRecordCons (Ref Column) a a
   | TyRecordNil
-  deriving (Ord)
 
-instance Eq a => Eq (MonoType a) where
+deriving instance Ord (MonoType Type)
+
+instance Eq (MonoType Type) where
   TyVar a == TyVar b = a == b
   TyApp c1 a1 == TyApp c2 a2 = c1 == c2 && a1 == a2
-  TyRecord s == TyRecord t = False --rowMap s == rowMap t
-    -- where rowMap :: a -> Map (Ref Column) a
-    --       rowMap = Map.fromList . go
-    --       go TyRecordNil = []
-    --       go (TyVar _) = []
-    --       go (TyRecordCons n t' rest) = (n,t') : go rest
+  TyRecord (Type s) == TyRecord (Type t) = rowMap s == rowMap t
+    where rowMap :: MonoType Type -> Map (Ref Column) (MonoType Type)
+          rowMap = Map.fromList . go
+          go (TyVar _) = []
+          go (TyRecordCons n (Type t') (Type rest)) = (n,t') : go rest
+          go TyRecordNil = []
   TyRecordCons _ _ _ == TyRecordCons _ _ _ = error "eq SimpleType: should not happen"
   TyRecordNil == TyRecordNil = True
   _ == _ = False
@@ -110,24 +118,6 @@ data Lit
 instance ToJSON Lit
 instance FromJSON Lit
 
-data Binop
-  = Add
-  | Sub
-  | Mul
-  | Div
-  | Equal
-  | NotEqual
-  | LessEq
-  | GreaterEq
-  | Less
-  | Greater
-  | And
-  | Or
-  deriving (Eq, Ord, Show, Generic, NFData)
-
-instance ToJSON Binop
-instance FromJSON Binop
-
 data PExpr
   = PLam Name PExpr
   | PApp PExpr PExpr
@@ -136,7 +126,6 @@ data PExpr
   | PIf PExpr PExpr PExpr
   | PVar Name
   | PLit Lit
-  | PBinop Binop PExpr PExpr
   | PPrjRecord PExpr (Ref Column)
   --
   | PColumnRef (Ref Column)
@@ -152,9 +141,7 @@ data TExpr
   | TIf TExpr TExpr TExpr
   | TVar Name
   | TLit Lit
-  | TBinop Binop TExpr TExpr
   | TPrjRecord TExpr (Ref Column)
-  -- Temporary:
   | TTypeClassDict (Predicate Point)
   --
   | TColumnRef (Id Column)
@@ -179,18 +166,19 @@ data CExpr
 instance ToJSON CExpr
 instance FromJSON CExpr
 
-toCoreExpr :: TExpr -> CExpr
+toCoreExpr :: MonadError TypeError m => TExpr -> m CExpr
 toCoreExpr = \case
-  TLam x e -> CLam x (toCoreExpr e)
-  TApp f arg -> CApp (toCoreExpr f) (toCoreExpr arg)
-  TLet x e body -> CLet x (toCoreExpr e) (toCoreExpr body)
-  TIf c t e -> CIf (toCoreExpr c) (toCoreExpr t) (toCoreExpr e)
-  TVar x -> CVar x
-  TLit l -> CLit l
-  TPrjRecord e r -> CPrjRecord (toCoreExpr e) r
-  TColumnRef c -> CColumnRef c
-  TWholeColumnRef c -> CWholeColumnRef c
-  TTableRef t cs -> CTableRef t cs
+  TLam x e -> CLam x <$> toCoreExpr e
+  TApp f arg -> CApp <$> toCoreExpr f <*> toCoreExpr arg
+  TLet x e body -> CLet x <$> toCoreExpr e <*> toCoreExpr body
+  TIf c t e -> CIf <$> toCoreExpr c <*> toCoreExpr t <*> toCoreExpr e
+  TVar x -> pure $ CVar x
+  TLit l -> pure $ CLit l
+  TPrjRecord e r -> CPrjRecord <$> toCoreExpr e <*> pure r
+  TTypeClassDict _ -> throwError "TTypeClassDict should have been eliminated before converting to core"
+  TColumnRef c -> pure $ CColumnRef c
+  TWholeColumnRef c -> pure $ CWholeColumnRef c
+  TTableRef t cs -> pure $ CTableRef t cs
 
 --
 

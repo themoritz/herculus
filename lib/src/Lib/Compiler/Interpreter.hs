@@ -57,7 +57,7 @@ prelude = Map.fromList
     )
   -- Class Eq
   , classFunction "=="
-  , ( "/="
+  , ( "!="
     , RPrelude $ \_ dict -> undefined -- TODO:
     )
   -- Instances Eq

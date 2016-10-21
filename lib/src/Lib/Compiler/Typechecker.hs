@@ -38,11 +38,9 @@ newInferState = InferState
   { _inferContext = Context Map.empty Map.empty
   , _inferCount = 0
   , _inferPointSupply = UF.newPointSupply
-  -- , _inferTypeClasses = primTypeClasses
-  -- , _inferTypeClassDicts = primTypeClassDicts
   }
 
-runInfer :: Monad m => TypecheckEnv m -> PExpr -> m (Either TypeError (TExpr, PolyType Type))
+runInfer :: Monad m => TypecheckEnv m -> PExpr -> m (Either TypeError (CExpr, PolyType Type))
 runInfer env expr =
   let action = do
         loadPrelude
@@ -51,7 +49,8 @@ runInfer env expr =
         t <- polyFromPoint poly
         traceShowM t
         c <- replaceTypeClassDicts e
-        pure (c, t)
+        c' <- toCoreExpr c
+        pure (c', t)
   in  runExceptT $ evalStateT (runReaderT (unInferT action) env) newInferState
 
 --
@@ -177,7 +176,7 @@ instantiate (ForAll as predicates p) = do
           TyRecord r -> (TyRecord <$> replace r) >>= mkPoint
           TyRecordCons n h t' -> (TyRecordCons n <$> replace h <*> replace t') >>= mkPoint
           TyRecordNil -> pure p'
-      replacePred (IsIn c pred) = IsIn c <$> replace pred
+      replacePred (IsIn c predicate) = IsIn c <$> replace predicate
   (,) <$> mapM replacePred predicates <*> replace p
 
 unify :: Monad m => Point -> Point -> InferT m ()
@@ -200,7 +199,7 @@ unify a b = do
             deferredTail <- freshPoint
             alternativeTail1 <- mkPoint $ TyRecordCons n1 h1 deferredTail
             alternativeTail2 <- mkPoint $ TyRecordCons n2 h2 deferredTail
-            -- TODO: Explain why switched
+            -- TODO: Understand and explain why switched
             unify t1 alternativeTail2
             unify t2 alternativeTail1
       _ -> do
