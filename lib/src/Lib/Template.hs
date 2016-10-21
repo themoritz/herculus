@@ -10,8 +10,9 @@ import           Lib.Compiler.Typechecker.Types
 import           Lib.Template.Interpreter
 import           Lib.Template.Parser
 import           Lib.Template.Typechecker
+import           Lib.Template.Types
 
-compileTemplate :: Monad m => Text -> TypecheckEnv m -> m (Either Text TTemplate)
+compileTemplate :: Monad m => Text -> TypecheckEnv m -> m (Either Text CTemplate)
 compileTemplate inp env = case parseTemplate inp of
   Left e -> pure $ Left e
   Right tpl -> do

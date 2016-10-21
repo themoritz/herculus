@@ -7,6 +7,7 @@
 module Lib.Compiler.Typechecker
   ( runInfer
   , infer
+  , inferAndDesugar
   , unify
   , newInferState
   , Type (..)
@@ -29,7 +30,6 @@ import           Lib.Compiler.Typechecker.Prim
 import           Lib.Compiler.Typechecker.Types
 import           Lib.Compiler.Types
 import           Lib.Model.Column
-import           Lib.Types
 
 --
 
@@ -66,8 +66,25 @@ replaceTypeClassDicts expr = case expr of
   TPrjRecord e r -> do
     e' <- replaceTypeClassDicts e
     pure $ TPrjRecord e' r
-  TTypeClassDict pred -> TVar <$> getInstanceDict pred
+  TTypeClassDict predicate -> TVar <$> getInstanceDict predicate
+  TColumnRef r -> pure $ TColumnRef r
+  TWholeColumnRef r -> pure $ TWholeColumnRef r
+  TTableRef t c -> pure $ TTableRef t c
 
+inferAndGeneralize :: Monad m => PExpr -> InferT m (TExpr, PolyType Point)
+inferAndGeneralize e = do
+  e' ::: (ePreds, ePoint) <- infer e
+  poly@(ForAll _ preds _) <- generalize ePreds ePoint
+  -- abstract (polymorphic) dicts, put them in scope, and replace them
+  -- (plus the non-polymorphic ones) in the body of e
+  dicts <- mapM (\predicate@(IsIn c _) -> (predicate,) <$> freshDictName c) preds
+  e'' <- withInstanceDicts dicts $ replaceTypeClassDicts e'
+  pure (foldr TLam e'' (map snd dicts), poly)
+
+inferAndDesugar :: Monad m => PExpr -> InferT m (CExpr, Point)
+inferAndDesugar e = do
+  e' ::: (_, point) <- infer e
+  (,point) <$> toCoreExpr e'
 
 infer :: Monad m => PExpr -> InferT m TypedExpr
 infer expr = case expr of
@@ -84,16 +101,9 @@ infer expr = case expr of
     unify fPoint arrPoint
     pure $ TApp f' arg' ::: (fPreds <> argPreds, resultPoint)
   PLet x e rest -> do
-    e' ::: (ePreds, ePoint) <- infer e
-    poly@(ForAll _ preds _) <- generalize ePreds ePoint -- <- this is where predicates might disappear
-    -- abstract (polymorphic) dicts, put them in scope, and replace them
-    -- (plus the non-polymorphic ones) in the body of e
-    dicts <- mapM (\pred@(IsIn c _) -> (pred,) <$> freshDictName c) preds
-    e'' <- withInstanceDicts dicts $ replaceTypeClassDicts e'
-    let e''' = foldr TLam e'' (map snd dicts)
-    --
+    (e', poly) <- inferAndGeneralize e
     rest' ::: restTuple <- inLocalContext (x, poly) $ infer rest
-    pure $ TLet x e''' rest' ::: restTuple
+    pure $ TLet x e' rest' ::: restTuple
   PIf cond e1 e2 -> do
     cond' ::: (condPreds, condPoint) <- infer cond
     e1' ::: (e1Preds, e1Point) <- infer e1
@@ -120,38 +130,41 @@ infer expr = case expr of
     tailPoint <- freshPoint
     consPoint <- mkPoint $ TyRecordCons name resultPoint tailPoint
     recordPoint <- mkPoint $ TyRecord consPoint
-    s <- unify ePoint recordPoint
+    unify ePoint recordPoint
     pure $ TPrjRecord e' name ::: (ePreds, resultPoint)
-  -- PColumnRef colRef -> do
-  --   f <- asks envResolveColumnRef
-  --   lift (f colRef) >>= \case
-  --     Nothing -> throwError $ pack $ "column not found: " <> show colRef
-  --     Just (i, dataCol) -> do
-  --       getRows <- asks envGetTableRows
-  --       t <- lift $ typeOfDataType getRows $ _dataColType dataCol
-  --       pure $ TColumnRef i ::: t
-  -- PColumnOfTableRef tblRef colRef -> do
-  --   f <- asks envResolveColumnOfTableRef
-  --   lift (f tblRef colRef) >>= \case
-  --     Nothing -> throwError $ pack $ "column not found: " <>
-  --                                    show colRef <> " on table " <>
-  --                                    show tblRef
-  --     Just (colId, dataCol) -> do
-  --       getRows <- asks envGetTableRows
-  --       t <- lift $ typeOfDataType getRows $ _dataColType dataCol
-  --       pure $ TWholeColumnRef colId ::: TyUnary TyList t
-  -- PTableRef tblRef -> do
-  --   f <- asks envResolveTableRef
-  --   lift (f tblRef) >>= \case
-  --     Nothing -> throwError $ pack $ "table not found: " <> show tblRef
-  --     Just (i, cols) -> do
-  --       getRows <- asks envGetTableRows
-  --       tblRows <- lift $ getRows i
-  --       pure $ TTableRef i (map fst cols) ::: TyUnary TyList (TyRecord tblRows)
+  PColumnRef colRef -> do
+    f <- asks envResolveColumnRef
+    lift (f colRef) >>= \case
+      Nothing -> throwError $ pack $ "Column not found: " <> show colRef
+      Just (i, dataCol) -> do
+        getRows <- asks envGetTableRows
+        refPoint <- (lift $ typeOfDataType getRows $ _dataColType dataCol) >>= typeToPoint
+        pure $ TColumnRef i ::: ([], refPoint)
+  PColumnOfTableRef tblRef colRef -> do
+    f <- asks envResolveColumnOfTableRef
+    lift (f tblRef colRef) >>= \case
+      Nothing -> throwError $ pack $ "Column not found: " <>
+                                     show colRef <> " on table " <>
+                                     show tblRef
+      Just (colId, dataCol) -> do
+        getRows <- asks envGetTableRows
+        refPoint <- (lift $ typeOfDataType getRows $ _dataColType dataCol) >>= typeToPoint
+        listPoint <- mkList refPoint
+        pure $ TWholeColumnRef colId ::: ([], listPoint)
+  PTableRef tblRef -> do
+    f <- asks envResolveTableRef
+    lift (f tblRef) >>= \case
+      Nothing -> throwError $ pack $ "Table not found: " <> show tblRef
+      Just (i, cols) -> do
+        getRows <- asks envGetTableRows
+        tblRows <- (lift $ getRows i) >>= typeToPoint
+        listPoint <- mkList tblRows
+        pure $ TTableRef i (map fst cols) ::: ([], listPoint)
 
+-- TODO: Split predicates into deferred and retained (in particular remove trivial preds)
 generalize :: MonadState InferState m => [Predicate Point] -> Point -> m (PolyType Point)
 generalize preds pt = do
-  traceShowM "Generalize:"
+  traceShowM ("Generalize:" :: String)
   forM_ preds $ \(IsIn c p) -> do
     traceShowM c
     debugPoint p
@@ -208,6 +221,7 @@ unify a b = do
         throwError $ "Types do not match: " <> (pack . show) typeA <> ", " <> (pack . show) typeB
 
   where
+    -- TODO: check kinds are the same
     bind :: Monad m => TypeVar -> Point -> Point -> InferT m ()
     bind x pointOfX otherPoint = do
       otherFtv <- ftv otherPoint

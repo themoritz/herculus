@@ -59,6 +59,11 @@ arr a b = do
   a' <- mkPoint $ TyApp fn a
   mkPoint $ TyApp a' b
 
+mkList :: MonadState InferState m => Point -> m Point
+mkList a = do
+  l <- mkPoint tyList
+  mkPoint $ TyApp l a
+
 typeVar :: Int -> TypeVar
 typeVar i = TypeVar i KindStar
 

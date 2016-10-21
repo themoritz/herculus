@@ -207,7 +207,7 @@ data TypecheckEnv m = TypecheckEnv
   { envResolveColumnRef        :: Ref Column -> m (Maybe (Id Column, DataCol))
   , envResolveColumnOfTableRef :: Ref Table -> Ref Column -> m (Maybe (Id Column, DataCol))
   , envResolveTableRef         :: Ref Table -> m (Maybe (Id Table, [(Id Column, DataCol)]))
-  , envGetTableRows            :: Id Table -> m (MonoType Point)
+  , envGetTableRows            :: Id Table -> m Type
   , envOwnTableId              :: Id Table
   }
 

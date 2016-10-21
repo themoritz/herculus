@@ -38,8 +38,7 @@ testTypecheckEnv = TypecheckEnv
                                            , [ (nullObjectId, testDataCol)
                                              ]
                                            )
-  -- , envGetTableRows = \_ -> pure $ TyRecordCons (Ref "A") tyNumber TyRecordNil
-  , envGetTableRows = \_ -> pure tyBool
+  , envGetTableRows = \_ -> pure $ Type $ TyRecordCons (Ref "A") (Type tyNumber) (Type TyRecordNil)
   , envOwnTableId = nullObjectId
   }
 
@@ -57,5 +56,5 @@ test inp = compile (pack inp) testTypecheckEnv >>= \case
   Right (e, typ) -> do
     putStrLn $ "Type: " ++ show typ
     case interpret e testEvalEnv of
-      Left e -> putStrLn $ unpack e
+      Left e' -> putStrLn $ unpack e'
       Right val -> putStrLn $ "Val: " ++ show val
