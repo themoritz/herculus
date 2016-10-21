@@ -155,19 +155,19 @@ primPrelude =
         tyVar 1 `tyArr` (tyVar 1 `tyArr` Type tyBool)
     )
   , ( "<="
-    , ForAll [typeVar 1] [IsIn (ClassName "Ord") (tyVar 1)] $
+    , ForAll [typeVar 1] [IsIn (ClassName "Eq") (tyVar 1), IsIn (ClassName "Ord") (tyVar 1)] $
         tyVar 1 `tyArr` (tyVar 1 `tyArr` Type tyBool)
     )
   , ( ">="
-    , ForAll [typeVar 1] [IsIn (ClassName "Ord") (tyVar 1)] $
+    , ForAll [typeVar 1] [IsIn (ClassName "Eq") (tyVar 1), IsIn (ClassName "Ord") (tyVar 1)] $
         tyVar 1 `tyArr` (tyVar 1 `tyArr` Type tyBool)
     )
   , ( "<"
-    , ForAll [typeVar 1] [IsIn (ClassName "Ord") (tyVar 1)] $
+    , ForAll [typeVar 1] [IsIn (ClassName "Eq") (tyVar 1), IsIn (ClassName "Ord") (tyVar 1)] $
         tyVar 1 `tyArr` (tyVar 1 `tyArr` Type tyBool)
     )
   , ( ">"
-    , ForAll [typeVar 1] [IsIn (ClassName "Ord") (tyVar 1)] $
+    , ForAll [typeVar 1] [IsIn (ClassName "Eq") (tyVar 1), IsIn (ClassName "Ord") (tyVar 1)] $
         tyVar 1 `tyArr` (tyVar 1 `tyArr` Type tyBool)
     )
   , ( "formatNumber"

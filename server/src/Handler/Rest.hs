@@ -29,7 +29,8 @@ import           Lib.Api.Rest
 import           Lib.Api.WebSocket
 import           Lib.Compiler
 import           Lib.Compiler.Interpreter.Types
-import           Lib.Compiler.Typechecker.Types
+import           Lib.Compiler.Typechecker.Types hiding (union)
+import           Lib.Compiler.Typechecker.Prim
 import           Lib.Compiler.Types
 import           Lib.Model
 import           Lib.Model.Cell
@@ -434,13 +435,13 @@ compileColumn c = do
       res <- compile (dataCol ^. dataColSourceCode) (mkTypecheckEnv $ col ^. columnTableId)
       compileResult <- case res of
         Left msg -> abort msg
-        Right (expr ::: typ) -> do
-          colTyp <- typeOfDataType getTableRows (dataCol ^. dataColType)
-          if typ /= colTyp
+        Right (expr, polyType) -> do
+          colType <- typeOfDataType getTableRows (dataCol ^. dataColType)
+          if polyType /= ForAll [] [] colType
             then abort $ pack $
-                   "Inferred type `" <> show typ <>
+                   "Inferred type `" <> show polyType <>
                    "` does not match column type `" <>
-                   show colTyp <> "`."
+                   show colType <> "`."
             else do
               let deps = collectDependencies expr
               cycles <- modifyDependencies c deps
@@ -551,10 +552,10 @@ mkTypecheckEnv ownTblId = TypecheckEnv
 getTableRows :: MonadHexl m => Id Table -> m Type
 getTableRows t = do
   cols <- listByQuery [ "tableId" =: toObjectId t ]
-  let toRow [] = pure TyNoRow
-      toRow ((name, col):rest) = TyRow (Ref name)
+  let toRow [] = pure $ Type TyRecordNil
+      toRow ((name, col):rest) = Type <$> (TyRecordCons (Ref name)
                                     <$> typeOfDataType getTableRows (col ^. dataColType)
-                                    <*> toRow rest
+                                    <*> toRow rest)
   toRow $ flip mapMaybe cols $ \(Entity _ col) ->
     fmap (col ^. columnName,) (col ^? columnKind . _ColumnData)
 

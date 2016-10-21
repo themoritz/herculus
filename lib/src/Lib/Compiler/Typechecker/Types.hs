@@ -4,7 +4,7 @@
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE TupleSections          #-}
+{-# LANGUAGE TupleSections              #-}
 
 module Lib.Compiler.Typechecker.Types where
 
@@ -13,18 +13,15 @@ import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 
-import Debug.Trace (traceShowM)
+import           Debug.Trace (traceShowM)
 
-import Data.Foldable (foldlM)
-import           Data.List             (intercalate)
+import           Data.Foldable (foldlM)
 import           Data.Map              (Map)
 import qualified Data.Map              as Map
 import           Data.Monoid           ((<>))
 import           Data.Set              (Set)
 import qualified Data.Set              as Set
-import           Data.Sequence         (Seq)
-import qualified Data.Sequence         as Seq
-import           Data.Text             (Text, unpack, pack)
+import           Data.Text             (pack)
 import qualified Data.UnionFind.IntMap as UF
 
 import           Lib.Types
@@ -72,7 +69,8 @@ instance Types a => Types [a] where
   ftv = foldlM (\vs a -> Set.union <$> pure vs <*> ftv a) Set.empty
 
 instance Types a => Types (PolyType a) where
-  ftv (ForAll as preds pt) = Set.difference <$> ftv pt <*> ftv as
+  -- TODO: Understand: need to include ftv of preds?
+  ftv (ForAll as preds pt) = Set.difference <$> (Set.union <$> ftv pt <*> ftv preds) <*> ftv as
 
 instance Types Point where
   ftv pt = findType pt >>= ftv
@@ -84,7 +82,7 @@ instance Types a => Types (Predicate a) where
   ftv (IsIn _ t) = ftv t
 
 instance Types Context where
-  ftv (Context types classes) = foldlM (\vs poly -> Set.union <$> pure vs <*> ftv poly) Set.empty types
+  ftv (Context types _) = foldlM (\vs poly -> Set.union <$> pure vs <*> ftv poly) Set.empty types
 
 
 lookupPolyType :: (MonadError TypeError m, MonadState InferState m) => Name -> m (PolyType Point)
@@ -103,8 +101,8 @@ inLocalContext (name, poly) action = do
   pure res
 
 getInstanceDict :: (MonadError TypeError m, MonadState InferState m) => Predicate Point -> m Name
-getInstanceDict pred = do
-  typePred <- predicateFromPoint pred
+getInstanceDict predicate = do
+  typePred <- predicateFromPoint predicate
   dicts <- use (inferContext . contextInstanceDicts)
   case Map.lookup typePred dicts of
     Just n -> pure n
@@ -119,14 +117,6 @@ withInstanceDicts dicts action = do
   res <- action
   inferContext . contextInstanceDicts .= old
   pure res
-
--- used?
-dryRun :: MonadState s m => m a -> m a
-dryRun action = do
-  old <- get
-  result <- action
-  put old
-  pure result
 
 freshPoint :: MonadState InferState m => m Point
 freshPoint = do
@@ -177,7 +167,7 @@ typeToPoint (Type t) = case t of
   TyConst c -> mkPoint $ TyConst c
   TyApp l r -> (TyApp <$> typeToPoint l <*> typeToPoint r) >>= mkPoint
   TyRecord r -> (TyRecord <$> typeToPoint r) >>= mkPoint
-  TyRecordCons ref t r -> (TyRecordCons ref <$> typeToPoint t <*> typeToPoint r) >>= mkPoint
+  TyRecordCons ref t' r -> (TyRecordCons ref <$> typeToPoint t' <*> typeToPoint r) >>= mkPoint
   TyRecordNil -> mkPoint TyRecordNil
 
 predicateFromPoint :: MonadState InferState m => Predicate Point -> m (Predicate Type)

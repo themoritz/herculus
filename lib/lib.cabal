@@ -22,6 +22,7 @@ library
                      , Lib.Compiler.Interpreter.Types
                      , Lib.Compiler.Typechecker
                      , Lib.Compiler.Typechecker.Types
+                     , Lib.Compiler.Typechecker.Prim
                      , Lib.NamedMap
                      , Lib.Api.Rest
                      , Lib.Api.Rest.Report

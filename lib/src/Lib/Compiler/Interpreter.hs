@@ -25,6 +25,28 @@ classFunction name =
   , RPrelude $ \_ (RInstanceDict d) -> let Just f = Map.lookup name d in pure f
   )
 
+app3Var :: Name -> Name -> Name -> Name -> CExpr
+app3Var f a b c = CApp (CApp (CApp (CVar f) (CVar a)) (CVar b)) (CVar c)
+
+app4Var :: Name -> Name -> Name -> Name -> Name -> CExpr
+app4Var f a b c d = CApp (CApp (CApp (CApp (CVar f) (CVar a)) (CVar b)) (CVar c)) (CVar d)
+
+inTermsOfEq :: Monad m => (Bool -> Bool) -> Result m
+inTermsOfEq f =
+  RPrelude $ \env dict -> pure $ RPrelude $ \_ a -> pure $ RPrelude $ \_ b -> do
+    RValue (VBool eq) <- eval (Map.insert "dict" dict $ Map.insert "a" a $ Map.insert "b" b env)
+                              (app3Var "==" "dict" "a" "b")
+    pure $ RValue $ VBool $ f eq
+
+inTermsOfEqOrd :: Monad m => (Bool -> Bool -> Bool) -> Result m
+inTermsOfEqOrd f =
+  RPrelude $ \env dictEq -> pure $ RPrelude $ \_ dictOrd -> pure $ RPrelude $ \_ a -> pure $ RPrelude $ \_ b -> do
+    RValue (VBool eq) <- eval (Map.insert "dict" dictEq $ Map.insert "a" a $ Map.insert "b" b env)
+                              (app3Var "==" "dict" "a" "b")
+    RValue (VBool le) <- eval (Map.insert "dictEq" dictEq $ Map.insert "dictOrd" dictOrd $ Map.insert "a" a $ Map.insert "b" b env)
+                              (app4Var "<=" "dictEq" "dictOrd" "a" "b")
+    pure $ RValue $ VBool $ f eq le
+
 -- Prelude
 
 prelude :: Monad m => Map Name (Result m)
@@ -58,7 +80,7 @@ prelude = Map.fromList
   -- Class Eq
   , classFunction "=="
   , ( "!="
-    , RPrelude $ \_ dict -> undefined -- TODO:
+    , inTermsOfEq not
     )
   -- Instances Eq
   , ( "$EqNumber"
@@ -94,7 +116,19 @@ prelude = Map.fromList
       ]
     )
   -- Class Ord
-  , classFunction "<="
+  , ( "<="
+    , RPrelude $ \_ _ -> pure $ RPrelude $ \_ (RInstanceDict dictOrd) -> -- first argument for dictEq, but not needed here
+        let Just f = Map.lookup "<=" dictOrd in pure f
+    )
+  , ( ">="
+    , inTermsOfEqOrd $ \eq le -> eq || not le
+    )
+  , ( "<"
+    , inTermsOfEqOrd $ \eq le -> not eq && le
+    )
+  , ( ">"
+    , inTermsOfEqOrd $ \_ le -> not le
+    )
   -- Instances Ord
   , ( "$OrdNumber"
     , RInstanceDict $ Map.fromList

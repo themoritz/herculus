@@ -15,6 +15,7 @@ import Data.List (intercalate)
 import           Data.Monoid
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import           Data.Text                    (Text, unpack)
 
 import           GHC.Generics
@@ -68,12 +69,18 @@ instance Eq (MonoType Type) where
           go (TyVar _) = []
           go (TyRecordCons n (Type t') (Type rest)) = (n,t') : go rest
           go TyRecordNil = []
-  TyRecordCons _ _ _ == TyRecordCons _ _ _ = error "eq SimpleType: should not happen"
+          go _ = error "eq MonoType: go: should not happen"
+  TyRecordCons _ _ _ == TyRecordCons _ _ _ = error "eq MonoType: should not happen"
   TyRecordNil == TyRecordNil = True
   _ == _ = False
 
--- "forall a. ..."
 data PolyType a = ForAll [TypeVar] [Predicate a] a
+
+instance Ord a => Eq (PolyType a) where
+  ForAll varsa predsa a == ForAll varsb predsb b =
+    Set.fromList varsa == Set.fromList varsb &&
+    Set.fromList predsa == Set.fromList predsb &&
+    a == b
 
 instance Show Type where
   show (Type t) = case t of
@@ -82,7 +89,7 @@ instance Show Type where
     TyApp (Type (TyApp (Type (TyConst (TypeConst "(->)" _))) a)) b -> "(" <> show a <> " -> " <> show b <> ")"
     TyApp f arg -> "(" <> show f <> " " <> show arg <> ")"
     TyRecord r -> "{" <> show r <> "}"
-    TyRecordCons name t r -> show name <> " : " <> show t <> ", " <> show r
+    TyRecordCons name t' r -> show name <> " : " <> show t' <> ", " <> show r
     TyRecordNil -> "-"
 
 instance Show Kind where
@@ -90,10 +97,10 @@ instance Show Kind where
   show (KindFun arg res) = "(" <> show arg <> " -> " <> show res <> ")"
 
 instance Show TypeVar where
-  show (TypeVar a k) = show a -- <> " : " <> show k
+  show (TypeVar a _) = show a
 
 instance Show TypeConst where
-  show (TypeConst n k) = unpack n -- <> " : " <> show k
+  show (TypeConst n _) = unpack n
 
 instance Show ClassName where
   show (ClassName name) = unpack name
