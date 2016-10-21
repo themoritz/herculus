@@ -6,7 +6,7 @@ import           Control.Applicative       ((<|>))
 import           Control.Concurrent        (forkIO)
 import           Control.Lens
 import           Control.Monad             (when)
-import           Data.Foldable             (foldl')
+import           Data.Foldable             (foldl', for_)
 import           Data.Map.Strict           (Map)
 import qualified Data.Map.Strict           as Map
 import           Data.Proxy
@@ -42,25 +42,25 @@ data CellInfo = CellInfo
   } deriving (Eq)
 
 data State = State
+  -- global
   { _stateError        :: Maybe Text
+  , _stateCacheRecords :: Map (Id Table) RecordCache.State
   , _stateSessionKey   :: Maybe SessionKey
-
   , _stateWebSocket    :: Maybe JSWebSocket
-
-  , _stateProjects     :: Map (Id Project) Project
   , _stateProjectId    :: Maybe (Id Project)
-
-  , _stateTables       :: Map (Id Table) Table
   , _stateTableId      :: Maybe (Id Table)
 
+  -- columns
+  , _stateColumns      :: Map (Id Column) Column.State
+
+  -- projects/tables/cells/records
+  , _stateProjects     :: Map (Id Project) Project
+  , _stateTables       :: Map (Id Table) Table
   , _stateCells        :: Map Coords CellContent
   , _stateRecords      :: Map (Id Record) Record
 
   -- for column config
   , _stateTableCache   :: TableCache
-  , _stateColumns      :: Map (Id Column) Column.State
-  , _stateCacheRecords :: Map (Id Table) RecordCache.State
-
   }
 
 makeLenses ''State
@@ -68,17 +68,17 @@ makeLenses ''State
 store :: ReactStore State
 store = mkStore State
   { _stateError = Nothing
+  , _stateCacheRecords = Map.empty
   , _stateSessionKey = Nothing
   , _stateWebSocket = Nothing
-  , _stateCacheRecords = Map.empty
-  , _stateProjects = Map.empty
   , _stateProjectId = Nothing
-  , _stateTables = Map.empty
   , _stateTableId = Nothing
+  , _stateColumns = Map.empty
+  , _stateProjects = Map.empty
+  , _stateTables = Map.empty
   , _stateCells = Map.empty
   , _stateRecords = Map.empty
   , _stateTableCache = Map.empty
-  , _stateColumns = Map.empty
   }
 
 instance StoreData State where
@@ -128,7 +128,6 @@ instance StoreData State where
 
       -- Cache
 
-      -- TODO: %%~ update
       RecordCacheAction tableId a ->
         st & stateCacheRecords . at tableId . _Just %%~ \cache ->
           RecordCache.runAction mkCallback (st ^. stateSessionKey) tableId a cache
@@ -143,16 +142,14 @@ instance StoreData State where
 
       ProjectsSet ps -> do
         _ <- forkIO $ case ps of
-          [] -> pure ()
-          Entity i _ : _ ->
-            alterStore store $ ProjectsLoadProject i
+          []             -> pure ()
+          Entity i _ : _ -> alterStore store $ ProjectsLoadProject i
         pure $ st & stateProjects .~ projectsMap
           where
             projectsMap = Map.fromList $ map entityToTuple ps
 
       ProjectsCreate project -> do
-        request api
-                (Proxy :: Proxy Api.ProjectCreate)
+        request api (Proxy :: Proxy Api.ProjectCreate)
                 (session $ st ^. stateSessionKey)
                 project $ mkCallback $
           \projectId -> [ProjectsAdd $ Entity projectId project]
@@ -201,9 +198,8 @@ instance StoreData State where
 
       TablesSet ts -> do
         _ <- forkIO $ case ts of
-          [] -> pure ()
-          Entity i _ : _ ->
-            alterStore store $ TablesLoadTable i
+          []             -> pure ()
+          Entity i _ : _ -> alterStore store $ TablesLoadTable i
         pure $ st & stateTables .~ tablesMap
           where
             tablesMap = Map.fromList $ map entityToTuple ts
@@ -239,10 +235,14 @@ instance StoreData State where
             st' = foldl' setRecordInCache st cells
         in st' & stateCells %~ fillEntries (map toEntry cells)
 
-      TableUpdateColumns entries -> pure $
-        st & stateColumns %~ \cols ->
-          foldl' (\cols' (Entity i c) -> Map.insert i (Column.mkState c) cols') cols $
-          filter (\(Entity _ c) -> st ^. stateTableId == Just (c ^. columnTableId)) entries
+      TableUpdateColumns entities ->
+          pure $ st & stateColumns %~ \cols ->
+            foldl' acc cols $ filter tableColumn entities
+        where
+          tableColumn (Entity _ column) =
+            st ^. stateTableId == Just $ column ^. columnTableId
+          acc cols' (Entity columnId column) =
+            Map.insert columnId (Column.mkState column) cols'
 
       TableAddColumn col -> do
         request api (Proxy :: Proxy Api.ColumnCreate)
@@ -262,11 +262,10 @@ instance StoreData State where
                              (\(Coords c _) _ -> c /= i)
 
       TableAddRecord -> do
-        case st ^. stateTableId of
-          Nothing -> pure ()
-          Just t -> request api (Proxy :: Proxy Api.RecordCreate)
-                            (session $ st ^. stateSessionKey) t $ mkCallback $
-                            \record -> [TableAddRecordDone record]
+        for_ (st ^. stateTableId) $ \table ->
+          request api (Proxy :: Proxy Api.RecordCreate)
+                      (session $ st ^. stateSessionKey) table $ mkCallback $
+                      \record -> [TableAddRecordDone record]
         pure st
 
       TableAddRecordDone (Entity i r, cells) -> pure $
@@ -311,11 +310,14 @@ instance StoreData State where
       -- Column
 
       GetTableCache sKey -> do
-        let toTableMap = Map.fromList . map (\(Entity tableId table) -> (tableId, table ^. tableName))
-        when (Map.null $ st ^. stateTableCache) $
-          request api (Proxy :: Proxy Api.TableListGlobal) (session sKey) $
-                  mkCallback $ \tables -> [SetTableCache $ toTableMap tables]
-        pure st
+          when (Map.null $ st ^. stateTableCache) $
+            request api (Proxy :: Proxy Api.TableListGlobal) (session sKey) $
+                    mkCallback $ \tables -> [SetTableCache $ toTableMap tables]
+          pure st
+        where
+          toTableMap = Map.fromList . map entityToPair
+          entityToPair (Entity tableId table) = (tableId, table ^. tableName)
+
       SetTableCache m ->
         pure $ st & stateTableCache .~ m
 
@@ -328,8 +330,10 @@ instance StoreData State where
         pure $ st & stateCells %~ fillEntries [(c, r, CellValue val)]
 
     where
-      fillEntries entries m = foldl' (\m' (c, v) -> Map.insert c v m') m $
-        map (\(colId, recId, val) -> (Coords colId recId, val)) entries
+      fillEntries entries m = foldl' acc m $ map toCoords entries
+        where
+          toCoords (colId, recId, val) = (Coords colId recId, val)
+          acc m' (c, v) = Map.insert c v m'
 
 toCellUpdate :: Entity Cell -> (Id Column, Id Record, CellContent)
 toCellUpdate (Entity _ (Cell content (Aspects _ c r))) = (c, r, content)
