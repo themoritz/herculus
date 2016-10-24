@@ -13,7 +13,7 @@ import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 
-import           Debug.Trace (traceShowM)
+import           Debug.Trace (traceShowM, traceM)
 
 import           Data.Foldable (foldlM)
 import           Data.Map              (Map)
@@ -21,7 +21,7 @@ import qualified Data.Map              as Map
 import           Data.Monoid           ((<>))
 import           Data.Set              (Set)
 import qualified Data.Set              as Set
-import           Data.Text             (pack)
+import           Data.Text             (pack, unpack)
 import qualified Data.UnionFind.IntMap as UF
 
 import           Lib.Types
@@ -146,6 +146,43 @@ debugPoint :: MonadState InferState m => Point -> m ()
 debugPoint p = do
   t <- pointToType p
   traceShowM t
+
+debugTExpr :: MonadState InferState m => TExpr -> m ()
+debugTExpr expr = debugTExpr' expr >>= mapM_ traceM
+  where
+    debugTExpr' = \case
+      TLam x e -> do
+        eLines <- debugTExpr' e
+        pure $ ["\\" <> unpack x <> " ->"] <> indent eLines
+      TApp f arg -> do
+        fLines <- debugTExpr' f
+        argLines <- debugTExpr' arg
+        pure $ fLines <> argLines
+      TLet x e rest -> do
+        eLines <- debugTExpr' e
+        restLines <- debugTExpr' rest
+        pure $ ["let " <> unpack x <> " ="] <> indent eLines <> [";"] <> indent restLines
+      TIf c t e -> do
+        cLines <- debugTExpr' c
+        tLines <- debugTExpr' t
+        eLines <- debugTExpr' e
+        pure $ ["if"] <> indent cLines <> ["then"] <> indent tLines <> ["else"] <> indent eLines
+      TVar x -> pure [unpack x]
+      TLit l -> pure [show l]
+      TPrjRecord e c -> do
+        eLines <- debugTExpr' e
+        pure $ ["Access " <> show c <> " of:"] <> indent eLines
+      TWithPredicates preds e -> do
+        preds' <- mapM predicateFromPoint preds
+        eLines <- debugTExpr' e
+        pure $ ["With:"] <> indent (map show preds') <> ["=>"] <> indent eLines
+      TTypeClassDict predicate -> do
+        predicate' <- predicateFromPoint predicate
+        pure ["Dict: " <> show predicate']
+      TColumnRef c -> pure ["Column: " <> show c]
+      TWholeColumnRef c -> pure ["Column: " <> show c]
+      TTableRef t cs -> pure ["Table: " <> show t <> ", columns: " <> show cs]
+    indent = map ("  " <>)
 
 pointToType :: MonadState InferState m => Point -> m Type
 pointToType p = do

@@ -144,11 +144,13 @@ data TExpr
   = TLam Name TExpr
   | TApp TExpr TExpr
   | TLet Name TExpr TExpr
-  --T | Fix Expr
+  -- | Fix Expr
   | TIf TExpr TExpr TExpr
   | TVar Name
   | TLit Lit
   | TPrjRecord TExpr (Ref Column)
+  -- For type classes:
+  | TWithPredicates [Predicate Point] TExpr
   | TTypeClassDict (Predicate Point)
   --
   | TColumnRef (Id Column)
@@ -182,6 +184,7 @@ toCoreExpr = \case
   TVar x -> pure $ CVar x
   TLit l -> pure $ CLit l
   TPrjRecord e r -> CPrjRecord <$> toCoreExpr e <*> pure r
+  TWithPredicates _ _ -> throwError "TWithRetainedPredicates should have been eliminated before converting to core"
   TTypeClassDict _ -> throwError "TTypeClassDict should have been eliminated before converting to core"
   TColumnRef c -> pure $ CColumnRef c
   TWholeColumnRef c -> pure $ CWholeColumnRef c

@@ -44,13 +44,13 @@ runInfer :: Monad m => TypecheckEnv m -> PExpr -> m (Either TypeError (CExpr, Po
 runInfer env expr =
   let action = do
         loadPrelude
-        e ::: (preds, point) <- infer expr
-        (_, poly) <- generalize preds point
+        (e, deferred, poly) <- inferAndGeneralize expr
         t <- polyFromPoint poly
-        traceShowM t
-        c <- replaceTypeClassDicts e
-        c' <- toCoreExpr c
-        pure (c', t)
+        debugTExpr e
+        e' <- replaceTypeClassDicts (TWithPredicates deferred e)
+        debugTExpr e'
+        c <- toCoreExpr e'
+        pure (c, t)
   in  runExceptT $ evalStateT (runReaderT (unInferT action) env) newInferState
 
 --
@@ -66,6 +66,10 @@ replaceTypeClassDicts expr = case expr of
   TPrjRecord e r -> do
     e' <- replaceTypeClassDicts e
     pure $ TPrjRecord e' r
+  TWithPredicates preds e -> do
+    dicts <- mapM (\predicate@(IsIn c _) -> (predicate,) <$> freshDictName c) preds
+    e' <- withInstanceDicts dicts $ replaceTypeClassDicts e
+    pure $ foldr TLam e' (map snd dicts)
   TTypeClassDict predicate -> lookupInstanceDict predicate >>= \case
     Just n -> pure $ TVar n
     Nothing -> do
@@ -79,12 +83,8 @@ inferAndGeneralize :: Monad m => PExpr -> InferT m (TExpr, [Predicate Point], Po
 inferAndGeneralize e = do
   e' ::: (ePreds, ePoint) <- infer e
   (deferred, poly@(ForAll _ retained _)) <- generalize ePreds ePoint
-  -- Abstract (polymorphic) dicts
-  dicts <- mapM (\predicate@(IsIn c _) -> (predicate,) <$> freshDictName c) retained
-  -- Put them in scope, and replace them (plus all non-polymorphic ones) in the body of e
-  -- FIXME: need to do this globally after inference is done.
-  e'' <- withInstanceDicts dicts $ replaceTypeClassDicts e'
-  pure (foldr TLam e'' (map snd dicts), deferred, poly)
+  let e'' = TWithPredicates retained e'
+  pure (e'', deferred, poly)
 
 inferAndDesugar :: Monad m => PExpr -> InferT m (CExpr, Point)
 inferAndDesugar e = do
