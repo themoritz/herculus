@@ -10,10 +10,8 @@ mkDerivation {
   isExecutable = true;
   executableHaskellDepends = [
     aeson base bytestring containers deepseq ghcjs-base #ghcjs-dom
-    http-api-data lens herculus-lib
-    mtl #react-flux react-flux-servant
-    servant
-    text transformers
+    http-api-data lens herculus-lib mtl react-flux react-flux-servant
+    servant text transformers
   ];
   license = stdenv.lib.licenses.unfree;
 }

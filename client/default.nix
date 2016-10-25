@@ -5,6 +5,7 @@ let
     haskellPackages.override {
       overrides = self: super: {
         herculus-lib = self.callPackage (import ../lib) {};
+        react-flux = self.callPackage (import ./react-flux.nix) {};
       };
     }
   );
