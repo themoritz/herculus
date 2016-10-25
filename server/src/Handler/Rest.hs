@@ -108,7 +108,8 @@ handleAuthLogin (LoginData userName pwd) =
       Entity userId user <- getUser
       checkPassword_ user
       pure userId
-    getUser = ExceptT $ getOneByQuery [ "name" =: userName ]
+    getUser = ExceptT $ over _Left (\_ -> "username unknown") <$>
+      getOneByQuery [ "name" =: userName ]
     checkPassword_ user =
       if verifyPassword pwd (user ^. userPwHash)
         then pure ()

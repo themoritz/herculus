@@ -9,6 +9,7 @@ import           Control.Monad             (when)
 import           Data.Foldable             (foldl', for_)
 import           Data.Map.Strict           (Map)
 import qualified Data.Map.Strict           as Map
+import           Data.Monoid               ((<>))
 import           Data.Proxy
 import           Data.Text                 (Text)
 import qualified Data.Text                 as Text
@@ -110,8 +111,10 @@ instance StoreData State where
 
       Login loginData -> do
         request api (Proxy :: Proxy Api.AuthLogin) loginData $ mkCallback $ \case
-          LoginSuccess sessionKey -> [LoggedIn sessionKey]
-          LoginFailed txt -> [MessageAction $ Message.SetError txt]
+          LoginSuccess sessionKey -> [ LoggedIn sessionKey
+                                     , MessageAction Message.SetSuccess "Successfully logged in."
+                                     ]
+          LoginFailed txt -> [MessageAction $ Message.SetWarning txt]
         pure st
 
       LoggedIn sKey -> pure $
@@ -120,7 +123,9 @@ instance StoreData State where
       Logout -> do
         request api (Proxy :: Proxy Api.AuthLogout)
                     (session $ st ^. stateSessionKey) $ mkCallback $
-                    const [LoggedOut]
+                    const [ LoggedOut
+                          , MessageAction Message.Unset
+                          ]
         pure st
 
       LoggedOut ->
@@ -344,5 +349,9 @@ dispatch a = [SomeStoreAction store a]
 mkCallback :: (a -> [Action])
            -> HandleResponse a
 mkCallback cbSuccess = pure . \case
-  Left  (_, e) -> dispatch $ MessageAction $ Message.SetError $ Text.pack e
-  Right x      -> SomeStoreAction store <$> cbSuccess x
+  Left (403, e) -> dispatch $ MessageAction $ Message.SetWarning $
+                    "Forbidden. Are you logged in?" <>
+                    "(403) " <> Text.pack e
+  Left (n, e)   -> dispatch $ MessageAction $ Message.SetError $
+                    "(" <> (Text.pack . show) n <> ") " <> Text.pack e
+  Right x       -> SomeStoreAction store <$> cbSuccess x

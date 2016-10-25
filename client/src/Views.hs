@@ -42,7 +42,7 @@ appHeader_ :: State -> ReactElementM eh ()
 appHeader_ !st = view appHeader st mempty
 
 appHeader :: ReactView State
-appHeader = defineView "login" $ \st ->
+appHeader = defineView "header" $ \st ->
   cldiv_ "menubar" $ do
     cldiv_ "logo" "Herculus"
     case st ^. stateSessionKey of
@@ -70,7 +70,7 @@ appFooter_ :: State -> ReactElementM eh ()
 appFooter_ !st = view appFooter st mempty
 
 appFooter :: ReactView State
-appFooter = defineView "login" $ \st ->
+appFooter = defineView "footer" $ \st ->
   cldiv_ "footer" $ do
     a_ [ "href" $= "mailto:Moritz <mdrexl@fastmail.fm>, Ruben <ruben.moor@gmail.com>"
       , "className" $= "link-on-dark"
@@ -86,11 +86,10 @@ appContent_ :: State -> ReactElementM eh ()
 appContent_ !st = view appContent st mempty
 
 appContent :: ReactView State
-appContent = defineView "login" $ \st ->
-  cldiv_ "tableGrid" $
-    case st ^. stateSessionKey of
-      Nothing -> login_ st
-      Just _ -> tableGrid_ st
+appContent = defineView "content" $ \st ->
+  case st ^. stateSessionKey of
+    Nothing -> login_ st
+    Just _  -> cldiv_ "tableGrid" $ tableGrid_ st
 
 
 --
