@@ -22,12 +22,17 @@ import           Action              (Action (..))
 import           Helper              (keyENTER, keyESC)
 import           Store
 import           Views.Auth          (login_, logout_)
+import           Views.Combinators   (clspan_)
 import           Views.Table         (tableGrid_)
+
+import           Store.Message       (Message (Message))
+import qualified Store.Message       as Message
 
 app :: ReactView ()
 app = defineControllerView "app" store $ \st () ->
   cldiv_ "container" $ do
     appHeader_ st
+    for_ (st ^. stateMessage) message_
     appContent_ st
     appFooter_ st
 
@@ -48,13 +53,18 @@ appHeader = defineView "login" $ \st ->
       Just _ -> case st ^. stateProjectId of
                   Nothing -> pure ()
                   Just prjId -> tables_ (st ^. stateTables) (st ^. stateTableId) prjId
-    case st ^. stateError of
-      Nothing -> pure ()
-      Just t -> do
-        h3_ "Error"
-        elemText t
 
--- content
+message_ :: Message -> ReactElementM eh ()
+message_ !msg = view message msg mempty
+
+message :: ReactView Message
+message = defineView "message" $ \(Message content typ) -> cldiv_ "message" $ cldiv_ "wrapper" $ do
+  cldiv_ "symbol" $ case typ of
+    Message.Info    -> clspan_ "info"    $ faIcon_ "exclamation-circle"
+    Message.Success -> clspan_ "success" $ faIcon_ "check-circle-o"
+    Message.Warning -> clspan_ "warning" $ faIcon_ "exclamation-triangle"
+    Message.Error   -> clspan_ "error"   $ faIcon_ "times-circle-o"
+  cldiv_ "content" $ elemText content
 
 appFooter_ :: State -> ReactElementM eh ()
 appFooter_ !st = view appFooter st mempty

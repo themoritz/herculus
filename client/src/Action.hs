@@ -33,6 +33,7 @@ import           Lib.Types                      (Id)
 import           Lib.Util.Base64                (unBase64)
 
 import qualified Action.Column                  as Column
+import qualified Action.Message                 as Message
 import qualified Action.RecordCache             as RecordCache
 
 type instance AuthClientData Api.SessionProtect = Maybe SessionKey
@@ -54,7 +55,7 @@ type TableCache = Map (Id Table) Text
 
 data Action
   -- Global
-  = GlobalSetError Text
+  = MessageAction Message.Action
   | GlobalInit Text -- WebSocket URL
   | GlobalSendWebSocket WsUpMessage
   -- Session

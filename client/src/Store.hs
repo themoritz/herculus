@@ -31,6 +31,7 @@ import           Lib.Types
 import           Action                    (Action (..), TableCache, api,
                                             session)
 import qualified Store.Column              as Column
+import qualified Store.Message             as Message
 import qualified Store.RecordCache         as RecordCache
 
 data Coords = Coords (Id Column) (Id Record)
@@ -43,7 +44,7 @@ data CellInfo = CellInfo
 
 data State = State
   -- global
-  { _stateError        :: Maybe Text
+  { _stateMessage      :: Message.State
   , _stateCacheRecords :: Map (Id Table) RecordCache.State
   , _stateSessionKey   :: Maybe SessionKey
   , _stateWebSocket    :: Maybe JSWebSocket
@@ -67,7 +68,7 @@ makeLenses ''State
 
 store :: ReactStore State
 store = mkStore State
-  { _stateError = Nothing
+  { _stateMessage = Nothing
   , _stateCacheRecords = Map.empty
   , _stateSessionKey = Nothing
   , _stateWebSocket = Nothing
@@ -85,8 +86,8 @@ instance StoreData State where
   type StoreAction State = Action
   transform action st = case action of
 
-      GlobalSetError msg -> pure $
-        st & stateError .~ Just msg
+      MessageAction a ->
+        pure $ st & stateMessage .~ Message.runAction a
 
       GlobalInit wsUrl -> do
         ws <- jsonWebSocketNew wsUrl $ \case
@@ -108,10 +109,9 @@ instance StoreData State where
       -- Session
 
       Login loginData -> do
-        request api (Proxy :: Proxy Api.AuthLogin) loginData $ mkCallback $
-          \loginResponse -> case loginResponse of
-                        LoginSuccess sessionKey -> [LoggedIn sessionKey]
-                        LoginFailed txt -> [GlobalSetError txt]
+        request api (Proxy :: Proxy Api.AuthLogin) loginData $ mkCallback $ \case
+          LoginSuccess sessionKey -> [LoggedIn sessionKey]
+          LoginFailed txt -> [MessageAction $ Message.SetError txt]
         pure st
 
       LoggedIn sKey -> pure $
@@ -240,7 +240,7 @@ instance StoreData State where
             foldl' acc cols $ filter tableColumn entities
         where
           tableColumn (Entity _ column) =
-            st ^. stateTableId == Just $ column ^. columnTableId
+            st ^. stateTableId == Just (column ^. columnTableId)
           acc cols' (Entity columnId column) =
             Map.insert columnId (Column.mkState column) cols'
 
@@ -344,5 +344,5 @@ dispatch a = [SomeStoreAction store a]
 mkCallback :: (a -> [Action])
            -> HandleResponse a
 mkCallback cbSuccess = pure . \case
-  Left  (_, e) -> dispatch $ GlobalSetError $ Text.pack e
+  Left  (_, e) -> dispatch $ MessageAction $ Message.SetError $ Text.pack e
   Right x      -> SomeStoreAction store <$> cbSuccess x

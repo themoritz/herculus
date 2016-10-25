@@ -15,8 +15,10 @@ executable client
   other-modules:       WebSocket
                      , Action
                      , Action.RecordCache
-                     , Store.RecordCache
+                     , Action.Message
                      , Action.Column
+                     , Store.RecordCache
+                     , Store.Message
                      , Store.Column
                      , Config
                      , Store
