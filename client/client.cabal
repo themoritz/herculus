@@ -12,11 +12,18 @@ cabal-version:       >=1.10
 
 executable client
   main-is:             Main.hs
-  other-modules:       React.Flux.Addons.Servant
-                     , WebSocket
+  other-modules:       WebSocket
+                     , Action
+                     , Action.RecordCache
+                     , Action.Message
+                     , Action.Column
+                     , Store.RecordCache
+                     , Store.Message
+                     , Store.Column
                      , Config
                      , Store
                      , Views
+                     , Views.Auth
                      , Views.Table
                      , Views.Column
                      , Views.Record
@@ -38,10 +45,12 @@ executable client
                      , deepseq
                      , ghcjs-dom
                      , ghcjs-base
+                     , http-api-data
                      , lens
                      , lib
                      , mtl
                      , react-flux
+                     , react-flux-servant
                      , servant
                      , text
                      , transformers

@@ -59,6 +59,10 @@ import qualified Latex
 data AppError
   = ErrUser Text
   | ErrBug Text
+    -- unauthorized: invalid request, e.g. missing authorization cookie
+  | ErrUnauthorized Text
+    -- forbidden: valid request but not allowed, e.g. session expired
+  | ErrForbidden Text
   deriving (Show)
 
 -- DB layer: Typed queries

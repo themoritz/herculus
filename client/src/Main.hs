@@ -2,11 +2,13 @@
 
 module Main where
 
-import           React.Flux
-import           React.Flux.Ajax
+import           React.Flux      (SomeStoreAction (..), executeAction,
+                                  reactRender)
+import           React.Flux.Ajax (initAjax)
 
+import           Action          (Action (GlobalInit))
 import qualified Config
-import           Store
+import           Store           (store)
 import           Views
 
 main :: IO ()

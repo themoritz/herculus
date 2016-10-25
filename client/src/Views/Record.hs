@@ -1,12 +1,13 @@
 module Views.Record where
 
-import React.Flux
+import           React.Flux
 
-import Lib.Model.Record
-import Lib.Model
+import           Lib.Model
+import           Lib.Model.Record
 
-import Store
-import Views.Combinators
+import           Action            (Action (TableDeleteRecord))
+import           Store             (dispatch)
+import           Views.Combinators
 
 record_ :: Entity Record -> ReactElementM eh ()
 record_ !c = view record c mempty

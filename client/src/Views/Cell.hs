@@ -29,7 +29,9 @@ import           Lib.Model.Record
 import           Lib.Model.Table
 import           Lib.Types
 
+import           Action            (Action (CellSetValue, RecordCacheAction))
 import           Store
+import qualified Store.RecordCache as RecordCache
 import           Views.Combinators
 import           Views.Common
 import           Views.Foreign
@@ -230,8 +232,8 @@ cellRecord :: ReactView ( Mode, IsDerived, Maybe (Id Record), Id Table
                         )
 cellRecord = defineControllerView "cellRecord" store $
   \st (mode, inpType, mr, t, cb) -> cldiv_ "record" $ do
-    onDidMount_ (dispatch $ CacheRecordsGet t) mempty
-    let records = fromMaybe Map.empty $ st ^. stateCacheRecords . at t
+    onDidMount_ (dispatch $ RecordCacheAction t RecordCache.Get) mempty
+    let records = st ^. stateCacheRecords . at t . _Just . RecordCache.recordCache
         showPairs = intercalate ", " .
                     map (\(c, v) -> (c ^. columnName) <> ": " <> (pack . show) v) .
                     Map.elems

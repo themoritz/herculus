@@ -14,7 +14,6 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Lib
-                     , Lib.Base64
                      , Lib.Compiler
                      , Lib.Compiler.Types
                      , Lib.Compiler.Parser
@@ -27,8 +26,10 @@ library
                      , Lib.Api.Rest
                      , Lib.Api.Rest.Report
                      , Lib.Api.WebSocket
+                     , Lib.Util.Base64
                      , Lib.Types
                      , Lib.Model
+                     , Lib.Model.Auth
                      , Lib.Model.Table
                      , Lib.Model.Project
                      , Lib.Model.Record
@@ -51,14 +52,17 @@ library
                      , base64-bytestring
                      , bson
                      , bytestring
+                     , case-insensitive
                      , cereal
                      , containers
                      , deepseq
                      , http-api-data
+                     , http-types
                      , http-media
                      , lens
                      , mtl
                      , parsec
+                     , pwstore-fast
                      , scientific
                      , servant
                      , text

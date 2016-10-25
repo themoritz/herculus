@@ -156,5 +156,36 @@
       }
     }
   }
+}
 
+.message {
+  position: absolute;
+  top: $menubar-height;
+  left: 0px;
+  right: 0px;
+  height: 50px;
+  background-color: $anthrazit;
+  .wrapper {
+    display: table;
+    .symbol {
+      width: 30px;
+      display: table-cell;
+      .info {
+        color: blue;
+      }
+      .success {
+        color: green;
+      }
+      .warning {
+        color: orange;
+      }
+      .error {
+        color: red;
+      }
+    }
+  }
+  .content {
+    color: white;
+    display: table-cell;
+  }
 }

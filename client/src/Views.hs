@@ -3,15 +3,14 @@
 
 module Views where
 
+import           Control.DeepSeq     (NFData)
 import           Control.Lens        hiding (view)
-
+import           Data.Foldable       (for_)
 import           Data.Map.Strict     (Map)
 import qualified Data.Map.Strict     as Map
-
-import           Data.Foldable       (for_)
 import           Data.Text           (Text)
 import qualified Data.Text           as Text
-
+import           GHC.Generics        (Generic)
 import           React.Flux
 import           React.Flux.Internal (toJSString)
 
@@ -19,34 +18,79 @@ import           Lib.Model.Project
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Store
-import           Views.Table
-
+import           Action              (Action (..))
 import           Helper              (keyENTER, keyESC)
+import           Store
+import           Views.Auth          (login_, logout_)
+import           Views.Combinators   (clspan_)
+import           Views.Table         (tableGrid_)
 
-import           Control.DeepSeq     (NFData)
-import           GHC.Generics        (Generic)
+import           Store.Message       (Message (Message))
+import qualified Store.Message       as Message
 
 app :: ReactView ()
 app = defineControllerView "app" store $ \st () ->
   cldiv_ "container" $ do
-    cldiv_ "menubar" $ do
-      cldiv_ "logo" "Herculus"
-      projects_ (st ^. stateProjects) (st ^. stateProjectId)
-      case st ^. stateProjectId of
-        Nothing -> pure ()
-        Just prjId -> tables_ (st ^. stateTables) (st ^. stateTableId) prjId
-      case st ^. stateError of
-        Nothing -> pure ()
-        Just t -> do
-          h3_ "Error"
-          elemText t
-    cldiv_ "tableGrid" $ tableGrid_ st
-    cldiv_ "footer" $ a_
-      [ "href" $= "mailto:Moritz <mdrexl@fastmail.fm>, Ruben <ruben.moor@gmail.com>"
+    appHeader_ st
+    for_ (st ^. stateMessage) message_
+    appContent_ st
+    appFooter_ st
+
+-- header
+
+appHeader_ :: State -> ReactElementM eh ()
+appHeader_ !st = view appHeader st mempty
+
+appHeader :: ReactView State
+appHeader = defineView "header" $ \st ->
+  cldiv_ "menubar" $ do
+    cldiv_ "logo" "Herculus"
+    case st ^. stateSessionKey of
+      Nothing -> pure ()
+      Just _ -> projects_ (st ^. stateProjects) (st ^. stateProjectId)
+    case st ^. stateSessionKey of
+      Nothing -> pure ()
+      Just _ -> case st ^. stateProjectId of
+                  Nothing -> pure ()
+                  Just prjId -> tables_ (st ^. stateTables) (st ^. stateTableId) prjId
+
+message_ :: Message -> ReactElementM eh ()
+message_ !msg = view message msg mempty
+
+message :: ReactView Message
+message = defineView "message" $ \(Message content typ) -> cldiv_ "message" $ cldiv_ "wrapper" $ do
+  cldiv_ "symbol" $ case typ of
+    Message.Info    -> clspan_ "info"    $ faIcon_ "exclamation-circle"
+    Message.Success -> clspan_ "success" $ faIcon_ "check-circle-o"
+    Message.Warning -> clspan_ "warning" $ faIcon_ "exclamation-triangle"
+    Message.Error   -> clspan_ "error"   $ faIcon_ "times-circle-o"
+  cldiv_ "content" $ elemText content
+
+appFooter_ :: State -> ReactElementM eh ()
+appFooter_ !st = view appFooter st mempty
+
+appFooter :: ReactView State
+appFooter = defineView "footer" $ \st ->
+  cldiv_ "footer" $ do
+    a_ [ "href" $= "mailto:Moritz <mdrexl@fastmail.fm>, Ruben <ruben.moor@gmail.com>"
       , "className" $= "link-on-dark"
       , "target" $= "_blank"
       ] "Contact"
+    case st ^. stateSessionKey of
+      Nothing -> pure ()
+      Just _ -> logout_ st
+
+-- content
+
+appContent_ :: State -> ReactElementM eh ()
+appContent_ !st = view appContent st mempty
+
+appContent :: ReactView State
+appContent = defineView "content" $ \st ->
+  case st ^. stateSessionKey of
+    Nothing -> login_ st
+    Just _  -> cldiv_ "tableGrid" $ tableGrid_ st
+
 
 --
 

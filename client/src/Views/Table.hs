@@ -13,7 +13,9 @@ import           Lib.Model.Column
 import           Lib.Model.Table
 import           Lib.Types
 
+import           Action            (Action (TableAddRecord, TableAddColumn))
 import           Store
+import qualified Store.Column      as Column
 import           Views.Cell
 import           Views.Column
 import           Views.Combinators
@@ -27,8 +29,10 @@ tableGrid_ !st = view tableGrid st mempty
 tableGrid :: ReactView State
 tableGrid = defineView "tableGrid" $ \st -> do
   let cells = st ^. stateCells
-      cols = st ^. stateColumns
+      cols = Column._stColumn <$> st ^. stateColumns
       recs = st ^. stateRecords
+      tableId = st ^. stateTableId
+      sKey = st ^. stateSessionKey
 
       numCols = Map.size cols
       numRecs = Map.size recs
@@ -46,7 +50,7 @@ tableGrid = defineView "tableGrid" $ \st -> do
           Just (c, col) -> case col ^. columnKind of
             ColumnReport rep ->
               case  Map.lookup y recByIndex of
-                Just (r, _) -> reportCell_ $ ReportCellProps c r rep
+                Just (r, _) -> reportCell_ $ ReportCellProps sKey c r rep
                 Nothing     -> mempty
             ColumnData   dat -> do
               let mRC = do (r, _)  <- Map.lookup y recByIndex
@@ -57,8 +61,8 @@ tableGrid = defineView "tableGrid" $ \st -> do
                 Nothing           -> mempty
 
       emptyDataCol :: Id Table -> Column
-      emptyDataCol tableId = Column
-        { _columnTableId = tableId
+      emptyDataCol i = Column
+        { _columnTableId = i
         , _columnName    = ""
         , _columnKind    = ColumnData DataCol
           { _dataColType          = DataNumber
@@ -69,8 +73,8 @@ tableGrid = defineView "tableGrid" $ \st -> do
         }
 
       emptyReportCol :: Id Table -> Column
-      emptyReportCol tableId = Column
-        { _columnTableId = tableId
+      emptyReportCol i = Column
+        { _columnTableId = i
         , _columnName = ""
         , _columnKind = ColumnReport ReportCol
           { _reportColTemplate         = ""
@@ -88,11 +92,11 @@ tableGrid = defineView "tableGrid" $ \st -> do
             record_ $ getRecord (y - 1)
         | y == 0 && x == (numCols + 1) = cldiv_ "column-new" $ do
             faButton_ "plus-circle" $ fromMaybe [] $
-              dispatch . TableAddColumn . emptyDataCol <$> st ^. stateTableId
+              dispatch . TableAddColumn . emptyDataCol <$> tableId
             faButton_ "bars" $ fromMaybe [] $
-              dispatch . TableAddColumn . emptyReportCol <$> st ^. stateTableId
+              dispatch . TableAddColumn . emptyReportCol <$> tableId
         | y == 0 && 0 < x && x <= numCols =
-            column_ $ getColumn (x - 1)
+            column_ sKey (getColumn (x - 1))
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $
             renderCell (x - 1) (y - 1)
         | otherwise = cldiv_ "empty" mempty
