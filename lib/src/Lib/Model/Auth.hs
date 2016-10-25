@@ -17,6 +17,10 @@ module Lib.Model.Auth
   , sessionKey
   , sessionUserId
   , User (..)
+  , UserInfo (..)
+  , uiUserId
+  , uiUserName
+  , uiSessionKey
   , userName
   , userPwHash
   , verifyPassword
@@ -51,7 +55,7 @@ data LoginData = LoginData
 type SessionKey = Base64
 
 data LoginResponse
-  = LoginSuccess SessionKey
+  = LoginSuccess UserInfo
   | LoginFailed Text
   deriving (Generic, FromJSON, ToJSON)
 
@@ -61,13 +65,9 @@ data SignupData = SignupData
   } deriving (Generic, FromJSON, ToJSON)
 
 data SignupResponse
-  = SignupSuccess SessionKey
+  = SignupSuccess UserInfo
   | SignupFailed Text
   deriving (Generic, FromJSON, ToJSON)
-
--- TODO: a "user" object that is available to auth protected handlers
---       the `User` below is not quite it, because it also contains the password
---       Maybe a different ADT. It's just `Id User` for now
 
 mkPwHash :: MonadIO m => Text -> m PwHash
 mkPwHash txt = liftIO $ toBase64Unsafe <$> makePassword (Text.encodeUtf8 txt) 17
@@ -87,7 +87,6 @@ data User = User
 instance Model User where
   collectionName = const "users"
 
-
 instance ToDocument User where
   toDocument User
    { _userName = name
@@ -101,6 +100,13 @@ instance FromDocument User where
   parseDocument doc = User <$> Bson.lookup "name" doc <*> Bson.lookup "pwHash" doc
 
 type PwHash = Base64
+
+-- a "user" object that is available to auth protected handlers
+data UserInfo = UserInfo
+  { _uiUserId     :: Id User
+  , _uiUserName   :: Text
+  , _uiSessionKey :: SessionKey
+  } deriving (Generic, FromJSON, ToJSON, NFData)
 
 -- Session
 
@@ -130,6 +136,6 @@ instance FromDocument Session where
     <*> Bson.lookup "sessionKey" doc
     <*> Bson.lookup "sessionExpDate" doc
 
-
 makeLenses ''User
+makeLenses ''UserInfo
 makeLenses ''Session

@@ -35,7 +35,8 @@ import           Lib.Model.Auth                 (LoginData (..),
                                                  LoginResponse (..), Session,
                                                  SessionKey, SignupData (..),
                                                  SignupResponse (..),
-                                                 User (User), mkPwHash,
+                                                 User (User),
+                                                 UserInfo (UserInfo), mkPwHash,
                                                  sessionKey, userPwHash,
                                                  verifyPassword)
 import           Lib.Model.Cell
@@ -102,7 +103,7 @@ handleAuthLogin (LoginData userName pwd) =
       Left  err    -> pure $ LoginFailed err
       Right userId -> do
         session <- getSession userId
-        pure $ LoginSuccess $ session ^. sessionKey
+        pure $ LoginSuccess $ UserInfo userId userName $ session ^. sessionKey
   where
     checkLogin = runExceptT $ do
       Entity userId user <- getUser
@@ -122,7 +123,7 @@ handleAuthLogin (LoginData userName pwd) =
         create session $> session
 
 handleAuthLogout :: MonadHexl m => SessionData -> m ()
-handleAuthLogout userId =
+handleAuthLogout (UserInfo userId _ _) =
   getOneByQuery [ "userId" =: userId ] >>= \case
     Left  msg -> throwError $ ErrBug msg
     Right (Entity sessionId _) -> delete (sessionId :: Id Session)
@@ -134,8 +135,8 @@ handleAuthSignup (SignupData userName pwd) =
     Left _  -> do
       _ <- create . User userName =<< mkPwHash pwd
       handleAuthLogin (LoginData userName pwd) >>= \case
-        LoginSuccess key -> pure $ SignupSuccess key
-        LoginFailed  msg -> throwError $ ErrBug $ "signed up, but login failed: " <> msg
+        LoginSuccess userInfo -> pure $ SignupSuccess userInfo
+        LoginFailed  msg      -> throwError $ ErrBug $ "signed up, but login failed: " <> msg
 
 -- Project
 
@@ -151,7 +152,6 @@ handleProjectSetName _ projectId name = do
   project <- getById' projectId
   let updatedProject = project & projectName .~ name
   update projectId $ const updatedProject
-
 
 handleProjectDelete :: MonadHexl m => SessionData -> Id Project -> m ()
 handleProjectDelete sessionData projectId = do

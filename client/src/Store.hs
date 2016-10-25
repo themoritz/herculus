@@ -9,9 +9,9 @@ import           Control.Monad             (when)
 import           Data.Foldable             (foldl', for_)
 import           Data.Map.Strict           (Map)
 import qualified Data.Map.Strict           as Map
+import           Data.Maybe                (isJust)
 import           Data.Monoid               ((<>))
 import           Data.Proxy
-import           Data.Text                 (Text)
 import qualified Data.Text                 as Text
 import           React.Flux
 import           React.Flux.Addons.Servant (HandleResponse, request)
@@ -20,7 +20,8 @@ import           WebSocket
 import qualified Lib.Api.Rest              as Api
 import           Lib.Api.WebSocket         (WsDownMessage (..))
 import           Lib.Model
-import           Lib.Model.Auth            (LoginResponse (..), SessionKey)
+import           Lib.Model.Auth            (LoginResponse (..), SessionKey,
+                                            UserInfo (UserInfo))
 import           Lib.Model.Cell            (Aspects (..), Cell (..),
                                             CellContent (..))
 import           Lib.Model.Column          (Column, columnTableId)
@@ -46,6 +47,7 @@ data CellInfo = CellInfo
 data State = State
   -- global
   { _stateMessage      :: Message.State
+  , _stateUserInfo     :: Maybe UserInfo
   , _stateCacheRecords :: Map (Id Table) RecordCache.State
   , _stateSessionKey   :: Maybe SessionKey
   , _stateWebSocket    :: Maybe JSWebSocket
@@ -69,18 +71,19 @@ makeLenses ''State
 
 store :: ReactStore State
 store = mkStore State
-  { _stateMessage = Nothing
+  { _stateMessage      = Nothing
+  , _stateUserInfo     = Nothing
   , _stateCacheRecords = Map.empty
-  , _stateSessionKey = Nothing
-  , _stateWebSocket = Nothing
-  , _stateProjectId = Nothing
-  , _stateTableId = Nothing
-  , _stateColumns = Map.empty
-  , _stateProjects = Map.empty
-  , _stateTables = Map.empty
-  , _stateCells = Map.empty
-  , _stateRecords = Map.empty
-  , _stateTableCache = Map.empty
+  , _stateSessionKey   = Nothing
+  , _stateWebSocket    = Nothing
+  , _stateProjectId    = Nothing
+  , _stateTableId      = Nothing
+  , _stateColumns      = Map.empty
+  , _stateProjects     = Map.empty
+  , _stateTables       = Map.empty
+  , _stateCells        = Map.empty
+  , _stateRecords      = Map.empty
+  , _stateTableCache   = Map.empty
   }
 
 instance StoreData State where
@@ -96,9 +99,11 @@ instance StoreData State where
           WsDownColumnsChanged cs     -> pure $ dispatch $ TableUpdateColumns cs
           WsDownRecordCreated t r dat -> pure $ dispatch $ RecordCacheAction t $ RecordCache.Add r dat
           WsDownRecordDeleted t r     -> pure $ dispatch $ RecordCacheAction t $ RecordCache.Delete r
-        request api (Proxy :: Proxy Api.ProjectList)
-          (session $ st ^. stateSessionKey) $ mkCallback $
-            \projects -> [ProjectsSet projects]
+        -- TODO: session key mechanism: get session key from somewhere
+        when (isJust $ st ^. stateSessionKey) $
+          request api (Proxy :: Proxy Api.ProjectList)
+            (session $ st ^. stateSessionKey) $ mkCallback $
+              \projects -> [ProjectsSet projects]
         pure $ st & stateWebSocket .~ Just ws
 
       GlobalSendWebSocket msg -> do
@@ -111,24 +116,22 @@ instance StoreData State where
 
       Login loginData -> do
         request api (Proxy :: Proxy Api.AuthLogin) loginData $ mkCallback $ \case
-          LoginSuccess sessionKey -> [ LoggedIn sessionKey
-                                     , MessageAction Message.SetSuccess "Successfully logged in."
-                                     ]
+          LoginSuccess userInfo -> [ LoggedIn userInfo
+                                   , MessageAction $ Message.SetSuccess "Successfully logged in."
+                                   ]
           LoginFailed txt -> [MessageAction $ Message.SetWarning txt]
         pure st
 
-      LoggedIn sKey -> pure $
-        st & stateSessionKey .~ Just sKey
+      LoggedIn userInfo@(UserInfo _ _ sKey) -> do
+        request api (Proxy :: Proxy Api.ProjectList)
+            (session $ Just sKey) $ mkCallback $ \projects -> [ProjectsSet projects]
+        pure $ st & stateSessionKey .~ Just sKey
+                  & stateUserInfo   .~ Just userInfo
 
       Logout -> do
         request api (Proxy :: Proxy Api.AuthLogout)
                     (session $ st ^. stateSessionKey) $ mkCallback $
-                    const [ LoggedOut
-                          , MessageAction Message.Unset
-                          ]
-        pure st
-
-      LoggedOut ->
+                    const [MessageAction Message.Unset]
         pure $ st & stateSessionKey .~ Nothing
 
       -- Cache
@@ -222,7 +225,9 @@ instance StoreData State where
       TablesLoadTable i -> do
         request api (Proxy :: Proxy Api.TableGetWhole)
                     (session $ st ^. stateSessionKey) i $ mkCallback $
-                    \table -> [TableSet table]
+                    \table -> [ TableSet table
+                              , MessageAction Message.Unset
+                              ]
         pure $ st & stateTableId .~ Just i
 
       -- Table
@@ -349,9 +354,9 @@ dispatch a = [SomeStoreAction store a]
 mkCallback :: (a -> [Action])
            -> HandleResponse a
 mkCallback cbSuccess = pure . \case
-  Left (403, e) -> dispatch $ MessageAction $ Message.SetWarning $
-                    "Forbidden. Are you logged in?" <>
-                    "(403) " <> Text.pack e
+  Left (401, e) -> dispatch $ MessageAction $ Message.SetWarning $
+                    "Unauthorized. Are you logged in?" <>
+                    " (401) " <> Text.pack e
   Left (n, e)   -> dispatch $ MessageAction $ Message.SetError $
-                    "(" <> (Text.pack . show) n <> ") " <> Text.pack e
+                    " (" <> (Text.pack . show) n <> ") " <> Text.pack e
   Right x       -> SomeStoreAction store <$> cbSuccess x

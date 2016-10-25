@@ -32,8 +32,9 @@ import           Lib.Api.Rest                     (SessionData, SessionProtect,
                                                    sessionParamStr)
 import           Lib.Model                        (Entity (..))
 import           Lib.Model.Auth                   (Session (..), SessionKey,
-                                                   User, sessionExpDate,
-                                                   sessionUserId)
+                                                   User, UserInfo (UserInfo),
+                                                   sessionExpDate,
+                                                   sessionUserId, userName)
 import           Lib.Types                        (Id, Time (Time), addSeconds)
 import           Lib.Util.Base64                  (mkBase64, toBase64)
 import           Monads                           (AppError (..), HexlEnv,
@@ -72,7 +73,7 @@ prolongSession session = do
 -- handling auth middleware
 
 lookUpSession :: (MonadIO m, MonadDB m)
-              => SessionKey -> m (Either Text (Id User))
+              => SessionKey -> m (Either Text UserInfo)
 lookUpSession sessionKey =
     getOneByQuery [ "sessionKey" =: sessionKey]
         >>= either (pure . Left) getUserId
@@ -83,15 +84,17 @@ lookUpSession sessionKey =
         then delete sessionId $> Left "session expired"
         else do session' <- prolongSession session
                 update sessionId (\_ -> session')
-                pure $ Right (session' ^. sessionUserId)
+                let userId = session' ^. sessionUserId
+                user <- getById' userId
+                pure $ Right $ UserInfo userId (user ^. userName) sessionKey
 
 authHandler :: HexlEnv -> AuthMiddleware
 authHandler env = mkAuthHandler $ hexlToServant env $ \request -> do
     let mSessionHeader =        List.lookup sessionParam     (requestHeaders request)
         mSessionQuery  = join $ List.lookup sessionParamBStr (queryString    request)
     case mSessionHeader <|> mSessionQuery of
-      Nothing -> throwError $ ErrUnauthorized $ "Missing session parameter " <> sessionParamStr
+      Nothing -> throwError $ ErrForbidden $ "Missing session parameter " <> sessionParamStr
       Just bs -> case toBase64 bs of
-        Left  err -> throwError $ ErrForbidden err
+        Left  err -> throwError $ ErrUnauthorized err
         Right key -> lookUpSession key
-                       >>= either (throwError . ErrForbidden) pure
+                       >>= either (throwError . ErrUnauthorized) pure

@@ -19,7 +19,7 @@ import           Lib.Api.Rest.Report
 import           Lib.Model
 import           Lib.Model.Auth                (LoginData, LoginResponse,
                                                 SessionKey, SignupData,
-                                                SignupResponse, User)
+                                                SignupResponse, UserInfo)
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Project
@@ -64,7 +64,7 @@ type Routes =
  :<|> CellGetReportPlain
 
 type SessionProtect = AuthProtect "cookie-auth"
-type SessionData = Id User
+type SessionData = UserInfo
 
 sessionParam :: HeaderName
 sessionParam = "servant-auth-cookie"
