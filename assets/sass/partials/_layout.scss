@@ -160,32 +160,47 @@
 
 .message {
   position: absolute;
-  top: $menubar-height;
-  left: 0px;
-  right: 0px;
-  height: 50px;
-  background-color: $anthrazit;
-  .wrapper {
+  top: $menubar-height + 10px;
+  right: 10px;
+  $message-box-width: 200px;
+  $message-box-padding: 5px;
+  width: $message-box-width;
+  padding: $message-box-padding;
+  color: white;
+  .header {
     display: table;
-    .symbol {
-      width: 30px;
+    .title {
       display: table-cell;
-      .info {
-        color: blue;
+      .symbol {
+        padding: 8px;
       }
-      .success {
-        color: green;
-      }
-      .warning {
-        color: orange;
-      }
-      .error {
-        color: red;
+      font-weight: bold;
+      font-size: larger;
+      width: $message-box-width - 2 * $message-box-padding - 10px;
+    }
+    .button {
+      display: table-cell;
+      vertical-align: top;
+      button {
+        color: white;
+        &:hover {
+          color: black;
+        }
       }
     }
   }
   .content {
-    color: white;
-    display: table-cell;
   }
+}
+.message.info {
+  background-color: blue;
+}
+.message.success {
+  background-color: green;
+}
+.message.warning {
+  background-color: orange;
+}
+.message.error {
+  background-color: red;
 }

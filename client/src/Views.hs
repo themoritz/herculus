@@ -8,6 +8,7 @@ import           Control.Lens        hiding (view)
 import           Data.Foldable       (for_)
 import           Data.Map.Strict     (Map)
 import qualified Data.Map.Strict     as Map
+import           Data.Monoid         ((<>))
 import           Data.Text           (Text)
 import qualified Data.Text           as Text
 import           GHC.Generics        (Generic)
@@ -45,26 +46,31 @@ appHeader :: ReactView State
 appHeader = defineView "header" $ \st ->
   cldiv_ "menubar" $ do
     cldiv_ "logo" "Herculus"
-    case st ^. stateSessionKey of
-      Nothing -> pure ()
-      Just _ -> projects_ (st ^. stateProjects) (st ^. stateProjectId)
-    case st ^. stateSessionKey of
-      Nothing -> pure ()
-      Just _ -> case st ^. stateProjectId of
-                  Nothing -> pure ()
-                  Just prjId -> tables_ (st ^. stateTables) (st ^. stateTableId) prjId
+    for_ (st ^. stateSessionKey) $ \_ -> do
+      projects_ (st ^. stateProjects) (st ^. stateProjectId)
+      for_ (st ^. stateProjectId) $ \prjId ->
+        tables_ (st ^. stateTables) (st ^. stateTableId) prjId
 
 message_ :: Message -> ReactElementM eh ()
 message_ !msg = view message msg mempty
 
 message :: ReactView Message
-message = defineView "message" $ \(Message content typ) -> cldiv_ "message" $ cldiv_ "wrapper" $ do
-  cldiv_ "symbol" $ case typ of
-    Message.Info    -> clspan_ "info"    $ faIcon_ "exclamation-circle"
-    Message.Success -> clspan_ "success" $ faIcon_ "check-circle-o"
-    Message.Warning -> clspan_ "warning" $ faIcon_ "exclamation-triangle"
-    Message.Error   -> clspan_ "error"   $ faIcon_ "times-circle-o"
-  cldiv_ "content" $ elemText content
+message = defineView "message" $ \(Message content typ) ->
+  let (cls, icon, txt) = case typ of
+        Message.Info    -> ("info"   , "exclamation-circle"  , "Information")
+        Message.Success -> ("success", "check-circle-o"      , "Success"    )
+        Message.Warning -> ("warning", "exclamation-triangle", "Warning"    )
+        Message.Error   -> ("error"  , "times-circle-o"      , "Error"      )
+  in  cldiv_ ("message " <> cls) $ do
+        cldiv_ "header" $ do
+          cldiv_ "title" $ do
+            clspan_ "symbol" $ faIcon_ icon
+            txt
+          cldiv_ "button" $ button_
+            [ "className" $= "pure"
+            , onClick $ \_ _ -> dispatch $ MessageAction Message.Unset
+            ] $ faIcon_ "times"
+        cldiv_ "content" $ elemText content
 
 appFooter_ :: State -> ReactElementM eh ()
 appFooter_ !st = view appFooter st mempty

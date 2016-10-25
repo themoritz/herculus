@@ -23,7 +23,8 @@ import qualified Config
 import           Lib.Api.Rest                   as Api
 import           Lib.Api.WebSocket              (WsUpMessage)
 import           Lib.Model                      (Entity)
-import           Lib.Model.Auth                 (LoginData, SessionKey)
+import           Lib.Model.Auth                 (LoginData, SessionKey,
+                                                 UserInfo)
 import           Lib.Model.Cell                 (Cell, CellContent, Value)
 import           Lib.Model.Column               (Column)
 import           Lib.Model.Project              (Project)
@@ -60,9 +61,8 @@ data Action
   | GlobalSendWebSocket WsUpMessage
   -- Session
   | Login LoginData
-  | LoggedIn SessionKey
+  | LoggedIn UserInfo
   | Logout
-  | LoggedOut
 
   | RecordCacheAction (Id Table) RecordCache.Action
   -- Projects
