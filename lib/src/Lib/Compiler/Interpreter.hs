@@ -62,6 +62,18 @@ prelude = Map.fromList
   , ( "not"
     , RPrelude $ \_ (RValue (VBool b)) -> pure $ RValue $ VBool $ not b
     )
+  , ( "*"
+    , RPrelude $ \_ (RValue (VNumber a)) -> pure $ RPrelude $ \_ (RValue (VNumber b)) ->
+        pure $ RValue $ VNumber $ a * b
+    )
+  , ( "+"
+    , RPrelude $ \_ (RValue (VNumber a)) -> pure $ RPrelude $ \_ (RValue (VNumber b)) ->
+        pure $ RValue $ VNumber $ a + b
+    )
+  , ( "-"
+    , RPrelude $ \_ (RValue (VNumber a)) -> pure $ RPrelude $ \_ (RValue (VNumber b)) ->
+        pure $ RValue $ VNumber $ a - b
+    )
   -- Class show
   , classFunction "show"
   , ( "$ShowNumber"

@@ -1,9 +1,11 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric  #-}
+{-# LANGUAGE FlexibleContexts  #-}
 
 module Lib.Template.Types where
 
 import           Control.DeepSeq
+import Control.Monad.Except
 
 import           Data.Aeson
 import           Data.Monoid
@@ -25,6 +27,14 @@ data PTplExpr
   | PTplIf PExpr PTemplate PTemplate
   | PTplShow PExpr
   deriving (Show)
+
+newtype TTemplate = TTemplate [TTplExpr]
+
+data TTplExpr
+  = TTplText Text
+  | TTplFor Name TExpr TTemplate
+  | TTplIf TExpr TTemplate TTemplate
+  | TTplShow TExpr
 
 newtype CTemplate = CTemplate [CTplExpr]
   deriving (Eq, Show, Generic, NFData)
@@ -51,3 +61,12 @@ collectTplDependencies = go
           CTplFor _ e body -> collectDependencies e <> go body
           CTplIf e then' else' -> collectDependencies e <> go then' <> go else'
           CTplShow e -> collectDependencies e
+
+toCoreTpl :: MonadError TypeError m => TTemplate -> m CTemplate
+toCoreTpl (TTemplate tpls) = CTemplate <$> mapM toCore tpls
+  where
+    toCore = \case
+      TTplText t -> pure $ CTplText t
+      TTplFor x e tpl -> CTplFor x <$> toCoreExpr e <*> toCoreTpl tpl
+      TTplIf c t e -> CTplIf <$> toCoreExpr c <*> toCoreTpl t <*> toCoreTpl e
+      TTplShow e -> CTplShow <$> toCoreExpr e

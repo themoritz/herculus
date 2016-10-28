@@ -14,30 +14,44 @@ import           Lib.Template.Types
 
 runInferTpl :: Monad m => TypecheckEnv m -> PTemplate -> m (Either TypeError CTemplate)
 runInferTpl env tpl =
-  runExceptT $ evalStateT (runReaderT (unInferT $ inferTpl tpl) env) newInferState
+  let action = do
+        loadPrelude
+        ttpl <- inferTpl tpl
+        ttpl' <- tplReplaceTypeClassDicts ttpl
+        toCoreTpl ttpl'
+  in runExceptT $ evalStateT (runReaderT (unInferT action) env) newInferState
 
-inferTpl :: Monad m => PTemplate -> InferT m CTemplate
-inferTpl (PTemplate tpl) = CTemplate <$> traverse inferTplExpr tpl
+inferTpl :: Monad m => PTemplate -> InferT m TTemplate
+inferTpl (PTemplate tpl) = TTemplate <$> traverse inferTplExpr tpl
 
-inferTplExpr :: Monad m => PTplExpr -> InferT m CTplExpr
+inferTplExpr :: Monad m => PTplExpr -> InferT m TTplExpr
 inferTplExpr expr = case expr of
-  PTplText t -> pure $ CTplText t
+  PTplText t -> pure $ TTplText t
   PTplFor x e tpl -> do
-    (e', ePoint) <- inferAndDesugar e
+    e' ::: (_, ePoint) <- infer e
     xPoint <- freshPoint
     tpl' <- inLocalContext (x, ForAll [] [] xPoint) $ inferTpl tpl
     listPoint <- mkList xPoint
     unify ePoint listPoint
-    pure $ CTplFor x e' tpl'
+    pure $ TTplFor x e' tpl'
   PTplIf cond thenTpl elseTpl -> do
-    (cond', condPoint) <- inferAndDesugar cond
+    cond' ::: (_, condPoint) <- infer cond
     thenTpl' <- inferTpl thenTpl
     elseTpl' <- inferTpl elseTpl
     boolPoint <- mkPoint tyBool
     unify condPoint boolPoint
-    pure $ CTplIf cond' thenTpl' elseTpl'
+    pure $ TTplIf cond' thenTpl' elseTpl'
   PTplShow e -> do
-    (e', ePoint) <- inferAndDesugar e
+    e' ::: (_, ePoint) <- infer e
     strPoint <- mkPoint tyString
     unify ePoint strPoint
-    pure $ CTplShow e'
+    pure $ TTplShow e'
+
+tplReplaceTypeClassDicts :: Monad m => TTemplate -> InferT m TTemplate
+tplReplaceTypeClassDicts (TTemplate tpl) = TTemplate <$> mapM replace tpl
+  where
+    replace = \case
+      TTplText t -> pure $ TTplText t
+      TTplFor x e t -> TTplFor x <$> replaceTypeClassDicts e <*> tplReplaceTypeClassDicts t
+      TTplIf c t e -> TTplIf <$> replaceTypeClassDicts c <*> tplReplaceTypeClassDicts t <*> tplReplaceTypeClassDicts e
+      TTplShow e -> TTplShow <$> replaceTypeClassDicts e

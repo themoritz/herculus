@@ -490,11 +490,11 @@ compileColumn c = do
       res <- compile (dataCol ^. dataColSourceCode) (mkTypecheckEnv $ col ^. columnTableId)
       compileResult <- case res of
         Left msg -> abort msg
-        Right (expr, polyType) -> do
+        Right (expr, inferredType) -> do
           colType <- typeOfDataType getTableRows (dataCol ^. dataColType)
-          if polyType /= ForAll [] [] colType
+          if inferredType /= colType
             then abort $ pack $
-                   "Inferred type `" <> show polyType <>
+                   "Inferred type `" <> show inferredType <>
                    "` does not match column type `" <>
                    show colType <> "`."
             else do

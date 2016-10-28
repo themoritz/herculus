@@ -18,7 +18,7 @@ import           Lib.Compiler.Typechecker.Types
 import           Lib.Compiler.Typechecker.Prim
 
 compile :: Monad m => Text -> TypecheckEnv m
-        -> m (Either Text (CExpr, PolyType Type))
+        -> m (Either Text (CExpr, Type))
 compile inp env = case parseExpr inp of
   Left e -> pure $ Left e
   Right e' -> runInfer env e'

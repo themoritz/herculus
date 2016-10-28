@@ -7,7 +7,7 @@
 module Lib.Compiler.Typechecker
   ( runInfer
   , infer
-  , inferAndDesugar
+  , replaceTypeClassDicts
   , unify
   , newInferState
   , Type (..)
@@ -40,14 +40,13 @@ newInferState = InferState
   , _inferPointSupply = UF.newPointSupply
   }
 
-runInfer :: Monad m => TypecheckEnv m -> PExpr -> m (Either TypeError (CExpr, PolyType Type))
+runInfer :: Monad m => TypecheckEnv m -> PExpr -> m (Either TypeError (CExpr, Type))
 runInfer env expr =
   let action = do
         loadPrelude
-        (e, deferred, poly) <- inferAndGeneralize expr
-        t <- polyFromPoint poly
-        debugTExpr e
-        e' <- replaceTypeClassDicts (TWithPredicates deferred e)
+        e ::: (_, poly) <- infer expr
+        t <- pointToType poly
+        e' <- replaceTypeClassDicts e
         debugTExpr e'
         c <- toCoreExpr e'
         pure (c, t)
@@ -73,8 +72,9 @@ replaceTypeClassDicts expr = case expr of
   TTypeClassDict predicate -> lookupInstanceDict predicate >>= \case
     Just n -> pure $ TVar n
     Nothing -> do
-      typePred <- predicateFromPoint predicate
-      throwError $ "no instance dictionary found: " <> (pack . show) typePred
+      IsIn cls typ <- predicateFromPoint predicate
+      throwError $ "Type `" <> (pack . show) typ <> "` does not implement the `"
+                            <> (pack . show) cls <> "` interface."
   TColumnRef r -> pure $ TColumnRef r
   TWholeColumnRef r -> pure $ TWholeColumnRef r
   TTableRef t c -> pure $ TTableRef t c
@@ -85,11 +85,6 @@ inferAndGeneralize e = do
   (deferred, poly@(ForAll _ retained _)) <- generalize ePreds ePoint
   let e'' = TWithPredicates retained e'
   pure (e'', deferred, poly)
-
-inferAndDesugar :: Monad m => PExpr -> InferT m (CExpr, Point)
-inferAndDesugar e = do
-  e' ::: (_, point) <- infer e
-  (,point) <$> toCoreExpr e'
 
 infer :: Monad m => PExpr -> InferT m TypedExpr
 infer expr = case expr of
@@ -163,7 +158,7 @@ infer expr = case expr of
       Nothing -> throwError $ pack $ "Table not found: " <> show tblRef
       Just (i, cols) -> do
         getRows <- asks envGetTableRows
-        tblRows <- (lift $ getRows i) >>= typeToPoint
+        tblRows <- (lift $ getRows i) >>= typeToPoint . Type . TyRecord
         listPoint <- mkList tblRows
         pure $ TTableRef i (map fst cols) ::: ([], listPoint)
 

@@ -62,6 +62,7 @@ deriving instance Ord (MonoType Type)
 
 instance Eq (MonoType Type) where
   TyVar a == TyVar b = a == b
+  TyConst a == TyConst b = a == b
   TyApp c1 a1 == TyApp c2 a2 = c1 == c2 && a1 == a2
   TyRecord (Type s) == TyRecord (Type t) = rowMap s == rowMap t
     where rowMap :: MonoType Type -> Map (Ref Column) (MonoType Type)
@@ -97,10 +98,10 @@ instance Show Kind where
   show (KindFun arg res) = "(" <> show arg <> " -> " <> show res <> ")"
 
 instance Show TypeVar where
-  show (TypeVar a _) = show a
+  show (TypeVar a k) = show a -- <> " : " <> show k
 
 instance Show TypeConst where
-  show (TypeConst n _) = unpack n
+  show (TypeConst n k) = unpack n -- <> " : " <> show k
 
 instance Show ClassName where
   show (ClassName name) = unpack name
