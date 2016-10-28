@@ -1,3 +1,4 @@
+# Needed to fix: https://github.com/NixOS/cabal2nix/issues/248
 { mkDerivation, aeson, base, bytestring, deepseq, ghcjs-base, mtl, stdenv
 , template-haskell, text, time, unordered-containers
 }:
