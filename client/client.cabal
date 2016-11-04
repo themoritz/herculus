@@ -47,7 +47,7 @@ executable client
                      , ghcjs-base
                      , http-api-data
                      , lens
-                     , lib
+                     , herculus-lib
                      , mtl
                      , react-flux
                      , react-flux-servant

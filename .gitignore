@@ -1,6 +1,12 @@
 client/.stack-work/
+client/result
+client/dist
 server/.stack-work/
+server/result
+server/dist
 lib/.stack-work/
+lib/result
+lib/dist
 assets/public/js/
 assets/public/css/
 assets/public/*.woff*

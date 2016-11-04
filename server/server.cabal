@@ -35,7 +35,7 @@ library
                      , filepath
                      , interpolatedstring-perl6
                      , lens
-                     , lib
+                     , herculus-lib
                      , monad-control
                      , monad-logger
                      , mongoDB
@@ -68,7 +68,7 @@ executable server-exe
                      , base
                      , bytestring
                      , either
-                     , lib
+                     , herculus-lib
                      , mongoDB
                      , mtl
                      , servant
