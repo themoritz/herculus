@@ -33,7 +33,7 @@ import qualified Data.ByteString.Char8       as B8
 import qualified Data.ByteString.Lazy        as BL
 import           Data.Monoid
 import           Data.Proxy
-import           Data.Text
+import           Data.Text                   (Text, pack)
 import           Data.Time.Clock             as Clock (getCurrentTime)
 
 import           Database.MongoDB            ((=:))
@@ -80,6 +80,7 @@ class (Monad m, MonadLogger m, MonadError AppError m) => MonadDB m where
   update :: Model a => Id a -> (a -> a) -> m ()
   updateByQuery' :: Model a => Mongo.Selector -> (a -> a) -> m ()
   upsert :: Model a => Mongo.Selector -> a -> (a -> a) -> m (Maybe (Id a))
+  upsertMany :: Model a => [Entity a] -> m ()
   delete :: Model a => Id a -> m ()
   deleteByQuery :: Model a => Proxy a -> Mongo.Selector -> m ()
   -- Other
@@ -201,6 +202,16 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
     getOneByQuery query >>= \case
       Right (Entity i _) -> update i f *> pure Nothing
       Left _ -> Just <$> create (f new)
+
+  upsertMany :: forall a. Model a => [Entity a] -> HexlT m ()
+  upsertMany entities = do
+    let collection = collectionName (Proxy :: Proxy a)
+        toUpsert (Entity i a) =
+          ( [ "_id" =: toObjectId i ]
+          , toDocument a
+          , [ Mongo.Upsert ]
+          )
+    void $ runMongo $ Mongo.updateMany collection (map toUpsert entities)
 
   delete :: forall a. Model a => Id a -> HexlT m ()
   delete i = deleteByQuery (Proxy :: Proxy a) [ "_id" =: toObjectId i ]

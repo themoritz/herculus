@@ -55,7 +55,7 @@ instance MonadError AppError m => MonadError AppError (PropT m) where
   throwError = lift . throwError
   catchError a h = PropT $ unPropT a `catchError` (unPropT . h)
 
-runPropT :: MonadHexl m => PropT m a -> m (a, [Cell])
+runPropT :: MonadHexl m => PropT m a -> m (a, [Entity Cell])
 runPropT action = runCacheT $ evalStateT (unPropT action) (State Map.empty)
 
 instance MonadHexl m => MonadCache (PropT m) where

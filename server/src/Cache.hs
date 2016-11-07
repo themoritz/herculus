@@ -32,7 +32,7 @@ import           Monads
 
 data Cache = Cache
   { _cacheCell          :: !(Map (Id Column, Id Record) Cell)
-  , _cacheCellsModified :: !(Map (Id Column, Id Record) Cell)
+  , _cacheCellsModified :: !(Map (Id Column, Id Record) (Entity Cell))
   , _cacheColumn        :: !(Map (Id Column) [CellContent])
   , _cacheCompileResult :: !(Map (Id Column) DataCompileResult)
   }
@@ -47,13 +47,13 @@ empty = Cache Map.empty Map.empty Map.empty Map.empty
 storeCell :: Id Column -> Id Record -> Cell -> Cache -> Cache
 storeCell c r v = set (cacheCell . at (c, r)) (Just v)
 
-setCellModified :: Id Column -> Id Record -> Cell -> Cache -> Cache
+setCellModified :: Id Column -> Id Record -> Entity Cell -> Cache -> Cache
 setCellModified c r v = set (cacheCellsModified . at (c, r)) (Just v)
 
 getCell :: Id Column -> Id Record -> Cache -> Maybe Cell
 getCell c r = view (cacheCell . at (c, r))
 
-getCellsModified :: Cache -> [Cell]
+getCellsModified :: Cache -> [Entity Cell]
 getCellsModified = Map.elems . _cacheCellsModified
 
 --
@@ -90,7 +90,7 @@ newtype CacheT m a = CacheT
              , MonadState Cache
              )
 
-runCacheT :: MonadHexl m => CacheT m a -> m (a, [Cell])
+runCacheT :: MonadHexl m => CacheT m a -> m (a, [Entity Cell])
 runCacheT action = do
   (a, st) <- runStateT (unCacheT action) empty
   pure (a, getCellsModified st)
@@ -123,8 +123,7 @@ instance MonadHexl m => MonadCache (CacheT m) where
       , "aspects.recordId" =: toObjectId r
       ]
     let updatedCell = cell { cellContent = content }
-    modify $ storeCell c r updatedCell . setCellModified c r updatedCell
-    lift $ update i $ const updatedCell
+    modify $ storeCell c r updatedCell . setCellModified c r (Entity i updatedCell)
 
   getColumnValues c = do
     results <- gets (getColumn c) >>= \case

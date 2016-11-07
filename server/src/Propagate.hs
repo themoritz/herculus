@@ -17,6 +17,7 @@ import           Data.Traversable
 import           Lib.Api.WebSocket
 import           Lib.Compiler.Interpreter
 import           Lib.Compiler.Interpreter.Types
+import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
@@ -52,7 +53,8 @@ propagate roots = do
         pure $ map fst coords
     order <- lift $ getColumnOrder $ join startCols
     propagate' order
-  sendWS $ WsDownCellsChanged changedCells
+  upsertMany changedCells
+  sendWS $ WsDownCellsChanged (map entityVal changedCells)
 
 propagate' :: forall m. MonadPropagate m => ColumnOrder -> m ()
 propagate' [] = pure ()
