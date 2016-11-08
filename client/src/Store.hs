@@ -9,7 +9,6 @@ import           Control.Monad             (when)
 import           Data.Foldable             (foldl', for_)
 import           Data.Map.Strict           (Map)
 import qualified Data.Map.Strict           as Map
-import           Data.Maybe                (isJust)
 import           Data.Monoid               ((<>))
 import           Data.Proxy
 import qualified Data.Text                 as Text
@@ -45,12 +44,23 @@ data CellInfo = CellInfo
   } deriving (Eq)
 
 data State = State
+  -- session-agnostic state
+  { _stateWebSocket :: Maybe JSWebSocket
+  , _stateMessage   :: Message.State
+  -- session state
+  , _stateSession   :: SessionState
+  }
+
+data SessionState
+  = StateLoggedIn  LoggedInState
+  | StateLoggedOut LoggedOutState
+
+data LoggedInState = LoggedInState
   -- global
-  { _stateMessage      :: Message.State
-  , _stateUserInfo     :: Maybe UserInfo
+  -- TODO: get rid of Maybes
+  { _stateUserInfo     :: UserInfo
   , _stateCacheRecords :: Map (Id Table) RecordCache.State
-  , _stateSessionKey   :: Maybe SessionKey
-  , _stateWebSocket    :: Maybe JSWebSocket
+  , _stateSessionKey   :: SessionKey
   , _stateProjectId    :: Maybe (Id Project)
   , _stateTableId      :: Maybe (Id Table)
 
@@ -67,15 +77,51 @@ data State = State
   , _stateTableCache   :: TableCache
   }
 
-makeLenses ''State
+data LoggedOutState
+  = LoggedOutLoginForm
+  | LoggedOutSignupForm
 
-store :: ReactStore State
-store = mkStore State
-  { _stateMessage      = Nothing
-  , _stateUserInfo     = Nothing
+makeLenses ''State
+makeLenses ''LoggedInState
+makePrisms ''SessionState
+
+-- execute action in case the user is logged in
+forLoggedIn :: State -> (LoggedInState -> IO LoggedInState) -> IO State
+forLoggedIn st action = case st ^. stateSession of
+  StateLoggedIn  liSt -> mkStateLoggedIn st <$> action liSt
+  StateLoggedOut _    -> do
+    -- TODO: proper error message
+    putStrLn "inconsistent client state: unexpected: not logged in"
+    pure st
+
+-- execute action in case the user is logged in
+-- use the state read-only for the action
+forLoggedIn_ :: State -> (LoggedInState -> IO ()) -> IO ()
+forLoggedIn_ st action = case st ^. stateSession of
+  StateLoggedIn  liSt -> action liSt
+  StateLoggedOut _    ->
+    -- TODO: proper error message
+    putStrLn "inconsistent client state: unexpected: not logged in"
+
+-- execute action in case the user is logged in
+-- in this variant, the action takes care of transforming the
+-- LoggedInState to State
+forLoggedIn' :: State -> (LoggedInState -> IO State) -> IO State
+forLoggedIn' st action = case st ^. stateSession of
+  StateLoggedIn  liSt -> action liSt
+  StateLoggedOut _    -> do
+    -- TODO: proper error message
+    putStrLn "inconsistent client state: unexpected: not logged in"
+    pure st
+
+mkStateLoggedIn :: State -> LoggedInState -> State
+mkStateLoggedIn st liSt = st & stateSession .~ StateLoggedIn liSt
+
+initLoggedInState :: SessionKey -> UserInfo -> LoggedInState
+initLoggedInState sKey userInfo = LoggedInState
+  { _stateUserInfo     = userInfo
   , _stateCacheRecords = Map.empty
-  , _stateSessionKey   = Nothing
-  , _stateWebSocket    = Nothing
+  , _stateSessionKey   = sKey
   , _stateProjectId    = Nothing
   , _stateTableId      = Nothing
   , _stateColumns      = Map.empty
@@ -86,6 +132,13 @@ store = mkStore State
   , _stateTableCache   = Map.empty
   }
 
+store :: ReactStore State
+store = mkStore State
+  { _stateWebSocket = Nothing
+  , _stateMessage   = Nothing
+  , _stateSession   = StateLoggedOut LoggedOutLoginForm
+  }
+
 instance StoreData State where
   type StoreAction State = Action
   transform action st = case action of
@@ -94,250 +147,282 @@ instance StoreData State where
         pure $ st & stateMessage .~ Message.runAction a
 
       GlobalInit wsUrl -> do
-        ws <- jsonWebSocketNew wsUrl $ \case
-          WsDownCellsChanged cs       -> pure $ dispatch $ TableUpdateCells cs
-          WsDownColumnsChanged cs     -> pure $ dispatch $ TableUpdateColumns cs
-          WsDownRecordCreated t r dat -> pure $ dispatch $ RecordCacheAction t $ RecordCache.Add r dat
-          WsDownRecordDeleted t r     -> pure $ dispatch $ RecordCacheAction t $ RecordCache.Delete r
-        -- TODO: session key mechanism: get session key from somewhere
-        when (isJust $ st ^. stateSessionKey) $
+        ws <- jsonWebSocketNew wsUrl $ pure . dispatch . \case
+          WsDownCellsChanged cs       -> TableUpdateCells cs
+          WsDownColumnsChanged cs     -> TableUpdateColumns cs
+          WsDownRecordCreated t r dat -> RecordCacheAction t $ RecordCache.Add r dat
+          WsDownRecordDeleted t r     -> RecordCacheAction t $ RecordCache.Delete r
+        forLoggedIn_ st $ \liSt ->
           request api (Proxy :: Proxy Api.ProjectList)
-            (session $ st ^. stateSessionKey) $ mkCallback $
+            (session $ liSt ^. stateSessionKey) $ mkCallback $
               \projects -> [ProjectsSet projects]
         pure $ st & stateWebSocket .~ Just ws
 
       GlobalSendWebSocket msg -> do
-        case st ^. stateWebSocket of
-          Nothing -> pure ()
-          Just ws -> jsonWebSocketSend msg ws
+        for_ (st ^. stateWebSocket) $ \ws -> jsonWebSocketSend msg ws
         pure st
 
       -- Session
 
       Login loginData -> do
         request api (Proxy :: Proxy Api.AuthLogin) loginData $ mkCallback $ \case
-          LoginSuccess userInfo -> [ LoggedIn userInfo
-                                   , MessageAction $ Message.SetSuccess "Successfully logged in."
-                                   ]
-          LoginFailed txt -> [MessageAction $ Message.SetWarning txt]
+          LoginSuccess userInfo ->
+            [ LoggedIn userInfo
+            , MessageAction $ Message.SetSuccess "Successfully logged in."
+            ]
+          LoginFailed txt ->
+            [ MessageAction $ Message.SetWarning txt
+            ]
         pure st
 
       LoggedIn userInfo@(UserInfo _ _ sKey) -> do
         request api (Proxy :: Proxy Api.ProjectList)
-            (session $ Just sKey) $ mkCallback $ \projects -> [ProjectsSet projects]
-        pure $ st & stateSessionKey .~ Just sKey
-                  & stateUserInfo   .~ Just userInfo
+            (session sKey) $ mkCallback $ \projects -> [ProjectsSet projects]
+        pure $ mkStateLoggedIn st $ initLoggedInState sKey userInfo
 
       Logout -> do
-        request api (Proxy :: Proxy Api.AuthLogout)
-                    (session $ st ^. stateSessionKey) $ mkCallback $
-                    const [MessageAction Message.Unset]
-        pure $ st & stateSessionKey .~ Nothing
+        forLoggedIn_ st $ \liSt ->
+          request api (Proxy :: Proxy Api.AuthLogout)
+                      (session $ liSt ^. stateSessionKey) $ mkCallback $
+                      const [MessageAction $ Message.SetSuccess "Successfully logged out."]
+        pure $ st & stateSession .~ StateLoggedOut LoggedOutLoginForm
 
       -- Cache
 
       RecordCacheAction tableId a ->
-        st & stateCacheRecords . at tableId . _Just %%~ \cache ->
-          RecordCache.runAction mkCallback (st ^. stateSessionKey) tableId a cache
+        forLoggedIn st $ \liSt ->
+          liSt & stateCacheRecords . at tableId . _Just %%~ \cache ->
+            RecordCache.runAction mkCallback (liSt ^. stateSessionKey) tableId a cache
 
       -- Column
 
       ColumnAction columnId a ->
-        st & stateColumns . at columnId . _Just %%~ \col ->
-          Column.runAction mkCallback (st ^. stateSessionKey) columnId a col
+        forLoggedIn st $ \liSt ->
+          liSt & stateColumns . at columnId . _Just %%~ \col ->
+            Column.runAction mkCallback (liSt ^. stateSessionKey) columnId a col
 
       -- Projects
 
-      ProjectsSet ps -> do
-        _ <- forkIO $ case ps of
-          []             -> pure ()
-          Entity i _ : _ -> alterStore store $ ProjectsLoadProject i
-        pure $ st & stateProjects .~ projectsMap
-          where
-            projectsMap = Map.fromList $ map entityToTuple ps
+      ProjectsSet ps ->
+        forLoggedIn st $ \liSt -> do
+          _ <- forkIO $ case ps of
+            []             -> pure ()
+            Entity i _ : _ -> alterStore store $ ProjectsLoadProject i
+          pure $ liSt & stateProjects .~ projectsMap
+            where
+              projectsMap = Map.fromList $ map entityToTuple ps
 
       ProjectsCreate project -> do
-        request api (Proxy :: Proxy Api.ProjectCreate)
-                (session $ st ^. stateSessionKey)
-                project $ mkCallback $
-          \projectId -> [ProjectsAdd $ Entity projectId project]
+        forLoggedIn_ st $ \liSt ->
+          request api (Proxy :: Proxy Api.ProjectCreate)
+                  (session $ liSt ^. stateSessionKey)
+                  project $ mkCallback $
+            \projectId -> [ProjectsAdd $ Entity projectId project]
         pure st
 
-      ProjectsAdd (Entity i p) -> pure $
-        st & stateProjects . at i .~ Just p
+      ProjectsAdd (Entity i p) ->
+        forLoggedIn st $ \liSt ->
+          pure $ liSt & stateProjects . at i .~ Just p
 
-      ProjectsLoadProject i -> do
-        request api (Proxy :: Proxy Api.TableList)
-                    (session $ st ^. stateSessionKey) i $ mkCallback $
-                    \tables -> [TablesSet tables]
-        pure $ st & stateProjectId .~ Just i
+      ProjectsLoadProject i ->
+        forLoggedIn st $ \liSt -> do
+          request api (Proxy :: Proxy Api.TableList)
+                      (session $ liSt ^. stateSessionKey) i $ mkCallback $
+                      \tables -> [TablesSet tables]
+          pure $ liSt & stateProjectId .~ Just i
 
       -- Project
 
-      ProjectSetName i name -> do
-        request api (Proxy :: Proxy Api.ProjectSetName)
-                    (session $ st ^. stateSessionKey)
-                    i name $ mkCallback $ const []
-        pure $ st & stateProjects . at i . _Just . projectName .~ name
+      ProjectSetName i name ->
+        forLoggedIn st $ \liSt -> do
+          request api (Proxy :: Proxy Api.ProjectSetName)
+                      (session $ liSt ^. stateSessionKey)
+                      i name $ mkCallback $ const []
+          pure $ liSt & stateProjects . at i . _Just . projectName .~ name
 
-      ProjectDelete projectId -> do
-        request api (Proxy :: Proxy Api.ProjectDelete)
-                    (session $ st ^. stateSessionKey) projectId $ mkCallback $
-                    const []
+      ProjectDelete projectId ->
+        forLoggedIn' st $ \liSt -> do
+          request api (Proxy :: Proxy Api.ProjectDelete)
+                      (session $ liSt ^. stateSessionKey) projectId $ mkCallback $
+                      const []
 
-        if st ^. stateProjectId == Just projectId
-          then do
-            let nextProject = Map.lookupLT projectId (st ^. stateProjects)
-                        <|> Map.lookupGT projectId (st ^. stateProjects)
-                st' = st & stateProjects %~ Map.delete projectId
-                         & stateTables %~ Map.filter (\table -> (table ^. tableProjectId) /= projectId)
-                         & stateColumns .~ Map.empty
-                         & stateCells .~ Map.empty
-                         & stateRecords .~ Map.empty
-                         & stateTableId .~ Nothing
-                         & stateProjectId .~ (fst <$> nextProject)
-            case nextProject of
-              Just (nextProjectId, _) -> React.Flux.transform (ProjectsLoadProject nextProjectId) st'
-              Nothing -> pure st'
-          else
-            pure $ st & stateProjects %~ Map.delete projectId
+          if liSt ^. stateProjectId == Just projectId
+            then do
+              let nextProject = Map.lookupLT projectId (liSt ^. stateProjects)
+                          <|> Map.lookupGT projectId (liSt ^. stateProjects)
+                  liSt' = liSt & stateProjects %~ Map.delete projectId
+                               & stateTables %~ Map.filter (\table -> (table ^. tableProjectId) /= projectId)
+                               & stateColumns .~ Map.empty
+                               & stateCells .~ Map.empty
+                               & stateRecords .~ Map.empty
+                               & stateTableId .~ Nothing
+                               & stateProjectId .~ (fst <$> nextProject)
+                  st' = mkStateLoggedIn st liSt'
+              case nextProject of
+                Just (nextProjectId, _) ->
+                  React.Flux.transform (ProjectsLoadProject nextProjectId) st'
+                Nothing ->
+                  pure st'
+            else
+              pure $ mkStateLoggedIn st $
+                liSt & stateProjects %~ Map.delete projectId
 
       -- Tables
 
-      TablesSet ts -> do
-        _ <- forkIO $ case ts of
-          []             -> pure ()
-          Entity i _ : _ -> alterStore store $ TablesLoadTable i
-        pure $ st & stateTables .~ tablesMap
-          where
-            tablesMap = Map.fromList $ map entityToTuple ts
+      TablesSet ts ->
+        forLoggedIn st $ \liSt -> do
+          _ <- forkIO $ case ts of
+            []             -> pure ()
+            Entity i _ : _ -> alterStore store $ TablesLoadTable i
+          pure $ liSt & stateTables .~ tablesMap
+            where
+              tablesMap = Map.fromList $ map entityToTuple ts
 
       TablesCreate table -> do
-        request api (Proxy :: Proxy Api.TableCreate)
-                    (session $ st ^. stateSessionKey)
-                    table $ mkCallback $
-                    \tableId -> [TablesAdd $ Entity tableId table]
+        forLoggedIn_ st $ \liSt ->
+          request api (Proxy :: Proxy Api.TableCreate)
+                      (session $ liSt ^. stateSessionKey)
+                      table $ mkCallback $
+                      \tableId -> [TablesAdd $ Entity tableId table]
         pure st
 
-      TablesAdd (Entity i t) -> pure $
-        st & stateTables . at i .~ Just t
+      TablesAdd (Entity i t) ->
+        forLoggedIn st $ \liSt ->
+          pure $ liSt & stateTables . at i .~ Just t
 
-      TablesLoadTable i -> do
-        request api (Proxy :: Proxy Api.TableGetWhole)
-                    (session $ st ^. stateSessionKey) i $ mkCallback $
-                    \table -> [ TableSet table
-                              , MessageAction Message.Unset
-                              ]
-        pure $ st & stateTableId .~ Just i
+      TablesLoadTable i ->
+        forLoggedIn st $ \liSt -> do
+          request api (Proxy :: Proxy Api.TableGetWhole)
+                      (session $ liSt ^. stateSessionKey) i $ mkCallback $
+                      \table -> [ TableSet table
+                                , MessageAction Message.Unset
+                                ]
+          pure $ liSt & stateTableId .~ Just i
 
       -- Table
 
-      TableSet (cols, recs, entries) -> pure $
-        st & stateColumns .~ (Column.mkState <$> Map.fromList (map entityToTuple cols))
-           & stateRecords .~ Map.fromList (map entityToTuple recs)
-           & stateCells   .~ fillEntries entries Map.empty
+      TableSet (cols, recs, entries) ->
+        forLoggedIn st $ \liSt -> pure $
+          liSt & stateColumns .~ (Column.mkState <$> Map.fromList (map entityToTuple cols))
+               & stateRecords .~ Map.fromList (map entityToTuple recs)
+               & stateCells   .~ fillEntries entries Map.empty
 
-      TableUpdateCells cells -> pure $
-        let toEntry (Cell content (Aspects _ c r)) = (c, r, content)
-            setRecordInCache st'' (Cell content (Aspects t c r)) =
-              st'' & stateCacheRecords . at t . _Just
-                   . RecordCache.recordCache . at r . _Just . at c . _Just . _2 .~ content
-            st' = foldl' setRecordInCache st cells
-        in st' & stateCells %~ fillEntries (map toEntry cells)
+      TableUpdateCells cells ->
+        forLoggedIn st $ \liSt -> pure $
+          let toEntry (Cell content (Aspects _ c r)) = (c, r, content)
+              setRecordInCache liSt'' (Cell content (Aspects t c r)) =
+                liSt'' & stateCacheRecords . at t . _Just
+                     . RecordCache.recordCache . at r . _Just
+                     . at c . _Just . _2 .~ content
+              liSt' = foldl' setRecordInCache liSt cells
+          in liSt' & stateCells %~ fillEntries (map toEntry cells)
 
       TableUpdateColumns entities ->
-          pure $ st & stateColumns %~ \cols ->
-            foldl' acc cols $ filter tableColumn entities
+          forLoggedIn st $ \liSt ->
+            pure $ liSt & stateColumns %~ \cols ->
+              foldl' acc cols $ filter (tableColumn liSt) entities
         where
-          tableColumn (Entity _ column) =
-            st ^. stateTableId == Just (column ^. columnTableId)
+          tableColumn liSt (Entity _ column) =
+            liSt ^. stateTableId == Just (column ^. columnTableId)
           acc cols' (Entity columnId column) =
             Map.insert columnId (Column.mkState column) cols'
 
       TableAddColumn col -> do
-        request api (Proxy :: Proxy Api.ColumnCreate)
-                    (session $ st ^. stateSessionKey) col $ mkCallback $
-                    \column -> [TableAddColumnDone column]
+        forLoggedIn_ st $ \liSt ->
+          request api (Proxy :: Proxy Api.ColumnCreate)
+                      (session $ liSt ^. stateSessionKey) col $ mkCallback $
+                      \column -> [TableAddColumnDone column]
         pure st
 
-      TableAddColumnDone (Entity i c, cells) -> pure $
-        st & stateColumns %~ Map.insert i (Column.mkState c)
-           & stateCells %~ fillEntries (map toCellUpdate cells)
+      TableAddColumnDone (Entity i c, cells) ->
+        forLoggedIn st $ \liSt -> pure $
+          liSt & stateColumns %~ Map.insert i (Column.mkState c)
+               & stateCells %~ fillEntries (map toCellUpdate cells)
 
-      TableDeleteColumn i -> do
-        request api (Proxy :: Proxy Api.ColumnDelete)
-                    (session $ st ^. stateSessionKey) i $ mkCallback $ const []
-        pure $ st & stateColumns %~ Map.delete i
-                  & stateCells %~ Map.filterWithKey
-                             (\(Coords c _) _ -> c /= i)
+      TableDeleteColumn i ->
+        forLoggedIn st $ \liSt -> do
+          request api (Proxy :: Proxy Api.ColumnDelete)
+                      (session $ liSt ^. stateSessionKey) i $ mkCallback $ const []
+          pure $ liSt & stateColumns %~ Map.delete i
+                      & stateCells %~ Map.filterWithKey (\(Coords c _) _ -> c /= i)
 
       TableAddRecord -> do
-        for_ (st ^. stateTableId) $ \table ->
-          request api (Proxy :: Proxy Api.RecordCreate)
-                      (session $ st ^. stateSessionKey) table $ mkCallback $
-                      \record -> [TableAddRecordDone record]
+        forLoggedIn_ st $ \liSt ->
+          for_ (liSt ^. stateTableId) $ \table ->
+            request api (Proxy :: Proxy Api.RecordCreate)
+                        (session $ liSt ^. stateSessionKey) table $ mkCallback $
+                        \record -> [TableAddRecordDone record]
         pure st
 
-      TableAddRecordDone (Entity i r, cells) -> pure $
-        st & stateRecords %~ Map.insert i r
-           & stateCells %~ fillEntries (map toCellUpdate cells)
+      TableAddRecordDone (Entity i r, cells) ->
+        forLoggedIn st $ \liSt -> pure $
+          liSt & stateRecords %~ Map.insert i r
+               & stateCells %~ fillEntries (map toCellUpdate cells)
 
-      TableDeleteRecord i -> do
-        request api (Proxy :: Proxy Api.RecordDelete)
-                    (session $ st ^. stateSessionKey) i $ mkCallback $ const []
-        pure $ st & stateRecords %~ Map.delete i
-                  & stateCells %~ Map.filterWithKey
-                             (\(Coords _ r) _ -> r /= i)
+      TableDeleteRecord i ->
+        forLoggedIn st $ \liSt -> do
+          request api (Proxy :: Proxy Api.RecordDelete)
+                      (session $ liSt ^. stateSessionKey) i $ mkCallback $ const []
+          pure $ liSt & stateRecords %~ Map.delete i
+                      & stateCells %~ Map.filterWithKey (\(Coords _ r) _ -> r /= i)
 
-      TableSetName i name -> do
-        request api (Proxy :: Proxy Api.TableSetName)
-                    (session $ st ^. stateSessionKey)
-                    i name $ mkCallback $ const []
-        pure $ st & stateTables . at i . _Just . tableName .~ name
+      TableSetName i name ->
+        forLoggedIn st $ \liSt -> do
+          request api (Proxy :: Proxy Api.TableSetName)
+                      (session $ liSt ^. stateSessionKey)
+                      i name $ mkCallback $ const []
+          pure $ liSt & stateTables . at i . _Just . tableName .~ name
 
-      TableDelete tableId -> do
-        request api (Proxy :: Proxy Api.TableDelete)
-                    (session $ st ^. stateSessionKey)
-                    tableId $ mkCallback $ const []
+      TableDelete tableId ->
+        forLoggedIn' st $ \liSt -> do
+          request api (Proxy :: Proxy Api.TableDelete)
+                      (session $ liSt ^. stateSessionKey)
+                      tableId $ mkCallback $ const []
 
-        if st ^. stateTableId == Just tableId
-          then do
-            let nextTable = Map.lookupLT tableId (st ^. stateTables)
-                        <|> Map.lookupGT tableId (st ^. stateTables)
+          if liSt ^. stateTableId == Just tableId
+            then do
+              let nextTable = Map.lookupLT tableId (liSt ^. stateTables)
+                          <|> Map.lookupGT tableId (liSt ^. stateTables)
 
-                st' = st & stateTables %~ Map.delete tableId
-                        & stateColumns .~ Map.empty
-                        & stateCells .~ Map.empty
-                        & stateRecords .~ Map.empty
-                        & stateTableId .~ (fst <$> nextTable)
-
-            case nextTable of
-              Just (nextTableId, _) -> React.Flux.transform (TablesLoadTable nextTableId) st'
-              Nothing -> pure st'
-          else
-            pure $ st & stateTables %~ Map.delete tableId
+                  liSt' = liSt & stateTables %~ Map.delete tableId
+                          & stateColumns .~ Map.empty
+                          & stateCells .~ Map.empty
+                          & stateRecords .~ Map.empty
+                          & stateTableId .~ (fst <$> nextTable)
+                  st' = mkStateLoggedIn st liSt'
+              case nextTable of
+                Just (nextTableId, _) ->
+                  React.Flux.transform (TablesLoadTable nextTableId) st'
+                Nothing -> pure st'
+            else
+              pure $ mkStateLoggedIn st $
+                liSt & stateTables %~ Map.delete tableId
 
       -- Column
 
-      GetTableCache sKey -> do
-          when (Map.null $ st ^. stateTableCache) $
-            request api (Proxy :: Proxy Api.TableListGlobal) (session sKey) $
-                    mkCallback $ \tables -> [SetTableCache $ toTableMap tables]
+      GetTableCache -> do
+          forLoggedIn_ st $ \liSt ->
+            when (Map.null $ liSt ^. stateTableCache) $
+              request api (Proxy :: Proxy Api.TableListGlobal)
+                      (session $ liSt ^. stateSessionKey) $
+                      mkCallback $
+                      \tables -> [SetTableCache $ toTableMap tables]
           pure st
         where
           toTableMap = Map.fromList . map entityToPair
           entityToPair (Entity tableId table) = (tableId, table ^. tableName)
 
       SetTableCache m ->
-        pure $ st & stateTableCache .~ m
+        forLoggedIn st $ \liSt -> pure $ liSt & stateTableCache .~ m
 
       -- Cell
 
-      CellSetValue c r val -> do
-        request api (Proxy :: Proxy Api.CellSet)
-                    (session $ st ^. stateSessionKey) c r val $ mkCallback $
-                    const []
-        pure $ st & stateCells %~ fillEntries [(c, r, CellValue val)]
+      CellSetValue c r val ->
+        forLoggedIn st $ \liSt -> do
+          request api (Proxy :: Proxy Api.CellSet)
+                      (session $ liSt ^. stateSessionKey) c r val $ mkCallback $
+                      const []
+          pure $ liSt & stateCells %~ fillEntries [(c, r, CellValue val)]
 
     where
       fillEntries entries m = foldl' acc m $ map toCoords entries

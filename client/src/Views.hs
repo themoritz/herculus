@@ -32,6 +32,8 @@ import qualified Store.Message       as Message
 app :: ReactView ()
 app = defineControllerView "app" store $ \st () ->
   cldiv_ "container" $ do
+    -- TODO: if logged out: login/sign-up view
+    -- else:
     appHeader_ st
     for_ (st ^. stateMessage) message_
     appContent_ st

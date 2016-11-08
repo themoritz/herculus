@@ -25,8 +25,9 @@ import           Lib.Types
 
 import           Action              (Action (ColumnAction, TableDeleteColumn, GetTableCache),
                                       TableCache)
-import           Store               (dispatch, stateColumns, stateTableCache,
-                                      store)
+import           Store               (dispatch, stateColumns, stateSession,
+                                      stateTableCache, store, _StateLoggedIn)
+import qualified Store
 import           Views.Combinators
 import           Views.Common        (EditBoxProps (..), editBox_)
 import           Views.Foreign
@@ -107,6 +108,11 @@ recordTableId _                = Nothing
 
 --
 
+-- helper lens
+atColumn :: Id Column -> Getting (Maybe State) Store.State (Maybe State)
+atColumn i = stateSession . _StateLoggedIn . stateColumns . at i
+
+
 column_ :: Maybe SessionKey -> Entity Column -> ReactElementM eh ()
 column_ !sKey !c = view column (sKey, c) mempty
 
@@ -169,8 +175,7 @@ columnConfig = defineControllerView "column configuration" store $
       , onClick $ \_ _ ->
           [ SomeStoreAction store $ ColumnAction i $ SetVisibility True ]
       ] ) $ faIcon_ "gear fa-2x"
-    -- TODO: check what this does
-    when (st ^. stateColumns . at i ^? _Just . stVisible == Just True) $
+    when (st ^. atColumn i ^? _Just . stVisible == Just True) $
       case col ^. columnKind of
         ColumnData   dat -> dataColConf_ sKey i dat
         ColumnReport rep -> reportColConf_ i rep
@@ -205,9 +210,9 @@ reportColConf = defineControllerView "report column config" store $
     let mError = case rep ^. reportColCompiledTemplate of
           CompileResultError msg -> Just msg
           _                      -> Nothing
-        lang = join (st ^. stateColumns . at i ^? _Just . stTmpReportLanguage) ?: rep ^. reportColLanguage
-        format = join (st ^. stateColumns . at i ^? _Just . stTmpReportFormat) ?: rep ^. reportColFormat
-        template = join (st ^. stateColumns . at i ^? _Just . stTmpReportTemplate) ?: rep ^. reportColTemplate
+        lang = join (st ^. atColumn i ^? _Just . stTmpReportLanguage) ?: rep ^. reportColLanguage
+        format = join (st ^. atColumn i ^? _Just . stTmpReportFormat) ?: rep ^. reportColFormat
+        template = join (st ^. atColumn i ^? _Just . stTmpReportTemplate) ?: rep ^. reportColTemplate
     cldiv_ "bodyWrapper" $ do
       cldiv_ "body" $ do
         cldiv_ "language" $ selReportLanguage_ i lang
@@ -300,10 +305,11 @@ dataTypeInfo = defineControllerView "datatype info" store $
       DataString   -> "String"
       DataNumber   -> "Number"
       DataTime     -> "Time"
-      DataRecord t -> do onDidMount_ [SomeStoreAction store $ GetTableCache sKey ] mempty
-                         let tblName = Map.lookup t (st ^. stateTableCache)
-                                    ?: "missing table"
-                         elemText $ "Row from " <> tblName
+      DataRecord t -> do
+        onDidMount_ [SomeStoreAction store GetTableCache] mempty
+        let tblName = Map.lookup t (st ^. stateSession . _StateLoggedIn . stateTableCache)
+                        ?: "missing table"
+        elemText $ "Row from " <> tblName
       DataList   d -> do "List ("
                          dataTypeInfo_ sKey d
                          ")"
@@ -320,15 +326,15 @@ dataColConf = defineControllerView "data column configuration" store $
       let mError = case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of
             (Derived, CompileResultError msg) -> Just msg
             _                                 -> Nothing
-          isDerived = join (st ^. stateColumns . at i ^? _Just . stTmpIsFormula)
+          isDerived = join (st ^. atColumn i ^? _Just . stTmpIsFormula)
             ?: dat ^. dataColIsDerived
-          formula = join (st ^. stateColumns . at i ^? _Just . stTmpFormula)
+          formula = join (st ^. atColumn i ^? _Just . stTmpFormula)
             ?: dat ^. dataColSourceCode
-          dt = join (st ^. stateColumns . at i ^? _Just . stTmpDataType)
+          dt = join (st ^. atColumn i ^? _Just . stTmpDataType)
             ?: dat ^. dataColType
       cldiv_ "bodyWrapper" $ cldiv_ "body" $ do
         cldiv_ "datatype" $
-          selDatatype_ sKey i dat (st ^. stateTableCache)
+          selDatatype_ sKey i dat (st ^. stateSession . _StateLoggedIn . stateTableCache)
         cldiv_ "formula" $ do
           checkIsFormula_ i isDerived
           -- input field for formula
@@ -418,7 +424,7 @@ selTable_ !sKey !mTableId !tables !cb = view selTable (sKey, mTableId, tables, c
 
 selTable :: ReactView (Maybe SessionKey, Maybe (Id Table), TableCache, SelTableCallback)
 selTable = defineView "select table" $ \(sKey, mTableId, tables, cb) -> do
-  onDidMount_ [SomeStoreAction store $ GetTableCache sKey] mempty
+  onDidMount_ [SomeStoreAction store GetTableCache] mempty
   select_
     [ "defaultValue" &= fromMaybe "" (show <$> mTableId)
     , onChange $ \evt -> maybe [] cb $ readMaybe $ target evt "value"
