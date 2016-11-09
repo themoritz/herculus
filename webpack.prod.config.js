@@ -9,7 +9,7 @@ config.plugins.push(
   new WebpackShellPlugin({
     onBuildExit: [
       'cd ./assets/public/js && mv bundle.js app.js',
-      './node_modules/.bin/zopfli -i 15 ./assets/public/js/app.js'
+      'zopfli --i15 ./assets/public/js/app.js'
     ]
   }),
   new webpack.DefinePlugin({

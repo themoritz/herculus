@@ -112,7 +112,7 @@ instance StoreData State where
       Login loginData -> do
         request api (Proxy :: Proxy Api.AuthLogin) loginData $ mkCallback $ \case
           LoginSuccess sessionKey -> [ LoggedIn sessionKey
-                                     , MessageAction Message.SetSuccess "Successfully logged in."
+                                     , MessageAction $ Message.SetSuccess "Successfully logged in."
                                      ]
           LoginFailed txt -> [MessageAction $ Message.SetWarning txt]
         pure st
