@@ -4,14 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "watch": "./node_modules/.bin/gulp",
+    "watch": "gulp",
     "webpack-dev": "webpack --config webpack.dev.config.js --progress --colors && ./build-client.sh && webpack --config webpack.dev.config.js --progress --colors --watch",
     "webpack-prod": "./build-client.sh --skip-combine && webpack --config webpack.prod.config.js --progress --colors",
     "build-client": "bash ./build-client.sh",
     "build-server": "bash ./build-server.sh",
-    "watch-nix": "./node_modules/.bin/gulp",
     "webpack-dev-nix": "webpack --config webpack.dev.config.js --progress --colors && bash ./build-client-nix.sh && webpack --config webpack.dev.config.js --progress --colors --watch",
-    "webpack-prod-nix": "bash ./build-client-nix.sh --skip-combine && webpack --config webpack.prod.config.js --progress --colors",
     "build-client-nix": "bash ./build-client-nix.sh",
     "build-server-nix": "bash ./build-server-nix.sh",
     "test": "echo \"Error: no test specified\" && exit 1"

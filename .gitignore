@@ -16,4 +16,5 @@ assets/public/*.eot
 node_modules/
 npm-debug.log
 TAGS
+result
 .#*
