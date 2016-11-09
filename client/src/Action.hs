@@ -68,7 +68,7 @@ data Action
   | RecordCacheAction (Id Table) RecordCache.Action
   -- Projects
   | ProjectsSet [Entity Project]
-  | ProjectsCreate Project
+  | ProjectsCreate Text -- project name
   | ProjectsAdd (Entity Project)
   | ProjectsLoadProject (Id Project)
   | ProjectDelete (Id Project)

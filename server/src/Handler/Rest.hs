@@ -117,7 +117,7 @@ handleAuthLogin (LoginData userName pwd) =
         then pure ()
         else throwError "wrong password"
 
-    getSession userId = getOneByQuery [ "userId" =: userId ] >>= \case
+    getSession userId = getOneByQuery [ "userId" =: toObjectId userId ] >>= \case
       Right (Entity sessionId session) -> do
         session' <- prolongSession session
         update sessionId $ \_ -> session'
@@ -128,7 +128,7 @@ handleAuthLogin (LoginData userName pwd) =
 
 handleAuthLogout :: MonadHexl m => SessionData -> m ()
 handleAuthLogout (UserInfo userId _ _) =
-  getOneByQuery [ "userId" =: userId ] >>= \case
+  getOneByQuery [ "userId" =: toObjectId userId ] >>= \case
     Left  msg -> throwError $ ErrBug msg
     Right (Entity sessionId _) -> delete (sessionId :: Id Session)
 
@@ -145,12 +145,14 @@ handleAuthSignup (SignupData userName pwd intention) =
 
 -- Project
 
-handleProjectCreate :: MonadHexl m => SessionData -> Project -> m (Id Project)
--- handleProjectCreate :: MonadHexl m => Project -> m (Id Project)
-handleProjectCreate _ = create
+handleProjectCreate :: MonadHexl m => SessionData -> Text -> m (Entity Project)
+handleProjectCreate (UserInfo userId _ _) projName = do
+  let project = Project projName userId
+  projectId <- create project
+  pure $ Entity projectId project
 
 handleProjectList :: MonadHexl m => SessionData -> m [Entity Project]
-handleProjectList _ = listAll
+handleProjectList (UserInfo userId _ _) = listByQuery [ "owner" =: toObjectId userId ]
 
 handleProjectSetName :: MonadHexl m => SessionData -> Id Project -> Text -> m ()
 handleProjectSetName _ projectId name = do

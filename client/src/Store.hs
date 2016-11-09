@@ -228,12 +228,12 @@ instance StoreData State where
             where
               projectsMap = Map.fromList $ map entityToTuple ps
 
-      ProjectsCreate project -> do
+      ProjectsCreate projectName -> do
         forLoggedIn_ st $ \liSt ->
           request api (Proxy :: Proxy Api.ProjectCreate)
                   (session $ liSt ^. stateSessionKey)
-                  project $ mkCallback $
-            \projectId -> [ProjectsAdd $ Entity projectId project]
+                  projectName $
+                  mkCallback $ \project -> [ProjectsAdd project]
         pure st
 
       ProjectsAdd (Entity i p) ->

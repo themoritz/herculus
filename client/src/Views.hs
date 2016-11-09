@@ -103,7 +103,7 @@ projects :: ReactView (Map (Id Project) Project, Maybe (Id Project))
 projects = defineView "projects" $ \(ps, mProj) ->
   cldiv_ "projects" $ do
     ul_ $ for_ (Map.toList ps) $ \(i, p) -> project_ i p (Just i == mProj)
-    inputNew_ "Add project..." (dispatch . ProjectsCreate . Project)
+    inputNew_ "Add project..." (dispatch . ProjectsCreate)
 
 data ProjectViewState = ProjectViewState
   { pEditable  :: Bool
