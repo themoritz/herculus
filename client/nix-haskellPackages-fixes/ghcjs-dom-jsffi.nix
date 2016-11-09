@@ -1,10 +1,12 @@
-{ mkDerivation, stdenv, base, ghcjs-base, ghcjs-prim, ghc-prim, text, transformers }:
+{ mkDerivation, base, ghc-prim, ghcjs-base, ghcjs-prim, stdenv
+, text, transformers
+}:
 mkDerivation {
   pname = "ghcjs-dom-jsffi";
-  version = "0.4.0.0";
-  sha256 = "0zrlyzq4xgg3pqm60whc602iy2ijh4ga9d620q83w8v5vm2a81fl";
+  version = "0.5.0.1";
+  sha256 = "1kbwrkmk6hxik9bclr7mpg1g1gg2x7c76z93r2pw9r6qyn4vmvny";
   libraryHaskellDepends = [
-    base ghcjs-base ghcjs-prim ghc-prim text transformers
+    base ghc-prim ghcjs-base ghcjs-prim text transformers
   ];
   description = "DOM library using JSFFI and GHCJS";
   license = stdenv.lib.licenses.mit;

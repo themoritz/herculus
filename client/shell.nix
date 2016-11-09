@@ -1,3 +1,3 @@
-{ pkgs ? import <nixpkgs> {}, compiler ? "ghcjs" }:
+{ pkgs ? import <nixpkgs> {}, compiler ? "ghcjsHEAD" }:
 
 (import ./default.nix { inherit pkgs compiler; }).env
