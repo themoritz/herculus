@@ -80,8 +80,9 @@ verifyPassword str pwHash =
 -- User
 
 data User = User
-  { _userName   :: Text
-  , _userPwHash :: PwHash
+  { _userName      :: Text
+  , _userPwHash    :: PwHash
+  , _userIntention :: Text
   } deriving (Generic, NFData)
 
 
@@ -90,15 +91,20 @@ instance Model User where
 
 instance ToDocument User where
   toDocument User
-   { _userName = name
+    { _userName = name
     , _userPwHash = pwHash
+    , _userIntention = intention
     } =
       [ "name" =: name
       , "pwHash" =: pwHash
+      , "intention" =: intention
       ]
 
 instance FromDocument User where
-  parseDocument doc = User <$> Bson.lookup "name" doc <*> Bson.lookup "pwHash" doc
+  parseDocument doc =
+    User <$> Bson.lookup "name" doc
+         <*> Bson.lookup "pwHash" doc
+         <*> Bson.lookup "intention" doc
 
 type PwHash = Base64
 

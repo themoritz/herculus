@@ -20,6 +20,7 @@ import qualified Lib.Api.Rest              as Api
 import           Lib.Api.WebSocket         (WsDownMessage (..))
 import           Lib.Model
 import           Lib.Model.Auth            (LoginResponse (..), SessionKey,
+                                            SignupResponse (..),
                                             UserInfo (UserInfo))
 import           Lib.Model.Cell            (Aspects (..), Cell (..),
                                             CellContent (..))
@@ -85,7 +86,7 @@ makeLenses ''State
 makeLenses ''LoggedInState
 makePrisms ''SessionState
 
--- execute action in case the user is logged in
+-- execute action in case the user is logged in and error otherwise
 forLoggedIn :: State -> (LoggedInState -> IO LoggedInState) -> IO State
 forLoggedIn st action = case st ^. stateSession of
   StateLoggedIn  liSt -> mkStateLoggedIn st <$> action liSt
@@ -94,7 +95,7 @@ forLoggedIn st action = case st ^. stateSession of
     putStrLn "inconsistent client state: unexpected: not logged in"
     pure st
 
--- execute action in case the user is logged in
+-- execute action in case the user is logged in and error otherwise
 -- use the state read-only for the action
 forLoggedIn_ :: State -> (LoggedInState -> IO ()) -> IO ()
 forLoggedIn_ st action = case st ^. stateSession of
@@ -103,7 +104,7 @@ forLoggedIn_ st action = case st ^. stateSession of
     -- TODO: proper error message
     putStrLn "inconsistent client state: unexpected: not logged in"
 
--- execute action in case the user is logged in
+-- execute action in case the user is logged in and error otherwise
 -- in this variant, the action takes care of transforming the
 -- LoggedInState to State
 forLoggedIn' :: State -> (LoggedInState -> IO State) -> IO State
@@ -152,10 +153,12 @@ instance StoreData State where
           WsDownColumnsChanged cs     -> TableUpdateColumns cs
           WsDownRecordCreated t r dat -> RecordCacheAction t $ RecordCache.Add r dat
           WsDownRecordDeleted t r     -> RecordCacheAction t $ RecordCache.Delete r
-        forLoggedIn_ st $ \liSt ->
-          request api (Proxy :: Proxy Api.ProjectList)
-            (session $ liSt ^. stateSessionKey) $ mkCallback $
-              \projects -> [ProjectsSet projects]
+        case st ^. stateSession of
+          StateLoggedIn liSt ->
+            request api (Proxy :: Proxy Api.ProjectList)
+              (session $ liSt ^. stateSessionKey) $ mkCallback $
+                \projects -> [ProjectsSet projects]
+          StateLoggedOut _ -> pure ()
         pure $ st & stateWebSocket .~ Just ws
 
       GlobalSendWebSocket msg -> do
@@ -163,6 +166,17 @@ instance StoreData State where
         pure st
 
       -- Session
+
+      Signup signupData -> do
+        request api (Proxy :: Proxy Api.AuthSignup) signupData $ mkCallback $ \case
+          SignupSuccess userInfo ->
+            [ LoggedIn userInfo
+            , MessageAction $ Message.SetSuccess "Successfully signed up."
+            ]
+          SignupFailed txt ->
+            [ MessageAction $ Message.SetWarning txt
+            ]
+        pure st
 
       ToSignupForm -> pure $ st & stateSession .~ StateLoggedOut LoggedOutSignupForm
 

@@ -28,8 +28,8 @@ import           Lib.Api.Rest
 import           Lib.Api.WebSocket
 import           Lib.Compiler
 import           Lib.Compiler.Interpreter.Types
-import           Lib.Compiler.Typechecker.Types hiding (union)
 import           Lib.Compiler.Typechecker.Prim
+import           Lib.Compiler.Typechecker.Types hiding (union)
 import           Lib.Compiler.Types
 import           Lib.Model
 import           Lib.Model.Auth                 (LoginData (..),
@@ -118,7 +118,10 @@ handleAuthLogin (LoginData userName pwd) =
         else throwError "wrong password"
 
     getSession userId = getOneByQuery [ "userId" =: userId ] >>= \case
-      Right (Entity _ session) -> prolongSession session
+      Right (Entity sessionId session) -> do
+        session' <- prolongSession session
+        update sessionId $ \_ -> session'
+        pure session'
       Left _ -> do
         session <- mkSession userId
         create session $> session
@@ -130,11 +133,12 @@ handleAuthLogout (UserInfo userId _ _) =
     Right (Entity sessionId _) -> delete (sessionId :: Id Session)
 
 handleAuthSignup :: (MonadIO m, MonadHexl m) => SignupData -> m SignupResponse
-handleAuthSignup (SignupData userName pwd) =
+handleAuthSignup (SignupData userName pwd intention) =
   getOneByQuery [ "name" =: userName ] >>= \case
     Right (_ :: Entity User) -> pure $ SignupFailed "username already exists"
     Left _  -> do
-      _ <- create . User userName =<< mkPwHash pwd
+      pwHash <- mkPwHash pwd
+      _ <- create $ User userName pwHash intention
       handleAuthLogin (LoginData userName pwd) >>= \case
         LoginSuccess userInfo -> pure $ SignupSuccess userInfo
         LoginFailed  msg      -> throwError $ ErrBug $ "signed up, but login failed: " <> msg

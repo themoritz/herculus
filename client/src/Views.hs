@@ -15,6 +15,7 @@ import           GHC.Generics        (Generic)
 import           React.Flux
 import           React.Flux.Internal (toJSString)
 
+import           Lib.Model.Auth      (uiUserName)
 import           Lib.Model.Project
 import           Lib.Model.Table
 import           Lib.Types
@@ -25,8 +26,8 @@ import           Store               (LoggedOutState (..), SessionState (..),
                                       State, dispatch, stateMessage,
                                       stateProjectId, stateProjects,
                                       stateSession, stateTableId, stateTables,
-                                      store)
-import           Views.Auth          (login_, logout_)
+                                      stateUserInfo, store)
+import           Views.Auth          (login_, logout_, signup_)
 import           Views.Combinators   (clspan_)
 import           Views.Table         (tableGrid_)
 
@@ -40,7 +41,7 @@ app = defineControllerView "app" store $ \st () ->
     for_ (st ^. stateMessage) message_
     case st ^. stateSession of
       StateLoggedOut LoggedOutLoginForm -> login_
-      StateLoggedOut LoggedOutSignupForm -> login_ -- TODO: signup form
+      StateLoggedOut LoggedOutSignupForm -> signup_
       StateLoggedIn liSt -> cldiv_ "tableGrid" $ tableGrid_ liSt
     appFooter_ st
 
@@ -58,7 +59,7 @@ appHeader = defineView "header" $ \st ->
         projects_ (liSt ^. stateProjects) (liSt ^. stateProjectId)
         for_ (liSt ^. stateProjectId) $ \prjId ->
           tables_ (liSt ^. stateTables) (liSt ^. stateTableId) prjId
-        logout_
+        logout_ $ liSt ^. stateUserInfo . uiUserName
       StateLoggedOut _  -> pure ()
 
 message_ :: Message -> ReactElementM eh ()
