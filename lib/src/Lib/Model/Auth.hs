@@ -60,9 +60,10 @@ data LoginResponse
   deriving (Generic, FromJSON, ToJSON)
 
 data SignupData = SignupData
-  { suUserName :: Text
-  , suPassword :: Text
-  } deriving (Generic, FromJSON, ToJSON)
+  { suUserName  :: Text
+  , suPassword  :: Text
+  , suIntention :: Text
+  } deriving (Generic, FromJSON, ToJSON, NFData)
 
 data SignupResponse
   = SignupSuccess UserInfo

@@ -20,7 +20,7 @@ import           Lib.Types
 import           Views.Combinators (clspan_)
 
 data ReportCellProps = ReportCellProps
-  { sKey                :: !(Maybe SessionKey)
+  { sKey                :: !SessionKey
   , reportCellColId     :: !(Id Column)
   , reportCellRecId     :: !(Id Record)
   , reportCellColReport :: !ReportCol
@@ -48,16 +48,16 @@ reportCell = defineView "reportCell" $ \ReportCellProps{..} -> cldiv_ "reportCel
           , "target" $= "_blank"
           ] $ faIcon_ "file-code-o fa-lg"
 
-getPlain :: Maybe SessionKey -> Id Column -> Id Record -> Text
+getPlain :: SessionKey -> Id Column -> Id Record -> Text
 getPlain = getReportPath "getReportPlain"
 
-getPDF :: Maybe SessionKey -> Id Column -> Id Record -> Text
+getPDF :: SessionKey -> Id Column -> Id Record -> Text
 getPDF = getReportPath "getReportPDF"
 
-getHTML :: Maybe SessionKey -> Id Column -> Id Record -> Text
+getHTML :: SessionKey -> Id Column -> Id Record -> Text
 getHTML = getReportPath "getReportHTML"
 
-getReportPath :: Text -> Maybe SessionKey -> Id Column -> Id Record -> Text
+getReportPath :: Text -> SessionKey -> Id Column -> Id Record -> Text
 getReportPath folder sKey columnId recordId =
   "/cell/" <> folder <>
   "?sessionKey=" <> toUrlPiece sKey <>

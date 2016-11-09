@@ -32,6 +32,7 @@ executable client
                      , Views.Foreign
                      , Views.Combinators
                      , Views.Common
+                     , Views.Util
   default-extensions:  OverloadedStrings
                      , TypeFamilies
                      , LambdaCase

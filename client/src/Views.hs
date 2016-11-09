@@ -21,7 +21,11 @@ import           Lib.Types
 
 import           Action              (Action (..))
 import           Helper              (keyENTER, keyESC)
-import           Store
+import           Store               (LoggedOutState (..), SessionState (..),
+                                      State, dispatch, stateMessage,
+                                      stateProjectId, stateProjects,
+                                      stateSession, stateTableId, stateTables,
+                                      store)
 import           Views.Auth          (login_, logout_)
 import           Views.Combinators   (clspan_)
 import           Views.Table         (tableGrid_)
@@ -32,11 +36,12 @@ import qualified Store.Message       as Message
 app :: ReactView ()
 app = defineControllerView "app" store $ \st () ->
   cldiv_ "container" $ do
-    -- TODO: if logged out: login/sign-up view
-    -- else:
     appHeader_ st
     for_ (st ^. stateMessage) message_
-    appContent_ st
+    case st ^. stateSession of
+      StateLoggedOut LoggedOutLoginForm -> login_
+      StateLoggedOut LoggedOutSignupForm -> login_ -- TODO: signup form
+      StateLoggedIn liSt -> cldiv_ "tableGrid" $ tableGrid_ liSt
     appFooter_ st
 
 -- header
@@ -48,10 +53,13 @@ appHeader :: ReactView State
 appHeader = defineView "header" $ \st ->
   cldiv_ "menubar" $ do
     cldiv_ "logo" "Herculus"
-    for_ (st ^. stateSessionKey) $ \_ -> do
-      projects_ (st ^. stateProjects) (st ^. stateProjectId)
-      for_ (st ^. stateProjectId) $ \prjId ->
-        tables_ (st ^. stateTables) (st ^. stateTableId) prjId
+    case st ^. stateSession of
+      StateLoggedIn liSt -> do
+        projects_ (liSt ^. stateProjects) (liSt ^. stateProjectId)
+        for_ (liSt ^. stateProjectId) $ \prjId ->
+          tables_ (liSt ^. stateTables) (liSt ^. stateTableId) prjId
+        logout_
+      StateLoggedOut _  -> pure ()
 
 message_ :: Message -> ReactElementM eh ()
 message_ !msg = view message msg mempty
@@ -78,27 +86,12 @@ appFooter_ :: State -> ReactElementM eh ()
 appFooter_ !st = view appFooter st mempty
 
 appFooter :: ReactView State
-appFooter = defineView "footer" $ \st ->
+appFooter = defineView "footer" $ \_ ->
   cldiv_ "footer" $ do
     a_ [ "href" $= "mailto:Moritz <mdrexl@fastmail.fm>, Ruben <ruben.moor@gmail.com>"
       , "className" $= "link-on-dark"
       , "target" $= "_blank"
       ] "Contact"
-    case st ^. stateSessionKey of
-      Nothing -> pure ()
-      Just _ -> logout_ st
-
--- content
-
-appContent_ :: State -> ReactElementM eh ()
-appContent_ !st = view appContent st mempty
-
-appContent :: ReactView State
-appContent = defineView "content" $ \st ->
-  case st ^. stateSessionKey of
-    Nothing -> login_ st
-    Just _  -> cldiv_ "tableGrid" $ tableGrid_ st
-
 
 --
 

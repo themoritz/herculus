@@ -24,7 +24,7 @@ import           Lib.Api.Rest                   as Api
 import           Lib.Api.WebSocket              (WsUpMessage)
 import           Lib.Model                      (Entity)
 import           Lib.Model.Auth                 (LoginData, SessionKey,
-                                                 UserInfo)
+                                                 SignupData, UserInfo)
 import           Lib.Model.Cell                 (Cell, CellContent, Value)
 import           Lib.Model.Column               (Column)
 import           Lib.Model.Project              (Project)
@@ -59,6 +59,8 @@ data Action
   | GlobalInit Text -- WebSocket URL
   | GlobalSendWebSocket WsUpMessage
   -- Session
+  | ToSignupForm
+  | Signup SignupData
   | Login LoginData
   | LoggedIn UserInfo
   | Logout
