@@ -121,7 +121,7 @@ instance Val Aspects where
     t <- Bson.lookup "tableId" doc
     c <- Bson.lookup "columnId" doc
     r <- Bson.lookup "recordId" doc
-    pure $ Aspects t c r
+    pure $ Aspects (fromObjectId t) (fromObjectId c) (fromObjectId r)
   cast' _ = fail "expected document"
 
 data Cell = Cell

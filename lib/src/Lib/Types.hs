@@ -36,7 +36,7 @@ import           Web.HttpApiData
 import           Lib.NamedMap
 
 newtype Id a = Id ObjectId
-  deriving (Eq, Ord, Val, Generic, Typeable)
+  deriving (Eq, Ord, Generic, Typeable)
 
 instance Show (Id a) where
   show (Id objectId) = show objectId

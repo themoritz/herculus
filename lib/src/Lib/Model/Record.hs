@@ -33,4 +33,4 @@ instance ToDocument Record where
     ]
 
 instance FromDocument Record where
-  parseDocument doc = Record <$> Bson.lookup "tableId" doc
+  parseDocument doc = Record . fromObjectId <$> Bson.lookup "tableId" doc
