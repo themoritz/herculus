@@ -14,7 +14,9 @@ import           Lib.Model.Table
 import           Lib.Types
 
 import           Action            (Action (TableAddRecord, TableAddColumn))
-import           Store
+import           Store             (Coords (..), LoggedInState, dispatch,
+                                    stateCells, stateColumns, stateRecords,
+                                    stateSessionKey, stateTableId, stateTables)
 import qualified Store.Column      as Column
 import           Views.Cell
 import           Views.Column
@@ -23,10 +25,10 @@ import           Views.Foreign
 import           Views.Record
 import           Views.ReportCell
 
-tableGrid_ :: State -> ReactElementM eh ()
+tableGrid_ :: LoggedInState -> ReactElementM eh ()
 tableGrid_ !st = view tableGrid st mempty
 
-tableGrid :: ReactView State
+tableGrid :: ReactView LoggedInState
 tableGrid = defineView "tableGrid" $ \st -> do
   let cells = st ^. stateCells
       cols = Column._stColumn <$> st ^. stateColumns

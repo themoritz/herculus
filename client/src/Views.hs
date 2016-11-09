@@ -8,20 +8,26 @@ import           Control.Lens        hiding (view)
 import           Data.Foldable       (for_)
 import           Data.Map.Strict     (Map)
 import qualified Data.Map.Strict     as Map
+import           Data.Monoid         ((<>))
 import           Data.Text           (Text)
 import qualified Data.Text           as Text
 import           GHC.Generics        (Generic)
 import           React.Flux
 import           React.Flux.Internal (toJSString)
 
+import           Lib.Model.Auth      (uiUserName)
 import           Lib.Model.Project
 import           Lib.Model.Table
 import           Lib.Types
 
 import           Action              (Action (..))
 import           Helper              (keyENTER, keyESC)
-import           Store
-import           Views.Auth          (login_, logout_)
+import           Store               (LoggedOutState (..), SessionState (..),
+                                      State, dispatch, stateMessage,
+                                      stateProjectId, stateProjects,
+                                      stateSession, stateTableId, stateTables,
+                                      stateUserInfo, store)
+import           Views.Auth          (login_, logout_, signup_)
 import           Views.Combinators   (clspan_)
 import           Views.Table         (tableGrid_)
 
@@ -33,7 +39,10 @@ app = defineControllerView "app" store $ \st () ->
   cldiv_ "container" $ do
     appHeader_ st
     for_ (st ^. stateMessage) message_
-    appContent_ st
+    case st ^. stateSession of
+      StateLoggedOut LoggedOutLoginForm -> login_
+      StateLoggedOut LoggedOutSignupForm -> signup_
+      StateLoggedIn liSt -> cldiv_ "tableGrid" $ tableGrid_ liSt
     appFooter_ st
 
 -- header
@@ -45,52 +54,45 @@ appHeader :: ReactView State
 appHeader = defineView "header" $ \st ->
   cldiv_ "menubar" $ do
     cldiv_ "logo" "Herculus"
-    case st ^. stateSessionKey of
-      Nothing -> pure ()
-      Just _ -> projects_ (st ^. stateProjects) (st ^. stateProjectId)
-    case st ^. stateSessionKey of
-      Nothing -> pure ()
-      Just _ -> case st ^. stateProjectId of
-                  Nothing -> pure ()
-                  Just prjId -> tables_ (st ^. stateTables) (st ^. stateTableId) prjId
+    case st ^. stateSession of
+      StateLoggedIn liSt -> do
+        projects_ (liSt ^. stateProjects) (liSt ^. stateProjectId)
+        for_ (liSt ^. stateProjectId) $ \prjId ->
+          tables_ (liSt ^. stateTables) (liSt ^. stateTableId) prjId
+        logout_ $ liSt ^. stateUserInfo . uiUserName
+      StateLoggedOut _  -> pure ()
 
 message_ :: Message -> ReactElementM eh ()
 message_ !msg = view message msg mempty
 
 message :: ReactView Message
-message = defineView "message" $ \(Message content typ) -> cldiv_ "message" $ cldiv_ "wrapper" $ do
-  cldiv_ "symbol" $ case typ of
-    Message.Info    -> clspan_ "info"    $ faIcon_ "exclamation-circle"
-    Message.Success -> clspan_ "success" $ faIcon_ "check-circle-o"
-    Message.Warning -> clspan_ "warning" $ faIcon_ "exclamation-triangle"
-    Message.Error   -> clspan_ "error"   $ faIcon_ "times-circle-o"
-  cldiv_ "content" $ elemText content
+message = defineView "message" $ \(Message content typ) ->
+  let (cls, icon, txt) = case typ of
+        Message.Info    -> ("info"   , "exclamation-circle"  , "Information")
+        Message.Success -> ("success", "check-circle-o"      , "Success"    )
+        Message.Warning -> ("warning", "exclamation-triangle", "Warning"    )
+        Message.Error   -> ("error"  , "times-circle-o"      , "Error"      )
+  in  cldiv_ ("message " <> cls) $ do
+        cldiv_ "header" $ do
+          cldiv_ "title" $ do
+            clspan_ "symbol" $ faIcon_ icon
+            txt
+          cldiv_ "button" $ button_
+            [ "className" $= "pure"
+            , onClick $ \_ _ -> dispatch $ MessageAction Message.Unset
+            ] $ faIcon_ "times"
+        cldiv_ "content" $ elemText content
 
 appFooter_ :: State -> ReactElementM eh ()
 appFooter_ !st = view appFooter st mempty
 
 appFooter :: ReactView State
-appFooter = defineView "footer" $ \st ->
+appFooter = defineView "footer" $ \_ ->
   cldiv_ "footer" $ do
     a_ [ "href" $= "mailto:Moritz <mdrexl@fastmail.fm>, Ruben <ruben.moor@gmail.com>"
       , "className" $= "link-on-dark"
       , "target" $= "_blank"
       ] "Contact"
-    case st ^. stateSessionKey of
-      Nothing -> pure ()
-      Just _ -> logout_ st
-
--- content
-
-appContent_ :: State -> ReactElementM eh ()
-appContent_ !st = view appContent st mempty
-
-appContent :: ReactView State
-appContent = defineView "content" $ \st ->
-  case st ^. stateSessionKey of
-    Nothing -> login_ st
-    Just _  -> cldiv_ "tableGrid" $ tableGrid_ st
-
 
 --
 

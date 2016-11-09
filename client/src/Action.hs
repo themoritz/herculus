@@ -23,7 +23,8 @@ import qualified Config
 import           Lib.Api.Rest                   as Api
 import           Lib.Api.WebSocket              (WsUpMessage)
 import           Lib.Model                      (Entity)
-import           Lib.Model.Auth                 (LoginData, SessionKey)
+import           Lib.Model.Auth                 (LoginData, SessionKey,
+                                                 SignupData, UserInfo)
 import           Lib.Model.Cell                 (Cell, CellContent, Value)
 import           Lib.Model.Column               (Column)
 import           Lib.Model.Project              (Project)
@@ -36,14 +37,13 @@ import qualified Action.Column                  as Column
 import qualified Action.Message                 as Message
 import qualified Action.RecordCache             as RecordCache
 
-type instance AuthClientData Api.SessionProtect = Maybe SessionKey
+type instance AuthClientData Api.SessionProtect = SessionKey
 
 mkAuthHeader :: AuthClientData Api.SessionProtect -> (Text, Text)
-mkAuthHeader Nothing = (Api.sessionParamStr, "")
-mkAuthHeader (Just sessionKey) =
+mkAuthHeader sessionKey =
   (Api.sessionParamStr, Text.decodeUtf8 $ unBase64 sessionKey)
 
-session :: Maybe SessionKey -> AuthenticateReq Api.SessionProtect
+session :: SessionKey -> AuthenticateReq Api.SessionProtect
 session key = mkAuthenticateReq key mkAuthHeader
 
 api :: ApiRequestConfig Routes
@@ -59,10 +59,11 @@ data Action
   | GlobalInit Text -- WebSocket URL
   | GlobalSendWebSocket WsUpMessage
   -- Session
+  | ToSignupForm
+  | Signup SignupData
   | Login LoginData
-  | LoggedIn SessionKey
+  | LoggedIn UserInfo
   | Logout
-  | LoggedOut
 
   | RecordCacheAction (Id Table) RecordCache.Action
   -- Projects
@@ -91,7 +92,7 @@ data Action
   | TableSetName (Id Table) Text
   | TableDelete (Id Table)
   -- column config: table cache
-  | GetTableCache          (Maybe SessionKey)
+  | GetTableCache
   | SetTableCache          TableCache
   -- Cell
   | CellSetValue (Id Column) (Id Record) Value

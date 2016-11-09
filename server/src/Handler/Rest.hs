@@ -28,15 +28,16 @@ import           Lib.Api.Rest
 import           Lib.Api.WebSocket
 import           Lib.Compiler
 import           Lib.Compiler.Interpreter.Types
-import           Lib.Compiler.Typechecker.Types hiding (union)
 import           Lib.Compiler.Typechecker.Prim
+import           Lib.Compiler.Typechecker.Types hiding (union)
 import           Lib.Compiler.Types
 import           Lib.Model
 import           Lib.Model.Auth                 (LoginData (..),
                                                  LoginResponse (..), Session,
                                                  SessionKey, SignupData (..),
                                                  SignupResponse (..),
-                                                 User (User), mkPwHash,
+                                                 User (User),
+                                                 UserInfo (UserInfo), mkPwHash,
                                                  sessionKey, userPwHash,
                                                  verifyPassword)
 import           Lib.Model.Cell
@@ -103,7 +104,7 @@ handleAuthLogin (LoginData userName pwd) =
       Left  err    -> pure $ LoginFailed err
       Right userId -> do
         session <- getSession userId
-        pure $ LoginSuccess $ session ^. sessionKey
+        pure $ LoginSuccess $ UserInfo userId userName $ session ^. sessionKey
   where
     checkLogin = runExceptT $ do
       Entity userId user <- getUser
@@ -117,26 +118,30 @@ handleAuthLogin (LoginData userName pwd) =
         else throwError "wrong password"
 
     getSession userId = getOneByQuery [ "userId" =: userId ] >>= \case
-      Right (Entity _ session) -> prolongSession session
+      Right (Entity sessionId session) -> do
+        session' <- prolongSession session
+        update sessionId $ \_ -> session'
+        pure session'
       Left _ -> do
         session <- mkSession userId
         create session $> session
 
 handleAuthLogout :: MonadHexl m => SessionData -> m ()
-handleAuthLogout userId =
+handleAuthLogout (UserInfo userId _ _) =
   getOneByQuery [ "userId" =: userId ] >>= \case
     Left  msg -> throwError $ ErrBug msg
     Right (Entity sessionId _) -> delete (sessionId :: Id Session)
 
 handleAuthSignup :: (MonadIO m, MonadHexl m) => SignupData -> m SignupResponse
-handleAuthSignup (SignupData userName pwd) =
+handleAuthSignup (SignupData userName pwd intention) =
   getOneByQuery [ "name" =: userName ] >>= \case
     Right (_ :: Entity User) -> pure $ SignupFailed "username already exists"
     Left _  -> do
-      _ <- create . User userName =<< mkPwHash pwd
+      pwHash <- mkPwHash pwd
+      _ <- create $ User userName pwHash intention
       handleAuthLogin (LoginData userName pwd) >>= \case
-        LoginSuccess key -> pure $ SignupSuccess key
-        LoginFailed  msg -> throwError $ ErrBug $ "signed up, but login failed: " <> msg
+        LoginSuccess userInfo -> pure $ SignupSuccess userInfo
+        LoginFailed  msg      -> throwError $ ErrBug $ "signed up, but login failed: " <> msg
 
 -- Project
 
@@ -152,7 +157,6 @@ handleProjectSetName _ projectId name = do
   project <- getById' projectId
   let updatedProject = project & projectName .~ name
   update projectId $ const updatedProject
-
 
 handleProjectDelete :: MonadHexl m => SessionData -> Id Project -> m ()
 handleProjectDelete sessionData projectId = do

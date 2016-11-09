@@ -52,7 +52,7 @@ mkState c = State
   }
 
 runAction :: Callback
-          -> Maybe SessionKey
+          -> SessionKey
           -> Id Column
           -> Action
           -> State -> IO State

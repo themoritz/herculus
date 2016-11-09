@@ -35,7 +35,7 @@ data State = State
 makeLenses ''State
 
 runAction :: Callback
-          -> Maybe SessionKey
+          -> SessionKey
           -> Id Table
           -> Action.RecordCache.Action
           -> State -> IO State
