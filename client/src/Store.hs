@@ -228,11 +228,11 @@ instance StoreData State where
             where
               projectsMap = Map.fromList $ map entityToTuple ps
 
-      ProjectsCreate projectName -> do
+      ProjectsCreate name -> do
         forLoggedIn_ st $ \liSt ->
           request api (Proxy :: Proxy Api.ProjectCreate)
                   (session $ liSt ^. stateSessionKey)
-                  projectName $
+                  name $
                   mkCallback $ \project -> [ProjectsAdd project]
         pure st
 
@@ -258,6 +258,7 @@ instance StoreData State where
 
       ProjectDelete projectId ->
         forLoggedIn' st $ \liSt -> do
+
           request api (Proxy :: Proxy Api.ProjectDelete)
                       (session $ liSt ^. stateSessionKey) projectId $ mkCallback $
                       const []
@@ -310,9 +311,7 @@ instance StoreData State where
         forLoggedIn st $ \liSt -> do
           request api (Proxy :: Proxy Api.TableGetWhole)
                       (session $ liSt ^. stateSessionKey) i $ mkCallback $
-                      \table -> [ TableSet table
-                                , MessageAction Message.Unset
-                                ]
+                      \table -> [ TableSet table ]
           pure $ liSt & stateTableId .~ Just i
 
       -- Table

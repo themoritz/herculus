@@ -16,6 +16,7 @@ library
   exposed-modules:     Monads
                      , Propagate
                      , Auth
+                     , Auth.Permission
                      , Cache
                      , Latex
                      , Options

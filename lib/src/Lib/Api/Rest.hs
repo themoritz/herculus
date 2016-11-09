@@ -12,7 +12,7 @@ import qualified Data.Text.Encoding            as Text
 import           Network.HTTP.Types.Header     (HeaderName)
 import           Servant.API                   ((:<|>), (:>), Capture, Delete,
                                                 Get, JSON, PlainText, Post,
-                                                ReqBody)
+                                                QueryParam, ReqBody)
 import           Servant.API.Experimental.Auth (AuthProtect)
 
 import           Lib.Api.Rest.Report
@@ -106,6 +106,6 @@ type RecordList           = SessionProtect  :> "record"     :> "list"       :> C
 type RecordListWithData   = SessionProtect  :> "record"     :> "listWithData" :> Capture "tableId" (Id Table)     :> Get '[JSON] [(Id Record, [(Entity Column, CellContent)])]
 
 type CellSet              = SessionProtect  :> "cell" :> "set"  :> Capture "columnId" (Id Column)   :> Capture "recordId" (Id Record) :> ReqBody '[JSON] Value          :> Post '[JSON] ()
-type CellGetReportPDF     = "cell"          :> "getReportPDF"   :> Capture "sessionKey" SessionKey  :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record) :> Get '[PDF] LBS.ByteString
-type CellGetReportHTML    = "cell"          :> "getReportHTML"  :> Capture "sessionKey" SessionKey  :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record) :> Get '[HTML] Text
-type CellGetReportPlain   = "cell"          :> "getReportPlain" :> Capture "sessionKey" SessionKey  :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record) :> Get '[PlainText] Text
+type CellGetReportPDF     = SessionProtect  :> "cell"          :> "getReportPDF"   :> QueryParam "sessionKey" SessionKey  :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record) :> Get '[PDF] LBS.ByteString
+type CellGetReportHTML    = SessionProtect  :> "cell"          :> "getReportHTML"  :> QueryParam "sessionKey" SessionKey  :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record) :> Get '[HTML] Text
+type CellGetReportPlain   = SessionProtect  :> "cell"          :> "getReportPlain" :> QueryParam "sessionKey" SessionKey  :> Capture "columnId" (Id Column) :> Capture "recordId" (Id Record) :> Get '[PlainText] Text

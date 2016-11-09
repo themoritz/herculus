@@ -36,7 +36,7 @@ import           Lib.Model.Auth                   (Session (..), SessionKey,
                                                    sessionExpDate,
                                                    sessionUserId, userName)
 import           Lib.Types                        (Id, Time (Time), addSeconds)
-import           Lib.Util.Base64                  (mkBase64, toBase64)
+import           Lib.Util.Base64                  (mkBase64Url, toBase64Url)
 import           Monads                           (AppError (..), HexlEnv,
                                                    MonadDB (..))
 
@@ -59,7 +59,7 @@ mkSession :: MonadIO m => Id User -> m Session
 mkSession userId = liftIO $ do
   -- session expiry in seconds
   created <- addSeconds sessionLength . Time <$> Clock.getCurrentTime
-  key <- mkBase64 <$> getEntropy 32
+  key <- mkBase64Url <$> getEntropy 32
   pure $ Session userId key created
 
 -- | prolong a session to current time + sessionLength
@@ -94,7 +94,7 @@ authHandler env = mkAuthHandler $ hexlToServant env $ \request -> do
         mSessionQuery  = join $ List.lookup sessionParamBStr (queryString    request)
     case mSessionHeader <|> mSessionQuery of
       Nothing -> throwError $ ErrForbidden $ "Missing session parameter " <> sessionParamStr
-      Just bs -> case toBase64 bs of
+      Just bs -> case toBase64Url bs of
         Left  err -> throwError $ ErrUnauthorized err
         Right key -> lookUpSession key
                        >>= either (throwError . ErrUnauthorized) pure

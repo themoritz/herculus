@@ -12,6 +12,7 @@ import           React.Flux        (ReactElementM, ReactView, a_, cldiv_,
                                     defineView, faIcon_, view, ($=), (&=))
 import           Web.HttpApiData   (toUrlPiece)
 
+import           Lib.Api.Rest      (sessionParamStr)
 import           Lib.Model.Auth    (SessionKey)
 import           Lib.Model.Column
 import           Lib.Model.Record
@@ -58,8 +59,8 @@ getHTML :: SessionKey -> Id Column -> Id Record -> Text
 getHTML = getReportPath "getReportHTML"
 
 getReportPath :: Text -> SessionKey -> Id Column -> Id Record -> Text
-getReportPath folder sKey columnId recordId =
-  "/cell/" <> folder <>
-  "?sessionKey=" <> toUrlPiece sKey <>
-  "&columnId=" <> (Text.pack . show) columnId <>
-  "&recordId=" <> (Text.pack . show) recordId
+getReportPath directory sKey columnId recordId =
+  "/cell/" <> directory <>
+  "/" <> (Text.pack . show) columnId <>
+  "/" <> (Text.pack . show) recordId <>
+  "?" <> sessionParamStr <> "=" <> toUrlPiece sKey

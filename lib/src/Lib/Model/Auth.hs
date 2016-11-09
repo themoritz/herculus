@@ -41,7 +41,8 @@ import           GHC.Generics           (Generic)
 import           Lib.Model.Class        (FromDocument (..), Model (..),
                                          ToDocument (..))
 import           Lib.Types              (Id, Time, fromObjectId, toObjectId)
-import           Lib.Util.Base64        (Base64, toBase64Unsafe, unBase64)
+import           Lib.Util.Base64        (Base64, Base64Url, toBase64Unsafe,
+                                         unBase64)
 
 
 -- Login
@@ -52,7 +53,7 @@ data LoginData = LoginData
   , ldPassword :: Text
   } deriving (Generic, FromJSON, ToJSON, NFData)
 
-type SessionKey = Base64
+type SessionKey = Base64Url
 
 data LoginResponse
   = LoginSuccess UserInfo

@@ -124,7 +124,7 @@ signup = defineStatefulView "signup" initialSignupViewState $ \viewState _ ->
                            || Text.null (signupIntention viewState))
                    && signupPwd viewState == signupPwdConfirm viewState
   in cldiv_ "signup" $ do
-       table_ $ do
+       table_ $ tbody_ $ do
          tr_ $ do
            td_ $ label_
              [ "htmlFor" $= "intention"

@@ -13,12 +13,13 @@ import           Control.Monad.Except           (ExceptT (ExceptT), runExceptT)
 import           Control.Monad.IO.Class         (MonadIO)
 import qualified Data.ByteString.Lazy           as BL
 import qualified Data.ByteString.Lazy.Char8     as BL8
+import           Data.Foldable                  (traverse_)
 import           Data.Functor                   (($>))
 import           Data.List                      (union)
 import           Data.Maybe                     (catMaybes, isNothing, mapMaybe)
 import           Data.Monoid
 import           Data.Text                      (Text, pack, unpack)
-import           Data.Traversable
+import           Data.Traversable               (for)
 import           Database.MongoDB               ((=:))
 import           Servant
 import qualified Text.Pandoc                    as Pandoc
@@ -53,6 +54,10 @@ import           Lib.Template.Types
 import           Lib.Types
 
 import           Auth                           (mkSession, prolongSession)
+import           Auth.Permission                (permissionColumn,
+                                                 permissionProject,
+                                                 permissionRecord,
+                                                 permissionTable)
 import           Cache
 import           Monads
 import           Propagate
@@ -155,49 +160,62 @@ handleProjectList :: MonadHexl m => SessionData -> m [Entity Project]
 handleProjectList (UserInfo userId _ _) = listByQuery [ "owner" =: toObjectId userId ]
 
 handleProjectSetName :: MonadHexl m => SessionData -> Id Project -> Text -> m ()
-handleProjectSetName _ projectId name = do
+handleProjectSetName (UserInfo userId _ _) projectId name = do
+  permissionProject userId projectId
   project <- getById' projectId
   let updatedProject = project & projectName .~ name
   update projectId $ const updatedProject
 
 handleProjectDelete :: MonadHexl m => SessionData -> Id Project -> m ()
-handleProjectDelete sessionData projectId = do
-    tables <- handleTableList sessionData projectId
-    _ <- mapM (handleTableDelete sessionData . entityId) tables
-    delete projectId
+handleProjectDelete sessionData@(UserInfo userId _ _) projectId = do
+  permissionProject userId projectId
+  tables <- handleTableList sessionData projectId
+  traverse_ (handleTableDelete sessionData . entityId) tables
+  delete projectId
 
 --
 
 handleTableCreate :: MonadHexl m => SessionData -> Table -> m (Id Table)
-handleTableCreate _ = create
+handleTableCreate (UserInfo userId _ _) table@(Table projectId _) = do
+  permissionProject userId projectId
+  create table
 
 handleTableList :: MonadHexl m => SessionData -> Id Project -> m [Entity Table]
-handleTableList _ projId = listByQuery [ "projectId" =: toObjectId projId ]
+handleTableList (UserInfo userId _ _) projId = do
+  permissionProject userId projId
+  listByQuery [ "projectId" =: toObjectId projId ]
 
+-- TODO: get all tables whose project id points to a project with owner == userId
 handleTableListGlobal :: MonadHexl m => SessionData -> m [Entity Table]
 handleTableListGlobal _ = listByQuery [ ]
 
 handleTableData :: MonadHexl m => SessionData -> Id Table -> m [(Id Column, Id Record, CellContent)]
-handleTableData _ tblId = do
+handleTableData (UserInfo userId _ _) tblId = do
+  permissionTable userId tblId
   cells <- listByQuery [ "aspects.tableId" =: toObjectId tblId ]
   let go (Cell v (Aspects _ c r)) = (c, r, v)
   pure $ map (go . entityVal) cells
 
-handleTableGetWhole :: MonadHexl m => SessionData -> Id Table
+handleTableGetWhole :: MonadHexl m
+                    => SessionData
+                    -> Id Table
                     -> m ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
-handleTableGetWhole sessionData tblId =
+handleTableGetWhole sessionData@(UserInfo userId _ _) tblId = do
+  permissionTable userId tblId
   (,,) <$> handleColumnList sessionData tblId
        <*> handleRecordList sessionData tblId
        <*> handleTableData sessionData tblId
 
 handleTableSetName :: MonadHexl m => SessionData -> Id Table -> Text -> m ()
-handleTableSetName _ tblId name = do
+handleTableSetName (UserInfo userId _ _) tblId name = do
+  permissionTable userId tblId
   table <- getById' tblId
   let table' = table & tableName .~ name
   update tblId $ const table'
 
 handleTableDelete :: MonadHexl m => SessionData -> Id Table -> m ()
-handleTableDelete _ tableId = do
+handleTableDelete (UserInfo userId _ _) tableId = do
+    permissionTable userId tableId
     delete tableId
     deleteByQuery (Proxy::Proxy Column) query
     deleteByQuery (Proxy::Proxy Cell) query
@@ -208,7 +226,8 @@ handleTableDelete _ tableId = do
 --
 
 handleColumnCreate :: MonadHexl m => SessionData -> Column -> m (Entity Column, [Entity Cell])
-handleColumnCreate _ newCol = do
+handleColumnCreate (UserInfo userId _ _) newCol = do
+  permissionTable userId (newCol ^. columnTableId)
   c <- create newCol
   case newCol ^. columnKind of
     ColumnData dataCol -> do
@@ -223,7 +242,8 @@ handleColumnCreate _ newCol = do
     ColumnReport _ -> pure (Entity c newCol, [])
 
 handleColumnDelete :: MonadHexl m => SessionData -> Id Column -> m ()
-handleColumnDelete _ colId = do
+handleColumnDelete (UserInfo userId _ _) colId = do
+  permissionColumn userId colId
   delete colId
   deleteByQuery (Proxy :: Proxy Cell)
     [ "aspects.columnId" =: toObjectId colId
@@ -235,70 +255,76 @@ handleColumnDelete _ colId = do
   propagate [RootWholeColumns $ map entityId newChilds]
 
 handleColumnList :: MonadHexl m => SessionData -> Id Table -> m [Entity Column]
-handleColumnList _ tblId = listByQuery [ "tableId" =: toObjectId tblId ]
+handleColumnList (UserInfo userId _ _) tblId = do
+  permissionTable userId tblId
+  listByQuery [ "tableId" =: toObjectId tblId ]
 
 handleColumnSetName :: MonadHexl m => SessionData -> Id Column -> Text -> m ()
-handleColumnSetName _ c name = do
-  update c $ columnName .~ name
-  newChilds <- compileColumnChildren c
+handleColumnSetName (UserInfo userId _ _) columnId name = do
+  permissionColumn userId columnId
+  update columnId $ columnName .~ name
+  newChilds <- compileColumnChildren columnId
   sendWS $ WsDownColumnsChanged newChilds
   propagate [RootWholeColumns $ map entityId newChilds]
 
 --
 
 handleDataColUpdate :: MonadHexl m => SessionData -> Id Column -> (DataType, IsDerived, Text) -> m ()
-handleDataColUpdate _ c (typ, derived, code) = do
-  oldCol <- getById' c
+handleDataColUpdate (UserInfo userId _ _) columnId (typ, derived, code) = do
+  permissionColumn userId columnId
+  oldCol <- getById' columnId
   case oldCol ^? columnKind . _ColumnData of
     Nothing -> throwError $ ErrBug "Called dataColUpdate for column other than data"
     Just dataCol -> do
       let updatedCol = oldCol & columnKind . _ColumnData %~ (dataColType .~ typ)
                                            . (dataColIsDerived .~ derived)
                                            . (dataColSourceCode .~ code)
-      update c $ const updatedCol
+      update columnId $ const updatedCol
 
       updatedChilds <- if dataCol ^. dataColType == typ
         then pure []
-        else compileColumnChildren c
+        else compileColumnChildren columnId
 
       (newSelf, propSelf) <- case derived of
         Derived -> do
-          newC <- compileColumn c
-          pure ([newC], [c])
+          newC <- compileColumn columnId
+          pure ([newC], [columnId])
         NotDerived -> do
-          renewErrorCells c
+          renewErrorCells columnId
           unless (typ == dataCol ^. dataColType) $ do
-            updateReference c typ
-            invalidateCells c
-          pure ([Entity c updatedCol], [])
+            updateReference columnId typ
+            invalidateCells columnId
+          pure ([Entity columnId updatedCol], [])
 
       sendWS $ WsDownColumnsChanged $ newSelf <> updatedChilds
       propagate [RootWholeColumns $ propSelf <> map entityId updatedChilds]
 
 handleReportColUpdate :: MonadHexl m => SessionData -> Id Column -> (Text, ReportFormat, Maybe ReportLanguage) -> m ()
-handleReportColUpdate _ c (template, format, lang) = do
-  oldCol <- getById' c
+handleReportColUpdate (UserInfo userId _ _) columnId (template, format, lang) = do
+  permissionColumn userId columnId
+  oldCol <- getById' columnId
   when (isNothing (oldCol ^? columnKind . _ColumnReport)) $
     throwError $ ErrBug "Called ReportColUpdate for column other than report"
-  update c $ columnKind . _ColumnReport %~ (reportColTemplate .~ template)
+  update columnId $ columnKind . _ColumnReport %~ (reportColTemplate .~ template)
                                          . (reportColFormat .~ format)
                                          . (reportColLanguage .~ lang)
-  newCol <- compileColumn c
+  newCol <- compileColumn columnId
   sendWS $ WsDownColumnsChanged [newCol]
 
 --
 
 handleRecordCreate :: MonadHexl m => SessionData -> Id Table -> m (Entity Record, [Entity Cell])
-handleRecordCreate _ t = do
-  let newRec = Record t
+handleRecordCreate (UserInfo userId _ _) tableId = do
+  permissionTable userId tableId
+  let newRec = Record tableId
   r <- create newRec
-  cols <- listByQuery [ "tableId" =: toObjectId t ]
+  cols <- listByQuery [ "tableId" =: toObjectId tableId ]
   newCells <- for cols $ \e@(Entity c col) ->
     case col ^? columnKind . _ColumnData of
       Nothing -> pure Nothing
       Just dataCol -> do
         defContent <- defaultContent (dataCol ^. dataColType)
-        let cell = newCell t c r defContent
+        let cell = newCell tableId c r defContent
         i <- create cell
         case dataCol ^. dataColIsDerived of
           NotDerived -> pure $ Just (e, Entity i cell)
@@ -317,12 +343,13 @@ handleRecordCreate _ t = do
                         _            -> Nothing
                  ) cols
     ]
-  sendWS $ WsDownRecordCreated t r $
+  sendWS $ WsDownRecordCreated tableId r $
     map (second $ cellContent . entityVal) $ catMaybes newCells
   pure (Entity r newRec, map snd $ catMaybes newCells)
 
 handleRecordDelete :: MonadHexl m => SessionData -> Id Record -> m ()
-handleRecordDelete _ recId = do
+handleRecordDelete (UserInfo userId _ _) recId = do
+  permissionRecord userId recId
   record <- getById' recId
   delete recId
   sendWS $ WsDownRecordDeleted (recordTableId record) recId
@@ -356,7 +383,8 @@ handleRecordDelete _ recId = do
     ]
 
 handleRecordData :: MonadHexl m => SessionData -> Id Record -> m [(Entity Column, CellContent)]
-handleRecordData _ recId = do
+handleRecordData (UserInfo userId _ _) recId = do
+  permissionRecord userId recId
   cells <- listByQuery
     [ "aspects.recordId" =: toObjectId recId ]
   for cells $ \(Entity _ cell) -> do
@@ -365,31 +393,36 @@ handleRecordData _ recId = do
     pure (Entity i col, cellContent cell)
 
 handleRecordList :: MonadHexl m => SessionData -> Id Table -> m [Entity Record]
-handleRecordList _ tblId = listByQuery [ "tableId" =: toObjectId tblId ]
+handleRecordList (UserInfo userId _ _) tblId = do
+  permissionTable userId tblId
+  listByQuery [ "tableId" =: toObjectId tblId ]
 
 handleRecordListWithData :: MonadHexl m => SessionData -> Id Table
                           -> m [(Id Record, [(Entity Column, CellContent)])]
-handleRecordListWithData sessionData tblId = do
+handleRecordListWithData sessionData@(UserInfo userId _ _) tblId = do
+  permissionTable userId tblId
   recs <- listByQuery [ "tableId" =: toObjectId tblId ]
   for recs $ \r -> (entityId r,) <$> handleRecordData sessionData (entityId r)
 
 --
 
 handleCellSet :: MonadHexl m => SessionData -> Id Column -> Id Record -> Value -> m ()
-handleCellSet _ c r val = do
+handleCellSet (UserInfo userId _ _) columnId recordId val = do
+  permissionColumn userId columnId
   Entity i cell <- getOneByQuery'
-    [ "aspects.columnId" =: toObjectId c
-    , "aspects.recordId" =: toObjectId r
+    [ "aspects.columnId" =: toObjectId columnId
+    , "aspects.recordId" =: toObjectId recordId
     ]
   let changedCell = cell { cellContent = CellValue val }
   update i $ const changedCell
   sendWS $ WsDownCellsChanged [changedCell]
   -- TODO: fork this
-  propagate [RootCellChanges [(c, r)]]
+  propagate [RootCellChanges [(columnId, recordId)]]
 
-handleCellGetReportPDF :: MonadHexl m => SessionKey -> Id Column -> Id Record -> m BL.ByteString
-handleCellGetReportPDF _ c r = do
-  (repCol, plain) <- evalReport c r
+handleCellGetReportPDF :: MonadHexl m => SessionData -> Maybe SessionKey -> Id Column -> Id Record -> m BL.ByteString
+handleCellGetReportPDF (UserInfo userId _ _) _ columnId recordId = do
+  permissionColumn userId columnId
+  (repCol, plain) <- evalReport columnId recordId
   case repCol ^. reportColLanguage of
     Nothing -> throwError $ ErrUser "Cannot generate PDF from plain text"
     Just lang -> case getPandocReader lang (repCol ^. reportColFormat) of
@@ -425,10 +458,11 @@ handleCellGetReportPDF _ c r = do
               "Source: " <> (pack . show) (Pandoc.writeLaTeX options pandoc)
             Right pdf -> pure pdf
 
-handleCellGetReportHTML :: MonadHexl m => SessionKey -> Id Column -> Id Record -> m Text
-handleCellGetReportHTML _ c r = do
-  col <- getById' c
-  (repCol, plain) <- evalReport c r
+handleCellGetReportHTML :: MonadHexl m => SessionData -> Maybe SessionKey -> Id Column -> Id Record -> m Text
+handleCellGetReportHTML (UserInfo userId _ _) _ columnId recordId = do
+  permissionColumn userId columnId
+  col <- getById' columnId
+  (repCol, plain) <- evalReport columnId recordId
   case repCol ^. reportColLanguage of
     Nothing   -> pure plain
     Just lang -> case getPandocReader lang (repCol ^. reportColFormat) of
@@ -449,11 +483,16 @@ handleCellGetReportHTML _ c r = do
                 }
           pure $ pack $ Pandoc.writeHtmlString options pandoc
 
-handleCellGetReportPlain :: MonadHexl m => SessionKey -> Id Column -> Id Record -> m Text
-handleCellGetReportPlain _ c r = snd <$> evalReport c r
+handleCellGetReportPlain :: MonadHexl m => SessionData -> Maybe SessionKey -> Id Column -> Id Record -> m Text
+handleCellGetReportPlain (UserInfo userId _ _) _ columnId recordId = do
+  permissionColumn userId columnId
+  snd <$> evalReport columnId recordId
 
-getPandocReader :: ReportLanguage -> ReportFormat
-  -> Maybe (Pandoc.ReaderOptions -> String -> Either Pandoc.PandocError Pandoc.Pandoc)
+getPandocReader :: ReportLanguage
+                -> ReportFormat
+                -> Maybe (Pandoc.ReaderOptions
+                -> String
+                -> Either Pandoc.PandocError Pandoc.Pandoc)
 getPandocReader lang format = case lang of
   ReportLanguageMarkdown -> Just Pandoc.readMarkdown
   ReportLanguageLatex    -> case format of
@@ -466,14 +505,14 @@ getPandocReader lang format = case lang of
 -- Helper ----------------------------
 
 evalReport :: MonadHexl m => Id Column -> Id Record -> m (ReportCol, Text)
-evalReport c r = do
-  col <- getById' c
+evalReport columnId recordId = do
+  col <- getById' columnId
   case col ^? columnKind . _ColumnReport of
     Nothing -> throwError $ ErrBug "Trying to get report for non report column"
     Just repCol -> case repCol ^. reportColCompiledTemplate of
       CompileResultOk ttpl -> fmap fst $ runCacheT $ do
         let env = EvalEnv
-                    { envGetCellValue = flip getCellValue r
+                    { envGetCellValue = flip getCellValue recordId
                     , envGetColumnValues = getColumnValues
                     , envGetTableRecords = getTableRecords
                     , envGetRecordValue = getRecordValue
@@ -485,11 +524,11 @@ evalReport c r = do
 
 -- | Compiles all kinds of columns
 compileColumn :: forall m. MonadHexl m => Id Column -> m (Entity Column)
-compileColumn c = do
-  col <- getById' c
+compileColumn columnId = do
+  col <- getById' columnId
   let abort :: Text -> m (CompileResult a)
       abort msg = do
-        void $ modifyDependencies c []
+        void $ modifyDependencies columnId []
         pure $ CompileResultError msg
   newCol <- case col ^. columnKind of
     ColumnData dataCol -> do
@@ -505,7 +544,7 @@ compileColumn c = do
                    show colType <> "`."
             else do
               let deps = collectDependencies expr
-              cycles <- modifyDependencies c deps
+              cycles <- modifyDependencies columnId deps
               if cycles then abort "Dependency graph has cycles"
                         else pure $ CompileResultOk expr
       pure $ col & columnKind . _ColumnData . dataColCompileResult .~ compileResult
@@ -516,28 +555,28 @@ compileColumn c = do
         Left msg -> abort msg
         Right tTpl -> do
           let deps = collectTplDependencies tTpl
-          cycles <- modifyDependencies c deps
+          cycles <- modifyDependencies columnId deps
           when cycles $ throwError $ ErrBug "Setting report dependencies generated cycle"
           pure $ CompileResultOk tTpl
       pure $ col & columnKind . _ColumnReport . reportColCompiledTemplate .~ compileResult
-  update c $ const newCol
-  pure $ Entity c newCol
+  update columnId $ const newCol
+  pure $ Entity columnId newCol
 
 compileColumnChildren :: MonadHexl m => Id Column -> m [Entity Column]
-compileColumnChildren c = do
+compileColumnChildren columnId = do
   graph <- getDependencies
-  for (getChildren c graph) $ \(child, _) -> do
+  for (getChildren columnId graph) $ \(child, _) -> do
     void $ compileColumn child
     childCol <- getById' child
     pure $ Entity child childCol
 
 invalidateCells :: MonadHexl m => Id Column -> m ()
-invalidateCells c = do
-  col <- getById' c
+invalidateCells columnId = do
+  col <- getById' columnId
   dataCol <- case col ^? columnKind . _ColumnData of
     Nothing -> throwError $ ErrBug "Trying to invalidate cells of column other than data"
     Just dataCol -> pure dataCol
-  cells <- listByQuery [ "aspects.columnId" =: toObjectId c]
+  cells <- listByQuery [ "aspects.columnId" =: toObjectId columnId]
   changes <- for cells $ \(Entity i cell) -> do
     defContent <- defaultContent (dataCol ^. dataColType)
     let invalidatedCell = Cell defContent (cellAspects cell)
@@ -546,12 +585,12 @@ invalidateCells c = do
   sendWS $ WsDownCellsChanged changes
 
 renewErrorCells :: MonadHexl m => Id Column -> m ()
-renewErrorCells c = do
-  col <- getById' c
+renewErrorCells columnId = do
+  col <- getById' columnId
   dataCol <- case col ^? columnKind . _ColumnData of
     Nothing -> throwError $ ErrBug "Trying to renewErrorCells of column other than data"
     Just dataCol -> pure dataCol
-  cells <- listByQuery [ "aspects.columnId" =: toObjectId c]
+  cells <- listByQuery [ "aspects.columnId" =: toObjectId columnId]
   changes <- for cells $ \(Entity i cell) ->
     case cellContent cell of
       CellError _ -> do
@@ -562,14 +601,14 @@ renewErrorCells c = do
       CellValue _ -> pure Nothing
   sendWS $ WsDownCellsChanged $ catMaybes changes
   propagate [ RootCellChanges $
-                map (\(Cell _ (Aspects _ c' r')) -> (c', r')) $
+                map (\(Cell _ (Aspects _ columnId' r')) -> (columnId', r')) $
                 catMaybes changes
             ]
 
 updateReference :: MonadHexl m => Id Column -> DataType -> m ()
-updateReference c dataType = case getReference dataType of
-  Nothing -> modifyReferences $ removeReference c
-  Just t  -> modifyReferences $ setReference t c
+updateReference columnId dataType = case getReference dataType of
+  Nothing -> modifyReferences $ removeReference columnId
+  Just t  -> modifyReferences $ setReference t columnId
 
 --
 
@@ -634,5 +673,3 @@ defaultContent = \case
       Right (Entity i _) -> Just i
   DataList _   -> pure . CellValue $ VList []
   DataMaybe _  -> pure . CellValue $ VMaybe Nothing
-
---
