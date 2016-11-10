@@ -17,7 +17,7 @@ import qualified Database.MongoDB               as Mongo
 import           Network.Wai.Handler.Warp       as Warp
 import           Network.Wai.Handler.WebSockets
 import           Network.WebSockets
-import           Servant                        ((:<|>) (..), Context (..), Raw,
+import           Servant                        ((:<|>) (..), (:>), Context (..), Raw,
                                                  Server, serveDirectory,
                                                  serveWithContext)
 
@@ -35,7 +35,7 @@ import           Monads
 import           Options                        (Options (..), getOptions)
 
 type AllRoutes =
-       Routes
+       "api" :> Routes
   :<|> Raw
 
 routes :: Proxy AllRoutes

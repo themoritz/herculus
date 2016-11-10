@@ -60,7 +60,7 @@ getHTML = getReportPath "getReportHTML"
 
 getReportPath :: Text -> SessionKey -> Id Column -> Id Record -> Text
 getReportPath directory sKey columnId recordId =
-  "/cell/" <> directory <>
+  "/api/cell/" <> directory <>
   "/" <> (Text.pack . show) columnId <>
   "/" <> (Text.pack . show) recordId <>
   "?" <> sessionParamStr <> "=" <> toUrlPiece sKey

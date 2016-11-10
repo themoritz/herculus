@@ -18,7 +18,7 @@ config.plugins.push(
       'NODE_ENV': JSON.stringify('production'),
       // Config: grabbed in client/jsbits/config.js
       'WEBSOCKET_URL': JSON.stringify(process.env.WEBSOCKET_URL || 'ws://localhost:3000/websocket'),
-      'API_URL': JSON.stringify(process.env.API_URL || 'http://localhost:3001')
+      'API_URL': JSON.stringify(process.env.API_URL || 'http://localhost:3001/api')
     }
   }),
   new webpack.optimize.UglifyJsPlugin({

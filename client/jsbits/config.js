@@ -10,6 +10,6 @@ function hexl$getApiUrl () {
   try {
     return process.env.API_URL
   } catch (e) {
-    return ""
+    return "/api"
   }
 }
