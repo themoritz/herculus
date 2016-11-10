@@ -31,7 +31,7 @@ import           Lib.Model.Project              (Project)
 import           Lib.Model.Record               (Record)
 import           Lib.Model.Table                (Table)
 import           Lib.Types                      (Id)
-import           Lib.Util.Base64                (unBase64)
+import           Lib.Util.Base64                (unBase64Url)
 
 import qualified Action.Column                  as Column
 import qualified Action.Message                 as Message
@@ -41,7 +41,7 @@ type instance AuthClientData Api.SessionProtect = SessionKey
 
 mkAuthHeader :: AuthClientData Api.SessionProtect -> (Text, Text)
 mkAuthHeader sessionKey =
-  (Api.sessionParamStr, Text.decodeUtf8 $ unBase64 sessionKey)
+  (Api.sessionParamStr, Text.decodeUtf8 $ unBase64Url sessionKey)
 
 session :: SessionKey -> AuthenticateReq Api.SessionProtect
 session key = mkAuthenticateReq key mkAuthHeader
