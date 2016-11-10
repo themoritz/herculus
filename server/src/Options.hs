@@ -49,10 +49,10 @@ options = Options
                   <> showDefault
                   <> help "directory to static files and js"
                   )
-  <*> txtOption   (  long "mongo-collection"
-                  <> short 'c'
-                  <> metavar "COLLECTION"
-                  <> value "test"
+  <*> txtOption   (  long "database-name"
+                  <> short 'd'
+                  <> metavar "DATABASE"
+                  <> value "herculus"
                   <> showDefault
-                  <> help "Collection name for Mongo database"
+                  <> help "Database name for Mongo database"
                   )
