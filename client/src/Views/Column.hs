@@ -18,7 +18,6 @@ import           React.Flux
 import           Text.Read           (readMaybe)
 
 import           Lib.Model
-import           Lib.Model.Auth      (SessionKey)
 import           Lib.Model.Column
 import           Lib.Model.Table
 import           Lib.Types
@@ -109,14 +108,18 @@ recordTableId _                = Nothing
 --
 
 -- helper lens
-atColumn :: Applicative f => Id Column -> (State -> f State) -> LoggedInState -> f LoggedInState
+atColumn :: Applicative f
+         => Id Column
+         -> (State -> f State)
+         -> LoggedInState
+         -> f LoggedInState
 atColumn i = stateColumns . at i . _Just
 
-column_ :: SessionKey -> Entity Column -> ReactElementM eh ()
-column_ !sKey !c = view column (sKey, c) mempty
+column_ :: Entity Column -> ReactElementM eh ()
+column_ !c = view column c mempty
 
-column :: ReactView (SessionKey, Entity Column)
-column = defineView "column" $ \(sKey, c@(Entity i col)) -> cldiv_ "column" $ do
+column :: ReactView (Entity Column)
+column = defineView "column" $ \c@(Entity i col) -> cldiv_ "column" $ do
   cldiv_ "head" $ do
     editBox_ EditBoxProps
       { editBoxValue       = col ^. columnName
@@ -126,44 +129,36 @@ column = defineView "column" $ \(sKey, c@(Entity i col)) -> cldiv_ "column" $ do
       , editBoxValidator   = Just
       , editBoxOnSave      = dispatch . ColumnAction i . Rename
       }
-    columnInfo_ sKey c
-  columnConfig_ sKey c
+    columnInfo_ c
+  columnConfig_ c
 
 -- column info, a summary of datatype and isDerived
 
-columnInfo_ :: SessionKey -> Entity Column -> ReactElementM eh ()
-columnInfo_ !sKey !c = view columnInfo (sKey, c) mempty
+columnInfo_ :: Entity Column -> ReactElementM eh ()
+columnInfo_ !c = view columnInfo c mempty
 
-columnInfo :: ReactView (SessionKey, Entity Column)
-columnInfo = defineView "column info" $ \(sKey, Entity _ col) ->
+columnInfo :: ReactView (Entity Column)
+columnInfo = defineView "column info" $ \(Entity _ col) ->
   cldiv_ "info" $
     case col ^. columnKind of
       ColumnData dat -> do
         case dat ^. dataColIsDerived of
           Derived    -> faIcon_ "superscript fa-fw"
           NotDerived -> faIcon_ "i-cursor fa-fw"
-        dataTypeInfo_ sKey (dat ^. dataColType)
+        dataTypeInfo_ (dat ^. dataColType)
       ColumnReport rep -> do
         faIcon_ "file-text-o"
         reportInfo_ rep
 
 -- configure column
 
-columnConfig_ :: SessionKey -> Entity Column -> ReactElementM eh ()
-columnConfig_ !sKey !c = view columnConfig (sKey, c) mempty
+columnConfig_ :: Entity Column -> ReactElementM eh ()
+columnConfig_ !c = view columnConfig c mempty
 
-columnConfig :: ReactView (SessionKey, Entity Column)
+columnConfig :: ReactView (Entity Column)
 columnConfig = defineControllerView "column configuration" store $ forLoggedIn $
-  \st (sKey, Entity i col) -> cldiv_ "config" $ do
-    let mError = case col ^. columnKind of
-          ColumnData dat ->
-            case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of
-              (Derived, CompileResultError msg) -> Just msg
-              _                                 -> Nothing
-          ColumnReport rep ->
-            case rep ^. reportColCompiledTemplate of
-              CompileResultError msg -> Just msg
-              _                      -> Nothing
+  \st (Entity i col) -> cldiv_ "config" $ do
+    let mError = getColumnError col
     button_ (
       maybe [] (\msg -> [ "title" &= msg ]) mError <>
       [ classNames
@@ -176,7 +171,7 @@ columnConfig = defineControllerView "column configuration" store $ forLoggedIn $
       ] ) $ faIcon_ "gear fa-2x"
     when (st ^? atColumn i . stVisible == Just True) $
       case col ^. columnKind of
-        ColumnData   dat -> dataColConf_ sKey i dat
+        ColumnData   dat -> dataColConf_ i dat
         ColumnReport rep -> reportColConf_ i rep
 
 -- column kind: report
@@ -293,12 +288,12 @@ inputTemplate = defineView "input template" $ \(i, t, lang) -> do
 
 -- column kind: data
 
-dataTypeInfo_ :: SessionKey -> DataType -> ReactElementM eh ()
-dataTypeInfo_ !sKey !dt = view dataTypeInfo (sKey, dt) mempty
+dataTypeInfo_ :: DataType -> ReactElementM eh ()
+dataTypeInfo_ !dt = view dataTypeInfo dt mempty
 
-dataTypeInfo :: ReactView (SessionKey, DataType)
+dataTypeInfo :: ReactView DataType
 dataTypeInfo = defineControllerView "datatype info" store $ forLoggedIn $
-  \st (sKey, dt) -> span_ [ "className" $= "dataType" ] $
+  \st dt -> span_ [ "className" $= "dataType" ] $
     case dt of
       DataBool     -> "Bool"
       DataString   -> "String"
@@ -310,18 +305,18 @@ dataTypeInfo = defineControllerView "datatype info" store $ forLoggedIn $
                         ?: "missing table"
         elemText $ "Row from " <> tblName
       DataList   d -> do "List ("
-                         dataTypeInfo_ sKey d
+                         dataTypeInfo_ d
                          ")"
       DataMaybe  d -> do "Maybe ("
-                         dataTypeInfo_ sKey d
+                         dataTypeInfo_ d
                          ")"
 
-dataColConf_ :: SessionKey -> Id Column -> DataCol -> ReactElementM eh ()
-dataColConf_ !sKey !i !d = view dataColConf (sKey, i, d) mempty
+dataColConf_ :: Id Column -> DataCol -> ReactElementM eh ()
+dataColConf_ !i !d = view dataColConf (i, d) mempty
 
-dataColConf :: ReactView (SessionKey, Id Column, DataCol)
+dataColConf :: ReactView (Id Column, DataCol)
 dataColConf = defineControllerView "data column configuration" store $ forLoggedIn $
-  \st (sKey, i, dat) -> cldiv_ "dialog data" $ do
+  \st (i, dat) -> cldiv_ "dialog data" $ do
       let mError = case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of
             (Derived, CompileResultError msg) -> Just msg
             _                                 -> Nothing
@@ -333,10 +328,9 @@ dataColConf = defineControllerView "data column configuration" store $ forLogged
             ?: dat ^. dataColType
       cldiv_ "bodyWrapper" $ cldiv_ "body" $ do
         cldiv_ "datatype" $
-          selDatatype_ sKey i dat (st ^. stateTableCache)
+          selDatatype_ i dat (st ^. stateTableCache)
         cldiv_ "formula" $ do
           checkIsFormula_ i isDerived
-          -- input field for formula
           inputFormula_ i formula isDerived
       for_ mError $ \errMsg -> cldiv_ "error" $ do
         clspan_ "title" "Error"
@@ -351,9 +345,7 @@ dataColConf = defineControllerView "data column configuration" store $ forLogged
           -- in the Nothing case: nothing has changed
           deleteActions = [ SomeStoreAction store $ TableDeleteColumn i ]
           saveActions = SomeStoreAction store . ColumnAction i <$>
-            -- hide dialog
             [ SetVisibility False
-            -- is formula and formula
             , DataColUpdate (dt, isDerived, formula)
             , UnsetTmpDataType
             , UnsetTmpIsFormula
@@ -385,19 +377,19 @@ confButtons = defineView "column configuration buttons" $
 
 -- select datatype
 
-selDatatype_ :: SessionKey -> Id Column -> DataCol -> TableCache -> ReactElementM eh ()
-selDatatype_  !sKey !i !dat !m = view selDatatype (sKey, i, dat, m) mempty
+selDatatype_ :: Id Column -> DataCol -> TableCache -> ReactElementM eh ()
+selDatatype_  !i !dat !tables = view selDatatype (i, dat, tables) mempty
 
-selDatatype :: ReactView (SessionKey, Id Column, DataCol, TableCache)
-selDatatype = defineView "selectDataType" $ \(sKey, i, dat, tables) ->
-    selBranch_ sKey (Just $ dat ^. dataColType) tables $
+selDatatype :: ReactView (Id Column, DataCol, TableCache)
+selDatatype = defineView "selectDataType" $ \(i, dat, tables) ->
+    selBranch_ (Just $ dat ^. dataColType) tables $
       \dt -> [SomeStoreAction store $ ColumnAction i $ SetTmpDataType dt]
 
-selBranch_ :: SessionKey -> Maybe DataType -> TableCache -> SelBranchCallback -> ReactElementM eh ()
-selBranch_ !sKey !mDt !tables !cb = view selBranch (sKey, mDt, tables, cb) mempty
+selBranch_ :: Maybe DataType -> TableCache -> SelBranchCallback -> ReactElementM eh ()
+selBranch_ !mDt !tables !cb = view selBranch (mDt, tables, cb) mempty
 
-selBranch :: ReactView (SessionKey, Maybe DataType, TableCache, SelBranchCallback)
-selBranch = defineStatefulView "selBranch" Nothing $ \curBranch (sKey, mDt, tables, cb) -> do
+selBranch :: ReactView (Maybe DataType, TableCache, SelBranchCallback)
+selBranch = defineStatefulView "selBranch" Nothing $ \curBranch (mDt, tables, cb) -> do
   let defDt = DataNumber
       selectedBranch = curBranch <|> toBranch <$> mDt ?: toBranch defDt
   cldiv_ "selBranch" $ select_
@@ -413,8 +405,8 @@ selBranch = defineStatefulView "selBranch" Nothing $ \curBranch (sKey, mDt, tabl
         Nothing      -> error "selBranch: unexpected: Nothing"
     ] $ optionsFor_ branches
   case selectedBranch of
-    BMaybe  -> selBranch_ sKey (subType =<< mDt) tables (cb . DataMaybe)
-    BList   -> selBranch_ sKey (subType =<< mDt) tables (cb . DataList)
+    BMaybe  -> selBranch_ (subType =<< mDt) tables (cb . DataMaybe)
+    BList   -> selBranch_ (subType =<< mDt) tables (cb . DataList)
     BRecord -> selTable_ (recordTableId =<< mDt) tables (cb . DataRecord)
     _       -> pure ()
 

@@ -52,7 +52,7 @@ type instance AuthServerData SessionProtect = SessionData
 
 -- | session length in seconds
 sessionLength :: Clock.NominalDiffTime
-sessionLength = 600
+sessionLength = 60 * 60 * 24 * 2 -- 2 days
 
 -- | initialize a session object
 mkSession :: MonadIO m => Id User -> m Session

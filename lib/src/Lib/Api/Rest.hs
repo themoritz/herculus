@@ -39,7 +39,6 @@ type Routes =
 
  :<|> TableCreate
  :<|> TableList
- :<|> TableListGlobal
  :<|> TableData
  :<|> TableGetWhole
  :<|> TableSetName
@@ -86,7 +85,6 @@ type ProjectDelete        = SessionProtect  :> "project"    :> "delete"   :> Cap
 
 type TableCreate          = SessionProtect  :> "table"      :> "create"     :> ReqBody '[JSON] Table            :> Post '[JSON] (Id Table)
 type TableList            = SessionProtect  :> "table"      :> "list"       :> Capture "projectId" (Id Project) :> Get '[JSON] [Entity Table]
-type TableListGlobal      = SessionProtect  :> "table"      :> "listGlobal" :> Get '[JSON] [Entity Table]
 type TableData            = SessionProtect  :> "table"      :> "data"       :> Capture "tableId" (Id Table)     :> Get '[JSON] [(Id Column, Id Record, CellContent)]
 type TableGetWhole        = SessionProtect  :> "table"      :> "getWhole"   :> Capture "tableId" (Id Table)     :> Get '[JSON] ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
 type TableSetName         = SessionProtect  :> "setName"    :> Capture "tableId" (Id Table)     :> ReqBody '[JSON] Text :> Post '[JSON] ()

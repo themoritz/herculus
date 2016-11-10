@@ -13,7 +13,7 @@ import           Control.Monad.Except           (ExceptT (ExceptT), runExceptT)
 import           Control.Monad.IO.Class         (MonadIO)
 import qualified Data.ByteString.Lazy           as BL
 import qualified Data.ByteString.Lazy.Char8     as BL8
-import           Data.Foldable                  (traverse_)
+import           Data.Foldable                  (for_, traverse_)
 import           Data.Functor                   (($>))
 import           Data.List                      (union)
 import           Data.Maybe                     (catMaybes, isNothing, mapMaybe)
@@ -75,7 +75,6 @@ handle =
 
   :<|> handleTableCreate
   :<|> handleTableList
-  :<|> handleTableListGlobal
   :<|> handleTableData
   :<|> handleTableGetWhole
   :<|> handleTableSetName
@@ -122,14 +121,11 @@ handleAuthLogin (LoginData userName pwd) =
         then pure ()
         else throwError "wrong password"
 
-    getSession userId = getOneByQuery [ "userId" =: toObjectId userId ] >>= \case
-      Right (Entity sessionId session) -> do
-        session' <- prolongSession session
-        update sessionId $ \_ -> session'
-        pure session'
-      Left _ -> do
-        session <- mkSession userId
-        create session $> session
+    getSession userId = do
+      eSession <- getOneByQuery [ "userId" =: toObjectId userId ]
+      for_ eSession $ \(Entity sessionId _) -> delete (sessionId :: Id Session)
+      session <- mkSession userId
+      create session $> session
 
 handleAuthLogout :: MonadHexl m => SessionData -> m ()
 handleAuthLogout (UserInfo userId _ _) =
@@ -184,10 +180,6 @@ handleTableList :: MonadHexl m => SessionData -> Id Project -> m [Entity Table]
 handleTableList (UserInfo userId _ _) projId = do
   permissionProject userId projId
   listByQuery [ "projectId" =: toObjectId projId ]
-
--- TODO: get all tables whose project id points to a project with owner == userId
-handleTableListGlobal :: MonadHexl m => SessionData -> m [Entity Table]
-handleTableListGlobal _ = listByQuery [ ]
 
 handleTableData :: MonadHexl m => SessionData -> Id Table -> m [(Id Column, Id Record, CellContent)]
 handleTableData (UserInfo userId _ _) tblId = do

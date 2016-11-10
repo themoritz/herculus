@@ -10,6 +10,7 @@ module Lib.Model.Column where
 
 import           Control.DeepSeq
 
+import           Control.Lens
 import           Control.Lens.Lens
 import           Control.Lens.Prism
 import           Data.Aeson         (FromJSON (..), ToJSON (..))
@@ -206,3 +207,16 @@ instance FromBSON IsDerived
 instance Val IsDerived where
   val = toValue
   cast' = decodeValue
+
+-- util
+
+getColumnError :: Column -> Maybe Text
+getColumnError col = case col ^. columnKind of
+  ColumnData dat ->
+    case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of
+      (Derived, CompileResultError msg) -> Just msg
+      _                                 -> Nothing
+  ColumnReport rep ->
+    case rep ^. reportColCompiledTemplate of
+      CompileResultError msg -> Just msg
+      _                      -> Nothing

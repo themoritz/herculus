@@ -417,11 +417,13 @@ instance StoreData State where
 
       GetTableCache -> do
           forLoggedIn_ st $ \liSt ->
-            when (Map.null $ liSt ^. stateTableCache) $
-              request api (Proxy :: Proxy Api.TableListGlobal)
-                      (session $ liSt ^. stateSessionKey) $
-                      mkCallback $
-                      \tables -> [SetTableCache $ toTableMap tables]
+            for_ (liSt ^. stateProjectId) $ \projectId ->
+              when (Map.null $ liSt ^. stateTableCache) $
+                request api (Proxy :: Proxy Api.TableList)
+                        (session $ liSt ^. stateSessionKey)
+                        projectId $
+                        mkCallback $
+                        \tables -> [SetTableCache $ toTableMap tables]
           pure st
         where
           toTableMap = Map.fromList . map entityToPair
