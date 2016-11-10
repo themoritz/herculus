@@ -14,4 +14,5 @@ mkDerivation {
     servant text transformers
   ];
   license = stdenv.lib.licenses.unfree;
+  doHaddock = false;
 }

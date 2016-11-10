@@ -19,4 +19,5 @@ mkDerivation {
   homepage = "https://github.com/githubuser/lib#readme";
   description = "Shared by server and client";
   license = stdenv.lib.licenses.unfree;
+  doHaddock = false;
 }

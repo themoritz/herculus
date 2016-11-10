@@ -21,6 +21,7 @@ executable client
                      , Store.Message
                      , Store.Column
                      , Config
+                     , Helper
                      , Store
                      , Views
                      , Views.Auth

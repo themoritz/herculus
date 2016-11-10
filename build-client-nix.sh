@@ -4,7 +4,7 @@ JSDIR=assets/public/js
 mkdir -p $JSDIR
 
 # Client. If lib or other dependencies have changed, need to rerun
-# `nix-shell --command 'cabal configure'`
+# `nix-shell --command 'cabal configure --ghcjs'`
 cd client && \
     cabal build
 

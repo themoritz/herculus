@@ -22,6 +22,7 @@ mkDerivation {
     aeson base bytestring either herculus-lib mongoDB mtl servant servant-server
     stm text transformers wai-websockets warp websockets
   ];
+  doHaddock = false;
   testHaskellDepends = [ base ];
   homepage = "https://gitlab.mdrexl.net/mdrexl/hexl";
   description = "Hexl server";
