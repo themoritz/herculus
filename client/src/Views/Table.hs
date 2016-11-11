@@ -2,6 +2,7 @@ module Views.Table where
 
 import           Control.Lens      hiding (view)
 
+import           Data.Map.Strict   (Map)
 import qualified Data.Map.Strict   as Map
 import           Data.Maybe        (fromMaybe)
 import           Data.Monoid       ((<>))
@@ -9,7 +10,10 @@ import           Data.Monoid       ((<>))
 import           React.Flux
 
 import           Lib.Model
+import           Lib.Model.Auth    (SessionKey)
+import           Lib.Model.Cell    (CellContent)
 import           Lib.Model.Column
+import           Lib.Model.Record  (Record)
 import           Lib.Model.Table
 import           Lib.Types
 
@@ -28,6 +32,27 @@ import           Views.ReportCell
 tableGrid_ :: LoggedInState -> ReactElementM eh ()
 tableGrid_ !st = view tableGrid st mempty
 
+renderCell :: Map Int (Id Column, Column)
+           -> Map Int (Id Record, Record)
+           -> SessionKey
+           -> Map Coords CellContent
+           -> Int -> Int -> ReactElementM eh ()
+renderCell !colByIndex !recByIndex !sKey !cells !x !y =
+  case Map.lookup x colByIndex of
+    Nothing -> mempty
+    Just (c, col) -> case col ^. columnKind of
+      ColumnReport rep ->
+        case  Map.lookup y recByIndex of
+          Just (r, _) -> reportCell_ $ ReportCellProps sKey c r rep
+          Nothing     -> mempty
+      ColumnData   dat -> do
+        let mRC = do (r, _)  <- Map.lookup y recByIndex
+                     content <- Map.lookup (Coords c r) cells
+                     pure (r, content)
+        case mRC of
+          Just (r, content) -> dataCell_ $ DataCellProps c r dat content
+          Nothing           -> mempty
+
 tableGrid :: ReactView LoggedInState
 tableGrid = defineView "tableGrid" $ \st -> do
   let cells = st ^. stateCells
@@ -44,23 +69,6 @@ tableGrid = defineView "tableGrid" $ \st -> do
 
       getRecord y = let Just r = Map.lookup y recByIndex in uncurry Entity r
       getColumn x = let Just c = Map.lookup x colByIndex in uncurry Entity c
-
-      renderCell :: Int -> Int -> ReactElementM eh ()
-      renderCell x y =
-        case Map.lookup x colByIndex of
-          Nothing -> mempty
-          Just (c, col) -> case col ^. columnKind of
-            ColumnReport rep ->
-              case  Map.lookup y recByIndex of
-                Just (r, _) -> reportCell_ $ ReportCellProps sKey c r rep
-                Nothing     -> mempty
-            ColumnData   dat -> do
-              let mRC = do (r, _)  <- Map.lookup y recByIndex
-                           content <- Map.lookup (Coords c r) cells
-                           pure (r, content)
-              case mRC of
-                Just (r, content) -> dataCell_ $ DataCellProps c r dat content
-                Nothing           -> mempty
 
       emptyDataCol :: Id Table -> Column
       emptyDataCol i = Column
@@ -100,7 +108,7 @@ tableGrid = defineView "tableGrid" $ \st -> do
         | y == 0 && 0 < x && x <= numCols =
             column_ (getColumn (x - 1))
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $
-            renderCell (x - 1) (y - 1)
+            renderCell colByIndex recByIndex sKey cells (x - 1) (y - 1)
         | otherwise = cldiv_ "empty" mempty
 
       props = GridProps

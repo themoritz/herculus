@@ -394,7 +394,7 @@ selBranch = defineStatefulView "selBranch" Nothing $ \curBranch (mDt, tables, cb
       selectedBranch = curBranch <|> toBranch <$> mDt ?: toBranch defDt
   cldiv_ "selBranch" $ select_
     [ "defaultValue" &= show selectedBranch
-    , onInput $ \evt _ -> case readMaybe (target evt "value") of
+    , onChange $ \evt _ -> case readMaybe (target evt "value") of
         Just BBool   -> (cb DataBool  , Just $ Just BBool  )
         Just BString -> (cb DataString, Just $ Just BString)
         Just BNumber -> (cb DataNumber, Just $ Just BNumber)
