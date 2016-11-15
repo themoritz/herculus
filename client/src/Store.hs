@@ -320,7 +320,7 @@ instance StoreData State where
 
       TableSet (cols, recs, entries) ->
         forLoggedIn st $ \liSt -> pure $
-          liSt & stateColumns .~ (Column.mkState <$> Map.fromList (map entityToTuple cols))
+          liSt & stateColumns .~ Map.fromList (map entityToTuple cols)
                & stateRecords .~ Map.fromList (map entityToTuple recs)
                & stateCells   .~ fillEntries entries Map.empty
 
@@ -342,7 +342,7 @@ instance StoreData State where
           tableColumn liSt (Entity _ column) =
             liSt ^. stateTableId == Just (column ^. columnTableId)
           acc cols' (Entity columnId column) =
-            Map.insert columnId (Column.mkState column) cols'
+            Map.insert columnId column cols'
 
       TableAddColumn col -> do
         forLoggedIn_ st $ \liSt ->
@@ -353,7 +353,7 @@ instance StoreData State where
 
       TableAddColumnDone (Entity i c, cells) ->
         forLoggedIn st $ \liSt -> pure $
-          liSt & stateColumns %~ Map.insert i (Column.mkState c)
+          liSt & stateColumns %~ Map.insert i c
                & stateCells %~ fillEntries (map toCellUpdate cells)
 
       TableDeleteColumn i ->

@@ -11,23 +11,9 @@ import           Lib.Model.Column (DataType, IsDerived, ReportFormat,
                                    ReportLanguage)
 
 data Action
-  = SetTmpDataType         DataType
-  | UnsetTmpDataType
-  | SetTmpIsFormula        IsDerived
-  | UnsetTmpIsFormula
-  | SetTmpFormula          Text
-  | UnsetTmpFormula
-  | SetVisibility          Bool
-  | SetTmpReportLang       (Maybe ReportLanguage)
-  | UnsetTmpReportLang
-  | SetTmpReportFormat     ReportFormat
-  | UnsetTmpReportFormat
-  | SetTmpReportTemplate   Text
-  | UnsetTmpReportTemplate
-
-  | Rename Text
+  = Rename Text
   -- Data column
-  | DataColUpdate (DataType, IsDerived, Text)
+  | DataColUpdate DataType IsDerived Text
   -- Report column
-  | ReportColUpdate (Text, ReportFormat, Maybe ReportLanguage)
+  | ReportColUpdate Text ReportFormat (Maybe ReportLanguage)
   deriving (NFData, Generic)
