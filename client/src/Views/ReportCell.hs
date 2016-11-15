@@ -21,7 +21,7 @@ import           Lib.Types
 import           Views.Combinators (clspan_)
 
 data ReportCellProps = ReportCellProps
-  { sKey                :: !SessionKey
+  { reportCellSKey      :: !SessionKey
   , reportCellColId     :: !(Id Column)
   , reportCellRecId     :: !(Id Record)
   , reportCellColReport :: !ReportCol
@@ -37,15 +37,15 @@ reportCell = defineView "reportCell" $ \ReportCellProps{..} -> cldiv_ "reportCel
     CompileResultError _ -> clspan_ "error" "Error"
     CompileResultOk _ -> case reportCellColReport ^. reportColFormat of
       ReportFormatPlain ->
-        a_ [ "href" &= getPlain sKey reportCellColId reportCellRecId
+        a_ [ "href" &= getPlain reportCellSKey reportCellColId reportCellRecId
           , "target" $= "_blank"
           ] $ faIcon_ "file-text-o fa-lg"
       ReportFormatPDF ->
-        a_ [ "href" &= getPDF sKey reportCellColId reportCellRecId
+        a_ [ "href" &= getPDF reportCellSKey reportCellColId reportCellRecId
           , "target" $= "_blank"
           ] $ faIcon_ "file-pdf-o fa-lg"
       ReportFormatHTML ->
-        a_ [ "href" &= getHTML sKey reportCellColId reportCellRecId
+        a_ [ "href" &= getHTML reportCellSKey reportCellColId reportCellRecId
           , "target" $= "_blank"
           ] $ faIcon_ "file-code-o fa-lg"
 

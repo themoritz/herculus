@@ -6,6 +6,7 @@ module Views where
 import           Control.DeepSeq     (NFData)
 import           Control.Lens        hiding (view)
 import           Data.Foldable       (for_)
+import qualified Data.IntMap.Strict  as IntMap
 import           Data.Map.Strict     (Map)
 import qualified Data.Map.Strict     as Map
 import           Data.Monoid         ((<>))
@@ -23,13 +24,15 @@ import           Lib.Types
 import           Action              (Action (..))
 import           Helper              (keyENTER, keyESC)
 import           Store               (LoggedOutState (..), SessionState (..),
-                                      State, dispatch, stateMessage,
-                                      stateProjectId, stateProjects,
-                                      stateSession, stateTableId, stateTables,
-                                      stateUserInfo, store)
+                                      State, dispatch, stateCells, stateColumns,
+                                      stateMessage, stateProjectId,
+                                      stateProjects, stateRecords, stateSession,
+                                      stateSessionKey, stateTableId,
+                                      stateTables, stateUserInfo, store)
+import qualified Store.Column        as Column
 import           Views.Auth          (login_, logout_, signup_)
 import           Views.Combinators   (clspan_)
-import           Views.Table         (tableGrid_)
+import           Views.Table         (TableGridProps (..), tableGrid_)
 
 import           Store.Message       (Message (Message))
 import qualified Store.Message       as Message
@@ -42,7 +45,20 @@ app = defineControllerView "app" store $ \st () ->
     case st ^. stateSession of
       StateLoggedOut LoggedOutLoginForm -> login_
       StateLoggedOut LoggedOutSignupForm -> signup_
-      StateLoggedIn liSt -> cldiv_ "tableGrid" $ tableGrid_ liSt
+      StateLoggedIn liSt ->
+        let cols = Column._stColumn <$> liSt ^. stateColumns
+            recs = liSt ^. stateRecords
+            tableGridProps = TableGridProps
+              { _cells      = liSt ^. stateCells
+              , _colByIndex = IntMap.fromList $ zip [0..] (Map.toList cols)
+              , _recByIndex = IntMap.fromList $ zip [0..] (Map.toList recs)
+              , _tableId    = liSt ^. stateTableId
+              , _sKey       = liSt ^. stateSessionKey
+              }
+        in  if not $ null $ liSt ^. stateTables
+            then cldiv_ "tableGrid" $ tableGrid_ tableGridProps
+            else cldiv_ "" mempty
+
     appFooter_ st
 
 -- header
