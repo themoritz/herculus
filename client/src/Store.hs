@@ -239,6 +239,7 @@ instance StoreData State where
       ProjectsAdd (Entity i p) ->
         forLoggedIn st $ \liSt ->
           pure $ liSt & stateProjects . at i .~ Just p
+                      & stateProjectId .~ Just i
 
       ProjectsLoadProject i ->
         forLoggedIn st $ \liSt -> do
@@ -306,6 +307,7 @@ instance StoreData State where
       TablesAdd (Entity i t) ->
         forLoggedIn st $ \liSt ->
           pure $ liSt & stateTables . at i .~ Just t
+                      & stateTableId .~ Just i
 
       TablesLoadTable i ->
         forLoggedIn st $ \liSt -> do
