@@ -8,14 +8,15 @@ import           GHC.Generics    (Generic)
 
 import           Data.Text       (Text)
 import qualified Data.Text       as Text
+import           Helper          (keyENTER)
 
 import           React.Flux      (ReactElementM, ReactView, button_, classNames,
                                   cldiv_, defineStatefulView, defineView,
                                   elemText, input_, label_, onChange, onClick,
-                                  span_, table_, target, tbody_, td_, textarea_,
-                                  tr_, view, ($=), (&=))
+                                  onKeyDown, span_, table_, target, tbody_, td_,
+                                  textarea_, tr_, view, ($=), (&=))
 
-import           Action          (Action (Login, Logout, ToSignupForm, Signup))
+import           Action          (Action (Login, Logout, Signup, ToSignupForm))
 import           Lib.Model.Auth  (LoginData (..), SignupData (..))
 import           Store           (dispatch)
 
@@ -25,54 +26,88 @@ login_ = view login () mempty
 
 data LoginViewState = LoginViewState
   { inpUserNameValue :: Text
+  , inpUserNameError :: Bool
   , inpPwdValue      :: Text
+  , inpPwdError      :: Bool
   } deriving (Generic, Show, NFData)
 
 initialLoginViewState :: LoginViewState
-initialLoginViewState = LoginViewState "" ""
--- initialLoginViewState = LoginViewState "jens" "admin"
+initialLoginViewState = LoginViewState {
+  inpUserNameValue = ""
+  , inpUserNameError = False
+  , inpPwdValue = ""
+  , inpPwdError = False
+}
+
+-- validation -- TODO (jk): Move into Validation.hs
+emptyText :: Text -> Bool
+emptyText = Text.null
+
+validateUserName :: Text -> Bool
+validateUserName = not . emptyText
+
+validatePwd :: Text -> Bool
+validatePwd = not . emptyText
 
 login :: ReactView ()
 login = defineStatefulView "login" initialLoginViewState $ \viewState _ ->
-  -- TODO: client-side validation
-  let validFormData = not $ Text.null (inpUserNameValue viewState) || Text.null (inpPwdValue viewState)
+  let validFormData viewState' = not $ inpUserNameError viewState' || inpPwdError viewState'
+
+      loginHandler viewState' =
+        if validFormData viewState then
+          let loginData = LoginData (inpUserNameValue viewState') (inpPwdValue viewState')
+          in  (dispatch $ Login loginData, Nothing)
+        else
+          ([], Nothing)
+
+      inputKeyDownHandler _ evt vSt
+        | keyENTER evt = loginHandler vSt
+        | otherwise = ([], Just vSt)
+
   in cldiv_ "login" $ table_ $ tbody_ $ do
        tr_ $ do
          td_ $ label_
            [ "htmlFor" $= "username"
            ] "User name"
          td_ $ input_
-           [ "className" $= "inp"
+           [ classNames
+               [ ("inp", True)
+               , ("error", inpUserNameError viewState)
+               ]
            , "type" $= "text"
            , "value" &= inpUserNameValue viewState
            , "placeholder" $= "user name"
            , "autoFocus" &= True
            , "name" $= "username"
-           , onChange $ \ev viewState' -> ([], Just viewState' { inpUserNameValue = target ev "value"})
+           , onChange $ \ev viewState' -> ([], Just viewState' {
+              inpUserNameValue = target ev "value"
+              , inpUserNameError = validateUserName $ target ev "value"})
+           , onKeyDown inputKeyDownHandler
            ]
        tr_ $ do
          td_ $ label_
            [ "htmlFor" $= "password"
            ] "Password"
          td_ $ input_
-           [ "className" $= "inp"
+           [ classNames
+               [ ("inp", True)
+               , ("error", inpPwdError viewState)
+               ]
            , "type" $= "password"
            , "value" &= inpPwdValue viewState
            , "placeholder" $= "password"
            , "name" $= "password"
-           , onChange $ \ev viewState' -> ([], Just viewState' { inpPwdValue = target ev "value"})
+           , onChange $ \ev viewState' -> ([], Just viewState' {
+              inpPwdValue = target ev "value"
+              , inpPwdError = validatePwd $ target ev "value"})
+           , onKeyDown inputKeyDownHandler
            ]
        tr_ $ td_
          [ "className" $= "submit"
          , "colSpan" $= "2"
          ] $ button_
-           [ classNames [ ("enabled", validFormData)]
-           , onClick $ \_ _ _ ->
-             if validFormData then
-               let loginData = LoginData (inpUserNameValue viewState) (inpPwdValue viewState)
-               in  (dispatch $ Login loginData, Nothing)
-             else
-               ([], Nothing)
+           [ classNames [ ("enabled", validFormData viewState)]
+           , onClick $ \_ _ _ -> loginHandler viewState
            ] "Submit"
        tr_ $ td_
          [ "colSpan" $= "2"
@@ -81,7 +116,7 @@ login = defineStatefulView "login" initialLoginViewState $ \viewState _ ->
            button_
              [ classNames [ ("pure", True) ]
              , onClick $ \_ _ _ -> (dispatch ToSignupForm, Nothing)
-             ] $ "Sign up"
+             ] "Sign up"
            "."
 
 logout_ :: Text -> ReactElementM eh ()
@@ -113,12 +148,10 @@ data SignupViewState = SignupViewState
 
 initialSignupViewState :: SignupViewState
 initialSignupViewState = SignupViewState "" "" "" ""
--- initialLoginViewState = LoginViewState "jens" "admin"
 
 signup :: ReactView ()
 signup = defineStatefulView "signup" initialSignupViewState $ \viewState _ ->
   -- TODO: client-side validation
-  -- TODO: server-side validation
   let validFormData = not (Text.null (signupUserName viewState)
                            || Text.null (signupPwd viewState)
                            || Text.null (signupIntention viewState))
