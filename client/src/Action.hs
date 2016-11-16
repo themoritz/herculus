@@ -51,8 +51,6 @@ api = ApiRequestConfig Config.apiUrl NoTimeout
 
 type Callback = forall b. ((b -> [Action]) -> HandleResponse b)
 
-type TableCache = Map (Id Table) Text
-
 data Action
   -- Global
   = MessageAction Message.Action
@@ -91,9 +89,6 @@ data Action
   | TableDeleteRecord (Id Record)
   | TableSetName (Id Table) Text
   | TableDelete (Id Table)
-  -- column config: table cache
-  | GetTableCache
-  | SetTableCache          TableCache
   -- Cell
   | CellSetValue (Id Column) (Id Record) Value
   | ColumnAction (Id Column) Column.Action

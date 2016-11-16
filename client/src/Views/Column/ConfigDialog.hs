@@ -5,18 +5,29 @@
 
 module Views.Column.ConfigDialog where
 
-import           Control.DeepSeq  (NFData)
+import           Control.DeepSeq   (NFData)
 import           Control.Lens
-import           Data.Map         (Map)
-import qualified Data.Map         as Map
-import           Data.Text        (Text)
-import           GHC.Generics     (Generic)
-import           Lib.Model.Column (Column, DataType, IsDerived, ReportFormat,
-                                   ReportLanguage)
-import           Lib.Types        (Id)
-import           React.Flux       (ReactStore, StoreData (..), mkStore)
+import           Data.Map          (Map)
+import qualified Data.Map          as Map
+import           Data.Proxy        (Proxy (..))
+import           Data.Text         (Text)
+import           GHC.Generics      (Generic)
 
-newtype State = State { unState :: Map (Id Column) DialogState }
+import qualified Lib.Api.Rest      as Api
+import           Lib.Model         (Entity (..))
+import           Lib.Model.Column  (Column, DataType, IsDerived, ReportFormat,
+                                    ReportLanguage)
+import           Lib.Model.Project (Project)
+import           Lib.Model.Table   (Table)
+import           Lib.Types         (Id)
+import           React.Flux        (ReactStore, StoreData (..), mkStore)
+
+type TableCache = Map (Id Table) Text
+
+data State = State
+  { _stDialogs    :: Map (Id Column) DialogState
+  , _stTableCache :: TableCache
+  }
 
 data DialogState = DialogState
   { _stTmpDataType       :: Maybe DataType
@@ -28,7 +39,11 @@ data DialogState = DialogState
   , _stTmpReportTemplate :: Maybe Text
   }
 
-makeLenses ''DialogState
+-- helper lens
+-- atDialog :: Applicative f
+--          => Id Column
+--          -> (Dialog.State -> f Dialog.State)
+atDialog i = stDialogs . at i . _Just
 
 store :: ReactStore State
 store = mkStore $ State Map.empty
@@ -49,35 +64,54 @@ data DialogAction
   | UnsetTmpReportFormat
   | SetTmpReportTemplate   Text
   | UnsetTmpReportTemplate
+  -- table cache
+  | GetTableCache          (Id Project)
+  | SetTableCache          TableCache
   deriving (NFData, Generic)
 
 instance StoreData State where
   type StoreAction State = Action
-  transform (Action i action) (State st) = pure $ State $
+  transform (Action i action) st =
     case action of
       SetTmpDataType dt ->
-        st & at i . _Just . stTmpDataType .~ Just dt
+        pure $ State $ st & atDialog i . stTmpDataType .~ Just dt
       UnsetTmpDataType ->
-        st & at i . _Just . stTmpDataType .~ Nothing
+        pure $ State $ st & atDialog i . stTmpDataType .~ Nothing
       SetTmpIsFormula it ->
-        st & at i . _Just . stTmpIsFormula .~ Just it
+        pure $ State $ st & atDialog i . stTmpIsFormula .~ Just it
       UnsetTmpIsFormula ->
-        st & at i . _Just . stTmpIsFormula .~ Nothing
+        pure $ State $ st & atDialog i . stTmpIsFormula .~ Nothing
       SetTmpFormula s ->
-        st & at i . _Just . stTmpFormula .~ Just s
+        pure $ State $ st & atDialog i . stTmpFormula .~ Just s
       UnsetTmpFormula ->
-        st & at i . _Just . stTmpFormula .~ Nothing
+        pure $ State $ st & atDialog i . stTmpFormula .~ Nothing
       SetVisibility b ->
-        st & at i . _Just . stVisible .~ b
+        pure $ State $ st & atDialog i . stVisible .~ b
       SetTmpReportLang lang ->
-        st & at i . _Just . stTmpReportLanguage .~ Just lang
+        pure $ State $ st & atDialog i . stTmpReportLanguage .~ Just lang
       UnsetTmpReportLang ->
-        st & at i . _Just . stTmpReportLanguage .~ Nothing
+        pure $ State $ st & atDialog i . stTmpReportLanguage .~ Nothing
       SetTmpReportFormat format ->
-        st & at i . _Just . stTmpReportFormat .~ Just format
+        pure $ State $ st & atDialog i . stTmpReportFormat .~ Just format
       UnsetTmpReportFormat ->
-        st & at i . _Just . stTmpReportFormat .~ Nothing
+        pure $ State $ st & atDialog i . stTmpReportFormat .~ Nothing
       SetTmpReportTemplate templ ->
-        st & at i . _Just . stTmpReportTemplate .~ Just templ
+        pure $ State $ st & atDialog i . stTmpReportTemplate .~ Just templ
       UnsetTmpReportTemplate ->
-        st & at i . _Just . stTmpReportTemplate .~ Nothing
+        pure $ State $ st & atDialog i . stTmpReportTemplate .~ Nothing
+      GetTableCache projectId sessionKey -> do
+          when (Map.null $ st ^. stTableCache) $
+            request api (Proxy :: Proxy Api.TableList)
+                    (session sessionKey)
+                    projectId $
+                    mkCallback $
+                    \tables -> [SetTableCache $ toTableMap tables]
+          pure st
+        where
+          toTableMap = Map.fromList . map entityToPair
+          entityToPair (Entity tableId table) = (tableId, table ^. tableName)
+      SetTableCache m ->
+       pure $ st & stTableCache .~ m
+
+makeLenses ''State
+makeLenses ''DialogState

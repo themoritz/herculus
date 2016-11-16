@@ -46,7 +46,7 @@ app = defineControllerView "app" store $ \st () ->
       StateLoggedOut LoggedOutLoginForm -> login_
       StateLoggedOut LoggedOutSignupForm -> signup_
       StateLoggedIn liSt ->
-        let cols = Column._stColumn <$> liSt ^. stateColumns
+        let cols = view stColumn <$> liSt ^. stateColumns
             recs = liSt ^. stateRecords
             tableGridProps = TableGridProps
               { _cells      = liSt ^. stateCells

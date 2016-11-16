@@ -30,8 +30,7 @@ import           Lib.Model.Record
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Action                    (Action (..), TableCache, api,
-                                            session)
+import           Action                    (Action (..), api, session)
 import qualified Store.Column              as Column
 import qualified Store.Message             as Message
 import qualified Store.RecordCache         as RecordCache
@@ -73,9 +72,6 @@ data LoggedInState = LoggedInState
   , _stateTables       :: Map (Id Table) Table
   , _stateCells        :: Map Coords CellContent
   , _stateRecords      :: Map (Id Record) Record
-
-  -- for column config
-  , _stateTableCache   :: TableCache
   }
 
 data LoggedOutState
@@ -414,25 +410,6 @@ instance StoreData State where
             else
               pure $ mkStateLoggedIn st $
                 liSt & stateTables %~ Map.delete tableId
-
-      -- Column
-
-      GetTableCache -> do
-          forLoggedIn_ st $ \liSt ->
-            for_ (liSt ^. stateProjectId) $ \projectId ->
-              when (Map.null $ liSt ^. stateTableCache) $
-                request api (Proxy :: Proxy Api.TableList)
-                        (session $ liSt ^. stateSessionKey)
-                        projectId $
-                        mkCallback $
-                        \tables -> [SetTableCache $ toTableMap tables]
-          pure st
-        where
-          toTableMap = Map.fromList . map entityToPair
-          entityToPair (Entity tableId table) = (tableId, table ^. tableName)
-
-      SetTableCache m ->
-        forLoggedIn st $ \liSt -> pure $ liSt & stateTableCache .~ m
 
       -- Cell
 

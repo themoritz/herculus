@@ -25,8 +25,7 @@ import           Lib.Types
 import           Action                    (Action (ColumnAction, TableDeleteColumn, GetTableCache),
                                             TableCache)
 import           Store                     (LoggedInState, dispatch,
-                                            stateColumns, stateTableCache,
-                                            store)
+                                            stateColumns, store)
 import           Views.Combinators
 import           Views.Common              (EditBoxProps (..), editBox_)
 import           Views.Foreign
@@ -118,14 +117,6 @@ recordTableId _                = Nothing
 
 --
 
--- helper lens
-atColumn :: Applicative f
-         => Id Column
-         -> (State -> f State)
-         -> LoggedInState
-         -> f LoggedInState
-atColumn i = stateColumns . at i . _Just
-
 column_ :: Entity Column -> ReactElementM eh ()
 column_ !c = view column c mempty
 
@@ -167,7 +158,7 @@ columnConfig_ :: Entity Column -> ReactElementM eh ()
 columnConfig_ !c = view columnConfig c mempty
 
 columnConfig :: ReactView (Entity Column)
-columnConfig = defineControllerView "column configuration" store $ forLoggedIn $
+columnConfig = defineControllerView "column configuration" Dialog.store $ forLoggedIn $
   \st (Entity i col) -> cldiv_ "config" $ do
     let mError = getColumnError col
     button_ (
@@ -179,7 +170,7 @@ columnConfig = defineControllerView "column configuration" store $ forLoggedIn $
           ]
       , onClick $ \_ _ -> dispatchAction i $ SetVisibility True
       ] ) $ faIcon_ "gear fa-2x"
-    when (st ^? atColumn i . stVisible == Just True) $
+    when (st ^? Dialog.atDialog i . Dialog.stVisible == Just True) $
       case col ^. columnKind of
         ColumnData   dat -> dataColConf_ i dat
         ColumnReport rep -> reportColConf_ i rep
@@ -209,14 +200,17 @@ reportColConf_ :: Id Column -> ReportCol -> ReactElementM eh ()
 reportColConf_ !i !r = view reportColConf (i, r) mempty
 
 reportColConf :: ReactView (Id Column, ReportCol)
-reportColConf = defineControllerView "report column config" store $ forLoggedIn $
+reportColConf = defineControllerView "report column config" Dialog.store $ forLoggedIn $
   \st (i, rep) -> cldiv_ "dialog report" $ do
     let mError = case rep ^. reportColCompiledTemplate of
           CompileResultError msg -> Just msg
           _                      -> Nothing
-        lang = join (st ^? atColumn i . stTmpReportLanguage) ?: rep ^. reportColLanguage
-        format = join (st ^? atColumn i . stTmpReportFormat) ?: rep ^. reportColFormat
-        template = join (st ^? atColumn i . stTmpReportTemplate) ?: rep ^. reportColTemplate
+        lang = join (st ^? Dialog.atDialog i . Dialog.stTmpReportLanguage)
+          ?: rep ^. reportColLanguage
+        format = join (st ^? Dialog.atDialog i . Dialog.stTmpReportFormat)
+          ?: rep ^. reportColFormat
+        template = join (st ^? Dialog.atDialog i . Dialog.stTmpReportTemplate)
+          ?: rep ^. reportColTemplate
     cldiv_ "bodyWrapper" $ do
       cldiv_ "body" $ do
         cldiv_ "language" $ selReportLanguage_ i lang
@@ -300,7 +294,7 @@ dataTypeInfo_ :: DataType -> ReactElementM eh ()
 dataTypeInfo_ !dt = view dataTypeInfo dt mempty
 
 dataTypeInfo :: ReactView DataType
-dataTypeInfo = defineControllerView "datatype info" store $ forLoggedIn $
+dataTypeInfo = defineControllerView "datatype info" Dialog.store $ forLoggedIn $
   \st dt -> span_ [ "className" $= "dataType" ] $
     case dt of
       DataBool     -> "Bool"
@@ -309,7 +303,7 @@ dataTypeInfo = defineControllerView "datatype info" store $ forLoggedIn $
       DataTime     -> "Time"
       DataRecord t -> do
         onDidMount_ (dispatch GetTableCache) mempty
-        let tblName = Map.lookup t (st ^. stateTableCache)
+        let tblName = Map.lookup t (st ^. Dialog.stTableCache)
                         ?: "missing table"
         elemText $ "Row from " <> tblName
       DataList   d -> do "List ("
@@ -323,20 +317,20 @@ dataColConf_ :: Id Column -> DataCol -> ReactElementM eh ()
 dataColConf_ !i !d = view dataColConf (i, d) mempty
 
 dataColConf :: ReactView (Id Column, DataCol)
-dataColConf = defineControllerView "data column configuration" store $ forLoggedIn $
+dataColConf = defineControllerView "data column configuration" Dialog.store $ forLoggedIn $
   \st (i, dat) -> cldiv_ "dialog data" $ do
       let mError = case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of
             (Derived, CompileResultError msg) -> Just msg
             _                                 -> Nothing
-          isDerived = join (st ^? atColumn i . stTmpIsFormula)
+          isDerived = join (st ^? Dialog.atDialog i . Dialog.stTmpIsFormula)
             ?: dat ^. dataColIsDerived
-          formula = join (st ^? atColumn i . stTmpFormula)
+          formula = join (st ^? Dialog.atDialog i . Dialog.stTmpFormula)
             ?: dat ^. dataColSourceCode
-          dt = join (st ^? atColumn i . stTmpDataType)
+          dt = join (st ^? Dialog.atDialog i . Dialog.stTmpDataType)
             ?: dat ^. dataColType
       cldiv_ "bodyWrapper" $ cldiv_ "body" $ do
         cldiv_ "datatype" $
-          selDatatype_ i dat (st ^. stateTableCache)
+          selDatatype_ i dat (st ^. Dialog.stTableCache)
         cldiv_ "formula" $ do
           checkIsFormula_ i isDerived
           inputFormula_ i formula isDerived
