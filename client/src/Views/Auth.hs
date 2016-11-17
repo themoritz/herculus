@@ -32,6 +32,7 @@ validateUserName = not . emptyText
 validatePwd :: Text -> Bool
 validatePwd = not . emptyText
 
+
 -- views
 
 login_ :: ReactElementM eh ()
@@ -40,14 +41,14 @@ login_ = view login () mempty
 data LoginViewState = LoginViewState
   { inpUserNameValue :: Text
   , inpPwdValue      :: Text
-  , showErrors       :: Bool
+  , showLoginErrors  :: Bool
   } deriving (Generic, Show, NFData)
 
 initialLoginViewState :: LoginViewState
 initialLoginViewState = LoginViewState {
   inpUserNameValue = ""
   , inpPwdValue = ""
-  , showErrors = False
+  , showLoginErrors = False
 }
 
 login :: ReactView ()
@@ -55,17 +56,17 @@ login = defineStatefulView "login" initialLoginViewState $ \viewState _ ->
 
   let inpUserNameError = not . validateUserName $ inpUserNameValue viewState
       inpPwdError = not . validatePwd $ inpPwdValue viewState
-      validFormData viewState' = not (inpUserNameError || inpPwdError)
+      validFormData = not (inpUserNameError || inpPwdError)
 
       loginHandler viewState' =
-        if validFormData viewState' then
+        if validFormData then
           (dispatch $ Login (LoginData (inpUserNameValue viewState') (inpPwdValue viewState'))
             , Just updatedErrorState)
         else
           ([], Just updatedErrorState)
         where
           updatedErrorState = viewState' {
-             showErrors = True
+             showLoginErrors = True
            }
 
       inputKeyDownHandler _ evt viewState'
@@ -80,7 +81,7 @@ login = defineStatefulView "login" initialLoginViewState $ \viewState _ ->
          td_ $ input_
            [ classNames
                [ ("auth-input", True)
-               , ("invalid", showErrors viewState && inpUserNameError)
+               , ("invalid", showLoginErrors viewState && inpUserNameError)
                ]
            , "type" $= "text"
            , "value" &= inpUserNameValue viewState
@@ -97,7 +98,7 @@ login = defineStatefulView "login" initialLoginViewState $ \viewState _ ->
          td_ $ input_
            [ classNames
                [ ("auth-input", True)
-               , ("invalid", showErrors viewState && inpPwdError)
+               , ("invalid", showLoginErrors viewState && inpPwdError)
                ]
            , "type" $= "password"
            , "value" &= inpPwdValue viewState
@@ -110,8 +111,8 @@ login = defineStatefulView "login" initialLoginViewState $ \viewState _ ->
          [ "className" $= "submit"
          , "colSpan" $= "2"
          ] $ button_
-           [ classNames [ ("enabled", validFormData viewState)]
-           , onClick $ \_ _ _ -> loginHandler viewState
+           [ classNames [ ("enabled", validFormData)]
+           , onClick $ \_ _ viewState' -> loginHandler viewState'
            ] "Submit"
        tr_ $ td_
          [ "colSpan" $= "2"
@@ -148,81 +149,124 @@ data SignupViewState = SignupViewState
   , signupPwd        :: Text
   , signupPwdConfirm :: Text
   , signupIntention  :: Text
+  , showSignupErrors :: Bool
   } deriving (Generic, Show, NFData)
 
 initialSignupViewState :: SignupViewState
-initialSignupViewState = SignupViewState "" "" "" ""
+initialSignupViewState = SignupViewState {
+  signupUserName = ""
+  , signupPwd = ""
+  , signupPwdConfirm = ""
+  , signupIntention = ""
+  , showSignupErrors = False
+}
 
 signup :: ReactView ()
 signup = defineStatefulView "signup" initialSignupViewState $ \viewState _ ->
-  -- TODO: client-side validation
-  let validFormData = not (Text.null (signupUserName viewState)
-                           || Text.null (signupPwd viewState)
-                           || Text.null (signupIntention viewState))
-                   && signupPwd viewState == signupPwdConfirm viewState
+
+  let signupUserNameError = not . validateUserName $ signupUserName viewState
+      equalPwdValues = signupPwd viewState == signupPwdConfirm viewState
+      signupPwdError = (not . validatePwd $ signupPwd viewState)
+        || not equalPwdValues
+      signupPwdConfirmError = (not . validatePwd $ signupPwdConfirm viewState)
+        || not equalPwdValues
+      signupIntentionError = emptyText $ signupIntention viewState
+
+      validFormData = not (signupUserNameError || signupPwdError ||
+        signupPwdConfirmError || signupIntentionError)
+
+      signupHandler viewState' =
+        if validFormData then
+          let signupData = SignupData
+                { suUserName = signupUserName viewState'
+                , suPassword = signupPwd viewState'
+                , suIntention = signupIntention viewState'
+                }
+          in (dispatch $ Signup signupData, Just updatedErrorState)
+        else
+          ([], Just updatedErrorState)
+        where
+          updatedErrorState = viewState' {
+            showSignupErrors = True
+          }
+
+      inputKeyDownHandler _ evt viewState'
+       | keyENTER evt = signupHandler viewState'
+       | otherwise = ([], Nothing)
+
   in cldiv_ "signup" $ do
-       table_ $ tbody_ $ do
-         tr_ $ do
-           td_ $ label_
-             [ "htmlFor" $= "intention"
-             ] "What are you planning to use Herculus for?"
-           td_ $ textarea_
-             [ "value" &= signupIntention viewState
-             , "placeholder" $= "Describe a project, idea, use case or that you just play around"
-             , "name" $= "intention"
-             , onChange $ \ev st -> ([], Just st { signupIntention = target ev "value" })
-             ] "What are you planning to use Herculus for?"
-         tr_ $ do
-           td_ $ label_
-             [ "htmlFor" $= "username"
-             ] "User name"
-           td_ $ input_
-             [ "className" $= "inp"
-             , "type" $= "text"
-             , "value" &= signupUserName viewState
-             , "placeholder" $= "user name"
-             , "autoFocus" &= True
-             , "name" $= "username"
-             , onChange $ \ev st -> ([], Just st { signupUserName = target ev "value"})
-             ]
-         tr_ $ do
+      table_ $ tbody_ $ do
+        tr_ $
+          td_ [ "colSpan" $= "2"] $
+            label_
+              [ "htmlFor" $= "intention"
+              ] "What are you planning to use Herculus for? Describe a project, idea, use case or that you just play around."
+        tr_ $
+          td_ [ "colSpan" $= "2"] $
+            textarea_
+              [ classNames
+                  [ ("auth-txtarea", True)
+                  , ("invalid", showSignupErrors viewState && signupIntentionError)
+                  ]
+              , "value" &= signupIntention viewState
+              , "name" $= "intention"
+              , onChange $ \ev st -> ([], Just st {
+                  signupIntention = target ev "value" })
+              ] ""
+        tr_ $ do
+          td_ $ label_
+            [ "htmlFor" $= "username"
+            ] "User name"
+          td_ $ input_
+            [ classNames
+                [ ("auth-input", True)
+                , ("invalid", showSignupErrors viewState && signupUserNameError)
+                ]
+            , "type" $= "text"
+            , "value" &= signupUserName viewState
+            , "autoFocus" &= True
+            , "name" $= "username"
+            , onChange $ \ev st -> ([], Just st {
+                signupUserName = target ev "value"})
+            , onKeyDown inputKeyDownHandler
+            ]
+        tr_ $ do
            td_ $ label_
              [ "htmlFor" $= "password"
              ] "Password"
            td_ $ input_
-             [ "className" $= "inp"
+             [ classNames
+                 [ ("auth-input", True)
+                 , ("invalid", showSignupErrors viewState && signupPwdError)
+                 ]
              , "type" $= "password"
              , "value" &= signupPwd viewState
-             , "placeholder" $= "password"
              , "name" $= "password"
-             , onChange $ \ev st -> ([], Just st { signupPwd = target ev "value"})
+             , onChange $ \ev st -> ([], Just st {
+                signupPwd = target ev "value"})
+             , onKeyDown inputKeyDownHandler
              ]
-         tr_ $ do
+        tr_ $ do
            td_ $ label_
              [ "htmlFor" $= "passwordConfirm"
              ] "Password (again)"
            td_ $ input_
-             [ "className" $= "inp"
+             [ classNames
+                 [ ("auth-input", True)
+                 , ("invalid", showSignupErrors viewState && signupPwdConfirmError)
+                 ]
              , "type" $= "password"
              , "value" &= signupPwdConfirm viewState
-             , "placeholder" $= "password confirmation"
              , "name" $= "passwordConfirm"
-             , onChange $ \ev st -> ([], Just st { signupPwdConfirm = target ev "value"})
+             , onChange $ \ev st -> ([], Just st {
+                signupPwdConfirm = target ev "value"})
+             , onKeyDown inputKeyDownHandler
              ]
-         tr_ $ td_
+        tr_ $ td_
            [ "className" $= "submit"
            , "colSpan" $= "2"
            ] $ button_
              [ classNames [ ("enabled", validFormData)]
-             , onClick $ \_ _ _ ->
-               if validFormData then
-                 let signupData = SignupData
-                       { suUserName = signupUserName viewState
-                       , suPassword = signupPwd viewState
-                       , suIntention = signupIntention viewState
-                       }
-                 in  (dispatch $ Signup signupData, Nothing)
-               else
-                 ([], Nothing)
+             , onClick $ \_ _ st -> signupHandler st
              ] "Submit"
-       cldiv_ "disclaimer" "Please be aware that this a beta version. We are still in the progress of implementing a lot of features. Bugs may occur. Your feedback to hi@herculus.io is highly appreciated. Please note that we cannot at the moment guarantee that projects will be carried over to future versions and thus data you enter now gets potentially lost."
+      cldiv_ "disclaimer" "Please be aware that this a beta version. We are still in the progress of implementing a lot of features. Bugs may occur. Your feedback to hi@herculus.io is highly appreciated. Please note that we cannot at the moment guarantee that projects will be carried over to future versions and thus data you enter now gets potentially lost."
