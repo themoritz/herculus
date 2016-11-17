@@ -6,56 +6,49 @@ module Store.RecordCache
   ( module Action.RecordCache
   , runAction
   , recordCache
+  , empty
   , State
   ) where
 
-import           Control.Arrow             (second)
+import           Control.Arrow      (second)
 import           Control.Lens
-import           Control.Monad             (when)
-import           Data.Map                  (Map)
-import qualified Data.Map                  as Map
-import           Data.Proxy                (Proxy (..))
-import qualified Lib.Api.Rest              as Api
-import           Lib.Model                 (Entity (Entity))
-import           Lib.Model.Auth            (SessionKey)
-import           Lib.Model.Cell            (CellContent)
-import           Lib.Model.Column          (Column)
-import           Lib.Model.Record          (Record)
-import           Lib.Model.Table           (Table)
-import           Lib.Types                 (Id)
-import           React.Flux.Addons.Servant (request)
+import           Data.Map           (Map)
+import qualified Data.Map           as Map
+import           Lib.Model          (Entity (Entity))
+import           Lib.Model.Auth     (SessionKey)
+import           Lib.Model.Cell     (CellContent)
+import           Lib.Model.Column   (Column)
+import           Lib.Model.Record   (Record)
+import           Lib.Model.Table    (Table)
+import           Lib.Types          (Id)
 
-import           Action                    (Action (RecordCacheAction),
-                                            Callback, api, session)
-import           Action.RecordCache        (Action (..))
+import           Action.RecordCache (Action (..))
 
 data State = State
-  { _recordCache :: Map (Id Record) (Map (Id Column) (Column, CellContent)) }
+  { _recordCache :: Map (Id Record) (Map (Id Column) (Column, CellContent))
+  }
+
+empty :: State
+empty = State
+  { _recordCache = Map.empty
+  }
 
 makeLenses ''State
 
-runAction :: Callback
-          -> SessionKey
-          -> Id Table
+runAction :: Id Table
           -> Action.RecordCache.Action
-          -> State -> IO State
-runAction mkCallback sessionKey tableId = \case
+          -> State -> State
+runAction tableId = \case
     Add recordId record ->
       let toCol (Entity c col, content) = (c, (col, content))
           recMap = Map.fromList $ map toCol record
-      in  \cache -> pure $ cache & recordCache . at recordId .~ Just recMap
+      in  recordCache . at recordId .~ Just recMap
 
-    Delete r ->
-      \cache -> pure $ cache & recordCache . at r .~ Nothing
+    -- record cache get is in src/Action
 
-    Get -> \cache -> do
-      when ( Map.null $ cache ^. recordCache) $
-        request api (Proxy :: Proxy Api.RecordListWithData)
-                    (session sessionKey) tableId $ mkCallback $
-                    \records -> [RecordCacheAction tableId $ Set records]
-      pure cache
+    Delete r -> recordCache . at r .~ Nothing
 
     Set recs ->
       let toCol (Entity c col, content) = (c, (col, content))
           recMaps = map (second $ Map.fromList . map toCol) recs
-      in  \cache -> pure $ cache & recordCache .~ Map.fromList recMaps
+      in  recordCache .~ Map.fromList recMaps

@@ -62,6 +62,7 @@ data Action
   | LoggedIn UserInfo
   | Logout
 
+  | RecordCacheGet (Id Table)
   | RecordCacheAction (Id Table) RecordCache.Action
   -- Projects
   | ProjectsSet [Entity Project]
