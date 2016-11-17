@@ -21,25 +21,8 @@ import           Lib.Model.Auth  (LoginData (..), SignupData (..))
 import           Store           (dispatch)
 
 
-login_ :: ReactElementM eh ()
-login_ = view login () mempty
+-- validation helpers
 
-data LoginViewState = LoginViewState
-  { inpUserNameValue :: Text
-  , inpUserNameError :: Bool
-  , inpPwdValue      :: Text
-  , inpPwdError      :: Bool
-  } deriving (Generic, Show, NFData)
-
-initialLoginViewState :: LoginViewState
-initialLoginViewState = LoginViewState {
-  inpUserNameValue = ""
-  , inpUserNameError = False
-  , inpPwdValue = ""
-  , inpPwdError = False
-}
-
--- validation -- TODO (jk): Move into Validation.hs
 emptyText :: Text -> Bool
 emptyText = Text.null
 
@@ -49,20 +32,45 @@ validateUserName = not . emptyText
 validatePwd :: Text -> Bool
 validatePwd = not . emptyText
 
+-- views
+
+login_ :: ReactElementM eh ()
+login_ = view login () mempty
+
+data LoginViewState = LoginViewState
+  { inpUserNameValue :: Text
+  , inpPwdValue      :: Text
+  , showErrors       :: Bool
+  } deriving (Generic, Show, NFData)
+
+initialLoginViewState :: LoginViewState
+initialLoginViewState = LoginViewState {
+  inpUserNameValue = ""
+  , inpPwdValue = ""
+  , showErrors = False
+}
+
 login :: ReactView ()
 login = defineStatefulView "login" initialLoginViewState $ \viewState _ ->
-  let validFormData viewState' = not $ inpUserNameError viewState' || inpPwdError viewState'
+
+  let inpUserNameError = not . validateUserName $ inpUserNameValue viewState
+      inpPwdError = not . validatePwd $ inpPwdValue viewState
+      validFormData viewState' = not (inpUserNameError || inpPwdError)
 
       loginHandler viewState' =
-        if validFormData viewState then
-          let loginData = LoginData (inpUserNameValue viewState') (inpPwdValue viewState')
-          in  (dispatch $ Login loginData, Nothing)
+        if validFormData viewState' then
+          (dispatch $ Login (LoginData (inpUserNameValue viewState') (inpPwdValue viewState'))
+            , Just updatedErrorState)
         else
-          ([], Nothing)
+          ([], Just updatedErrorState)
+        where
+          updatedErrorState = viewState' {
+             showErrors = True
+           }
 
-      inputKeyDownHandler _ evt vSt
-        | keyENTER evt = loginHandler vSt
-        | otherwise = ([], Just vSt)
+      inputKeyDownHandler _ evt viewState'
+        | keyENTER evt = loginHandler viewState'
+        | otherwise = ([], Nothing)
 
   in cldiv_ "login" $ table_ $ tbody_ $ do
        tr_ $ do
@@ -71,17 +79,15 @@ login = defineStatefulView "login" initialLoginViewState $ \viewState _ ->
            ] "User name"
          td_ $ input_
            [ classNames
-               [ ("inp", True)
-               , ("error", inpUserNameError viewState)
+               [ ("auth-input", True)
+               , ("invalid", showErrors viewState && inpUserNameError)
                ]
            , "type" $= "text"
            , "value" &= inpUserNameValue viewState
-           , "placeholder" $= "user name"
            , "autoFocus" &= True
            , "name" $= "username"
            , onChange $ \ev viewState' -> ([], Just viewState' {
-              inpUserNameValue = target ev "value"
-              , inpUserNameError = validateUserName $ target ev "value"})
+              inpUserNameValue = target ev "value"})
            , onKeyDown inputKeyDownHandler
            ]
        tr_ $ do
@@ -90,16 +96,14 @@ login = defineStatefulView "login" initialLoginViewState $ \viewState _ ->
            ] "Password"
          td_ $ input_
            [ classNames
-               [ ("inp", True)
-               , ("error", inpPwdError viewState)
+               [ ("auth-input", True)
+               , ("invalid", showErrors viewState && inpPwdError)
                ]
            , "type" $= "password"
            , "value" &= inpPwdValue viewState
-           , "placeholder" $= "password"
            , "name" $= "password"
            , onChange $ \ev viewState' -> ([], Just viewState' {
-              inpPwdValue = target ev "value"
-              , inpPwdError = validatePwd $ target ev "value"})
+              inpPwdValue = target ev "value"})
            , onKeyDown inputKeyDownHandler
            ]
        tr_ $ td_

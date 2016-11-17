@@ -1,3 +1,20 @@
+
+
+.auth-input {
+  background: $light-gray;
+  border: 1px solid darken($light-gray, 3%);
+  border-radius: 2px;
+  outline: none;
+  padding: 5px 5px;
+  color: $anthrazit;
+  font-size: larger;
+
+  &.invalid {
+      background-color: lighten(red, 40%);
+      border: 1px solid lighten(red, 20%);
+  }
+}
+
 .login {
   position: absolute;
   top: 200px;
@@ -7,7 +24,7 @@
   }
 }
 
-.signup {
+.auth-signup {
   position: absolute;
   top: 200px;
   left: 20px;
