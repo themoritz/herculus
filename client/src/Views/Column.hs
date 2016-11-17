@@ -3,43 +3,45 @@
 
 module Views.Column where
 
-import           Control.Applicative ((<|>))
-import           Control.DeepSeq     (NFData)
-import           Control.Lens        hiding (view)
-import           Control.Monad       (join, when)
-import           Data.Foldable       (for_)
-import           Data.Map            (Map)
-import qualified Data.Map            as Map
-import           Data.Maybe          (fromMaybe, isJust)
-import           Data.Monoid         ((<>))
-import           Data.Text           (Text)
-import           GHC.Generics        (Generic)
+import           Control.Applicative       ((<|>))
+import           Control.DeepSeq           (NFData)
+import           Control.Lens              hiding (view)
+import           Control.Monad             (join, when)
+import           Data.Foldable             (for_)
+import           Data.Map                  (Map)
+import qualified Data.Map                  as Map
+import           Data.Maybe                (fromMaybe, isJust)
+import           Data.Monoid               ((<>))
+import           Data.Text                 (Text)
+import           GHC.Generics              (Generic)
 import           React.Flux
-import           Text.Read           (readMaybe)
+import           Text.Read                 (readMaybe)
 
 import           Lib.Model
+import           Lib.Model.Auth            (SessionKey)
 import           Lib.Model.Column
+import           Lib.Model.Project         (Project)
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Action              (Action (ColumnAction, TableDeleteColumn, GetTableCache),
-                                      TableCache)
-import           Store               (LoggedInState, dispatch, stateColumns,
-                                      stateTableCache, store)
+import           Action                    (Action (ColumnAction, TableDeleteColumn))
+import           Store                     (dispatch, store)
 import           Views.Combinators
-import           Views.Common        (EditBoxProps (..), editBox_)
+import           Views.Common              (EditBoxProps (..), editBox_)
 import           Views.Foreign
-import           Views.Util          (forLoggedIn)
 
+import qualified Action.Column             as Column
 import           Store.Column
-
--- state of column controller view
-
---
-
--- branch selection types
+import qualified Views.Column.ConfigDialog as Dialog
 
 --
+
+-- | column action, concerns the column given by the id of the main store
+mkColumnAction :: Id Column -> Column.Action -> SomeStoreAction
+mkColumnAction i = SomeStoreAction store . ColumnAction i
+
+dispatchColumnAction :: Id Column -> Column.Action -> [SomeStoreAction]
+dispatchColumnAction i a = [mkColumnAction i a]
 
 type SelBranchCallback = DataType -> [SomeStoreAction]
 type SelTableCallback  = Id Table -> [SomeStoreAction]
@@ -107,19 +109,11 @@ recordTableId _                = Nothing
 
 --
 
--- helper lens
-atColumn :: Applicative f
-         => Id Column
-         -> (State -> f State)
-         -> LoggedInState
-         -> f LoggedInState
-atColumn i = stateColumns . at i . _Just
+column_ :: Id Project -> SessionKey -> Entity Column -> ReactElementM eh ()
+column_ !projectId !sKey !c = view column (projectId, sKey, c) mempty
 
-column_ :: Entity Column -> ReactElementM eh ()
-column_ !c = view column c mempty
-
-column :: ReactView (Entity Column)
-column = defineView "column" $ \c@(Entity i col) -> cldiv_ "column" $ do
+column :: ReactView (Id Project, SessionKey, Entity Column)
+column = defineView "column" $ \(projectId, sKey, c@(Entity i col)) -> cldiv_ "column" $ do
   cldiv_ "head" $ do
     editBox_ EditBoxProps
       { editBoxValue       = col ^. columnName
@@ -127,37 +121,37 @@ column = defineView "column" $ \c@(Entity i col) -> cldiv_ "column" $ do
       , editBoxClassName   = "columnName"
       , editBoxShow        = id
       , editBoxValidator   = Just
-      , editBoxOnSave      = dispatch . ColumnAction i . Rename
+      , editBoxOnSave      = dispatchColumnAction i . Rename
       }
-    columnInfo_ c
-  columnConfig_ c
+    columnInfo_ projectId sKey c
+  columnConfig_ projectId sKey c
 
 -- column info, a summary of datatype and isDerived
 
-columnInfo_ :: Entity Column -> ReactElementM eh ()
-columnInfo_ !c = view columnInfo c mempty
+columnInfo_ :: Id Project -> SessionKey -> Entity Column -> ReactElementM eh ()
+columnInfo_ !projectId !sKey !c = view columnInfo (projectId, sKey, c) mempty
 
-columnInfo :: ReactView (Entity Column)
-columnInfo = defineView "column info" $ \(Entity _ col) ->
+columnInfo :: ReactView (Id Project, SessionKey, Entity Column)
+columnInfo = defineView "column info" $ \(projectId, sKey, Entity _ col) ->
   cldiv_ "info" $
     case col ^. columnKind of
       ColumnData dat -> do
         case dat ^. dataColIsDerived of
           Derived    -> faIcon_ "superscript fa-fw"
           NotDerived -> faIcon_ "i-cursor fa-fw"
-        dataTypeInfo_ (dat ^. dataColType)
+        dataTypeInfo_ projectId sKey (dat ^. dataColType)
       ColumnReport rep -> do
         faIcon_ "file-text-o"
         reportInfo_ rep
 
 -- configure column
 
-columnConfig_ :: Entity Column -> ReactElementM eh ()
-columnConfig_ !c = view columnConfig c mempty
+columnConfig_ :: Id Project -> SessionKey -> Entity Column -> ReactElementM eh ()
+columnConfig_ !projectId !sKey !c = view columnConfig (projectId, sKey, c) mempty
 
-columnConfig :: ReactView (Entity Column)
-columnConfig = defineControllerView "column configuration" store $ forLoggedIn $
-  \st (Entity i col) -> cldiv_ "config" $ do
+columnConfig :: ReactView (Id Project, SessionKey, Entity Column)
+columnConfig = defineControllerView "column configuration" Dialog.store $
+  \st (projectId, sKey, Entity i col) -> cldiv_ "config" $ do
     let mError = getColumnError col
     button_ (
       maybe [] (\msg -> [ "title" &= msg ]) mError <>
@@ -166,12 +160,11 @@ columnConfig = defineControllerView "column configuration" store $ forLoggedIn $
           , ("pure", True)
           , ("error", isJust mError)
           ]
-      , onClick $ \_ _ ->
-          [ SomeStoreAction store $ ColumnAction i $ SetVisibility True ]
+      , onClick $ \_ _ -> Dialog.dispatch $ Dialog.SetVisibility i True
       ] ) $ faIcon_ "gear fa-2x"
-    when (st ^? atColumn i . stVisible == Just True) $
+    when (st ^? Dialog.atDialog i . Dialog.stVisible == Just True) $
       case col ^. columnKind of
-        ColumnData   dat -> dataColConf_ i dat
+        ColumnData   dat -> dataColConf_ projectId sKey i dat
         ColumnReport rep -> reportColConf_ i rep
 
 -- column kind: report
@@ -199,14 +192,17 @@ reportColConf_ :: Id Column -> ReportCol -> ReactElementM eh ()
 reportColConf_ !i !r = view reportColConf (i, r) mempty
 
 reportColConf :: ReactView (Id Column, ReportCol)
-reportColConf = defineControllerView "report column config" store $ forLoggedIn $
+reportColConf = defineControllerView "report column config" Dialog.store $
   \st (i, rep) -> cldiv_ "dialog report" $ do
     let mError = case rep ^. reportColCompiledTemplate of
           CompileResultError msg -> Just msg
           _                      -> Nothing
-        lang = join (st ^? atColumn i . stTmpReportLanguage) ?: rep ^. reportColLanguage
-        format = join (st ^? atColumn i . stTmpReportFormat) ?: rep ^. reportColFormat
-        template = join (st ^? atColumn i . stTmpReportTemplate) ?: rep ^. reportColTemplate
+        lang = join (st ^? Dialog.atDialog i . Dialog.stTmpReportLanguage)
+          ?: rep ^. reportColLanguage
+        format = join (st ^? Dialog.atDialog i . Dialog.stTmpReportFormat)
+          ?: rep ^. reportColFormat
+        template = join (st ^? Dialog.atDialog i . Dialog.stTmpReportTemplate)
+          ?: rep ^. reportColTemplate
     cldiv_ "bodyWrapper" $ do
       cldiv_ "body" $ do
         cldiv_ "language" $ selReportLanguage_ i lang
@@ -217,22 +213,21 @@ reportColConf = defineControllerView "report column config" store $ forLoggedIn 
     for_ mError $ \errMsg -> cldiv_ "error" $ do
       clspan_ "title" "Error"
       cldiv_  "body" $ elemText errMsg
-    let cancelActions = SomeStoreAction store . ColumnAction i <$>
-          [ SetVisibility False
-          , UnsetTmpReportLang
-          , UnsetTmpReportFormat
-          , UnsetTmpReportTemplate
+    let cancelActions = Dialog.mkAction <$>
+          [ Dialog.SetVisibility i False
+          , Dialog.UnsetTmpReportLang i
+          , Dialog.UnsetTmpReportFormat i
+          , Dialog.UnsetTmpReportTemplate i
           ]
-        deleteActions = [ SomeStoreAction store $ TableDeleteColumn i ]
-        saveActions   = SomeStoreAction store . ColumnAction i <$>
-          -- hide dialog
-          [ SetVisibility False
-          , ReportColUpdate (template, format, lang)
-          , UnsetTmpReportLang
-          , UnsetTmpReportFormat
-          , UnsetTmpReportTemplate
-          -- datatype selection
-          ]
+        deleteActions = dispatch $ TableDeleteColumn i
+        saveActions   =
+          mkColumnAction i (ReportColUpdate template format lang) :
+            map Dialog.mkAction
+              [ Dialog.SetVisibility i False
+              , Dialog.UnsetTmpReportLang i
+              , Dialog.UnsetTmpReportFormat i
+              , Dialog.UnsetTmpReportTemplate i
+              ]
     confButtons_ cancelActions deleteActions saveActions
 
 selReportLanguage_ :: Id Column -> Maybe ReportLanguage -> ReactElementM eh ()
@@ -247,7 +242,7 @@ selReportLanguage = defineView "select report lang" $ \(i, lang) ->
       , onInput $ \evt ->
           let lang' = readMaybe (target evt "value") -- Maybe (Maybe a)
                 ?: Nothing -- unexpected
-          in  [SomeStoreAction store $ ColumnAction i $ SetTmpReportLang lang' ]
+          in  Dialog.dispatch $ Dialog.SetTmpReportLang i lang'
       ] $ optionsFor_ reportLangs
 
 selReportFormat_ :: Id Column -> ReportFormat -> ReactElementM eh ()
@@ -262,7 +257,7 @@ selReportFormat = defineView "select report format" $ \(i, format) ->
       , onInput $ \evt ->
           let format' = readMaybe (target evt "value")
                 ?: ReportFormatPlain -- unexpected
-          in  [SomeStoreAction store $ ColumnAction i $ SetTmpReportFormat format' ]
+          in  Dialog.dispatch $ Dialog.SetTmpReportFormat i format'
       ] $ optionsFor_ reportFormats
 
 inputTemplate_ :: Id Column -> Text -> Maybe ReportLanguage -> ReactElementM eh ()
@@ -282,75 +277,80 @@ inputTemplate = defineView "input template" $ \(i, t, lang) -> do
           , codemirrorTheme = "default"
           , codemirrorReadOnly = CodemirrorEnabled
           , codemirrorValue = t
-          , codemirrorOnChange = \v ->
-              [ SomeStoreAction store $ ColumnAction i $ SetTmpReportTemplate v ]
+          , codemirrorOnChange = Dialog.dispatch . Dialog.SetTmpReportTemplate i
           }
 
 -- column kind: data
 
-dataTypeInfo_ :: DataType -> ReactElementM eh ()
-dataTypeInfo_ !dt = view dataTypeInfo dt mempty
+dataTypeInfo_ :: Id Project -> SessionKey -> DataType -> ReactElementM eh ()
+dataTypeInfo_ !projectId !sKey !dt = view dataTypeInfo (projectId, sKey, dt) mempty
 
-dataTypeInfo :: ReactView DataType
-dataTypeInfo = defineControllerView "datatype info" store $ forLoggedIn $
-  \st dt -> span_ [ "className" $= "dataType" ] $
+dataTypeInfo :: ReactView (Id Project, SessionKey, DataType)
+dataTypeInfo = defineControllerView "datatype info" Dialog.store $
+  \st (projectId, sKey, dt) -> span_ [ "className" $= "dataType" ] $
     case dt of
       DataBool     -> "Bool"
       DataString   -> "String"
       DataNumber   -> "Number"
       DataTime     -> "Time"
       DataRecord t -> do
-        onDidMount_ [SomeStoreAction store GetTableCache] mempty
-        let tblName = Map.lookup t (st ^. stateTableCache)
+        onDidMount_ (Dialog.dispatch $ Dialog.GetTableCache projectId sKey) mempty
+        let tblName = Map.lookup t (st ^. Dialog.stTableCache)
                         ?: "missing table"
         elemText $ "Row from " <> tblName
       DataList   d -> do "List ("
-                         dataTypeInfo_ d
+                         dataTypeInfo_ projectId sKey d
                          ")"
       DataMaybe  d -> do "Maybe ("
-                         dataTypeInfo_ d
+                         dataTypeInfo_ projectId sKey d
                          ")"
 
-dataColConf_ :: Id Column -> DataCol -> ReactElementM eh ()
-dataColConf_ !i !d = view dataColConf (i, d) mempty
+dataColConf_ :: Id Project
+             -> SessionKey
+             -> Id Column
+             -> DataCol
+             -> ReactElementM eh ()
+dataColConf_ !projectId !sKey !i !d =
+  view dataColConf (projectId, sKey, i, d) mempty
 
-dataColConf :: ReactView (Id Column, DataCol)
-dataColConf = defineControllerView "data column configuration" store $ forLoggedIn $
-  \st (i, dat) -> cldiv_ "dialog data" $ do
+dataColConf :: ReactView (Id Project, SessionKey, Id Column, DataCol)
+dataColConf = defineControllerView "data column configuration" Dialog.store $
+  \st (projectId, sKey, i, dat) -> cldiv_ "dialog data" $ do
       let mError = case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of
             (Derived, CompileResultError msg) -> Just msg
             _                                 -> Nothing
-          isDerived = join (st ^? atColumn i . stTmpIsFormula)
+          isDerived = join (st ^? Dialog.atDialog i . Dialog.stTmpIsFormula)
             ?: dat ^. dataColIsDerived
-          formula = join (st ^? atColumn i . stTmpFormula)
+          formula = join (st ^? Dialog.atDialog i . Dialog.stTmpFormula)
             ?: dat ^. dataColSourceCode
-          dt = join (st ^? atColumn i . stTmpDataType)
+          dt = join (st ^? Dialog.atDialog i . Dialog.stTmpDataType)
             ?: dat ^. dataColType
       cldiv_ "bodyWrapper" $ cldiv_ "body" $ do
         cldiv_ "datatype" $
-          selDatatype_ i dat (st ^. stateTableCache)
+          selDatatype_ projectId sKey i dat (st ^. Dialog.stTableCache)
         cldiv_ "formula" $ do
           checkIsFormula_ i isDerived
           inputFormula_ i formula isDerived
       for_ mError $ \errMsg -> cldiv_ "error" $ do
         clspan_ "title" "Error"
         cldiv_  "body" $ elemText errMsg
-      let cancelActions = SomeStoreAction store . ColumnAction i <$>
-            [ SetVisibility False
-            , UnsetTmpDataType
-            , UnsetTmpFormula
-            , UnsetTmpIsFormula
+      let cancelActions = Dialog.mkAction <$>
+            [ Dialog.SetVisibility i False
+            , Dialog.UnsetTmpDataType i
+            , Dialog.UnsetTmpFormula i
+            , Dialog.UnsetTmpIsFormula i
             ]
           -- TODO: figure out what changed before initiating ajax
           -- in the Nothing case: nothing has changed
-          deleteActions = [ SomeStoreAction store $ TableDeleteColumn i ]
-          saveActions = SomeStoreAction store . ColumnAction i <$>
-            [ SetVisibility False
-            , DataColUpdate (dt, isDerived, formula)
-            , UnsetTmpDataType
-            , UnsetTmpIsFormula
-            , UnsetTmpFormula
-            ]
+          deleteActions = dispatch $ TableDeleteColumn i
+          saveActions =
+            mkColumnAction i (DataColUpdate dt isDerived formula) :
+              map Dialog.mkAction
+                [ Dialog.SetVisibility i False
+                , Dialog.UnsetTmpDataType i
+                , Dialog.UnsetTmpIsFormula i
+                , Dialog.UnsetTmpFormula i
+                ]
       confButtons_ cancelActions deleteActions saveActions
 
 confButtons_ :: [SomeStoreAction]
@@ -377,45 +377,80 @@ confButtons = defineView "column configuration buttons" $
 
 -- select datatype
 
-selDatatype_ :: Id Column -> DataCol -> TableCache -> ReactElementM eh ()
-selDatatype_  !i !dat !tables = view selDatatype (i, dat, tables) mempty
+selDatatype_ :: Id Project
+             -> SessionKey
+             -> Id Column
+             -> DataCol
+             -> Dialog.TableCache
+             -> ReactElementM eh ()
+selDatatype_  !projectId !sKey !i !dat !tables =
+  view selDatatype (projectId, sKey, i, dat, tables) mempty
 
-selDatatype :: ReactView (Id Column, DataCol, TableCache)
-selDatatype = defineView "selectDataType" $ \(i, dat, tables) ->
-    selBranch_ (Just $ dat ^. dataColType) tables $
-      \dt -> [SomeStoreAction store $ ColumnAction i $ SetTmpDataType dt]
+selDatatype :: ReactView (Id Project,
+                          SessionKey,
+                          Id Column,
+                          DataCol,
+                          Dialog.TableCache
+                         )
+selDatatype =
+  defineView "selectDataType" $ \(projectId, sKey, i, dat, tables) ->
+    selBranch_ projectId sKey (Just $ dat ^. dataColType) tables $
+      Dialog.dispatch . Dialog.SetTmpDataType i
 
-selBranch_ :: Maybe DataType -> TableCache -> SelBranchCallback -> ReactElementM eh ()
-selBranch_ !mDt !tables !cb = view selBranch (mDt, tables, cb) mempty
+selBranch_ :: Id Project
+           -> SessionKey
+           -> Maybe DataType
+           -> Dialog.TableCache
+           -> SelBranchCallback
+           -> ReactElementM eh ()
+selBranch_ !projectId !sKey !mDt !tables !cb =
+  view selBranch (projectId, sKey, mDt, tables, cb) mempty
 
-selBranch :: ReactView (Maybe DataType, TableCache, SelBranchCallback)
-selBranch = defineStatefulView "selBranch" Nothing $ \curBranch (mDt, tables, cb) -> do
-  let defDt = DataNumber
-      selectedBranch = curBranch <|> toBranch <$> mDt ?: toBranch defDt
-  cldiv_ "selBranch" $ select_
-    [ "defaultValue" &= show selectedBranch
-    , onInput $ \evt _ -> case readMaybe (target evt "value") of
-        Just BBool   -> (cb DataBool  , Just $ Just BBool  )
-        Just BString -> (cb DataString, Just $ Just BString)
-        Just BNumber -> (cb DataNumber, Just $ Just BNumber)
-        Just BTime   -> (cb DataTime  , Just $ Just BTime  )
-        Just BMaybe  -> (cb $ DataMaybe defDt, Just $ Just BMaybe)
-        Just BList   -> (cb $ DataList  defDt, Just $ Just BList)
-        Just BRecord -> ([], Just $ Just BRecord)
-        Nothing      -> error "selBranch: unexpected: Nothing"
-    ] $ optionsFor_ branches
-  case selectedBranch of
-    BMaybe  -> selBranch_ (subType =<< mDt) tables (cb . DataMaybe)
-    BList   -> selBranch_ (subType =<< mDt) tables (cb . DataList)
-    BRecord -> selTable_ (recordTableId =<< mDt) tables (cb . DataRecord)
-    _       -> pure ()
+selBranch :: ReactView (Id Project,
+                        SessionKey,
+                        Maybe DataType,
+                        Dialog.TableCache,
+                        SelBranchCallback
+                       )
+selBranch = defineStatefulView "selBranch" Nothing $
+  \curBranch (projectId, sKey, mDt, tables, cb) -> do
+    let defDt = DataNumber
+        selectedBranch = curBranch <|> toBranch <$> mDt ?: toBranch defDt
+    cldiv_ "selBranch" $ select_
+      [ "defaultValue" &= show selectedBranch
+      , onInput $ \evt _ -> case readMaybe (target evt "value") of
+          Just BBool   -> (cb DataBool  , Just $ Just BBool  )
+          Just BString -> (cb DataString, Just $ Just BString)
+          Just BNumber -> (cb DataNumber, Just $ Just BNumber)
+          Just BTime   -> (cb DataTime  , Just $ Just BTime  )
+          Just BMaybe  -> (cb $ DataMaybe defDt, Just $ Just BMaybe)
+          Just BList   -> (cb $ DataList  defDt, Just $ Just BList)
+          Just BRecord -> ([], Just $ Just BRecord)
+          Nothing      -> error "selBranch: unexpected: Nothing"
+      ] $ optionsFor_ branches
+    case selectedBranch of
+      BMaybe  -> selBranch_ projectId sKey (subType =<< mDt) tables (cb . DataMaybe)
+      BList   -> selBranch_ projectId sKey (subType =<< mDt) tables (cb . DataList)
+      BRecord -> selTable_ projectId sKey (recordTableId =<< mDt) tables (cb . DataRecord)
+      _       -> pure ()
 
-selTable_ :: Maybe (Id Table) -> TableCache -> SelTableCallback -> ReactElementM eh ()
-selTable_ !mTableId !tables !cb = view selTable (mTableId, tables, cb) mempty
+selTable_ :: Id Project
+          -> SessionKey
+          -> Maybe (Id Table)
+          -> Dialog.TableCache
+          -> SelTableCallback
+          -> ReactElementM eh ()
+selTable_ !projectId !sKey !mTableId !tables !cb =
+  view selTable (projectId, sKey, mTableId, tables, cb) mempty
 
-selTable :: ReactView (Maybe (Id Table), TableCache, SelTableCallback)
-selTable = defineView "select table" $ \(mTableId, tables, cb) -> do
-  onDidMount_ [SomeStoreAction store GetTableCache] mempty
+selTable :: ReactView (Id Project,
+                       SessionKey,
+                       Maybe (Id Table),
+                       Dialog.TableCache,
+                       SelTableCallback
+                      )
+selTable = defineView "select table" $ \(projectId, sKey, mTableId, tables, cb) -> do
+  onDidMount_ (Dialog.dispatch $ Dialog.GetTableCache projectId sKey) mempty
   select_
     [ "defaultValue" &= fromMaybe "" (show <$> mTableId)
     , onChange $ \evt -> maybe [] cb $ readMaybe $ target evt "value"
@@ -438,7 +473,7 @@ checkIsFormula = defineView "checkIsFormula" $ \(i, isDerived) -> do
       , onChange $ \_ ->
           -- flip the checked status
           let newInpType = if checked then NotDerived else Derived
-          in  [ SomeStoreAction store $ ColumnAction i $ SetTmpIsFormula newInpType ]
+          in  Dialog.dispatch $ Dialog.SetTmpIsFormula i newInpType
       ]
     span_ [] "Use formula"
 
@@ -462,8 +497,8 @@ inputFormula = defineView "input formula" $ \(i, formula, inpTyp) -> do
           , codemirrorTheme = "default"
           , codemirrorReadOnly = readOnly
           , codemirrorValue = formula
-          , codemirrorOnChange = \v ->
-              [ SomeStoreAction store $ ColumnAction i $ SetTmpFormula v ]
+          , codemirrorOnChange =
+              Dialog.dispatch . Dialog.SetTmpFormula i
           }
 
 --

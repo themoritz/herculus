@@ -27,6 +27,7 @@ executable client
                      , Views.Auth
                      , Views.Table
                      , Views.Column
+                     , Views.Column.ConfigDialog
                      , Views.Record
                      , Views.Cell
                      , Views.ReportCell

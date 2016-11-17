@@ -5,7 +5,6 @@ module Store where
 import           Control.Applicative       ((<|>))
 import           Control.Concurrent        (forkIO)
 import           Control.Lens
-import           Control.Monad             (when)
 import           Data.Foldable             (foldl', for_)
 import           Data.Map.Strict           (Map)
 import qualified Data.Map.Strict           as Map
@@ -30,8 +29,7 @@ import           Lib.Model.Record
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Action                    (Action (..), TableCache, api,
-                                            session)
+import           Action                    (Action (..), api, session)
 import qualified Store.Column              as Column
 import qualified Store.Message             as Message
 import qualified Store.RecordCache         as RecordCache
@@ -62,6 +60,8 @@ data LoggedInState = LoggedInState
   { _stateUserInfo     :: UserInfo
   , _stateCacheRecords :: Map (Id Table) RecordCache.State
   , _stateSessionKey   :: SessionKey
+
+  -- TODO: maybe put tableId and tables one level deeper into project?
   , _stateProjectId    :: Maybe (Id Project)
   , _stateTableId      :: Maybe (Id Table)
 
@@ -73,9 +73,6 @@ data LoggedInState = LoggedInState
   , _stateTables       :: Map (Id Table) Table
   , _stateCells        :: Map Coords CellContent
   , _stateRecords      :: Map (Id Record) Record
-
-  -- for column config
-  , _stateTableCache   :: TableCache
   }
 
 data LoggedOutState
@@ -130,7 +127,6 @@ initLoggedInState sKey userInfo = LoggedInState
   , _stateTables       = Map.empty
   , _stateCells        = Map.empty
   , _stateRecords      = Map.empty
-  , _stateTableCache   = Map.empty
   }
 
 store :: ReactStore State
@@ -320,7 +316,7 @@ instance StoreData State where
 
       TableSet (cols, recs, entries) ->
         forLoggedIn st $ \liSt -> pure $
-          liSt & stateColumns .~ (Column.mkState <$> Map.fromList (map entityToTuple cols))
+          liSt & stateColumns .~ Map.fromList (map entityToTuple cols)
                & stateRecords .~ Map.fromList (map entityToTuple recs)
                & stateCells   .~ fillEntries entries Map.empty
 
@@ -342,7 +338,7 @@ instance StoreData State where
           tableColumn liSt (Entity _ column) =
             liSt ^. stateTableId == Just (column ^. columnTableId)
           acc cols' (Entity columnId column) =
-            Map.insert columnId (Column.mkState column) cols'
+            Map.insert columnId column cols'
 
       TableAddColumn col -> do
         forLoggedIn_ st $ \liSt ->
@@ -353,7 +349,7 @@ instance StoreData State where
 
       TableAddColumnDone (Entity i c, cells) ->
         forLoggedIn st $ \liSt -> pure $
-          liSt & stateColumns %~ Map.insert i (Column.mkState c)
+          liSt & stateColumns %~ Map.insert i c
                & stateCells %~ fillEntries (map toCellUpdate cells)
 
       TableDeleteColumn i ->
@@ -414,25 +410,6 @@ instance StoreData State where
             else
               pure $ mkStateLoggedIn st $
                 liSt & stateTables %~ Map.delete tableId
-
-      -- Column
-
-      GetTableCache -> do
-          forLoggedIn_ st $ \liSt ->
-            for_ (liSt ^. stateProjectId) $ \projectId ->
-              when (Map.null $ liSt ^. stateTableCache) $
-                request api (Proxy :: Proxy Api.TableList)
-                        (session $ liSt ^. stateSessionKey)
-                        projectId $
-                        mkCallback $
-                        \tables -> [SetTableCache $ toTableMap tables]
-          pure st
-        where
-          toTableMap = Map.fromList . map entityToPair
-          entityToPair (Entity tableId table) = (tableId, table ^. tableName)
-
-      SetTableCache m ->
-        forLoggedIn st $ \liSt -> pure $ liSt & stateTableCache .~ m
 
       -- Cell
 
