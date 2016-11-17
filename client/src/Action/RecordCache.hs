@@ -15,6 +15,5 @@ import           Lib.Types        (Id)
 data Action
   = Add (Id Record) [(Entity Column, CellContent)]
   | Delete (Id Record)
-  | Get
   | Set [(Id Record, [(Entity Column, CellContent)])]
   deriving (NFData, Generic)
