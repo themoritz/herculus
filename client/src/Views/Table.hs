@@ -17,6 +17,7 @@ import           Lib.Model
 import           Lib.Model.Auth     (SessionKey)
 import           Lib.Model.Cell     (CellContent)
 import           Lib.Model.Column
+import           Lib.Model.Project  (Project)
 import           Lib.Model.Record   (Record)
 import           Lib.Model.Table
 import           Lib.Types
@@ -35,6 +36,7 @@ data TableGridProps = TableGridProps
   , _colByIndex :: IntMap (Id Column, Column)
   , _recByIndex :: IntMap (Id Record, Record)
   , _tableId    :: Maybe (Id Table)
+  , _projectId  :: Id Project
   , _sKey       :: SessionKey
   }
 
@@ -109,7 +111,7 @@ tableGrid = defineView "tableGrid" $ \props -> do
             faButton_ "bars" $ fromMaybe [] $
               dispatch . TableAddColumn . emptyReportCol <$> props ^. tableId
         | y == 0 && 0 < x && x <= numCols =
-            column_ (getColumn (x - 1))
+            column_ (props ^. projectId) (props ^. sKey) (getColumn (x - 1))
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $
             renderCell (x - 1) (y - 1)
         | otherwise = cldiv_ "empty" mempty

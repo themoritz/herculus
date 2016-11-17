@@ -29,7 +29,6 @@ import           Store               (LoggedOutState (..), SessionState (..),
                                       stateProjects, stateRecords, stateSession,
                                       stateSessionKey, stateTableId,
                                       stateTables, stateUserInfo, store)
-import qualified Store.Column        as Column
 import           Views.Auth          (login_, logout_, signup_)
 import           Views.Combinators   (clspan_)
 import           Views.Table         (TableGridProps (..), tableGrid_)
@@ -46,18 +45,21 @@ app = defineControllerView "app" store $ \st () ->
       StateLoggedOut LoggedOutLoginForm -> login_
       StateLoggedOut LoggedOutSignupForm -> signup_
       StateLoggedIn liSt ->
-        let cols = view stColumn <$> liSt ^. stateColumns
-            recs = liSt ^. stateRecords
-            tableGridProps = TableGridProps
-              { _cells      = liSt ^. stateCells
-              , _colByIndex = IntMap.fromList $ zip [0..] (Map.toList cols)
-              , _recByIndex = IntMap.fromList $ zip [0..] (Map.toList recs)
-              , _tableId    = liSt ^. stateTableId
-              , _sKey       = liSt ^. stateSessionKey
-              }
-        in  if not $ null $ liSt ^. stateTables
-            then cldiv_ "tableGrid" $ tableGrid_ tableGridProps
-            else cldiv_ "" mempty
+        case (liSt ^. stateProjectId, null $ liSt ^. stateTables) of
+          (Just projectId, False) ->
+            let cols = liSt ^. stateColumns
+                recs = liSt ^. stateRecords
+                -- TODO: put tables deeper into view state hierarchy under projectId
+                tableGridProps = TableGridProps
+                  { _cells      = liSt ^. stateCells
+                  , _colByIndex = IntMap.fromList $ zip [0..] (Map.toList cols)
+                  , _recByIndex = IntMap.fromList $ zip [0..] (Map.toList recs)
+                  , _tableId    = liSt ^. stateTableId
+                  , _projectId  = projectId
+                  , _sKey       = liSt ^. stateSessionKey
+                  }
+            in  cldiv_ "tableGrid" $ tableGrid_ tableGridProps
+          _ -> cldiv_ "" mempty
 
     appFooter_ st
 

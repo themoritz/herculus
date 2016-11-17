@@ -5,7 +5,6 @@ module Store where
 import           Control.Applicative       ((<|>))
 import           Control.Concurrent        (forkIO)
 import           Control.Lens
-import           Control.Monad             (when)
 import           Data.Foldable             (foldl', for_)
 import           Data.Map.Strict           (Map)
 import qualified Data.Map.Strict           as Map
@@ -61,6 +60,8 @@ data LoggedInState = LoggedInState
   { _stateUserInfo     :: UserInfo
   , _stateCacheRecords :: Map (Id Table) RecordCache.State
   , _stateSessionKey   :: SessionKey
+
+  -- TODO: maybe put tableId and tables one level deeper into project?
   , _stateProjectId    :: Maybe (Id Project)
   , _stateTableId      :: Maybe (Id Table)
 
@@ -126,7 +127,6 @@ initLoggedInState sKey userInfo = LoggedInState
   , _stateTables       = Map.empty
   , _stateCells        = Map.empty
   , _stateRecords      = Map.empty
-  , _stateTableCache   = Map.empty
   }
 
 store :: ReactStore State

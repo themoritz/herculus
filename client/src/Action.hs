@@ -7,7 +7,6 @@
 module Action where
 
 import           Control.DeepSeq                (NFData)
-import           Data.Map                       (Map)
 import           Data.Text                      (Text)
 import qualified Data.Text.Encoding             as Text
 import           Data.Typeable                  (Typeable)
