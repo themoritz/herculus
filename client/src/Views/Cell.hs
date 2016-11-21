@@ -211,7 +211,7 @@ cellTime = defineStatefulView "cellTime" Nothing $
           handleChange x _ = case parseTime "%F" x of
             Nothing -> ([], Just $ Just x)
             Just t' -> (cb t', Just Nothing)
-      datePicker_ $ DatePickerProps
+      datePicker_ DatePickerProps
         { datePickerSelected = curT
         , datePickerPlaceholderText = "Please select a day"
         , datePickerDateFormat = "YYYY-MM-DD"
@@ -235,7 +235,7 @@ cellRecord :: ReactView ( Mode, IsDerived, Maybe (Id Record), Id Table
                         )
 cellRecord = defineControllerView "cellRecord" store $
   \st (mode, inpType, mr, t, cb) -> cldiv_ "record" $ do
-    onDidMount_ (dispatch $ RecordCacheGet t) mempty
+    -- onDidMount_ (dispatch $ RecordCacheGet t) mempty
     let records = st ^. stateSession . _StateLoggedIn . stateCacheRecords . at t . _Just . RecordCache.recordCache
         showPairs = intercalate ", " .
                     map (\(c, v) -> (c ^. columnName) <> ": " <> (pack . show) v) .
