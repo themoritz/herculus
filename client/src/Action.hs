@@ -61,8 +61,8 @@ data Action
   | Login LoginData
   | LoggedIn UserInfo
   | Logout
-
   | RecordCacheAction (Id Table) RecordCache.Action
+  | SetProjectOverview SessionKey
   -- Projects
   | ProjectsSet [Entity Project]
   | ProjectsCreate Text -- project name
@@ -70,9 +70,9 @@ data Action
   | ProjectsLoadProject (Id Project)
   | ProjectDelete (Id Project)
   -- Project
-  | ProjectSetName (Id Project) Text
+  | ProjectSetName Text
+  | ProjectLoadDone Project [Entity Table]
   -- Tables
-  | TablesSet [Entity Table]
   | TablesCreate Table
   | TablesAdd (Entity Table)
   | TablesLoadTable (Id Table)

@@ -53,7 +53,7 @@ import           Lib.Template.Interpreter
 import           Lib.Template.Types
 import           Lib.Types
 
-import           Auth                           (mkSession, prolongSession)
+import           Auth                           (mkSession)
 import           Auth.Permission                (permissionColumn,
                                                  permissionProject,
                                                  permissionRecord,
@@ -72,9 +72,9 @@ handle =
   :<|> handleProjectList
   :<|> handleProjectSetName
   :<|> handleProjectDelete
+  :<|> handleProjectLoad
 
   :<|> handleTableCreate
-  :<|> handleTableList
   :<|> handleTableData
   :<|> handleTableGetWhole
   :<|> handleTableSetName
@@ -165,7 +165,7 @@ handleProjectSetName (UserInfo userId _ _) projectId name = do
 handleProjectDelete :: MonadHexl m => SessionData -> Id Project -> m ()
 handleProjectDelete sessionData@(UserInfo userId _ _) projectId = do
   permissionProject userId projectId
-  tables <- handleTableList sessionData projectId
+  tables <- listByQuery [ "projectId" =: toObjectId projectId ]
   traverse_ (handleTableDelete sessionData . entityId) tables
   delete projectId
 
@@ -176,10 +176,12 @@ handleTableCreate (UserInfo userId _ _) table@(Table projectId _) = do
   permissionProject userId projectId
   create table
 
-handleTableList :: MonadHexl m => SessionData -> Id Project -> m [Entity Table]
-handleTableList (UserInfo userId _ _) projId = do
+handleProjectLoad :: MonadHexl m => SessionData -> Id Project -> m (Project, [Entity Table])
+handleProjectLoad (UserInfo userId _ _) projId = do
   permissionProject userId projId
-  listByQuery [ "projectId" =: toObjectId projId ]
+  tables <- listByQuery [ "projectId" =: toObjectId projId ]
+  project <- getById' projId
+  pure (project, tables)
 
 handleTableData :: MonadHexl m => SessionData -> Id Table -> m [(Id Column, Id Record, CellContent)]
 handleTableData (UserInfo userId _ _) tblId = do

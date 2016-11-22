@@ -36,9 +36,9 @@ type Routes =
  :<|> ProjectList
  :<|> ProjectSetName
  :<|> ProjectDelete
+ :<|> ProjectLoad
 
  :<|> TableCreate
- :<|> TableList
  :<|> TableData
  :<|> TableGetWhole
  :<|> TableSetName
@@ -82,9 +82,9 @@ type ProjectCreate        = SessionProtect  :> "project"    :> "create"   :> Req
 type ProjectList          = SessionProtect  :> "project"    :> "list"     :> Get '[JSON] [Entity Project]
 type ProjectSetName       = SessionProtect  :> "project"    :> "setName"  :> Capture "projectId" (Id Project) :> ReqBody '[JSON] Text :> Post '[JSON] ()
 type ProjectDelete        = SessionProtect  :> "project"    :> "delete"   :> Capture "projectId" (Id Project) :> Delete '[JSON] ()
+type ProjectLoad          = SessionProtect  :> "table"      :> "list"       :> Capture "projectId" (Id Project) :> Get '[JSON] (Project, [Entity Table])
 
 type TableCreate          = SessionProtect  :> "table"      :> "create"     :> ReqBody '[JSON] Table            :> Post '[JSON] (Id Table)
-type TableList            = SessionProtect  :> "table"      :> "list"       :> Capture "projectId" (Id Project) :> Get '[JSON] [Entity Table]
 type TableData            = SessionProtect  :> "table"      :> "data"       :> Capture "tableId" (Id Table)     :> Get '[JSON] [(Id Column, Id Record, CellContent)]
 type TableGetWhole        = SessionProtect  :> "table"      :> "getWhole"   :> Capture "tableId" (Id Table)     :> Get '[JSON] ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
 type TableSetName         = SessionProtect  :> "setName"    :> Capture "tableId" (Id Table)     :> ReqBody '[JSON] Text :> Post '[JSON] ()
