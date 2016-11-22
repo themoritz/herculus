@@ -60,6 +60,13 @@ Also needs to be called whenever someone changes the `package.json`...
 Whenever you made changes to the server, recompile and start it with
 `npm run build-server`.
 
+### How to solve issues
+
+_Error_: `server-exe: connect: does not exist (Connection refused)`
+
+_Solution_: Check if your local `mongodb` has been started before.
+
+
 Whenever you made changes to the client, recompile it with
 `npm run build-client`. gulp should refresh your browser window when done.
 
