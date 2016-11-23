@@ -169,19 +169,18 @@ handleProjectDelete sessionData@(UserInfo userId _ _) projectId = do
   traverse_ (handleTableDelete sessionData . entityId) tables
   delete projectId
 
---
-
-handleTableCreate :: MonadHexl m => SessionData -> Table -> m (Id Table)
-handleTableCreate (UserInfo userId _ _) table@(Table projectId _) = do
-  permissionProject userId projectId
-  create table
-
 handleProjectLoad :: MonadHexl m => SessionData -> Id Project -> m (Project, [Entity Table])
 handleProjectLoad (UserInfo userId _ _) projId = do
   permissionProject userId projId
   tables <- listByQuery [ "projectId" =: toObjectId projId ]
   project <- getById' projId
   pure (project, tables)
+--
+
+handleTableCreate :: MonadHexl m => SessionData -> Table -> m (Id Table)
+handleTableCreate (UserInfo userId _ _) table@(Table projectId _) = do
+  permissionProject userId projectId
+  create table
 
 handleTableData :: MonadHexl m => SessionData -> Id Table -> m [(Id Column, Id Record, CellContent)]
 handleTableData (UserInfo userId _ _) tblId = do

@@ -115,7 +115,7 @@ forProjectDetail_ :: State -> (SessionKey -> ProjectDetailState -> IO ()) -> IO 
 forProjectDetail_ st action =
   forLoggedIn_ st $ \liSt -> case liSt ^. stateProjectView of
       StateProjectDetail pdSt -> action (liSt ^. stateSessionKey) pdSt
-      StateProjectOverview _ -> do
+      StateProjectOverview _ ->
         -- TODO: proper error message
         putStrLn "inconsistent client state: unexpected: project overview"
 
@@ -161,8 +161,8 @@ initLoggedInState sKey userInfo = LoggedInState
   , _stateProjectView  = StateProjectOverview Map.empty
   }
 
-setProjectOverview :: State -> SessionKey -> IO ()
-setProjectOverview st sKey = do
+setProjectOverview :: SessionKey -> IO ()
+setProjectOverview sKey =
   request api (Proxy :: Proxy Api.ProjectList)
     (session sKey) $ mkCallback $
     \projects -> [ProjectsSet projects]
@@ -189,7 +189,7 @@ instance StoreData State where
           WsDownRecordDeleted t r     -> RecordCacheAction t $ RecordCache.Delete r
         case st ^. stateSession of
           StateLoggedIn liSt ->
-            setProjectOverview st (liSt ^. stateSessionKey)
+            setProjectOverview (liSt ^. stateSessionKey)
           StateLoggedOut _ -> pure ()
         pure $ st & stateWebSocket .~ Just ws
 
@@ -224,7 +224,7 @@ instance StoreData State where
         pure st
 
       LoggedIn userInfo@(UserInfo _ _ sKey) -> do
-        setProjectOverview st sKey
+        setProjectOverview sKey
         pure $ mkStateLoggedIn st $ initLoggedInState sKey userInfo
 
       Logout -> do
@@ -250,12 +250,12 @@ instance StoreData State where
 
       -- Projects
       SetProjectOverview sKey -> do
-        setProjectOverview st sKey
+        setProjectOverview sKey
         pure st
 
       ProjectsSet ps ->
         forLoggedIn st $ \liSt ->
-          liSt & stateProjectView .~ StateProjectOverview projectsMap
+          pure $ liSt & stateProjectView .~ StateProjectOverview projectsMap
             where
               projectsMap = Map.fromList $ map entityToTuple ps
 
@@ -269,26 +269,30 @@ instance StoreData State where
 
       ProjectsAdd (Entity i p) ->
         forLoggedIn st $ \liSt ->
-          pure $ liSt & stateProjectView .~  mkProjectDetailState i p
+          pure $ liSt & stateProjectView .~ StateProjectDetail (mkProjectDetailState i p)
 
       -- Project
 
-      ProjectsLoadProject i ->
+      ProjectsLoadProject i -> do
         forLoggedIn_ st $ \liSt ->
           request api (Proxy :: Proxy Api.ProjectLoad)
-                      (session $ liSt ^. stateSessionKey) i $ mkCallback $
-                      \(project, tables) -> [ProjectLoadDone project tables]
+            (session $ liSt ^. stateSessionKey) i $ mkCallback $
+            \(project, tables) -> [ProjectLoadDone i project tables]
+        pure st
 
-      ProjectLoadDone p ts ->
-        forLoggedIn st $ \liSt -> do
-          _ <- forkIO $ case ts of
-            []             -> pure ()
-            Entity i _ : _ -> alterStore store $ TablesLoadTable i
-          pure $ liSt & stateProjectView .~
-            (mkProjectDetailState i p & stateTables .~ tablesMap)
-            where
-              tablesMap = Map.fromList $ map entityToTuple ts
+      ProjectLoadDone pId p ts -> do
+        st' <- forLoggedIn st $ \liSt -> do
+                  _ <- forkIO $ case ts of
+                    []             -> pure ()
+                    Entity tId _ : _ -> alterStore store $ TablesLoadTable tId
 
+                  pure $ liSt & stateProjectView .~
+                    StateProjectDetail (mkProjectDetailState pId p)
+
+        forProjectDetail st' $ \_ pdSt ->
+          pure $ pdSt & stateTables .~ tablesMap
+          where
+            tablesMap = Map.fromList $ map entityToTuple ts
 
       ProjectSetName name ->
         forProjectDetail st $ \sKey pdSt -> do
@@ -297,13 +301,13 @@ instance StoreData State where
                       (pdSt ^. stateProjectId) name $ mkCallback $ const []
           pure $ pdSt & stateProject . projectName .~ name
 
-      ProjectDelete projectId ->
-        forLoggedIn st $ \liSt -> do
+      ProjectDelete projectId -> do
+        forLoggedIn_ st $ \liSt -> do
           let sKey = liSt ^. stateSessionKey
           request api (Proxy :: Proxy Api.ProjectDelete)
                       (session sKey) projectId $ mkCallback $
                       const [SetProjectOverview sKey]
-          pure $ liSt & stateProjects %~ Map.delete projectId
+        pure st
 
       -- Tables
 
@@ -316,7 +320,7 @@ instance StoreData State where
         pure st
 
       TablesAdd (Entity i t) ->
-        forProjectDetail st $ \sKey pdSt ->
+        forProjectDetail st $ \_ pdSt ->
           pure $ pdSt & stateTables . at i .~ Just t
                       & stateTableId .~ Just i
 
@@ -330,7 +334,7 @@ instance StoreData State where
       -- Table
 
       TableSet (cols, recs, entries) ->
-        forProjectDetail st $ \_ pdSt -> pure
+        forProjectDetail st $ \_ pdSt -> pure $
           pdSt & stateColumns .~ Map.fromList (map entityToTuple cols)
                & stateRecords .~ Map.fromList (map entityToTuple recs)
                & stateCells   .~ fillEntries entries Map.empty
@@ -374,13 +378,13 @@ instance StoreData State where
           pure $ pdSt & stateColumns %~ Map.delete i
                       & stateCells %~ Map.filterWithKey (\(Coords c _) _ -> c /= i)
 
-      TableAddRecord -> do
-        forProjectDetail st $ \sKey pdSt ->
+      TableAddRecord ->
+        forProjectDetail st $ \sKey pdSt -> do
           for_ (pdSt ^. stateTableId) $ \table ->
             request api (Proxy :: Proxy Api.RecordCreate)
                         (session sKey) table $ mkCallback $
                         \record -> [TableAddRecordDone record]
-        pure st
+          pure pdSt
 
       TableAddRecordDone (Entity i r, cells) ->
         forProjectDetail st $ \_ pdSt -> pure $
@@ -417,14 +421,16 @@ instance StoreData State where
                           & stateCells .~ Map.empty
                           & stateRecords .~ Map.empty
                           & stateTableId .~ (fst <$> nextTable)
-                  st' = mkStateLoggedIn st pdSt'
               case nextTable of
                 Just (nextTableId, _) ->
-                  React.Flux.transform (TablesLoadTable nextTableId) st'
-                Nothing -> pure st'
+                  -- FIXME: How can we update the State to transform TablesLoadTable??
+                  -- Until now we used the following transform:
+                  -- React.Flux.transform (TablesLoadTable nextTableId) st'
+                  -- Remove this if action TablesLoadTable can be dispatched in any way:
+                  pure pdSt'
+                Nothing -> pure pdSt'
             else
-              pure $ mkStateLoggedIn st $
-                pdSt & stateTables %~ Map.delete tableId
+              pure $ pdSt & stateTables %~ Map.delete tableId
 
       -- Cell
 

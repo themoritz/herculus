@@ -148,11 +148,11 @@ instance StoreData State where
         pure $ st & atDialog i . stTmpReportTemplate .~ Nothing
       GetTableCache projectId sessionKey -> do
           when (Map.null $ st ^. stTableCache) $
-            request api (Proxy :: Proxy Api.TableList)
+            request api (Proxy :: Proxy Api.ProjectLoad)
                     (session sessionKey)
                     projectId $
                     mkCallback $
-                    \tables -> [SetTableCache $ toTableMap tables]
+                    \(_, tables) -> [SetTableCache $ toTableMap tables]
           pure st
         where
           toTableMap = Map.fromList . map entityToPair

@@ -26,9 +26,10 @@ import           Helper              (keyENTER, keyESC)
 import           Store               (LoggedOutState (..), SessionState (..),
                                       State, dispatch, stateCells, stateColumns,
                                       stateMessage, stateProjectId,
-                                      stateProjects, stateRecords, stateSession,
-                                      stateSessionKey, stateTableId,
-                                      stateTables, stateUserInfo, store)
+                                      stateProjectView, stateRecords,
+                                      stateSession, stateSessionKey,
+                                      stateTableId, stateTables, stateUserInfo,
+                                      store)
 import           Views.Auth          (login_, logout_, signup_)
 import           Views.Combinators   (clspan_)
 import           Views.Table         (TableGridProps (..), tableGrid_)
@@ -74,7 +75,8 @@ appHeader = defineView "header" $ \st ->
     cldiv_ "logo" "Herculus"
     case st ^. stateSession of
       StateLoggedIn liSt -> do
-        projects_ (liSt ^. stateProjects) (liSt ^. stateProjectId)
+        -- TODO: Move projects to ProjectsOverviewView (view has to created)
+        -- projects_ (liSt ^. stateProjects) (liSt ^. stateProjectId)
         for_ (liSt ^. stateProjectId) $ \prjId ->
           tables_ (liSt ^. stateTables) (liSt ^. stateTableId) prjId
         logout_ $ liSt ^. stateUserInfo . uiUserName
@@ -106,7 +108,7 @@ appFooter_ !st = view appFooter st mempty
 
 appFooter :: ReactView State
 appFooter = defineView "footer" $ \_ ->
-  cldiv_ "footer" $ do
+  cldiv_ "footer" $
     a_ [ "href" $= "mailto:Moritz <mdrexl@fastmail.fm>, Ruben <ruben.moor@gmail.com>"
       , "className" $= "link-on-dark"
       , "target" $= "_blank"

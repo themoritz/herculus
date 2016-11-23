@@ -71,7 +71,7 @@ data Action
   | ProjectDelete (Id Project)
   -- Project
   | ProjectSetName Text
-  | ProjectLoadDone Project [Entity Table]
+  | ProjectLoadDone (Id Project) Project [Entity Table]
   -- Tables
   | TablesCreate Table
   | TablesAdd (Entity Table)
