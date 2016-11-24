@@ -29,7 +29,7 @@ import           Lib.Model.Record
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Action            (Action (CellSetValue, RecordCacheAction))
+import           Action            (Action (CellSetValue, RecordCacheGet))
 import           Store
 import qualified Store.RecordCache as RecordCache
 import           Views.Combinators
@@ -211,7 +211,7 @@ cellTime = defineStatefulView "cellTime" Nothing $
           handleChange x _ = case parseTime "%F" x of
             Nothing -> ([], Just $ Just x)
             Just t' -> (cb t', Just Nothing)
-      datePicker_ $ DatePickerProps
+      datePicker_ DatePickerProps
         { datePickerSelected = curT
         , datePickerPlaceholderText = "Please select a day"
         , datePickerDateFormat = "YYYY-MM-DD"
@@ -221,7 +221,10 @@ cellTime = defineStatefulView "cellTime" Nothing $
     _ ->
       elemShow t
 
-cellRecord_ :: Mode -> IsDerived -> Maybe (Id Record) -> Id Table
+cellRecord_ :: Mode
+            -> IsDerived
+            -> Maybe (Id Record)
+            -> Id Table
             -> CellCallback (Maybe (Id Record))
             -> ReactElementM ViewEventHandler ()
 cellRecord_ !mode !inpType !mr !t !cb =
@@ -232,8 +235,9 @@ cellRecord :: ReactView ( Mode, IsDerived, Maybe (Id Record), Id Table
                         )
 cellRecord = defineControllerView "cellRecord" store $
   \st (mode, inpType, mr, t, cb) -> cldiv_ "record" $ do
-    onDidMount_ (dispatch $ RecordCacheAction t RecordCache.Get) mempty
-    let records = st ^. stateSession . _StateLoggedIn . stateProjectView . _StateProjectDetail . stateCacheRecords . at t . _Just . RecordCache.recordCache
+    onDidMount_ (dispatch $ RecordCacheGet t) mempty
+    let records = st ^. stateSession . _StateLoggedIn . stateProjectView . _StateProjectDetail
+                      . stateCacheRecords . at t . _Just . RecordCache.recordCache
         showPairs = intercalate ", " .
                     map (\(c, v) -> (c ^. columnName) <> ": " <> (pack . show) v) .
                     Map.elems

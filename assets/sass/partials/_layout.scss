@@ -181,6 +181,7 @@
   $message-box-padding: 5px;
   width: $message-box-width;
   padding: $message-box-padding;
+  z-index: 1;
   color: white;
   .header {
     display: table;

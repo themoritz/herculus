@@ -249,10 +249,22 @@ instance StoreData State where
 
       -- Cache
 
-      RecordCacheAction tableId a ->
+      RecordCacheGet tableId ->
         forProjectDetail st $ \sKey pdSt ->
-          pdSt & stateCacheRecords . at tableId . _Just %%~ \cache ->
-            RecordCache.runAction mkCallback sKey tableId a cache
+          case pdSt ^. stateCacheRecords . at tableId of
+            Just _ -> pure pdSt
+            -- cache not yet initialized: no key in map => Nothing
+            Nothing -> do
+              request api (Proxy :: Proxy Api.RecordListWithData)
+                      (session sKey) tableId $ mkCallback $
+                      \records -> [RecordCacheAction tableId $ RecordCache.Set records]
+              -- initialize cache with empty map
+              pure $ pdSt & stateCacheRecords . at tableId ?~ RecordCache.empty
+
+      RecordCacheAction tableId a ->
+        forProjectDetail st $ \_ pdSt ->
+          pure $ pdSt &
+            stateCacheRecords . at tableId . _Just %~ RecordCache.runAction tableId a
 
       -- Column
 

@@ -61,6 +61,8 @@ data Action
   | Login LoginData
   | LoggedIn UserInfo
   | Logout
+
+  | RecordCacheGet (Id Table)
   | RecordCacheAction (Id Table) RecordCache.Action
   | SetProjectOverview SessionKey
   -- Projects
