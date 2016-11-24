@@ -5,11 +5,9 @@ module Store where
 import           Control.Applicative       ((<|>))
 import           Control.Concurrent        (forkIO)
 import           Control.Lens
-import           Control.Monad             (when)
 import           Data.Foldable             (foldl', for_)
 import           Data.Map.Strict           (Map)
 import qualified Data.Map.Strict           as Map
-import           Data.Maybe                (isNothing)
 import           Data.Monoid               ((<>))
 import           Data.Proxy
 import qualified Data.Text                 as Text
@@ -203,12 +201,16 @@ instance StoreData State where
       -- Cache
 
       RecordCacheGet tableId ->
-        forLoggedIn st $ \liSt -> do
-          when (isNothing $ liSt ^. stateCacheRecords . at tableId) $
-            request api (Proxy :: Proxy Api.RecordListWithData)
-                    (session $ liSt ^. stateSessionKey) tableId $ mkCallback $
-                    \records -> [RecordCacheAction tableId $ RecordCache.Set records]
-          pure $ liSt & stateCacheRecords . at tableId ?~ RecordCache.empty
+        forLoggedIn st $ \liSt ->
+          case liSt ^. stateCacheRecords . at tableId of
+            Just _ -> pure liSt
+            -- cache not yet initialized: no key in map => Nothing
+            Nothing -> do
+              request api (Proxy :: Proxy Api.RecordListWithData)
+                      (session $ liSt ^. stateSessionKey) tableId $ mkCallback $
+                      \records -> [RecordCacheAction tableId $ RecordCache.Set records]
+              -- initialize cache with empty map
+              pure $ liSt & stateCacheRecords . at tableId ?~ RecordCache.empty
 
       RecordCacheAction tableId a ->
         forLoggedIn st $ \liSt ->
