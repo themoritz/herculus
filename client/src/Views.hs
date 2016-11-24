@@ -23,7 +23,8 @@ import           Lib.Types
 
 import           Action              (Action (..))
 import           Helper              (keyENTER, keyESC)
-import           Store               (LoggedOutState (..), SessionState (..),
+import           Store               (LoggedOutState (..),
+                                      ProjectViewState (..), SessionState (..),
                                       State, dispatch, stateCells, stateColumns,
                                       stateMessage, stateProjectId,
                                       stateProjectView, stateRecords,
@@ -46,21 +47,25 @@ app = defineControllerView "app" store $ \st () ->
       StateLoggedOut LoggedOutLoginForm -> login_
       StateLoggedOut LoggedOutSignupForm -> signup_
       StateLoggedIn liSt ->
-        case (liSt ^. stateProjectId, null $ liSt ^. stateTables) of
-          (Just projectId, False) ->
-            let cols = liSt ^. stateColumns
-                recs = liSt ^. stateRecords
-                -- TODO: put tables deeper into view state hierarchy under projectId
-                tableGridProps = TableGridProps
-                  { _cells      = liSt ^. stateCells
-                  , _colByIndex = IntMap.fromList $ zip [0..] (Map.toList cols)
-                  , _recByIndex = IntMap.fromList $ zip [0..] (Map.toList recs)
-                  , _tableId    = liSt ^. stateTableId
-                  , _projectId  = projectId
-                  , _sKey       = liSt ^. stateSessionKey
-                  }
-            in  cldiv_ "tableGrid" $ tableGrid_ tableGridProps
-          _ -> cldiv_ "" mempty
+        case liSt ^. stateProjectView of
+          StateProjectOverview ps  ->
+            cldiv_ "overview" $ projectsOverview_ ps
+          StateProjectDetail pdSt ->
+            case (pdSt ^. stateProjectId, null $ pdSt ^. stateTables) of
+              (projectId, False) ->
+                let cols = pdSt ^. stateColumns
+                    recs = pdSt ^. stateRecords
+                    -- TODO: put tables deeper into view state hierarchy under projectId
+                    tableGridProps = TableGridProps
+                      { _cells      = pdSt ^. stateCells
+                      , _colByIndex = IntMap.fromList $ zip [0..] (Map.toList cols)
+                      , _recByIndex = IntMap.fromList $ zip [0..] (Map.toList recs)
+                      , _tableId    = pdSt ^. stateTableId
+                      , _projectId  = projectId
+                      , _sKey       = liSt ^. stateSessionKey
+                      }
+                in  cldiv_ "tableGrid" $ tableGrid_ tableGridProps
+              _ -> cldiv_ "" mempty
 
     appFooter_ st
 
@@ -75,10 +80,14 @@ appHeader = defineView "header" $ \st ->
     cldiv_ "logo" "Herculus"
     case st ^. stateSession of
       StateLoggedIn liSt -> do
-        -- TODO: Move projects to ProjectsOverviewView (view has to created)
-        -- projects_ (liSt ^. stateProjects) (liSt ^. stateProjectId)
-        for_ (liSt ^. stateProjectId) $ \prjId ->
-          tables_ (liSt ^. stateTables) (liSt ^. stateTableId) prjId
+        case liSt ^. stateProjectView of
+          StateProjectOverview _  -> pure ()
+          StateProjectDetail pdSt -> do
+            tables_ (pdSt ^. stateTables) (pdSt ^. stateTableId) (pdSt ^. stateProjectId)
+            button_
+              [ classNames [ ("pure", True), ("backToOverview", True) ]
+              , onClick $ \_ _ -> dispatch $ SetProjectOverview (liSt ^. stateSessionKey)
+              ] "Back 2 Overview"
         logout_ $ liSt ^. stateUserInfo . uiUserName
       StateLoggedOut _  -> pure ()
 
@@ -116,30 +125,45 @@ appFooter = defineView "footer" $ \_ ->
 
 --
 
-projects_ :: Map (Id Project) Project -> Maybe (Id Project) -> ReactElementM eh ()
-projects_ !ps !mProj = view projects (ps, mProj) mempty
+projectsOverview_ :: Map (Id Project) Project -> ReactElementM eh ()
+projectsOverview_ !ps = view projectsOverview ps mempty
 
-projects :: ReactView (Map (Id Project) Project, Maybe (Id Project))
-projects = defineView "projects" $ \(ps, mProj) ->
-  cldiv_ "projects" $ do
-    ul_ $ for_ (Map.toList ps) $ \(i, p) -> project_ i p (Just i == mProj)
-    inputNew_ "Add project..." (dispatch . ProjectsCreate)
+projectsOverview :: ReactView (Map (Id Project) Project)
+projectsOverview = defineView "projects" $ \ps ->
+  ul_ $ do
+    li_ $ inputNew_ "Add project..." (dispatch . ProjectsCreate)
+    for_ (Map.toList ps) $ uncurry project_
 
-data ProjectViewState = ProjectViewState
+project_ :: Id Project -> Project -> ReactElementM eh ()
+project_ !projectId !project' = viewWithSKey project (toJSString $ show projectId) (projectId, project') mempty
+
+project :: ReactView (Id Project, Project)
+project = defineView "project" $ \(projectId, project') ->
+  li_
+     [ classNames
+       [ ("link", True)
+       ]
+     , onClick $ \_ _ -> dispatch $ ProjectsLoadProject projectId
+     ]
+     $ div_ $
+       span_ $ elemText $ project' ^. projectName
+data ProjectInfoViewState = ProjectInfoViewState
   { pEditable  :: Bool
   , pName      :: Text
   , pNameError :: Bool
   } deriving (Generic, Show, NFData)
 
-initialProjectViewState :: ProjectViewState
-initialProjectViewState = ProjectViewState False "" False
+initialProjectInfoViewState :: ProjectInfoViewState
+initialProjectInfoViewState = ProjectInfoViewState False "" False
 
-project_ :: Id Project -> Project -> Bool -> ReactElementM eh ()
-project_ !projectId !project' !selected = viewWithSKey project (toJSString $ show projectId) (projectId, project', selected) mempty
+-- TODO: projectDetail will be become the projectView of ProjectDetailView
 
-project :: ReactView (Id Project, Project, Bool)
-project = defineStatefulView "project" initialProjectViewState $ \state (projectId, project', selected) ->
-  let saveHandler st = (dispatch $ ProjectSetName projectId (pName st), Just st { pEditable = False })
+projectInfo_ :: Id Project -> Project -> ReactElementM eh ()
+projectInfo_ !projectId !project' = viewWithSKey project (toJSString $ show projectId) (projectId, project') mempty
+
+projectInfo :: ReactView (Id Project, Project)
+projectInfo = defineStatefulView "project" initialProjectInfoViewState $ \state (projectId, project') ->
+  let saveHandler st = (dispatch $ ProjectSetName (pName st), Just st { pEditable = False })
       inputKeyDownHandler _ evt st
         | keyENTER evt && not (Text.null $ pName st) = saveHandler st
         | keyESC evt = ([] , Just st { pEditable = False })
@@ -147,7 +171,6 @@ project = defineStatefulView "project" initialProjectViewState $ \state (project
   in li_
      [ classNames
        [ ("link", True)
-       , ("active", selected)
        ]
      , onClick $ \_ _ _ -> (dispatch $ ProjectsLoadProject projectId, Nothing)
      ] $

@@ -161,6 +161,15 @@
     top: 0px;
     right: 0px;
     text-align: right;
+    color: $light-gray;
+  }
+
+  .backToOverview{
+    position: absolute;
+    bottom: 5px;
+    right: 0px;
+    text-align: right;
+    color: $light-gray;
   }
 }
 

@@ -119,13 +119,22 @@ forProjectDetail_ st action =
         -- TODO: proper error message
         putStrLn "inconsistent client state: unexpected: project overview"
 
+forProjectDetail' :: State -> (SessionKey -> ProjectDetailState -> IO State) -> IO State
+forProjectDetail' st action =
+  forLoggedIn' st $ \liSt -> case liSt ^. stateProjectView of
+      StateProjectDetail pdSt -> action (liSt ^. stateSessionKey) pdSt
+      StateProjectOverview _ -> do
+        -- TODO: proper error message
+        putStrLn "inconsistent client state: unexpected: project overview"
+        pure st
+
 mkStateProjectDetail :: LoggedInState -> ProjectDetailState -> LoggedInState
 mkStateProjectDetail liSt pdSt = liSt & stateProjectView .~ StateProjectDetail pdSt
 
 -- execute action in case the user is logged in and error otherwise
 forLoggedIn :: State -> (LoggedInState -> IO LoggedInState) -> IO State
 forLoggedIn st action = case st ^. stateSession of
-  StateLoggedIn  liSt -> mkStateLoggedIn st <$> action liSt
+  StateLoggedIn  liSt -> updStateLoggedIn st <$> action liSt
   StateLoggedOut _    -> do
     -- TODO: proper error message
     putStrLn "inconsistent client state: unexpected: not logged in"
@@ -151,8 +160,12 @@ forLoggedIn' st action = case st ^. stateSession of
     putStrLn "inconsistent client state: unexpected: not logged in"
     pure st
 
-mkStateLoggedIn :: State -> LoggedInState -> State
-mkStateLoggedIn st liSt = st & stateSession .~ StateLoggedIn liSt
+updStateProjectDetail :: State -> ProjectDetailState -> State
+updStateProjectDetail st pdSt =
+  st & stateSession . _StateLoggedIn . stateProjectView .~ StateProjectDetail pdSt
+
+updStateLoggedIn :: State -> LoggedInState -> State
+updStateLoggedIn st liSt = st & stateSession .~ StateLoggedIn liSt
 
 initLoggedInState :: SessionKey -> UserInfo -> LoggedInState
 initLoggedInState sKey userInfo = LoggedInState
@@ -225,7 +238,7 @@ instance StoreData State where
 
       LoggedIn userInfo@(UserInfo _ _ sKey) -> do
         setProjectOverview sKey
-        pure $ mkStateLoggedIn st $ initLoggedInState sKey userInfo
+        pure $ updStateLoggedIn st $ initLoggedInState sKey userInfo
 
       Logout -> do
         forLoggedIn_ st $ \liSt ->
@@ -406,7 +419,7 @@ instance StoreData State where
           pure $ pdSt & stateTables . at i . _Just . tableName .~ name
 
       TableDelete tableId ->
-        forProjectDetail st $ \sKey pdSt -> do
+        forProjectDetail' st $ \sKey pdSt -> do
           request api (Proxy :: Proxy Api.TableDelete)
                       (session sKey)
                       tableId $ mkCallback $ const []
@@ -416,21 +429,20 @@ instance StoreData State where
               let nextTable = Map.lookupLT tableId (pdSt ^. stateTables)
                           <|> Map.lookupGT tableId (pdSt ^. stateTables)
 
-                  pdSt' = pdSt & stateTables %~ Map.delete tableId
+
+                  st' = updStateProjectDetail st $ pdSt
+                          & stateTables %~ Map.delete tableId
                           & stateColumns .~ Map.empty
                           & stateCells .~ Map.empty
                           & stateRecords .~ Map.empty
                           & stateTableId .~ (fst <$> nextTable)
+
               case nextTable of
                 Just (nextTableId, _) ->
-                  -- FIXME: How can we update the State to transform TablesLoadTable??
-                  -- Until now we used the following transform:
-                  -- React.Flux.transform (TablesLoadTable nextTableId) st'
-                  -- Remove this if action TablesLoadTable can be dispatched in any way:
-                  pure pdSt'
-                Nothing -> pure pdSt'
+                  React.Flux.transform (TablesLoadTable nextTableId) st'
+                Nothing -> pure st'
             else
-              pure $ pdSt & stateTables %~ Map.delete tableId
+              pure $ updStateProjectDetail st $ pdSt & stateTables %~ Map.delete tableId
 
       -- Cell
 
