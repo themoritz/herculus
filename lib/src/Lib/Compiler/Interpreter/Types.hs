@@ -4,6 +4,7 @@ module Lib.Compiler.Interpreter.Types where
 
 import           Control.Monad.Except
 import           Control.Monad.Reader
+import           Control.Monad.State
 
 import           Data.Text            (Text)
 
@@ -34,16 +35,19 @@ data EvalEnv m = EvalEnv
   }
 
 newtype InterpretT m a = InterpretT
-  { unInterpretT :: ReaderT (EvalEnv m) (ExceptT EvalError m) a
+  { unInterpretT :: StateT Int (ReaderT (EvalEnv m) (ExceptT EvalError m)) a
   } deriving ( Functor
              , Applicative
              , Monad
              , MonadError EvalError
              , MonadReader (EvalEnv m)
+             , MonadState Int
              )
 
 instance MonadTrans InterpretT where
-  lift = InterpretT . lift . lift
+  lift = InterpretT . lift . lift . lift
 
-runInterpretT :: EvalEnv m -> InterpretT m a -> m (Either EvalError a)
-runInterpretT env action = runExceptT $ runReaderT (unInterpretT action) env
+runInterpretT :: Monad m => Int -> EvalEnv m
+              -> InterpretT m a -> m (Either EvalError a)
+runInterpretT gas env action =
+  runExceptT $ runReaderT (evalStateT (unInterpretT action) gas) env

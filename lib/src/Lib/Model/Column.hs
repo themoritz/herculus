@@ -11,8 +11,6 @@ module Lib.Model.Column where
 import           Control.DeepSeq
 
 import           Control.Lens
-import           Control.Lens.Lens
-import           Control.Lens.Prism
 import           Data.Aeson         (FromJSON (..), ToJSON (..))
 import           Data.Aeson.Bson
 import           Data.Bson          (Val, (=:))

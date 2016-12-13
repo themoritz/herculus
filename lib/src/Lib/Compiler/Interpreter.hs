@@ -5,10 +5,11 @@ module Lib.Compiler.Interpreter where
 
 import           Control.Monad.Except
 import           Control.Monad.Reader
+import           Control.Monad.State
 
-import Data.Monoid ((<>))
 import           Data.Map                       (Map)
 import qualified Data.Map                       as Map
+import           Data.Monoid                    ((<>))
 import           Data.Text                      (Text, pack)
 import           Data.Traversable
 
@@ -221,10 +222,16 @@ prelude = Map.fromList
 
 -- Interpreter
 
+consumeGas :: Monad m => InterpretT m ()
+consumeGas = do
+  gas <- get
+  when (gas == 0) $ throwError "Computation exceeded the maximum allowed number of operations."
+  put (gas - 1)
+
+-- TODO: More refined model of when gas is consumed might be needed
 eval :: Monad m => TermEnv m -> CExpr -> InterpretT m (Result m)
-eval env expr = case expr of
-  CLam x body -> do
-    pure $ RClosure x body env
+eval env expr = consumeGas >> case expr of
+  CLam x body -> pure $ RClosure x body env
   CApp f arg -> do
     argVal <- eval env arg
     eval env f >>= \case
@@ -237,14 +244,13 @@ eval env expr = case expr of
   CIf cond e1 e2 -> do
     RValue (VBool bVal) <- eval env cond
     if bVal then eval env e1 else eval env e2
-  CVar x -> do
-    case Map.lookup x env of
-      Nothing -> throwError $ "Interpreter `Var`: " <> (pack . show) x <> " not found in env. Please report this as a bug!"
-      Just v -> pure v
+  CVar x -> case Map.lookup x env of
+    Nothing -> throwError $ "Interpreter `Var`: " <> (pack . show) x <> " not found in env. Please report this as a bug!"
+    Just v -> pure v
   CLit l -> do
     let v = case l of
           LNumber v' -> VNumber v'
-          LBool v' -> VBool v'
+          LBool v'   -> VBool v'
           LString v' -> VString v'
     pure $ RValue v
   CPrjRecord e name -> do
@@ -274,10 +280,10 @@ eval env expr = case expr of
 
 interpret :: Monad m => CExpr -> EvalEnv m -> m (Either Text Value)
 interpret expr env = do
-  result <- runInterpretT env (eval prelude expr)
+  result <- runInterpretT 100000 env (eval prelude expr)
   case result of
     Left e -> pure $ Left e
     Right (RValue v) -> pure $ Right v
-    Right (RClosure _ _ _) -> pure $ Left "Interpret result: Did not expect closure. Please report this as a bug!"
-    Right (RPrelude _) -> pure $ Left "Interpret result: Did not expect prelude function. Please report this as a bug!"
+    Right RClosure{} -> pure $ Left "Interpret result: Did not expect closure. Please report this as a bug!"
+    Right RPrelude{} -> pure $ Left "Interpret result: Did not expect prelude function. Please report this as a bug!"
     _ -> pure $ Left "Interpret result: Pattern match failure. Please report this as a bug!"

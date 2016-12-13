@@ -23,6 +23,7 @@ module Lib.Model.Auth
   , uiSessionKey
   , userName
   , userPwHash
+  , userIntention
   , verifyPassword
   ) where
 

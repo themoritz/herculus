@@ -14,7 +14,7 @@ import           Lib.Model.Cell
 import           Lib.Template.Types
 
 runEvalTemplate :: Monad m => EvalEnv m -> CTemplate -> m (Either Text Text)
-runEvalTemplate env tpl = runInterpretT env (evalTpl prelude tpl)
+runEvalTemplate env tpl = runInterpretT 1000000 env (evalTpl prelude tpl)
 
 evalTpl :: Monad m => TermEnv m -> CTemplate -> InterpretT m Text
 evalTpl env (CTemplate tpl) = mconcat <$> traverse (evalTplExpr env) tpl
