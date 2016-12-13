@@ -158,9 +158,7 @@ handleProjectList (UserInfo userId _ _) = listByQuery [ "owner" =: toObjectId us
 handleProjectSetName :: MonadHexl m => SessionData -> Id Project -> Text -> m ()
 handleProjectSetName (UserInfo userId _ _) projectId name = do
   permissionProject userId projectId
-  project <- getById' projectId
-  let updatedProject = project & projectName .~ name
-  update projectId $ const updatedProject
+  update projectId $ projectName .~ name
 
 handleProjectDelete :: MonadHexl m => SessionData -> Id Project -> m ()
 handleProjectDelete sessionData@(UserInfo userId _ _) projectId = do
@@ -202,19 +200,17 @@ handleTableGetWhole sessionData@(UserInfo userId _ _) tblId = do
 handleTableSetName :: MonadHexl m => SessionData -> Id Table -> Text -> m ()
 handleTableSetName (UserInfo userId _ _) tblId name = do
   permissionTable userId tblId
-  table <- getById' tblId
-  let table' = table & tableName .~ name
-  update tblId $ const table'
+  update tblId $ tableName .~ name
 
 handleTableDelete :: MonadHexl m => SessionData -> Id Table -> m ()
 handleTableDelete (UserInfo userId _ _) tableId = do
     permissionTable userId tableId
     delete tableId
-    deleteByQuery (Proxy::Proxy Column) query
-    deleteByQuery (Proxy::Proxy Cell) query
-    deleteByQuery (Proxy::Proxy Record) query
+    deleteByQuery (Proxy :: Proxy Column) query
+    deleteByQuery (Proxy :: Proxy Cell) query
+    deleteByQuery (Proxy :: Proxy Record) query
   where
-    query = [ "tableId" =: toObjectId tableId]
+    query = [ "tableId" =: toObjectId tableId ]
 
 --
 
@@ -299,8 +295,8 @@ handleReportColUpdate (UserInfo userId _ _) columnId (template, format, lang) = 
   when (isNothing (oldCol ^? columnKind . _ColumnReport)) $
     throwError $ ErrBug "Called ReportColUpdate for column other than report"
   update columnId $ columnKind . _ColumnReport %~ (reportColTemplate .~ template)
-                                         . (reportColFormat .~ format)
-                                         . (reportColLanguage .~ lang)
+                                                . (reportColFormat .~ format)
+                                                . (reportColLanguage .~ lang)
   newCol <- compileColumn columnId
   sendWS $ WsDownColumnsChanged [newCol]
 
@@ -349,17 +345,18 @@ handleRecordDelete (UserInfo userId _ _) recId = do
   deleteByQuery (Proxy :: Proxy Cell)
     [ "aspects.recordId" =: toObjectId recId
     ]
+  let tableId = recordTableId record
   graph <- getDependencies
-  cs <- listByQuery [ "tableId" =: toObjectId (recordTableId record) ]
+  cols <- listByQuery [ "tableId" =: toObjectId tableId ]
   let allChildren = foldr (union . (\e ->
                                       map fst .
                                       filter (\(_, typ) -> typ == OneToAll) .
-                                      getChildren (entityId e) $ graph)) [] cs
-  -- Invalidate references
+                                      getChildren (entityId e) $ graph)) [] cols
+  -- Invalidate references of values in other cells to this record
   refGraph <- getReferences
-  let refingCols = getReferringColumns (recordTableId record) refGraph
-  mCellChanges <- for refingCols $ \c -> do
-    cells <- listByQuery [ "aspects.columnId" =: toObjectId c ]
+  let refingCols = getReferringColumns tableId refGraph
+  mCellChanges <- for refingCols $ \col -> do
+    cells <- listByQuery [ "aspects.columnId" =: toObjectId col ]
     for cells $ \(Entity i cell) -> case cellContent cell of
       CellError _ -> pure Nothing
       CellValue val -> case invalidateRecord recId val of
@@ -375,6 +372,7 @@ handleRecordDelete (UserInfo userId _ _) recId = do
     , RootCellChanges $ map (\(Cell _ (Aspects _ c r)) -> (c, r)) cellChanges
     ]
 
+-- | Get all the data of a row
 handleRecordData :: MonadHexl m => SessionData -> Id Record -> m [(Entity Column, CellContent)]
 handleRecordData (UserInfo userId _ _) recId = do
   permissionRecord userId recId
@@ -515,7 +513,13 @@ evalReport columnId recordId = do
           Right res -> pure (repCol, res)
       _ -> throwError $ ErrBug "Getting report for non compiled template."
 
--- | Compiles all kinds of columns
+-- | Compiles a column (both data and report columns).
+--
+-- For a data column: compile, check the inferred type matches the column's
+-- type, extract the dependencies from the expression, check for cycles in
+-- the dependency graph, and update the dependencies of the column.
+--
+-- For a report column: compile and update the dependencies.
 compileColumn :: forall m. MonadHexl m => Id Column -> m (Entity Column)
 compileColumn columnId = do
   col <- getById' columnId
@@ -555,21 +559,20 @@ compileColumn columnId = do
   update columnId $ const newCol
   pure $ Entity columnId newCol
 
+-- | Compile all columns depending on this column.
 compileColumnChildren :: MonadHexl m => Id Column -> m [Entity Column]
 compileColumnChildren columnId = do
   graph <- getDependencies
-  for (getChildren columnId graph) $ \(child, _) -> do
-    void $ compileColumn child
-    childCol <- getById' child
-    pure $ Entity child childCol
+  for (getChildren columnId graph) (compileColumn . fst)
 
+-- | Put default content in every cell of the column. Don't propagate.
 invalidateCells :: MonadHexl m => Id Column -> m ()
 invalidateCells columnId = do
   col <- getById' columnId
   dataCol <- case col ^? columnKind . _ColumnData of
     Nothing -> throwError $ ErrBug "Trying to invalidate cells of column other than data"
     Just dataCol -> pure dataCol
-  cells <- listByQuery [ "aspects.columnId" =: toObjectId columnId]
+  cells <- listByQuery [ "aspects.columnId" =: toObjectId columnId ]
   changes <- for cells $ \(Entity i cell) -> do
     defContent <- defaultContent (dataCol ^. dataColType)
     let invalidatedCell = Cell defContent (cellAspects cell)
@@ -577,13 +580,14 @@ invalidateCells columnId = do
     pure invalidatedCell
   sendWS $ WsDownCellsChanged changes
 
+-- | Insert default content for error cells and propagate.
 renewErrorCells :: MonadHexl m => Id Column -> m ()
 renewErrorCells columnId = do
   col <- getById' columnId
   dataCol <- case col ^? columnKind . _ColumnData of
     Nothing -> throwError $ ErrBug "Trying to renewErrorCells of column other than data"
     Just dataCol -> pure dataCol
-  cells <- listByQuery [ "aspects.columnId" =: toObjectId columnId]
+  cells <- listByQuery [ "aspects.columnId" =: toObjectId columnId ]
   changes <- for cells $ \(Entity i cell) ->
     case cellContent cell of
       CellError _ -> do
@@ -598,6 +602,8 @@ renewErrorCells columnId = do
                 catMaybes changes
             ]
 
+-- | If the datatype of the column contains a reference to a table, add it to
+-- the reference graph. Otherwise remove all references.
 updateReference :: MonadHexl m => Id Column -> DataType -> m ()
 updateReference columnId dataType = case getReference dataType of
   Nothing -> modifyReferences $ removeReference columnId
@@ -612,7 +618,7 @@ mkTypecheckEnv ownTblId = TypecheckEnv
     , envResolveColumnOfTableRef = \tblName colName -> do
         tableRes <- getOneByQuery [ "name" =: tblName ]
         case tableRes of
-          Left _ -> pure Nothing
+          Left _             -> pure Nothing
           Right (Entity i _) -> resolveColumnRef i colName
 
     , envResolveTableRef = \tblName -> do
@@ -639,7 +645,7 @@ mkTypecheckEnv ownTblId = TypecheckEnv
             ]
       columnRes <- getOneByQuery colQuery
       pure $ case columnRes of
-        Left _  -> Nothing
+        Left _               -> Nothing
         Right (Entity i col) -> fmap (i,) (col ^? columnKind . _ColumnData)
 
 getTableRows :: MonadHexl m => Id Table -> m Type
@@ -662,7 +668,7 @@ defaultContent = \case
   DataRecord t -> do
     res <- getOneByQuery [ "tableId" =: toObjectId t ]
     pure $ CellValue $ VRecord $ case res of
-      Left _ -> Nothing
+      Left _             -> Nothing
       Right (Entity i _) -> Just i
   DataList _   -> pure . CellValue $ VList []
   DataMaybe _  -> pure . CellValue $ VMaybe Nothing

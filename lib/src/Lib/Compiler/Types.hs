@@ -1,30 +1,30 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric  #-}
-{-# LANGUAGE TupleSections  #-}
+{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE FlexibleInstances  #-}
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE StandaloneDeriving  #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TupleSections      #-}
 
 module Lib.Compiler.Types where
 
 import           Control.DeepSeq
-import Control.Monad.Except
+import           Control.Monad.Except
 
 import           Data.Aeson
-import Data.List (intercalate)
+import           Data.List                    (intercalate)
+import           Data.Map                     (Map)
+import qualified Data.Map                     as Map
 import           Data.Monoid
-import Data.Map (Map)
-import qualified Data.Map as Map
-import qualified Data.Set as Set
+import qualified Data.Set                     as Set
 import           Data.Text                    (Text, unpack)
 
 import           GHC.Generics
 
-import {-# SOURCE #-} Lib.Model.Column
+import qualified Data.UnionFind.IntMap        as UF
+import           Lib.Model.Column
 import           Lib.Model.Dependencies.Types
 import           Lib.Model.Table
 import           Lib.Types
-import qualified Data.UnionFind.IntMap as UF
 
 
 type TypeError = Text
@@ -71,7 +71,7 @@ instance Eq (MonoType Type) where
           go (TyRecordCons n (Type t') (Type rest)) = (n,t') : go rest
           go TyRecordNil = []
           go _ = error "eq MonoType: go: should not happen"
-  TyRecordCons _ _ _ == TyRecordCons _ _ _ = error "eq MonoType: should not happen"
+  TyRecordCons{} == TyRecordCons{} = error "eq MonoType: should not happen"
   TyRecordNil == TyRecordNil = True
   _ == _ = False
 
@@ -94,14 +94,14 @@ instance Show Type where
     TyRecordNil -> "-"
 
 instance Show Kind where
-  show KindStar = "*"
+  show KindStar          = "*"
   show (KindFun arg res) = "(" <> show arg <> " -> " <> show res <> ")"
 
 instance Show TypeVar where
-  show (TypeVar a k) = show a -- <> " : " <> show k
+  show (TypeVar a _) = show a -- <> " : " <> show k
 
 instance Show TypeConst where
-  show (TypeConst n k) = unpack n -- <> " : " <> show k
+  show (TypeConst n _) = unpack n -- <> " : " <> show k
 
 instance Show ClassName where
   show (ClassName name) = unpack name
