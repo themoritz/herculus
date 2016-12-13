@@ -1,8 +1,8 @@
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TupleSections       #-}
 
 module Lib.Compiler.Typechecker
   ( runInfer
@@ -18,7 +18,7 @@ import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 
-import Debug.Trace (traceShowM)
+import           Debug.Trace                    (traceShowM)
 
 import qualified Data.Map                       as Map
 import           Data.Monoid

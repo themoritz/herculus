@@ -1,9 +1,9 @@
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TemplateHaskell            #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE TupleSections              #-}
 
 module Lib.Compiler.Typechecker.Types where
@@ -13,9 +13,9 @@ import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 
-import           Debug.Trace (traceShowM, traceM)
+import           Debug.Trace           (traceM, traceShowM)
 
-import           Data.Foldable (foldlM)
+import           Data.Foldable         (foldlM)
 import           Data.Map              (Map)
 import qualified Data.Map              as Map
 import           Data.Monoid           ((<>))
@@ -34,16 +34,16 @@ import           Lib.Compiler.Types
 --
 
 data Context = Context
-  { _contextTypes :: Map Name (PolyType Point)
+  { _contextTypes         :: Map Name (PolyType Point)
   , _contextInstanceDicts :: Map (Predicate Type) Name -- predicate -> instance dictionary
   }
 
 makeLenses ''Context
 
 data InferState = InferState
-  { _inferContext          :: Context
-  , _inferCount            :: Int
-  , _inferPointSupply      :: UF.PointSupply (MonoType Point)
+  { _inferContext     :: Context
+  , _inferCount       :: Int
+  , _inferPointSupply :: UF.PointSupply (MonoType Point)
   }
 
 makeLenses ''InferState
@@ -58,12 +58,12 @@ instance Types TypeConst where
   ftv _ = pure $ Set.empty
 
 instance Types a => Types (MonoType a) where
-  ftv (TyVar v) = ftv v
-  ftv (TyConst c) = ftv c
-  ftv (TyApp l r) = Set.union <$> ftv l <*> ftv r
-  ftv (TyRecord r) = ftv r
+  ftv (TyVar v)            = ftv v
+  ftv (TyConst c)          = ftv c
+  ftv (TyApp l r)          = Set.union <$> ftv l <*> ftv r
+  ftv (TyRecord r)         = ftv r
   ftv (TyRecordCons _ t r) = Set.union <$> ftv t <*> ftv r
-  ftv (TyRecordNil) = pure Set.empty
+  ftv (TyRecordNil)        = pure Set.empty
 
 instance Types a => Types [a] where
   ftv = foldlM (\vs a -> Set.union <$> pure vs <*> ftv a) Set.empty
@@ -89,7 +89,7 @@ lookupPolyType :: (MonadError TypeError m, MonadState InferState m) => Name -> m
 lookupPolyType name = do
   ctx <- use (inferContext . contextTypes)
   case Map.lookup name ctx of
-    Just t -> pure t
+    Just t  -> pure t
     Nothing -> throwError $ "not in scope: " <> name
 
 inLocalContext :: MonadState InferState m => (Name, PolyType Point) -> m a -> m a
