@@ -36,9 +36,9 @@ import           Data.These
 
 import           GHC.Generics
 
-import           Lib.Model.Column
+import {-# SOURCE #-}           Lib.Model.Column
 import           Lib.Model.Dependencies.Types
-import           Lib.Model.Table
+import {-# SOURCE #-}           Lib.Model.Table
 import           Lib.Types
 
 data DependencyGraph = DependencyGraph

@@ -1,46 +1,69 @@
-{-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TemplateHaskell       #-}
 
 module Lib.Model.Project where
 
 import           Control.DeepSeq
 
-import           Control.Lens    (makeLenses)
-import           Data.Aeson      (FromJSON, ToJSON)
-import           Data.Text       (Text)
+import           Control.Lens           (makeLenses)
+import           Data.Aeson             (FromJSON, ToJSON)
+import           Data.Serialize         (decode, encode)
+import           Data.Text              (Text)
 
-import           Data.Bson       ((=:))
-import qualified Data.Bson       as Bson
+import           Data.Bson              ((=:))
+import qualified Data.Bson              as Bson
 
 import           GHC.Generics
 
-import           Lib.Model.Auth  (User)
+import           Lib.Model.Auth         (User)
 import           Lib.Model.Class
-import           Lib.Types       (Id, fromObjectId, toObjectId)
+import           Lib.Model.Dependencies
+import           Lib.Types              (Id, fromObjectId, toObjectId)
 
+--------------------------------------------------------------------------------
 
-data Project = Project
-  { _projectName  :: Text
-  , _projectOwner :: Id User -- user id of project creator/owner
+data ProjectClient = ProjectClient
+  { _projectClientName  :: Text
+  , _projectClientOwner :: Id User
   } deriving (Generic, NFData)
 
+instance ToJSON ProjectClient
+instance FromJSON ProjectClient
+
+--------------------------------------------------------------------------------
+
+data Project = Project
+  { _projectName            :: Text
+  , _projectOwner           :: Id User
+  , _projectDependencyGraph :: DependencyGraph
+  }
+
 makeLenses ''Project
+
+--------------------------------------------------------------------------------
+
+instance ClientModel Project ProjectClient where
+  toClient (Project name owner _) = ProjectClient name owner
+  fromClient (ProjectClient name owner) = Project name owner emptyDependencyGraph
 
 instance Model Project where
   collectionName = const "projects"
 
-instance ToJSON Project
-instance FromJSON Project
-
 instance ToDocument Project where
-  toDocument (Project name owner) =
-    [ "name" =: name
-    , "owner" =: toObjectId owner
+  toDocument (Project name owner graph) =
+    [ "name"            =: name
+    , "owner"           =: toObjectId owner
+    , "dependencyGraph" =: Bson.Binary (encode graph)
     ]
 
 instance FromDocument Project where
-  parseDocument doc =
-    Project <$> Bson.lookup "name" doc
-            <*> (fromObjectId <$> Bson.lookup "owner" doc)
+  parseDocument doc = do
+    name <- Bson.lookup "name" doc
+    owner <- Bson.lookup "owner" doc
+    Bson.Binary graph <- Bson.lookup "dependencyGraph" doc
+    case decode graph of
+      Left err     -> fail err
+      Right graph' -> pure $ Project name (fromObjectId owner) graph'

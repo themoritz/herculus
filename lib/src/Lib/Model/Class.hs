@@ -1,8 +1,10 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 module Lib.Model.Class where
 
-import Data.Bson
-import Data.Text
+import           Data.Bson
 import           Data.Proxy
+import           Data.Text
 
 class (ToDocument a, FromDocument a) => Model a where
   collectionName :: Proxy a -> Text
@@ -12,3 +14,7 @@ class ToDocument a where
 
 class FromDocument a where
   parseDocument :: Document -> Either Text a
+
+class ClientModel server client where
+  toClient   :: server -> client
+  fromClient :: client -> server
