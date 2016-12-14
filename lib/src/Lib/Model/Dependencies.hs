@@ -1,9 +1,9 @@
 {-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TemplateHaskell   #-}
 {-# LANGUAGE TupleSections     #-}
-{-# LANGUAGE LambdaCase        #-}
 
 module Lib.Model.Dependencies
   ( DependencyGraph
@@ -18,96 +18,99 @@ module Lib.Model.Dependencies
   , ColumnOrder
   ) where
 
+import           Control.Applicative
 import           Control.Lens
 import           Control.Monad.State
 import           Control.Monad.Trans.Maybe
-import           Control.Applicative
 
-import           Data.Aeson
-import           Data.Aeson.Bson
-import           Data.Bson       ((=:))
-import qualified Data.Bson       as Bson
-import           Data.Map        (Map)
-import qualified Data.Map        as Map
-import           Data.Text       (pack)
+import           Data.Align                   (alignWith)
+import           Data.Map                     (Map)
+import qualified Data.Map                     as Map
+import           Data.Serialize
+import           Data.Text                    (pack)
 
 import           GHC.Generics
 
 import           Lib.Model.Class
 import           Lib.Model.Column
 import           Lib.Model.Dependencies.Types
-import           Lib.NamedMap
 import           Lib.Types
 
 type Connections = NamedMap (Id Column) DependencyType
 
 data DependencyGraph = DependencyGraph
-  { _dependsOnColumns  :: NamedMap (Id Column) Connections
-  , _influencesColumns :: NamedMap (Id Column) Connections
+  { _dependencyColumns :: Map (Id Column) (Id Table, Map (Id Column) ColumnDependency)
+  , _dependencyTables  :: Map (Id Table) (Map (Id Column) TableDependency)
   } deriving (Show, Generic)
 
 makeLenses ''DependencyGraph
 
-connection :: Id Column -> Id Column
-           -> Lens' (NamedMap (Id Column) Connections) (Maybe DependencyType)
-connection c1 c2 = namedMap . at c1 . non emptyNamedMap . namedMap . at c2
+instance Serialize DependencyGraph
 
-instance ToJSON DependencyGraph
-instance FromJSON DependencyGraph
+columnDependency :: (Id Column, Id Table) -> Id Column
+                 -> Lens' DependencyGraph ColumnDependency
+columnDependency (c1, t1) c2 =
+  dependencyColumns . at c1 . non (t1, Map.empty) . _2 . at c2
 
-instance ToBSON DependencyGraph
-instance FromBSON DependencyGraph
-
-data Dependencies = Dependencies
-  { dependenciesGraph :: DependencyGraph
-  }
-
-instance Model Dependencies where collectionName = const "dependencies"
-
-instance ToDocument Dependencies where
-  toDocument (Dependencies graph) =
-    [ "graph" =: toValue graph
-    ]
-
-instance FromDocument Dependencies where
-  parseDocument doc = do
-    val <- Bson.lookup "graph" doc
-    case fromValue val of
-      Error msg -> Left $ pack msg
-      Success g -> pure $ Dependencies g
-
-transpose :: DependencyGraph -> DependencyGraph
-transpose (DependencyGraph d i) = DependencyGraph i d
+tableDependency :: Id Table -> Id Column
+                -> Lens' DependencyGraph TableDependency
+tableDependency t1 c2 =
+  dependencyTables . at t1 . non Map.empty . at c2
 
 emptyDependencyGraph :: DependencyGraph
-emptyDependencyGraph = DependencyGraph emptyNamedMap emptyNamedMap
+emptyDependencyGraph = DependencyGraph Map.empty Map.empty
 
-setDependency :: Id Column -> Id Column -> DependencyType
-              -> DependencyGraph -> DependencyGraph
-setDependency start end typ graph = graph
-  & dependsOnColumns . connection start end .~ Just typ
-  & influencesColumns . connection end start .~ Just typ
+--
 
-removeDependency :: Id Column -> Id Column
-                 -> DependencyGraph -> DependencyGraph
-removeDependency start end graph = graph
-  & dependsOnColumns . connection start end .~ Nothing
-  & influencesColumns . connection end start .~ Nothing
+setColumnDependency :: (Id Column, Id Table) -> Id Column -> ColumnDependency
+                    -> DependencyGraph -> DependencyGraph
+setColumnDependency start end typ = columnDependency start end .~ Just typ
 
-setDependencies :: Id Column -> [(Id Column, DependencyType)]
-                -> DependencyGraph -> DependencyGraph
-setDependencies start edges graph =
-  let connections = maybe [] (map fst . Map.toList . unNamedMap)
-        (graph ^. dependsOnColumns . namedMap . at start)
-      removeOld g = foldr (removeDependency start) g connections
-      setNew g    = foldr (\(end, typ) -> setDependency start end typ) g edges
-  in setNew . removeOld $ graph
+removeColumnDependency :: Id Column -> Id Column
+                       -> DependencyGraph -> DependencyGraph
+removeColumnDependency start end = columnDependency start end .~ Nothing
 
-type ColumnOrder = [(Id Column, [(Id Column, DependencyType)])]
+setColumnDependencies :: (Id Column, Id Table) -> [(Id Column, ColumnDependency)]
+                      -> DependencyGraph -> DependencyGraph
+setColumnDependencies (c, t) edges =
+  dependencyColumns . at c1 . non (t1, Map.empty) . _2 .~ Map.fromList edges
 
-getChildren :: Id Column -> DependencyGraph -> [(Id Column, DependencyType)]
-getChildren col graph = Map.toList $
-  graph ^. influencesColumns . namedMap . at col . non emptyNamedMap . namedMap
+getColumnChildren :: Id Column -> DependencyGraph -> [(Id Column, ColumnDependency)]
+getColumnChildren c graph = case graph ^. dependencyColumns . at c of
+  Nothing        -> []
+  Just (_, deps) -> Map.fromList deps
+
+getColumnChildrenOnly :: ColumnDependency -> Id Column -> DependencyGraph -> [Id Column]
+getColumnChildrenOnly typ c graph =
+  filter (\(_, typ') -> typ == typ') . getColumnChildren t graph
+
+--
+
+setTableDependency :: Id Table -> Id Column -> TableDependency
+                   -> DependencyGraph -> DependencyGraph
+setTableDependency start end typ = tableDependency start end .~ Just typ
+
+removeTableDependency :: Id Table -> Id Column
+                      -> DependencyGraph -> DependencyGraph
+removeTableDependency start end = tableDependency start end .~ Nothing
+
+setTableDependencies :: Id Table -> [(Id Column, TableDependency)]
+                     -> DependencyGraph -> DependencyGraph
+setTableDependencies t edges =
+  dependencyTables . at t . non Map.empty .~ Map.fromList edges
+
+getTableChildren :: Id Table -> DependencyGraph -> [(Id Column, TableDependency)]
+getTableChildren t graph = case graph ^. dependencyTables . at t of
+  Nothing   -> []
+  Just deps -> Map.fromList deps
+
+getTableChildrenOnly :: TableDependency -> Id Table -> DependencyGraph -> [Id Column]
+getTableChildrenOnly typ t graph =
+  filter (\(_, typ') -> typ == typ') . getTableChildren t graph
+
+--
+
+type ColumnOrder = [(Id Column, [(Id Column, AddTargetMode)])]
 
 getDependentTopological :: [Id Column] -> DependencyGraph -> Maybe ColumnOrder
 getDependentTopological roots graph =
@@ -115,7 +118,7 @@ getDependentTopological roots graph =
   where
     topSort :: Id Column -> MaybeT (State (Map (Id Column) Bool)) ColumnOrder
     topSort x = gets (Map.lookup x) >>= \case
-      Just False -> empty
+      Just False -> empty -- Found circle
       Just True -> pure []
       Nothing -> do
         modify $ Map.insert x False
@@ -123,10 +126,18 @@ getDependentTopological roots graph =
         modify $ Map.insert x True
         pure $ (x, getChildren x graph) : join (reverse childOrders)
 
-    graph' = transpose .
-             setDependencies nullObjectId (map (, OneToOne) roots) .
-             transpose $ graph
+    collectNext :: Id Column -> Map (Id Column) AddTargetMode
+    collectNext c = case graph' ^. dependencyColumns . at c of
+      Nothing -> Map.empty
+      Just (t, direct) ->
+        let indirect = fromMaybe nil (graph' ^. dependencyTables . at t)
+        in alignWith alignDeps direct indirect
 
-    getChildren' :: Id Column -> [Id Column]
-    getChildren' col = map fst . Map.toList $
-      graph' ^. influencesColumns . namedMap . at col . non emptyNamedMap . namedMap
+    alignDeps (This ColDepRef) = AddOne
+    alignDeps _                = AddAll
+
+    -- Modified graph that contains edges from a fake node to all the root
+    -- columns.
+    graph' = setColumnDependencies (nullObjectId, nullObjectId)
+                                   (map (, ColDepRef) roots)
+                                   graph

@@ -2,14 +2,25 @@
 
 module Lib.Model.Dependencies.Types where
 
-import Data.Aeson
+import           Data.Serialize
 
-import GHC.Generics
+import           GHC.Generics
 
-data DependencyType
-  = OneToOne
-  | OneToAll
+data ColumnDependency
+  = ColDepRef
+  | ColDepWholeRef
   deriving (Generic, Eq, Ord, Show)
 
-instance ToJSON DependencyType
-instance FromJSON DependencyType
+instance Serialize ColumnDependency
+
+data TableDependency
+  = TblDepColumnRef
+  | TblDepTableRef
+  | TblDepRow
+  deriving (Generic, Eq, Ord, Show)
+
+instance Serialize TableDependency
+
+data AddTargetMode
+  = AddOne
+  | AddAll
