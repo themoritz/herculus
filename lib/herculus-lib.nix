@@ -1,7 +1,7 @@
 { mkDerivation, aeson, attoparsec, base, base64-bytestring, bson
 , bytestring, case-insensitive, cereal, containers, Decimal
 , deepseq, http-api-data, http-media, http-types, lens, mtl, parsec
-, pwstore-fast, scientific, servant, stdenv, text, time
+, pwstore-fast, scientific, servant, stdenv, text, these, time
 , transformers, union-find, unordered-containers, vector
 }:
 mkDerivation {
@@ -12,7 +12,7 @@ mkDerivation {
     aeson attoparsec base base64-bytestring bson bytestring
     case-insensitive cereal containers Decimal deepseq http-api-data
     http-media http-types lens mtl parsec pwstore-fast scientific
-    servant text time transformers union-find unordered-containers
+    servant text these time transformers union-find unordered-containers
     vector
   ];
   testHaskellDepends = [ base ];

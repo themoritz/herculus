@@ -180,8 +180,8 @@ debugTExpr expr = debugTExpr' expr >>= mapM_ traceM
         predicate' <- predicateFromPoint predicate
         pure ["Dict: " <> show predicate']
       TColumnRef c -> pure ["Column: " <> show c]
-      TWholeColumnRef c -> pure ["Column: " <> show c]
-      TTableRef t cs -> pure ["Table: " <> show t <> ", columns: " <> show cs]
+      TWholeColumnRef _ c -> pure ["Whole Column: " <> show c]
+      TTableRef t -> pure ["Table: " <> show t]
     indent = map ("  " <>)
 
 pointToType :: MonadState InferState m => Point -> m Type
@@ -230,8 +230,8 @@ union (Point a) (Point b) = inferPointSupply %= \s -> UF.union s a b
 
 data TypecheckEnv m = TypecheckEnv
   { envResolveColumnRef        :: Ref Column -> m (Maybe (Id Column, DataCol))
-  , envResolveColumnOfTableRef :: Ref Table -> Ref Column -> m (Maybe (Id Column, DataCol))
-  , envResolveTableRef         :: Ref Table -> m (Maybe (Id Table, [(Id Column, DataCol)]))
+  , envResolveColumnOfTableRef :: Ref Table -> Ref Column -> m (Maybe (Id Table, Id Column, DataCol))
+  , envResolveTableRef         :: Ref Table -> m (Maybe (Id Table))
   , envGetTableRows            :: Id Table -> m Type
   , envOwnTableId              :: Id Table
   }

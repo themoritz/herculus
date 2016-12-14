@@ -1,21 +1,23 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric  #-}
-{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE DeriveAnyClass   #-}
+{-# LANGUAGE DeriveGeneric    #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase       #-}
 
 module Lib.Template.Types where
 
 import           Control.DeepSeq
-import Control.Monad.Except
+import           Control.Monad.Except
 
 import           Data.Aeson
 import           Data.Monoid
-import           Data.Text (Text)
+import           Data.Text                    (Text)
 
 import           GHC.Generics
 
 import           Lib.Compiler.Types
-import {-# SOURCE #-} Lib.Model.Column
+import {-# SOURCE #-}           Lib.Model.Column
 import           Lib.Model.Dependencies.Types
+import           Lib.Model.Table
 import           Lib.Types
 
 newtype PTemplate = PTemplate [PTplExpr]
@@ -53,20 +55,22 @@ data CTplExpr
 instance ToJSON CTplExpr
 instance FromJSON CTplExpr
 
-collectTplDependencies :: CTemplate -> [(Id Column, DependencyType)]
+collectTplDependencies :: CTemplate -> ( [(Id Column, ColumnDependency)]
+                                       , [(Id Table, TableDependency)]
+                                       )
 collectTplDependencies = go
-  where go (CTemplate tpls) = concatMap goOne tpls
+  where go (CTemplate tpls) = mconcat $ map goOne tpls
         goOne e' = case e' of
-          CTplText _ -> []
-          CTplFor _ e body -> collectDependencies e <> go body
+          CTplText _           -> ([], [])
+          CTplFor _ e body     -> collectDependencies e <> go body
           CTplIf e then' else' -> collectDependencies e <> go then' <> go else'
-          CTplShow e -> collectDependencies e
+          CTplShow e           -> collectDependencies e
 
 toCoreTpl :: MonadError TypeError m => TTemplate -> m CTemplate
 toCoreTpl (TTemplate tpls) = CTemplate <$> mapM toCore tpls
   where
     toCore = \case
-      TTplText t -> pure $ CTplText t
+      TTplText t      -> pure $ CTplText t
       TTplFor x e tpl -> CTplFor x <$> toCoreExpr e <*> toCoreTpl tpl
-      TTplIf c t e -> CTplIf <$> toCoreExpr c <*> toCoreTpl t <*> toCoreTpl e
-      TTplShow e -> CTplShow <$> toCoreExpr e
+      TTplIf c t e    -> CTplIf <$> toCoreExpr c <*> toCoreTpl t <*> toCoreTpl e
+      TTplShow e      -> CTplShow <$> toCoreExpr e

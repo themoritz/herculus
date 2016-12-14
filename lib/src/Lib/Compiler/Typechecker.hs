@@ -68,16 +68,16 @@ replaceTypeClassDicts expr = case expr of
   TWithPredicates preds e -> do
     dicts <- mapM (\predicate@(IsIn c _) -> (predicate,) <$> freshDictName c) preds
     e' <- withInstanceDicts dicts $ replaceTypeClassDicts e
-    pure $ foldr TLam e' (map snd dicts)
+    pure $ foldr (TLam . snd) e' dicts
   TTypeClassDict predicate -> lookupInstanceDict predicate >>= \case
     Just n -> pure $ TVar n
     Nothing -> do
       IsIn cls typ <- predicateFromPoint predicate
       throwError $ "Type `" <> (pack . show) typ <> "` does not implement the `"
                             <> (pack . show) cls <> "` interface."
-  TColumnRef r -> pure $ TColumnRef r
-  TWholeColumnRef r -> pure $ TWholeColumnRef r
-  TTableRef t c -> pure $ TTableRef t c
+  TColumnRef c -> pure $ TColumnRef c
+  TWholeColumnRef t c -> pure $ TWholeColumnRef t c
+  TTableRef t -> pure $ TTableRef t
 
 inferAndGeneralize :: Monad m => PExpr -> InferT m (TExpr, [Predicate Point], PolyType Point)
 inferAndGeneralize e = do
@@ -139,7 +139,7 @@ infer expr = case expr of
       Nothing -> throwError $ pack $ "Column not found: " <> show colRef
       Just (i, dataCol) -> do
         getRows <- asks envGetTableRows
-        refPoint <- (lift $ typeOfDataType getRows $ _dataColType dataCol) >>= typeToPoint
+        refPoint <- lift (typeOfDataType getRows $ _dataColType dataCol) >>= typeToPoint
         pure $ TColumnRef i ::: ([], refPoint)
   PColumnOfTableRef tblRef colRef -> do
     f <- asks envResolveColumnOfTableRef
@@ -147,20 +147,20 @@ infer expr = case expr of
       Nothing -> throwError $ pack $ "Column not found: " <>
                                      show colRef <> " on table " <>
                                      show tblRef
-      Just (colId, dataCol) -> do
+      Just (tblId, colId, dataCol) -> do
         getRows <- asks envGetTableRows
-        refPoint <- (lift $ typeOfDataType getRows $ _dataColType dataCol) >>= typeToPoint
+        refPoint <- lift (typeOfDataType getRows $ _dataColType dataCol) >>= typeToPoint
         listPoint <- mkList refPoint
-        pure $ TWholeColumnRef colId ::: ([], listPoint)
+        pure $ TWholeColumnRef tblId colId ::: ([], listPoint)
   PTableRef tblRef -> do
     f <- asks envResolveTableRef
     lift (f tblRef) >>= \case
       Nothing -> throwError $ pack $ "Table not found: " <> show tblRef
-      Just (i, cols) -> do
+      Just i -> do
         getRows <- asks envGetTableRows
-        tblRows <- (lift $ getRows i) >>= typeToPoint . Type . TyRecord
+        tblRows <- lift (getRows i) >>= typeToPoint . Type . TyRecord
         listPoint <- mkList tblRows
-        pure $ TTableRef i (map fst cols) ::: ([], listPoint)
+        pure $ TTableRef i ::: ([], listPoint)
 
 -- Entailment
 
@@ -222,7 +222,7 @@ instantiate (ForAll as predicates p) = do
         t <- findType p'
         case t of
           TyVar a -> case lookup a pool of
-            Nothing -> pure p'
+            Nothing    -> pure p'
             Just fresh -> pure fresh
           TyConst _  -> pure p'
           TyApp l r -> (TyApp <$> replace l <*> replace r) >>= mkPoint
@@ -272,4 +272,4 @@ unify a b = do
             typeOfX <- pointToType pointOfX
             otherType <- pointToType otherPoint
             throwError $ "Infinite type: " <> (pack . show) typeOfX <> ", " <> (pack . show) otherType
-          False -> union pointOfX otherPoint
+          False -> pointOfX `union` otherPoint

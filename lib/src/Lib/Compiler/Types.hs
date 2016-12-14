@@ -2,6 +2,8 @@
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections      #-}
 
@@ -111,7 +113,7 @@ instance Show a => Show (Predicate a) where
 
 instance Show (PolyType Type) where
   show (ForAll as preds t) =
-    "forall " <> intercalate " " (map show as) <> ". " <>
+    "forall " <> unwords (map show as) <> ". " <>
     "(" <> intercalate ", " (map show preds) <> ") " <>
     "=> " <> show t
 
@@ -155,8 +157,8 @@ data TExpr
   | TTypeClassDict (Predicate Point)
   --
   | TColumnRef (Id Column)
-  | TWholeColumnRef (Id Column)
-  | TTableRef (Id Table) [Id Column]
+  | TWholeColumnRef (Id Table) (Id Column)
+  | TTableRef (Id Table)
 
 -- Core language
 data CExpr
@@ -169,8 +171,8 @@ data CExpr
   | CPrjRecord CExpr (Ref Column)
   --
   | CColumnRef (Id Column)
-  | CWholeColumnRef (Id Column)
-  | CTableRef (Id Table) [Id Column]
+  | CWholeColumnRef (Id Table) (Id Column)
+  | CTableRef (Id Table)
   deriving (Show, Eq, Generic, NFData)
 
 instance ToJSON CExpr
@@ -178,31 +180,33 @@ instance FromJSON CExpr
 
 toCoreExpr :: MonadError TypeError m => TExpr -> m CExpr
 toCoreExpr = \case
-  TLam x e -> CLam x <$> toCoreExpr e
-  TApp f arg -> CApp <$> toCoreExpr f <*> toCoreExpr arg
-  TLet x e body -> CLet x <$> toCoreExpr e <*> toCoreExpr body
-  TIf c t e -> CIf <$> toCoreExpr c <*> toCoreExpr t <*> toCoreExpr e
-  TVar x -> pure $ CVar x
-  TLit l -> pure $ CLit l
-  TPrjRecord e r -> CPrjRecord <$> toCoreExpr e <*> pure r
+  TLam x e            -> CLam x <$> toCoreExpr e
+  TApp f arg          -> CApp <$> toCoreExpr f <*> toCoreExpr arg
+  TLet x e body       -> CLet x <$> toCoreExpr e <*> toCoreExpr body
+  TIf c t e           -> CIf <$> toCoreExpr c <*> toCoreExpr t <*> toCoreExpr e
+  TVar x              -> pure $ CVar x
+  TLit l              -> pure $ CLit l
+  TPrjRecord e r      -> CPrjRecord <$> toCoreExpr e <*> pure r
   TWithPredicates _ _ -> throwError "TWithRetainedPredicates should have been eliminated before converting to core"
-  TTypeClassDict _ -> throwError "TTypeClassDict should have been eliminated before converting to core"
-  TColumnRef c -> pure $ CColumnRef c
-  TWholeColumnRef c -> pure $ CWholeColumnRef c
-  TTableRef t cs -> pure $ CTableRef t cs
+  TTypeClassDict _    -> throwError "TTypeClassDict should have been eliminated before converting to core"
+  TColumnRef c        -> pure $ CColumnRef c
+  TWholeColumnRef t c -> pure $ CWholeColumnRef t c
+  TTableRef t         -> pure $ CTableRef t
 
 --
 
-collectDependencies :: CExpr -> [(Id Column, DependencyType)]
+collectDependencies :: CExpr -> ( [(Id Column, ColumnDependency)]
+                                , [(Id Table, TableDependency)]
+                                )
 collectDependencies = go
   where go e' = case e' of
-          CLam _ body       -> go body
-          CApp f e          -> go f <> go e
-          CLet _ e body     -> go e <> go body
-          CIf c t e         -> go c <> go t <> go e
-          CVar _            -> []
-          CLit _            -> []
-          CPrjRecord e _    -> go e
-          CColumnRef c      -> [(c, OneToOne)]
-          CWholeColumnRef c -> [(c, OneToAll)]
-          CTableRef _ cs    -> map (,OneToAll) cs
+          CLam _ body         -> go body
+          CApp f e            -> go f <> go e
+          CLet _ e body       -> go e <> go body
+          CIf c t e           -> go c <> go t <> go e
+          CVar _              -> ([], [])
+          CLit _              -> ([], [])
+          CPrjRecord e _      -> go e
+          CColumnRef c        -> ([(c, ColDepRef)], [])
+          CWholeColumnRef t c -> ([(c, ColDepWholeRef)], [(t, TblDepColumnRef)])
+          CTableRef t         -> ([], [(t, TblDepTableRef)])

@@ -65,6 +65,7 @@ library
                      , scientific
                      , servant
                      , text
+                     , these
                      , time
                      , transformers
                      , union-find

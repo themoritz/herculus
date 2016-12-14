@@ -267,13 +267,13 @@ eval env expr = consumeGas >> case expr of
     lift (f colId) >>= \case
       Nothing -> throwError "Dependent cell not ready"
       Just val -> pure $ RValue val
-  CWholeColumnRef colId -> do
+  CWholeColumnRef _ colId -> do
     f <- asks envGetColumnValues
     mVals <- lift $ f colId
     fmap (RValue . VList) $ for mVals $ \case
       Nothing -> throwError "Dependent cell not ready"
       Just val -> pure val
-  CTableRef tblId _ -> do
+  CTableRef tblId -> do
     f <- asks envGetTableRecords
     records <- lift $ f tblId
     pure $ RValue $ VList $ map (VRecord . Just) records

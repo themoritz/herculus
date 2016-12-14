@@ -7,14 +7,18 @@
 
 module Lib.Model.Dependencies
   ( DependencyGraph
-  , Dependencies (..)
   , emptyDependencyGraph
-  , setDependency
-  , setDependencies
-  , removeDependency
-  , getChildren
+  , setColumnDependency
+  , setColumnDependencies
+  , removeColumnDependency
+  , getColumnChildren
+  , getColumnChildrenOnly
+  , setTableDependency
+  , setTableDependencies
+  , removeTableDependency
+  , getTableChildren
+  , getTableChildrenOnly
   , getDependentTopological
-  , DependencyType (..)
   , ColumnOrder
   ) where
 
@@ -23,20 +27,19 @@ import           Control.Lens
 import           Control.Monad.State
 import           Control.Monad.Trans.Maybe
 
-import           Data.Align                   (alignWith)
+import           Data.Align
 import           Data.Map                     (Map)
 import qualified Data.Map                     as Map
+import           Data.Maybe                   (fromMaybe)
 import           Data.Serialize
-import           Data.Text                    (pack)
+import           Data.These
 
 import           GHC.Generics
 
-import           Lib.Model.Class
 import           Lib.Model.Column
 import           Lib.Model.Dependencies.Types
+import           Lib.Model.Table
 import           Lib.Types
-
-type Connections = NamedMap (Id Column) DependencyType
 
 data DependencyGraph = DependencyGraph
   { _dependencyColumns :: Map (Id Column) (Id Table, Map (Id Column) ColumnDependency)
@@ -48,12 +51,12 @@ makeLenses ''DependencyGraph
 instance Serialize DependencyGraph
 
 columnDependency :: (Id Column, Id Table) -> Id Column
-                 -> Lens' DependencyGraph ColumnDependency
+                 -> Lens' DependencyGraph (Maybe ColumnDependency)
 columnDependency (c1, t1) c2 =
   dependencyColumns . at c1 . non (t1, Map.empty) . _2 . at c2
 
 tableDependency :: Id Table -> Id Column
-                -> Lens' DependencyGraph TableDependency
+                -> Lens' DependencyGraph (Maybe TableDependency)
 tableDependency t1 c2 =
   dependencyTables . at t1 . non Map.empty . at c2
 
@@ -66,23 +69,23 @@ setColumnDependency :: (Id Column, Id Table) -> Id Column -> ColumnDependency
                     -> DependencyGraph -> DependencyGraph
 setColumnDependency start end typ = columnDependency start end .~ Just typ
 
-removeColumnDependency :: Id Column -> Id Column
+removeColumnDependency :: (Id Column, Id Table) -> Id Column
                        -> DependencyGraph -> DependencyGraph
 removeColumnDependency start end = columnDependency start end .~ Nothing
 
 setColumnDependencies :: (Id Column, Id Table) -> [(Id Column, ColumnDependency)]
                       -> DependencyGraph -> DependencyGraph
 setColumnDependencies (c, t) edges =
-  dependencyColumns . at c1 . non (t1, Map.empty) . _2 .~ Map.fromList edges
+  dependencyColumns . at c . non (t, Map.empty) . _2 .~ Map.fromList edges
 
 getColumnChildren :: Id Column -> DependencyGraph -> [(Id Column, ColumnDependency)]
 getColumnChildren c graph = case graph ^. dependencyColumns . at c of
   Nothing        -> []
-  Just (_, deps) -> Map.fromList deps
+  Just (_, deps) -> Map.toList deps
 
 getColumnChildrenOnly :: ColumnDependency -> Id Column -> DependencyGraph -> [Id Column]
 getColumnChildrenOnly typ c graph =
-  filter (\(_, typ') -> typ == typ') . getColumnChildren t graph
+  map fst $ filter (\(_, typ') -> typ == typ') $ getColumnChildren c graph
 
 --
 
@@ -102,11 +105,11 @@ setTableDependencies t edges =
 getTableChildren :: Id Table -> DependencyGraph -> [(Id Column, TableDependency)]
 getTableChildren t graph = case graph ^. dependencyTables . at t of
   Nothing   -> []
-  Just deps -> Map.fromList deps
+  Just deps -> Map.toList deps
 
 getTableChildrenOnly :: TableDependency -> Id Table -> DependencyGraph -> [Id Column]
 getTableChildrenOnly typ t graph =
-  filter (\(_, typ') -> typ == typ') . getTableChildren t graph
+  map fst $ filter (\(_, typ') -> typ == typ') $ getTableChildren t graph
 
 --
 
@@ -122,12 +125,12 @@ getDependentTopological roots graph =
       Just True -> pure []
       Nothing -> do
         modify $ Map.insert x False
-        childOrders <- mapM topSort (getChildren' x)
+        childOrders <- mapM topSort (map fst $ collectNext x)
         modify $ Map.insert x True
-        pure $ (x, getChildren x graph) : join (reverse childOrders)
+        pure $ (x, collectNext x) : join (reverse childOrders)
 
-    collectNext :: Id Column -> Map (Id Column) AddTargetMode
-    collectNext c = case graph' ^. dependencyColumns . at c of
+    collectNext :: Id Column -> [(Id Column, AddTargetMode)]
+    collectNext c = Map.toList $ case graph' ^. dependencyColumns . at c of
       Nothing -> Map.empty
       Just (t, direct) ->
         let indirect = fromMaybe nil (graph' ^. dependencyTables . at t)
