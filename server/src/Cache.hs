@@ -33,8 +33,8 @@ import           Monads
 data Cache = Cache
   { _cacheCell          :: !(Map (Id Column, Id Record) Cell)
   , _cacheCellsModified :: !(Map (Id Column, Id Record) (Entity Cell))
-  , _cacheColumn        :: !(Map (Id Column) [CellContent])
-  , _cacheCompileResult :: !(Map (Id Column) DataCompileResult)
+  , _cacheColumnCells   :: !(Map (Id Column) [CellContent])
+  , _cacheColumn        :: !(Map (Id Column) Column)
   }
 
 makeLenses ''Cache
@@ -58,29 +58,29 @@ getCellsModified = Map.elems . _cacheCellsModified
 
 --
 
-storeColumn :: Id Column -> [CellContent] -> Cache -> Cache
-storeColumn c vs = set (cacheColumn . at c) (Just vs)
+storeColumnCells :: Id Column -> [CellContent] -> Cache -> Cache
+storeColumnCells c vs = set (cacheColumnCells . at c) (Just vs)
 
-getColumn :: Id Column -> Cache -> Maybe [CellContent]
-getColumn c = view (cacheColumn . at c)
+getColumnCells :: Id Column -> Cache -> Maybe [CellContent]
+getColumnCells c = view (cacheColumnCells . at c)
 
 --
 
-storeCode :: Id Column -> DataCompileResult -> Cache -> Cache
-storeCode c expr = set (cacheCompileResult . at c) (Just expr)
+storeColumn :: Id Column -> Column -> Cache -> Cache
+storeColumn c expr = set (cacheColumn . at c) (Just expr)
 
-getCode :: Id Column -> Cache -> Maybe DataCompileResult
-getCode c = view (cacheCompileResult . at c)
+getColumn' :: Id Column -> Cache -> Maybe Column
+getColumn' c = view (cacheColumn . at c)
 
 --
 
 class (MonadError AppError m, Monad m) => MonadCache m where
-  getCellValue :: Id Column -> Id Record -> m (Maybe Value)
-  setCellContent :: Id Column -> Id Record -> CellContent -> m ()
+  getCellValue    :: Id Column -> Id Record -> m (Maybe Value)
+  setCellContent  :: Id Column -> Id Record -> CellContent -> m ()
   getColumnValues :: Id Column -> m [Maybe Value]
   getTableRecords :: Id Table -> m [Id Record]
   getRecordValue  :: Id Record -> Ref Column -> m (Maybe Value)
-  getCompileResult :: Id Column -> m (Maybe DataCompileResult)
+  getColumn       :: Id Column -> m Column
 
 newtype CacheT m a = CacheT
   { unCacheT :: StateT Cache m a
@@ -114,7 +114,7 @@ instance MonadHexl m => MonadCache (CacheT m) where
         modify $ storeCell c r cell
         pure $ cellContent cell
     case result of
-      CellError _ -> pure Nothing
+      CellError _   -> pure Nothing
       CellValue val -> pure $ Just val
 
   setCellContent c r content = do
@@ -126,13 +126,13 @@ instance MonadHexl m => MonadCache (CacheT m) where
     modify $ storeCell c r updatedCell . setCellModified c r (Entity i updatedCell)
 
   getColumnValues c = do
-    results <- gets (getColumn c) >>= \case
+    results <- gets (getColumnCells c) >>= \case
       Just results -> pure results
       Nothing -> do
         let query = [ "aspects.columnId" =: toObjectId c ]
         cells <- lift $ listByQuery query
         let results = map (cellContent . entityVal) cells
-        modify $ storeColumn c results
+        modify $ storeColumnCells c results
         pure results
     let go = \case
           CellError _ -> pure Nothing
@@ -153,12 +153,9 @@ instance MonadHexl m => MonadCache (CacheT m) where
       ]
     getCellValue (entityId col) r
 
-  getCompileResult c = gets (getCode c) >>= \case
-    Just result -> pure $ Just result
+  getColumn c = gets (getColumn' c) >>= \case
+    Just result -> pure result
     Nothing -> do
       col <- lift $ getById' c
-      case col ^? columnKind . _ColumnData . dataColCompileResult of
-        Nothing -> pure Nothing
-        Just compileResult -> do
-          modify $ storeCode c compileResult
-          pure $ Just compileResult
+      modify $ storeColumn c col
+      pure col

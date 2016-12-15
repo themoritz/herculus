@@ -14,7 +14,7 @@ module Lib.Model.Dependencies
   , getTableDependants
   , getTableDependantsOnly
   , setDependencies
-  , getDependentTopological
+  , getDependantsTopological
   , ColumnOrder
   ) where
 
@@ -65,15 +65,25 @@ getDirectColumnDependants c graph = case graph ^. columnDependants . at c of
   Nothing        -> []
   Just (_, deps) -> Map.toList deps
 
-getAllColumnDependants :: Id Column -> DependencyGraph -> [(Id Column, AddTargetMode)]
-getAllColumnDependants c graph = Map.toList $ case graph ^. columnDependants . at c of
-    Nothing -> Map.empty
-    Just (t, direct) ->
-      let indirect = fromMaybe nil (graph ^. tableDependants . at t)
-      in alignWith alignDeps direct indirect
+getAllColumnDependants :: (Id Column, Id Table)
+                       -- ^ Pair of column together with its table
+                       -> DependencyGraph -> [(Id Column, AddTargetMode)]
+getAllColumnDependants (c, t) graph =
+    Map.toList $ alignWith alignDeps direct indirect
   where
-    alignDeps (This ColDepRef) = AddOne
-    alignDeps _                = AddAll
+    direct   = fromMaybe nil (graph ^? columnDependants . at c . _Just . _2)
+    indirect = fromMaybe nil (graph ^. tableDependants . at t)
+
+getAllColumnDependants' :: Id Column -> DependencyGraph -> [(Id Column, AddTargetMode)]
+getAllColumnDependants' c graph = Map.toList $ case graph ^. columnDependants . at c of
+  Nothing -> Map.empty
+  Just (t, direct) ->
+    let indirect = fromMaybe nil (graph ^. tableDependants . at t)
+    in alignWith alignDeps direct indirect
+
+alignDeps :: These ColumnDependency TableDependency -> AddTargetMode
+alignDeps (This ColDepRef) = AddOne
+alignDeps _                = AddAll
 
 --------------------------------------------------------------------------------
 
@@ -117,7 +127,7 @@ setDependencies getTableId c (colDeps, tblDeps) graph = do
         Nothing         -> lift (getTableId dep) >>= addEdge
     for_ tblDeps $ \(dep, typ) ->
       tableDependants . at dep . non Map.empty . at c .= Just typ
-  case getDependentTopological [c] graph' of
+  case getDependantsTopological [c] graph' of
     Nothing -> pure Nothing
     Just _  -> pure $ Just graph'
 
@@ -125,8 +135,8 @@ setDependencies getTableId c (colDeps, tblDeps) graph = do
 
 type ColumnOrder = [(Id Column, [(Id Column, AddTargetMode)])]
 
-getDependentTopological :: [Id Column] -> DependencyGraph -> Maybe ColumnOrder
-getDependentTopological roots graph =
+getDependantsTopological :: [Id Column] -> DependencyGraph -> Maybe ColumnOrder
+getDependantsTopological roots graph =
     tail <$> evalState (runMaybeT $ topSort nullObjectId) Map.empty
   where
     topSort :: Id Column -> MaybeT (State (Map (Id Column) Bool)) ColumnOrder
@@ -135,9 +145,9 @@ getDependentTopological roots graph =
       Just True -> pure []
       Nothing -> do
         modify $ Map.insert x False
-        childOrders <- mapM topSort (map fst $ getAllColumnDependants x graph')
+        childOrders <- mapM topSort (map fst $ getAllColumnDependants' x graph')
         modify $ Map.insert x True
-        pure $ (x, getAllColumnDependants x graph') : join (reverse childOrders)
+        pure $ (x, getAllColumnDependants' x graph') : join (reverse childOrders)
 
     -- Modified graph that contains edges from a fake node to all the root
     -- columns.

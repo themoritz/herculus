@@ -30,9 +30,18 @@ data AddTarget
   = CompleteColumn
   | OneRecord (Id Record)
 
+data CellUpdateAction
+  = Evaluate DataCompileResult
+  -- ^ Formula, so evaluate
+  | Hop
+  -- ^ No formula, hop because of references
+  | DoNothing
+  -- ^ For report columns
+
 class MonadCache m => MonadPropagate m where
-  addTargets :: Id Column -> AddTarget -> m ()
-  getTargets :: Id Column -> m [Id Record]
+  addTargets        :: Id Column -> AddTarget -> m ()
+  getTargets        :: Id Column -> m [Id Record]
+  whatToDoWithCells :: Id Column -> m CellUpdateAction
 
 data State = State
   { _stateTargets :: Map (Id Column) (Maybe [Id Record]) -- Nothing = All
@@ -64,7 +73,7 @@ instance MonadHexl m => MonadCache (PropT m) where
   getColumnValues    = PropT . lift . getColumnValues
   getTableRecords    = PropT . lift . getTableRecords
   getRecordValue c   = PropT . lift . getRecordValue c
-  getCompileResult   = PropT . lift . getCompileResult
+  getColumn          = PropT . lift . getColumn
 
 
 instance MonadHexl m => MonadPropagate (PropT m) where
@@ -80,3 +89,11 @@ instance MonadHexl m => MonadPropagate (PropT m) where
       col <- lift $ getById' c
       records <- lift $ listByQuery [ "tableId" =: toObjectId (_columnTableId col) ]
       pure $ map entityId records
+
+  whatToDoWithCells c = do
+    col <- getColumn c
+    case col ^. columnKind of
+      ColumnReport _ -> pure DoNothing
+      ColumnData dataCol -> case dataCol ^. dataColIsDerived of
+        Derived    -> pure $ Evaluate (dataCol ^. dataColCompileResult)
+        NotDerived -> pure $ Hop
