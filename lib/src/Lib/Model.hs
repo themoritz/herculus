@@ -1,7 +1,8 @@
-{-# LANGUAGE DeriveAnyClass     #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE StandaloneDeriving    #-}
 
 module Lib.Model where
 
@@ -22,6 +23,10 @@ data Entity a = Entity
   { entityId  :: Id a
   , entityVal :: a
   } deriving (Typeable, Generic)
+
+instance ClientModel s c => ClientModel (Entity s) (Entity c) where
+  toClient (Entity i s)   = Entity (toClientId i) (toClient s)
+  fromClient (Entity i c) = Entity (fromClientId i) (fromClient c)
 
 entityToTuple :: Entity a -> (Id a, a)
 entityToTuple (Entity i a) = (i, a)

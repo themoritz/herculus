@@ -66,7 +66,7 @@ instance FromJSON (Id a) where
     str <- parseJSON json
     case readMaybe str of
       Nothing -> fail "could not read"
-      Just i -> pure (Id i)
+      Just i  -> pure (Id i)
 
 instance FromHttpApiData (Id a) where
   parseUrlPiece piece = case readMaybe $ unpack piece of
@@ -125,7 +125,7 @@ instance PrintfArg Number where
 formatNumber :: Text -> Number -> Text
 formatNumber f n = case unsafePerformIO (try $ evaluate $ printf (unpack f) n) of
   Left (e :: SomeException) -> pack $ displayException e
-  Right str -> pack str
+  Right str                 -> pack str
 
 --
 

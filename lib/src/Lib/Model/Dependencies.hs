@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
@@ -8,16 +9,11 @@
 module Lib.Model.Dependencies
   ( DependencyGraph
   , emptyDependencyGraph
-  , setColumnDependency
-  , setColumnDependencies
-  , removeColumnDependency
-  , getColumnChildren
-  , getColumnChildrenOnly
-  , setTableDependency
-  , setTableDependencies
-  , removeTableDependency
-  , getTableChildren
-  , getTableChildrenOnly
+  , getAllColumnDependants
+  , getDirectColumnDependants
+  , getTableDependants
+  , getTableDependantsOnly
+  , setDependencies
   , getDependentTopological
   , ColumnOrder
   ) where
@@ -28,10 +24,12 @@ import           Control.Monad.State
 import           Control.Monad.Trans.Maybe
 
 import           Data.Align
+import           Data.Foldable                (for_)
 import           Data.Map                     (Map)
 import qualified Data.Map                     as Map
 import           Data.Maybe                   (fromMaybe)
 import           Data.Serialize
+import qualified Data.Set                     as Set
 import           Data.These
 
 import           GHC.Generics
@@ -41,77 +39,89 @@ import           Lib.Model.Dependencies.Types
 import {-# SOURCE #-}           Lib.Model.Table
 import           Lib.Types
 
+--------------------------------------------------------------------------------
+
 data DependencyGraph = DependencyGraph
-  { _dependencyColumns :: Map (Id Column) (Id Table, Map (Id Column) ColumnDependency)
-  , _dependencyTables  :: Map (Id Table) (Map (Id Column) TableDependency)
+  { _columnDependants :: Map (Id Column) (Id Table, Map (Id Column) ColumnDependency)
+  , _tableDependants  :: Map (Id Table) (Map (Id Column) TableDependency)
   } deriving (Show, Generic)
 
 makeLenses ''DependencyGraph
 
 instance Serialize DependencyGraph
 
-columnDependency :: (Id Column, Id Table) -> Id Column
-                 -> Lens' DependencyGraph (Maybe ColumnDependency)
-columnDependency (c1, t1) c2 =
-  dependencyColumns . at c1 . non (t1, Map.empty) . _2 . at c2
-
-tableDependency :: Id Table -> Id Column
-                -> Lens' DependencyGraph (Maybe TableDependency)
-tableDependency t1 c2 =
-  dependencyTables . at t1 . non Map.empty . at c2
-
 emptyDependencyGraph :: DependencyGraph
 emptyDependencyGraph = DependencyGraph Map.empty Map.empty
 
---
+--------------------------------------------------------------------------------
 
-setColumnDependency :: (Id Column, Id Table) -> Id Column -> ColumnDependency
+setColumnDependants :: (Id Column, Id Table) -> [(Id Column, ColumnDependency)]
                     -> DependencyGraph -> DependencyGraph
-setColumnDependency start end typ = columnDependency start end .~ Just typ
+setColumnDependants (c, t) edges =
+  columnDependants . at c . non (t, Map.empty) . _2 .~ Map.fromList edges
 
-removeColumnDependency :: (Id Column, Id Table) -> Id Column
-                       -> DependencyGraph -> DependencyGraph
-removeColumnDependency start end = columnDependency start end .~ Nothing
-
-setColumnDependencies :: (Id Column, Id Table) -> [(Id Column, ColumnDependency)]
-                      -> DependencyGraph -> DependencyGraph
-setColumnDependencies (c, t) edges =
-  dependencyColumns . at c . non (t, Map.empty) . _2 .~ Map.fromList edges
-
-getColumnChildren :: Id Column -> DependencyGraph -> [(Id Column, ColumnDependency)]
-getColumnChildren c graph = case graph ^. dependencyColumns . at c of
+getDirectColumnDependants :: Id Column -> DependencyGraph -> [(Id Column, ColumnDependency)]
+getDirectColumnDependants c graph = case graph ^. columnDependants . at c of
   Nothing        -> []
   Just (_, deps) -> Map.toList deps
 
-getColumnChildrenOnly :: ColumnDependency -> Id Column -> DependencyGraph -> [Id Column]
-getColumnChildrenOnly typ c graph =
-  map fst $ filter (\(_, typ') -> typ == typ') $ getColumnChildren c graph
+getAllColumnDependants :: Id Column -> DependencyGraph -> [(Id Column, AddTargetMode)]
+getAllColumnDependants c graph = Map.toList $ case graph ^. columnDependants . at c of
+    Nothing -> Map.empty
+    Just (t, direct) ->
+      let indirect = fromMaybe nil (graph ^. tableDependants . at t)
+      in alignWith alignDeps direct indirect
+  where
+    alignDeps (This ColDepRef) = AddOne
+    alignDeps _                = AddAll
 
---
+--------------------------------------------------------------------------------
 
-setTableDependency :: Id Table -> Id Column -> TableDependency
-                   -> DependencyGraph -> DependencyGraph
-setTableDependency start end typ = tableDependency start end .~ Just typ
-
-removeTableDependency :: Id Table -> Id Column
-                      -> DependencyGraph -> DependencyGraph
-removeTableDependency start end = tableDependency start end .~ Nothing
-
-setTableDependencies :: Id Table -> [(Id Column, TableDependency)]
-                     -> DependencyGraph -> DependencyGraph
-setTableDependencies t edges =
-  dependencyTables . at t . non Map.empty .~ Map.fromList edges
-
-getTableChildren :: Id Table -> DependencyGraph -> [(Id Column, TableDependency)]
-getTableChildren t graph = case graph ^. dependencyTables . at t of
+getTableDependants :: Id Table -> DependencyGraph -> [(Id Column, TableDependency)]
+getTableDependants t graph = case graph ^. tableDependants . at t of
   Nothing   -> []
   Just deps -> Map.toList deps
 
-getTableChildrenOnly :: TableDependency -> Id Table -> DependencyGraph -> [Id Column]
-getTableChildrenOnly typ t graph =
-  map fst $ filter (\(_, typ') -> typ == typ') $ getTableChildren t graph
+getTableDependantsOnly :: TableDependency -> Id Table -> DependencyGraph -> [Id Column]
+getTableDependantsOnly typ t graph =
+  map fst $ filter (\(_, typ') -> typ == typ') $ getTableDependants t graph
 
---
+--------------------------------------------------------------------------------
+
+setDependencies :: Monad m
+                => (Id Column -> m (Id Table))
+                -- ^ A monadic function that can get the tableId of a column
+                -> Id Column
+                -- ^ The column to set the dependencies for
+                -> ([(Id Column, ColumnDependency)], [(Id Table, TableDependency)])
+                -> DependencyGraph
+                -> m (Maybe DependencyGraph)
+setDependencies getTableId c (colDeps, tblDeps) graph = do
+  graph' <- flip execStateT graph $ do
+    let colDepsSet = Set.fromList $ map fst colDeps
+        tblDepsSet = Set.fromList $ map fst tblDeps
+    -- Remove edges
+    columnDependants . itraversed . withIndex
+                     . filtered (flip Set.notMember colDepsSet . fst)
+                     . _2 . _2 . at c .= Nothing
+    tableDependants  . itraversed . withIndex
+                     . filtered (flip Set.notMember tblDepsSet . fst)
+                     . _2 . at c .= Nothing
+    -- Add edges
+    for_ colDeps $ \(dep, typ) -> do
+      mNode <- use (columnDependants . at dep)
+      let addEdge tblId =
+            columnDependants . at dep . non (tblId, Map.empty) . _2 . at c .= Just typ
+      case mNode of
+        Just (tblId, _) -> addEdge tblId
+        Nothing         -> lift (getTableId dep) >>= addEdge
+    for_ tblDeps $ \(dep, typ) ->
+      tableDependants . at dep . non Map.empty . at c .= Just typ
+  case getDependentTopological [c] graph' of
+    Nothing -> pure Nothing
+    Just _  -> pure $ Just graph'
+
+--------------------------------------------------------------------------------
 
 type ColumnOrder = [(Id Column, [(Id Column, AddTargetMode)])]
 
@@ -125,22 +135,12 @@ getDependentTopological roots graph =
       Just True -> pure []
       Nothing -> do
         modify $ Map.insert x False
-        childOrders <- mapM topSort (map fst $ collectNext x)
+        childOrders <- mapM topSort (map fst $ getAllColumnDependants x graph')
         modify $ Map.insert x True
-        pure $ (x, collectNext x) : join (reverse childOrders)
-
-    collectNext :: Id Column -> [(Id Column, AddTargetMode)]
-    collectNext c = Map.toList $ case graph' ^. dependencyColumns . at c of
-      Nothing -> Map.empty
-      Just (t, direct) ->
-        let indirect = fromMaybe nil (graph' ^. dependencyTables . at t)
-        in alignWith alignDeps direct indirect
-
-    alignDeps (This ColDepRef) = AddOne
-    alignDeps _                = AddAll
+        pure $ (x, getAllColumnDependants x graph') : join (reverse childOrders)
 
     -- Modified graph that contains edges from a fake node to all the root
     -- columns.
-    graph' = setColumnDependencies (nullObjectId, nullObjectId)
-                                   (map (, ColDepRef) roots)
-                                   graph
+    graph' = setColumnDependants (nullObjectId, nullObjectId)
+                                 (map (, ColDepRef) roots)
+                                 graph

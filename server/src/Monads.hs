@@ -26,7 +26,6 @@ import           Control.Monad.Except
 import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Control
--- import Control.Monad.Base
 
 import           Data.Aeson
 import qualified Data.ByteString.Char8       as B8
@@ -49,9 +48,6 @@ import           ConnectionManager
 import           Lib.Api.WebSocket
 import           Lib.Model
 import           Lib.Model.Class
-import           Lib.Model.Column
-import           Lib.Model.Dependencies
-import           Lib.Model.References
 import           Lib.Types
 
 import qualified Latex
@@ -90,14 +86,6 @@ class (Monad m, MonadLogger m, MonadError AppError m) => MonadDB m where
 
 class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m where
   sendWS :: WsDownMessage -> m ()
-
-  getDependencies :: m DependencyGraph
-  modifyDependencies :: Id Column -> [(Id Column, DependencyType)] -> m Bool
-
-  getReferences :: m ReferenceGraph
-  modifyReferences :: (ReferenceGraph -> ReferenceGraph) -> m ()
-
-  getColumnOrder :: [Id Column] -> m ColumnOrder
 
   -- Pandoc stuff
   getDefaultTemplate :: String -> m (Either String String)
@@ -233,33 +221,6 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
     connections <- allConnections <$> liftIO (atomically $ readTVar connectionsRef)
     forM_ connections $ \connection ->
       liftIO $ sendTextData connection $ encode msg
-
-  getDependencies = getOneByQuery [] >>= \case
-    Right e -> pure $ dependenciesGraph $ entityVal e
-    Left _  -> pure emptyDependencyGraph
-
-  modifyDependencies c newDeps = do
-    graph <- getDependencies
-    case getDependentTopological [c] (setDependencies c newDeps graph) of
-      Nothing -> pure True
-      Just _  -> do
-        void $ upsert [] (Dependencies emptyDependencyGraph) $ \deps ->
-          deps { dependenciesGraph = setDependencies c newDeps $ dependenciesGraph deps }
-        pure False
-
-  getReferences = getOneByQuery [] >>= \case
-    Right e -> pure $ referenceGraph $ entityVal e
-    Left _  -> pure emptyReferenceGraph
-
-  modifyReferences f =
-    void $ upsert [] (References emptyReferenceGraph) $ \refs ->
-      refs { referenceGraph = f (referenceGraph refs) }
-
-  getColumnOrder cs = do
-    graph <- getDependencies
-    case getDependentTopological cs graph of
-      Nothing -> throwError $ ErrBug "dependency graph has cycles"
-      Just order -> pure order
 
   --
 

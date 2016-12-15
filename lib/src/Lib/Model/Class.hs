@@ -6,6 +6,8 @@ import           Data.Bson
 import           Data.Proxy
 import           Data.Text
 
+import           Lib.Types
+
 class (ToDocument a, FromDocument a) => Model a where
   collectionName :: Proxy a -> Text
 
@@ -16,5 +18,9 @@ class FromDocument a where
   parseDocument :: Document -> Either Text a
 
 class ClientModel server client where
-  toClient   :: server -> client
-  fromClient :: client -> server
+  toClient     :: server -> client
+  toClientId   :: Id server -> Id client
+  toClientId (Id i) = Id i
+  fromClient   :: client -> server
+  fromClientId :: Id client -> Id server
+  fromClientId (Id i) = Id i
