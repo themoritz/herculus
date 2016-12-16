@@ -24,15 +24,15 @@ import           Database.MongoDB     ((=:))
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
-import           Lib.Model.Record
+import           Lib.Model.Row
 import           Lib.Model.Table
 import           Lib.Types
 
 import           Monads
 
 data Cache = Cache
-  { _cacheCell          :: !(Map (Id Column, Id Record) Cell)
-  , _cacheCellsModified :: !(Map (Id Column, Id Record) (Entity Cell))
+  { _cacheCell          :: !(Map (Id Column, Id Row) Cell)
+  , _cacheCellsModified :: !(Map (Id Column, Id Row) (Entity Cell))
   , _cacheColumnCells   :: !(Map (Id Column) [CellContent])
   , _cacheColumn        :: !(Map (Id Column) Column)
   }
@@ -44,13 +44,13 @@ empty = Cache Map.empty Map.empty Map.empty Map.empty
 
 --
 
-storeCell :: Id Column -> Id Record -> Cell -> Cache -> Cache
+storeCell :: Id Column -> Id Row -> Cell -> Cache -> Cache
 storeCell c r v = set (cacheCell . at (c, r)) (Just v)
 
-setCellModified :: Id Column -> Id Record -> Entity Cell -> Cache -> Cache
+setCellModified :: Id Column -> Id Row -> Entity Cell -> Cache -> Cache
 setCellModified c r v = set (cacheCellsModified . at (c, r)) (Just v)
 
-getCell :: Id Column -> Id Record -> Cache -> Maybe Cell
+getCell :: Id Column -> Id Row -> Cache -> Maybe Cell
 getCell c r = view (cacheCell . at (c, r))
 
 getCellsModified :: Cache -> [Entity Cell]
@@ -75,11 +75,11 @@ getColumn' c = view (cacheColumn . at c)
 --
 
 class (MonadError AppError m, Monad m) => MonadCache m where
-  getCellValue    :: Id Column -> Id Record -> m (Maybe Value)
-  setCellContent  :: Id Column -> Id Record -> CellContent -> m ()
+  getCellValue    :: Id Column -> Id Row -> m (Maybe Value)
+  setCellContent  :: Id Column -> Id Row -> CellContent -> m ()
   getColumnValues :: Id Column -> m [Maybe Value]
-  getTableRecords :: Id Table -> m [Id Record]
-  getRecordValue  :: Id Record -> Ref Column -> m (Maybe Value)
+  getTableRows    :: Id Table -> m [Id Row]
+  getRowField     :: Id Row -> Ref Column -> m (Maybe Value)
   getColumn       :: Id Column -> m Column
 
 newtype CacheT m a = CacheT
@@ -108,8 +108,8 @@ instance MonadHexl m => MonadCache (CacheT m) where
       Just cell -> pure $ cellContent cell
       Nothing -> do
         Entity _ cell <- lift $ getOneByQuery'
-          [ "aspects.columnId" =: toObjectId c
-          , "aspects.recordId" =: toObjectId r
+          [ "columnId" =: toObjectId c
+          , "rowId"    =: toObjectId r
           ]
         modify $ storeCell c r cell
         pure $ cellContent cell
@@ -119,8 +119,8 @@ instance MonadHexl m => MonadCache (CacheT m) where
 
   setCellContent c r content = do
     Entity i cell <- lift $ getOneByQuery'
-      [ "aspects.columnId" =: toObjectId c
-      , "aspects.recordId" =: toObjectId r
+      [ "columnId" =: toObjectId c
+      , "rowId"    =: toObjectId r
       ]
     let updatedCell = cell { cellContent = content }
     modify $ storeCell c r updatedCell . setCellModified c r (Entity i updatedCell)
@@ -129,7 +129,7 @@ instance MonadHexl m => MonadCache (CacheT m) where
     results <- gets (getColumnCells c) >>= \case
       Just results -> pure results
       Nothing -> do
-        let query = [ "aspects.columnId" =: toObjectId c ]
+        let query = [ "columnId" =: toObjectId c ]
         cells <- lift $ listByQuery query
         let results = map (cellContent . entityVal) cells
         modify $ storeColumnCells c results
@@ -139,17 +139,17 @@ instance MonadHexl m => MonadCache (CacheT m) where
           CellValue val -> pure $ Just val
     traverse go results
 
-  getTableRecords t = do
+  getTableRows t = do
     -- TODO: cache
     rs <- lift $ listByQuery [ "tableId" =: toObjectId t ]
     pure $ map entityId rs
 
-  getRecordValue r colRef = do
+  getRowField r colRef = do
     -- TODO: cache
-    record <- lift $ getById' r
+    row <- lift $ getById' r
     col <- lift $ getOneByQuery'
-      [ "name" =: unRef colRef
-      , "tableId" =: toObjectId (recordTableId record)
+      [ "name"    =: unRef colRef
+      , "tableId" =: toObjectId (rowTableId row)
       ]
     getCellValue (entityId col) r
 

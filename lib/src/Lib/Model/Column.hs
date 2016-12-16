@@ -132,6 +132,18 @@ reportColLanguage = lens _reportColLanguage (\r l -> r { _reportColLanguage = l}
 reportColFormat :: Lens' ReportCol ReportFormat
 reportColFormat = lens _reportColFormat (\r f -> r { _reportColFormat = f})
 
+emptyReportCol :: Id Table -> Column
+emptyReportCol i = Column
+  { _columnTableId = i
+  , _columnName = ""
+  , _columnKind = ColumnReport ReportCol
+    { _reportColTemplate         = ""
+    , _reportColCompiledTemplate = CompileResultNone
+    , _reportColLanguage         = Just ReportLanguageMarkdown
+    , _reportColFormat           = ReportFormatPDF
+    }
+  }
+
 instance ToJSON ReportCol
 instance FromJSON ReportCol
 
@@ -171,6 +183,21 @@ dataColSourceCode = lens _dataColSourceCode (\d s -> d { _dataColSourceCode = s 
 
 dataColCompileResult :: Lens' DataCol DataCompileResult
 dataColCompileResult = lens _dataColCompileResult (\d cr -> d { _dataColCompileResult = cr })
+
+emptyDataColType :: DataType
+emptyDataColType = DataNumber
+
+emptyDataCol :: Id Table -> Column
+emptyDataCol i = Column
+  { _columnTableId = i
+  , _columnName    = ""
+  , _columnKind    = ColumnData DataCol
+    { _dataColType          = emptyDataColType
+    , _dataColIsDerived     = NotDerived
+    , _dataColSourceCode    = ""
+    , _dataColCompileResult = CompileResultNone
+    }
+  }
 
 instance ToJSON DataCol
 instance FromJSON DataCol

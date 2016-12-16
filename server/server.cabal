@@ -13,18 +13,19 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Monads
-                     , Propagate
-                     , Auth
+  exposed-modules:     Auth
                      , Auth.Permission
-                     , Cache
-                     , Latex
-                     , Options
-                     , Propagate.Monad
                      , ConnectionManager
+                     , Engine
+                     , Engine.Monad
+                     , Engine.Compile
+                     , Engine.Propagate
                      , Handler.WebSocket
                      , Handler.Rest
                      , HexlNat
+                     , Latex
+                     , Monads
+                     , Options
   build-depends:       aeson
                      , base >= 4.7 && < 5
                      , base64-bytestring

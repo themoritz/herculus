@@ -22,7 +22,7 @@ import           Lib.Model.Record   (Record)
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Action             (Action (TableAddRecord, TableAddColumn))
+import           Action             (Action (TableAddColumn, TableAddRecord))
 import           Store              (Coords (..), dispatch)
 import           Views.Cell
 import           Views.Column
@@ -74,30 +74,6 @@ tableGrid = defineView "tableGrid" $ \props -> do
               case mRC of
                 Just (r, content) -> dataCell_ $ DataCellProps c r dat content
                 Nothing           -> mempty
-
-      emptyDataCol :: Id Table -> Column
-      emptyDataCol i = Column
-        { _columnTableId = i
-        , _columnName    = ""
-        , _columnKind    = ColumnData DataCol
-          { _dataColType          = DataNumber
-          , _dataColIsDerived     = NotDerived
-          , _dataColSourceCode    = ""
-          , _dataColCompileResult = CompileResultNone
-          }
-        }
-
-      emptyReportCol :: Id Table -> Column
-      emptyReportCol i = Column
-        { _columnTableId = i
-        , _columnName = ""
-        , _columnKind = ColumnReport ReportCol
-          { _reportColTemplate         = ""
-          , _reportColCompiledTemplate = CompileResultNone
-          , _reportColLanguage         = Just ReportLanguageMarkdown
-          , _reportColFormat           = ReportFormatPDF
-          }
-        }
 
       renderer (GridRenderArgs x y _)
         | x == 0 && y == 0 = cldiv_ "origin" mempty
