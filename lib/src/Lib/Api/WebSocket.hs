@@ -12,7 +12,7 @@ import           GHC.Generics
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
-import           Lib.Model.Record
+import           Lib.Model.Row
 import           Lib.Model.Table
 import           Lib.Types
 
@@ -26,8 +26,8 @@ instance FromJSON WsUpMessage
 data WsDownMessage
   = WsDownCellsChanged [Cell]
   | WsDownColumnsChanged [Entity Column]
-  | WsDownRecordCreated (Id Table) (Id Record) [(Entity Column, CellContent)]
-  | WsDownRecordDeleted (Id Table) (Id Record)
+  | WsDownRowCreated (Id Table) (Id Row) [(Entity Column, CellContent)]
+  | WsDownRowDeleted (Id Table) (Id Row)
   deriving (Generic)
 
 instance ToJSON WsDownMessage

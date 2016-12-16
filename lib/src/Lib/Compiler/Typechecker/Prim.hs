@@ -1,15 +1,15 @@
-{-# LANGUAGE FlexibleContexts            #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Lib.Compiler.Typechecker.Prim where
 
-import           Control.Monad.State
 import           Control.Lens
+import           Control.Monad.State
 
 import qualified Data.Map                       as Map
 import           Data.Text                      (Text)
 
-import           Lib.Compiler.Types
 import           Lib.Compiler.Typechecker.Types
+import           Lib.Compiler.Types
 import           Lib.Model.Column
 import           Lib.Model.Table
 import           Lib.Types
@@ -76,7 +76,7 @@ typeOfDataType f = \case
   DataString     -> pure $ Type tyString
   DataNumber     -> pure $ Type tyNumber
   DataTime       -> pure $ Type tyTime
-  (DataRecord t) -> Type . TyRecord <$> f t
+  (DataRowRef t) -> Type . TyRecord <$> f t
   (DataList t)   -> Type . TyApp (Type tyList) <$> typeOfDataType f t
   (DataMaybe t)  -> Type . TyApp (Type tyMaybe) <$> typeOfDataType f t
 

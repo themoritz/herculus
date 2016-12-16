@@ -138,8 +138,8 @@ infer expr = case expr of
     lift (f colRef) >>= \case
       Nothing -> throwError $ pack $ "Column not found: " <> show colRef
       Just (i, dataCol) -> do
-        getRows <- asks envGetTableRows
-        refPoint <- lift (typeOfDataType getRows $ _dataColType dataCol) >>= typeToPoint
+        getRowType <- asks envGetTableRowType
+        refPoint <- lift (typeOfDataType getRowType $ _dataColType dataCol) >>= typeToPoint
         pure $ TColumnRef i ::: ([], refPoint)
   PColumnOfTableRef tblRef colRef -> do
     f <- asks envResolveColumnOfTableRef
@@ -148,8 +148,8 @@ infer expr = case expr of
                                      show colRef <> " on table " <>
                                      show tblRef
       Just (tblId, colId, dataCol) -> do
-        getRows <- asks envGetTableRows
-        refPoint <- lift (typeOfDataType getRows $ _dataColType dataCol) >>= typeToPoint
+        getRowType <- asks envGetTableRowType
+        refPoint <- lift (typeOfDataType getRowType $ _dataColType dataCol) >>= typeToPoint
         listPoint <- mkList refPoint
         pure $ TWholeColumnRef tblId colId ::: ([], listPoint)
   PTableRef tblRef -> do
@@ -157,8 +157,8 @@ infer expr = case expr of
     lift (f tblRef) >>= \case
       Nothing -> throwError $ pack $ "Table not found: " <> show tblRef
       Just i -> do
-        getRows <- asks envGetTableRows
-        tblRows <- lift (getRows i) >>= typeToPoint . Type . TyRecord
+        getRowType <- asks envGetTableRowType
+        tblRows <- lift (getRowType i) >>= typeToPoint . Type . TyRecord
         listPoint <- mkList tblRows
         pure $ TTableRef i ::: ([], listPoint)
 

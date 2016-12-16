@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lib.Model.Record where
+module Lib.Model.Row where
 
 import           Control.DeepSeq
 
@@ -17,20 +17,20 @@ import           Lib.Model.Class
 import           Lib.Model.Table
 import           Lib.Types
 
-data Record = Record
-  { recordTableId :: Id Table
+data Row = Row
+  { rowTableId :: Id Table
   } deriving (Generic, NFData, Eq, Ord, Show)
 
-instance Model Record where
-  collectionName = const "records"
+instance Model Row where
+  collectionName = const "rows"
 
-instance ToJSON Record
-instance FromJSON Record
+instance ToJSON Row
+instance FromJSON Row
 
-instance ToDocument Record where
-  toDocument (Record tblId)=
+instance ToDocument Row where
+  toDocument (Row tblId)=
     [ "tableId" =: toObjectId tblId
     ]
 
-instance FromDocument Record where
-  parseDocument doc = Record . fromObjectId <$> Bson.lookup "tableId" doc
+instance FromDocument Row where
+  parseDocument doc = Row . fromObjectId <$> Bson.lookup "tableId" doc

@@ -1,4 +1,5 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
 
 module Lib.Model.Class where
 
@@ -17,7 +18,7 @@ class ToDocument a where
 class FromDocument a where
   parseDocument :: Document -> Either Text a
 
-class ClientModel server client where
+class ClientModel server client | client -> server where
   toClient     :: server -> client
   toClientId   :: Id server -> Id client
   toClientId (Id i) = Id i

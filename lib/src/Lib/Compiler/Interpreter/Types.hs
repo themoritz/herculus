@@ -13,7 +13,7 @@ import           Data.Map             (Map)
 import           Lib.Compiler.Types
 import           Lib.Model.Cell
 import           Lib.Model.Column
-import           Lib.Model.Record
+import           Lib.Model.Row
 import           Lib.Model.Table
 import           Lib.Types
 
@@ -30,8 +30,8 @@ type EvalError = Text
 data EvalEnv m = EvalEnv
   { envGetCellValue    :: Id Column -> m (Maybe Value)
   , envGetColumnValues :: Id Column -> m [Maybe Value]
-  , envGetTableRecords :: Id Table -> m [Id Record]
-  , envGetRecordValue  :: Id Record -> Ref Column -> m (Maybe Value)
+  , envGetTableRows    :: Id Table -> m [Id Row]
+  , envGetRowField     :: Id Row -> Ref Column -> m (Maybe Value)
   }
 
 newtype InterpretT m a = InterpretT

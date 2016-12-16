@@ -32,19 +32,19 @@ testDataCol = DataCol
 
 testTypecheckEnv :: Monad m => TypecheckEnv m
 testTypecheckEnv = TypecheckEnv
-  { envResolveColumnRef = \_ -> pure $ Just (nullObjectId, testDataCol)
+  { envResolveColumnRef        = \_ -> pure $ Just (nullObjectId, testDataCol)
   , envResolveColumnOfTableRef = \_ _ -> pure $ Just (nullObjectId, nullObjectId, testDataCol)
-  , envResolveTableRef = \_ -> pure $ Just nullObjectId
-  , envGetTableRows = \_ -> pure $ Type $ TyRecordCons (Ref "A") (Type tyNumber) (Type TyRecordNil)
-  , envOwnTableId = nullObjectId
+  , envResolveTableRef         = \_ -> pure $ Just nullObjectId
+  , envGetTableRowType         = \_ -> pure $ Type $ TyRecordCons (Ref "A") (Type tyNumber) (Type TyRecordNil)
+  , envOwnTableId              = nullObjectId
   }
 
 testEvalEnv :: Monad m => EvalEnv m
 testEvalEnv = EvalEnv
-  { envGetCellValue = \_ -> pure $ Just $ VNumber 1
+  { envGetCellValue    = \_ -> pure $ Just $ VNumber 1
   , envGetColumnValues = \_ -> pure [Just $ VNumber 1]
-  , envGetTableRecords = \_ -> pure [nullObjectId]
-  , envGetRecordValue = \_ _ -> pure $ Just $ VNumber 1
+  , envGetTableRows    = \_ -> pure [nullObjectId]
+  , envGetRowField     = \_ _ -> pure $ Just $ VNumber 1
   }
 
 test :: String -> IO ()

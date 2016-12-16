@@ -19,7 +19,7 @@ import           GHC.Generics
 
 import           Lib.Model.Class
 import           Lib.Model.Column
-import           Lib.Model.Record
+import           Lib.Model.Row
 import           Lib.Model.Table
 import           Lib.Types
 
@@ -50,20 +50,20 @@ data Value
   | VString Text
   | VNumber Number
   | VTime Time
-  | VRecord (Maybe (Id Record))
+  | VRowRef (Maybe (Id Row))
   | VList [Value]
   | VMaybe (Maybe Value)
   deriving (Generic, NFData, Typeable, Eq)
 
 instance Show Value where
   show = \case
-    VBool b -> show b
+    VBool b   -> show b
     VString t -> show t
     VNumber n -> show n
-    VTime t -> show t
-    VRecord i -> "Record " ++ show i
-    VList vs -> show vs
-    VMaybe m -> show m
+    VTime t   -> show t
+    VRowRef i -> "RowRef " ++ show i
+    VList vs  -> show vs
+    VMaybe m  -> show m
 
 instance ToJSON Value
 instance FromJSON Value
@@ -75,13 +75,13 @@ defaultContentPure = \case
   DataString   -> VString ""
   DataNumber   -> VNumber 0
   DataTime     -> VTime defaultTime
-  DataRecord _ -> VRecord Nothing
+  DataRowRef _ -> VRowRef Nothing
   DataList   _ -> VList []
   DataMaybe  _ -> VMaybe Nothing
 
--- | Returns `Nothing` if no record had to be invalidated
-invalidateRecord :: Id Record -> Value -> Maybe Value
-invalidateRecord r old =
+-- | Returns `Nothing` if no reference had to be invalidated
+invalidateRowRef :: Id Row -> Value -> Maybe Value
+invalidateRowRef r old =
     let (new, invalidated) = runWriter (go old)
     in if length invalidated == 0
          then Nothing
@@ -93,7 +93,7 @@ invalidateRecord r old =
       VString s  -> pure $ VString s
       VNumber n  -> pure $ VNumber n
       VTime t    -> pure $ VTime t
-      VRecord mr -> VRecord <$> if mr == Just r
+      VRowRef mr -> VRowRef <$> if mr == Just r
                                   then do tell [()]
                                           pure Nothing
                                   else pure mr
@@ -102,38 +102,15 @@ invalidateRecord r old =
 
 --
 
-data Aspects = Aspects
-  { aspectsTableId  :: Id Table
-  , aspectsColumnId :: Id Column
-  , aspectsRecordId :: Id Record
-  } deriving (Generic, NFData, Eq, Ord, Show, Typeable)
-
-instance ToJSON Aspects
-instance FromJSON Aspects
-
-instance Val Aspects where
-  val (Aspects t c r) = Bson.Doc
-    [ "tableId" =: toObjectId t
-    , "columnId" =: toObjectId c
-    , "recordId" =: toObjectId r
-    ]
-  cast' (Bson.Doc doc) = do
-    t <- Bson.lookup "tableId" doc
-    c <- Bson.lookup "columnId" doc
-    r <- Bson.lookup "recordId" doc
-    pure $ Aspects (fromObjectId t) (fromObjectId c) (fromObjectId r)
-  cast' _ = fail "expected document"
-
 data Cell = Cell
-  { cellContent :: CellContent
-  , cellAspects :: Aspects
+  { cellContent  :: CellContent
+  , cellTableId  :: Id Table
+  , cellColumnId :: Id Column
+  , cellRowId    :: Id Row
   } deriving (Generic, NFData, Show)
 
-newCell :: Id Table -> Id Column -> Id Record -> CellContent -> Cell
-newCell t c r content = Cell
-  { cellContent = content
-  , cellAspects = Aspects t c r
-  }
+newCell :: Id Table -> Id Column -> Id Row -> CellContent -> Cell
+newCell t c r content = Cell content t c r
 
 instance Model Cell where collectionName = const "cells"
 
@@ -141,11 +118,16 @@ instance ToJSON Cell
 instance FromJSON Cell
 
 instance ToDocument Cell where
-  toDocument (Cell con asp) =
-    [ "content" =: con
-    , "aspects" =: asp
+  toDocument (Cell con t c r) =
+    [ "content"  =: con
+    , "tableId"  =: toObjectId t
+    , "columnId" =: toObjectId c
+    , "rowId"    =: toObjectId r
     ]
 
 instance FromDocument Cell where
-  parseDocument doc = Cell <$> Bson.lookup "content" doc
-                           <*> Bson.lookup "aspects" doc
+  parseDocument doc =
+    Cell <$> Bson.lookup "content"  doc
+         <*> (fromObjectId <$> Bson.lookup "tableId"  doc)
+         <*> (fromObjectId <$> Bson.lookup "columnId" doc)
+         <*> (fromObjectId <$> Bson.lookup "rowId"    doc)

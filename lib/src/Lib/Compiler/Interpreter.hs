@@ -254,11 +254,11 @@ eval env expr = consumeGas >> case expr of
           LString v' -> VString v'
     pure $ RValue v
   CPrjRecord e name -> do
-    RValue (VRecord mRecId) <- eval env e
+    RValue (VRowRef mRecId) <- eval env e
     case mRecId of
       Nothing -> throwError "Dependent cell not ready (invalid reference)"
       Just recId -> do
-        f <- asks envGetRecordValue
+        f <- asks envGetRowField
         lift (f recId name) >>= \case
           Nothing -> throwError "Dependent cell not ready"
           Just val -> pure $ RValue val
@@ -274,9 +274,9 @@ eval env expr = consumeGas >> case expr of
       Nothing -> throwError "Dependent cell not ready"
       Just val -> pure val
   CTableRef tblId -> do
-    f <- asks envGetTableRecords
-    records <- lift $ f tblId
-    pure $ RValue $ VList $ map (VRecord . Just) records
+    f <- asks envGetTableRows
+    rows <- lift $ f tblId
+    pure $ RValue $ VList $ map (VRowRef . Just) rows
 
 interpret :: Monad m => CExpr -> EvalEnv m -> m (Either Text Value)
 interpret expr env = do

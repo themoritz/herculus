@@ -30,7 +30,7 @@ data DataType
   | DataString
   | DataNumber
   | DataTime
-  | DataRecord (Id Table)
+  | DataRowRef (Id Table)
   | DataList DataType
   | DataMaybe DataType
   deriving (Eq, Ord, Show, Read, Generic, NFData)
@@ -47,7 +47,7 @@ getReference = \case
   DataString    -> Nothing
   DataNumber    -> Nothing
   DataTime      -> Nothing
-  DataRecord t  -> Just t
+  DataRowRef t  -> Just t
   DataList sub  -> getReference sub
   DataMaybe sub -> getReference sub
 
@@ -75,24 +75,23 @@ instance FromJSON Column
 instance ToDocument Column where
   toDocument (Column t name kind) =
     [ "tableId" =: toObjectId t
-    , "name" =: name
-    , "kind" =: toValue kind
+    , "name"    =: name
+    , "kind"    =: toValue kind
     ]
 
 instance FromDocument Column where
   parseDocument doc = do
-    t <- Bson.lookup "tableId" doc
-    name <- Bson.lookup "name" doc
+    t       <- Bson.lookup "tableId" doc
+    name    <- Bson.lookup "name" doc
     kindVal <- Bson.lookup "kind" doc
     case eitherDecodeValue kindVal of
       Right kind ->  pure $ Column (fromObjectId t) name kind
-      Left msg -> Left $ pack msg
+      Left msg   -> Left $ pack msg
 
 data ColumnKind
   = ColumnReport ReportCol
   | ColumnData DataCol
   deriving (Eq, Show, NFData, Generic)
-  -- Future: | ColumnAction Action
 
 _ColumnReport :: Prism' ColumnKind ReportCol
 _ColumnReport = prism' ColumnReport $ \case

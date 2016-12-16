@@ -232,7 +232,7 @@ data TypecheckEnv m = TypecheckEnv
   { envResolveColumnRef        :: Ref Column -> m (Maybe (Id Column, DataCol))
   , envResolveColumnOfTableRef :: Ref Table -> Ref Column -> m (Maybe (Id Table, Id Column, DataCol))
   , envResolveTableRef         :: Ref Table -> m (Maybe (Id Table))
-  , envGetTableRows            :: Id Table -> m Type
+  , envGetTableRowType         :: Id Table -> m Type
   , envOwnTableId              :: Id Table
   }
 
