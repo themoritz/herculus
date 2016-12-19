@@ -1,7 +1,44 @@
+@import "../modules/dimensions";
+@import "../modules/colors";
+
 .overview {
   position: absolute;
   left: 0px;
   top: $menubar-height;
   right: 0px;
   bottom: $footer-height;
+}
+
+.projects {
+  margin: auto;
+  width: 90%;
+  text-align: center;
+
+  h1 {
+    margin-top: 20px;
+  }
+}
+
+div.tile {
+  float: left;
+  width: 220px;
+  height: 110px;
+  background-color: $medium-gray;
+  color: $anthrazit;
+  margin: 12px;
+  text-align: left;
+  p {
+    margin-top: 6px;
+    margin-left: 8px;
+    text-transform: capitalize;
+  }
+}
+
+div.tile.new {
+  vertical-align: middle;
+  background-color: $light-gray;
+  text-align: center;
+  p {
+    margin-top: 20px;
+  }
 }

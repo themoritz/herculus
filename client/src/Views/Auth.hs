@@ -14,9 +14,10 @@ import           React.Flux      (ReactElementM, ReactView, button_, classNames,
                                   cldiv_, defineStatefulView, defineView,
                                   elemText, input_, label_, onChange, onClick,
                                   onKeyDown, span_, table_, target, tbody_, td_,
-                                  textarea_, tr_, view, ($=), (&=))
+                                  textarea_, tr_, view, ($=), (&=), p_, strong_)
 
-import           Action          (Action (Login, Logout, Signup, ToSignupForm))
+import           Action          (Action (Login, Logout, Signup, ToSignupForm,
+                                          ToLoginForm))
 import           Lib.Model.Auth  (LoginData (..), SignupData (..))
 import           Store           (dispatch)
 
@@ -135,8 +136,8 @@ logout = defineView "login" $ \userName -> cldiv_ "logout" $ do
   " "
   button_
     [ classNames
-      [ ("pure"        , True)
-      , ("link-on-dark", True)
+      [ ("pure"   , True)
+      , ("on-dark", True)
       ]
     , onClick $ \_ _ -> dispatch Logout
     ] "(logout)"
@@ -195,78 +196,90 @@ signup = defineStatefulView "signup" initialSignupViewState $ \viewState _ ->
        | otherwise = ([], Nothing)
 
   in cldiv_ "signup" $ do
-      table_ $ tbody_ $ do
-        tr_ $
-          td_ [ "colSpan" $= "2"] $
-            label_
-              [ "htmlFor" $= "intention"
-              ] "What are you planning to use Herculus for? Describe a project, idea, use case or that you just play around."
-        tr_ $
-          td_ [ "colSpan" $= "2"] $
-            textarea_
+       table_ $ tbody_ $ do
+         tr_ $ do
+           td_ $
+             label_
+               [ "htmlFor" $= "intention"
+               ] "What are you planning to use Herculus for? Describe a project, idea, use case or that you are just going to play around."
+           td_ $
+             textarea_
+               [ classNames
+                   [ ("auth-txtarea", True)
+                   , ("invalid", showSignupErrors viewState && signupIntentionError)
+                   ]
+               , "value" &= signupIntention viewState
+               , "name" $= "intention"
+               , "rows" $= "5"
+               , onChange $ \ev st -> ([], Just st {
+                   signupIntention = target ev "value" })
+               ] ""
+         tr_ $ do
+           td_ $ label_
+             [ "htmlFor" $= "username"
+             ] "User name"
+           td_ $ input_
+             [ classNames
+                 [ ("auth-input", True)
+                 , ("invalid", showSignupErrors viewState && signupUserNameError)
+                 ]
+             , "type" $= "text"
+             , "value" &= signupUserName viewState
+             , "autoFocus" &= True
+             , "name" $= "username"
+             , onChange $ \ev st -> ([], Just st {
+                 signupUserName = target ev "value"})
+             , onKeyDown inputKeyDownHandler
+             ]
+         tr_ $ do
+            td_ $ label_
+              [ "htmlFor" $= "password"
+              ] "Password"
+            td_ $ input_
               [ classNames
-                  [ ("auth-txtarea", True)
-                  , ("invalid", showSignupErrors viewState && signupIntentionError)
+                  [ ("auth-input", True)
+                  , ("invalid", showSignupErrors viewState && signupPwdError)
                   ]
-              , "value" &= signupIntention viewState
-              , "name" $= "intention"
+              , "type" $= "password"
+              , "value" &= signupPwd viewState
+              , "name" $= "password"
               , onChange $ \ev st -> ([], Just st {
-                  signupIntention = target ev "value" })
-              ] ""
-        tr_ $ do
-          td_ $ label_
-            [ "htmlFor" $= "username"
-            ] "User name"
-          td_ $ input_
-            [ classNames
-                [ ("auth-input", True)
-                , ("invalid", showSignupErrors viewState && signupUserNameError)
-                ]
-            , "type" $= "text"
-            , "value" &= signupUserName viewState
-            , "autoFocus" &= True
-            , "name" $= "username"
-            , onChange $ \ev st -> ([], Just st {
-                signupUserName = target ev "value"})
-            , onKeyDown inputKeyDownHandler
-            ]
-        tr_ $ do
-           td_ $ label_
-             [ "htmlFor" $= "password"
-             ] "Password"
-           td_ $ input_
-             [ classNames
-                 [ ("auth-input", True)
-                 , ("invalid", showSignupErrors viewState && signupPwdError)
-                 ]
-             , "type" $= "password"
-             , "value" &= signupPwd viewState
-             , "name" $= "password"
-             , onChange $ \ev st -> ([], Just st {
-                signupPwd = target ev "value"})
-             , onKeyDown inputKeyDownHandler
-             ]
-        tr_ $ do
-           td_ $ label_
-             [ "htmlFor" $= "passwordConfirm"
-             ] "Password (again)"
-           td_ $ input_
-             [ classNames
-                 [ ("auth-input", True)
-                 , ("invalid", showSignupErrors viewState && signupPwdConfirmError)
-                 ]
-             , "type" $= "password"
-             , "value" &= signupPwdConfirm viewState
-             , "name" $= "passwordConfirm"
-             , onChange $ \ev st -> ([], Just st {
-                signupPwdConfirm = target ev "value"})
-             , onKeyDown inputKeyDownHandler
-             ]
-        tr_ $ td_
-           [ "className" $= "submit"
-           , "colSpan" $= "2"
-           ] $ button_
-             [ classNames [ ("enabled", validFormData)]
-             , onClick $ \_ _ st -> signupHandler st
-             ] "Submit"
-      cldiv_ "disclaimer" "Please be aware that this a beta version. We are still in the progress of implementing a lot of features. Bugs may occur. Your feedback to hi@herculus.io is highly appreciated. Please note that we cannot at the moment guarantee that projects will be carried over to future versions and thus data you enter now gets potentially lost."
+                 signupPwd = target ev "value"})
+              , onKeyDown inputKeyDownHandler
+              ]
+         tr_ $ do
+            td_ $ label_
+              [ "htmlFor" $= "passwordConfirm"
+              ] "Password (again)"
+            td_ $ input_
+              [ classNames
+                  [ ("auth-input", True)
+                  , ("invalid", showSignupErrors viewState && signupPwdConfirmError)
+                  ]
+              , "type" $= "password"
+              , "value" &= signupPwdConfirm viewState
+              , "name" $= "passwordConfirm"
+              , onChange $ \ev st -> ([], Just st {
+                 signupPwdConfirm = target ev "value"})
+              , onKeyDown inputKeyDownHandler
+              ]
+         tr_ $ td_
+            [ "className" $= "submit"
+            , "colSpan" $= "2"
+            ] $ button_
+              [ classNames [ ("enabled", validFormData)]
+              , onClick $ \_ _ st -> signupHandler st
+              ] "Submit"
+       cldiv_ "disclaimer" $ do
+         p_ "Please be aware that this a beta version. We are still in the progress of implementing a lot of features. Bugs may occur. Please note that we cannot at the moment guarantee that projects will be carried over to future versions and thus data you enter now potentially gets lost."
+         p_ $ do
+           "Your feedback to "
+           strong_ "hi@herculus.io"
+           " is highly appreciated."
+       p_ $ do
+         "Back to "
+         button_
+           [ classNames [ ("pure", True) ]
+           , onClick $ \_ _ _ -> (dispatch ToLoginForm, Nothing)
+           ] "login"
+         "."

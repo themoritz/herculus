@@ -32,8 +32,9 @@ import           Store               (LoggedOutState (..),
                                       stateTableId, stateTables, stateUserInfo,
                                       store)
 import           Views.Auth          (login_, logout_, signup_)
-import           Views.Combinators   (clspan_)
+import           Views.Combinators   (clspan_, inputNew_)
 import           Views.Table         (TableGridProps (..), tableGrid_)
+import           Views.ProjectOverview (projectsOverview_)
 
 import           Store.Message       (Message (Message))
 import qualified Store.Message       as Message
@@ -77,7 +78,14 @@ appHeader_ !st = view appHeader st mempty
 appHeader :: ReactView State
 appHeader = defineView "header" $ \st ->
   cldiv_ "menubar" $ do
-    cldiv_ "logo" "Herculus"
+    cldiv_ "logo" $ do
+      -- img_
+      --   [ "src" $= "img/herculus.svg"
+      --   , "height" $= "100px"
+      --   , "width" $= "100px"
+      --   , "alt" $= "logo"
+      --   ]
+      "Herculus"
     case st ^. stateSession of
       StateLoggedIn liSt -> do
         case liSt ^. stateProjectView of
@@ -88,12 +96,12 @@ appHeader = defineView "header" $ \st ->
               [ classNames
                 [ ("pure", True)
                 , ("backToOverview", True)
-                , ("link-on-dark", True)
+                , ("on-dark", True)
                 ]
               , onClick $ \_ _ -> dispatch $ SetProjectOverview (liSt ^. stateSessionKey)
               ] $ do
                 faIcon_ "square-o"
-                "Projects"
+                " Projects"
         logout_ $ liSt ^. stateUserInfo . uiUserName
       StateLoggedOut _  -> pure ()
 
@@ -123,88 +131,12 @@ appFooter_ !st = view appFooter st mempty
 
 appFooter :: ReactView State
 appFooter = defineView "footer" $ \_ ->
-  cldiv_ "footer" $
-    a_ [ "href" $= "mailto:Moritz <mdrexl@fastmail.fm>, Ruben <ruben.moor@gmail.com>"
-      , "className" $= "link-on-dark"
-      , "target" $= "_blank"
-      ] "Contact"
+  cldiv_ "footer" $ do
+    "Contact us at "
+    a_ [ "href" $= "mailto:hi@herculus.io"
+      , "className" $= "on-dark"
+      ] "hi@herculus.io"
 
---
-
-projectsOverview_ :: Map (Id Project) Project -> ReactElementM eh ()
-projectsOverview_ !ps = view projectsOverview ps mempty
-
-projectsOverview :: ReactView (Map (Id Project) Project)
-projectsOverview = defineView "projects" $ \ps ->
-  ul_ $ do
-    li_ $ inputNew_ "Add project..." (dispatch . ProjectsCreate)
-    for_ (Map.toList ps) $ uncurry project_
-
-project_ :: Id Project -> Project -> ReactElementM eh ()
-project_ !projectId !project' = viewWithSKey project (toJSString $ show projectId) (projectId, project') mempty
-
-project :: ReactView (Id Project, Project)
-project = defineView "project" $ \(projectId, project') ->
-  li_
-     [ classNames
-       [ ("link", True)
-       ]
-     , onClick $ \_ _ -> dispatch $ ProjectsLoadProject projectId
-     ]
-     $ div_ $
-       span_ $ elemText $ project' ^. projectName
-data ProjectInfoViewState = ProjectInfoViewState
-  { pEditable  :: Bool
-  , pName      :: Text
-  , pNameError :: Bool
-  } deriving (Generic, Show, NFData)
-
-initialProjectInfoViewState :: ProjectInfoViewState
-initialProjectInfoViewState = ProjectInfoViewState False "" False
-
--- TODO: projectDetail will be become the projectView of ProjectDetailView
-
-projectInfo_ :: Id Project -> Project -> ReactElementM eh ()
-projectInfo_ !projectId !project' =
-  viewWithSKey project (toJSString $ show projectId) (projectId, project') mempty
-
-projectInfo :: ReactView (Id Project, Project)
-projectInfo = defineStatefulView "project" initialProjectInfoViewState $ \state (projectId, project') ->
-  let saveHandler st = (dispatch $ ProjectSetName (pName st), Just st { pEditable = False })
-      inputKeyDownHandler _ evt st
-        | keyENTER evt && not (Text.null $ pName st) = saveHandler st
-        | keyESC evt = ([] , Just st { pEditable = False })
-        | otherwise = ([], Just st)
-  in li_
-     [ classNames
-       [ ("link", True)
-       ]
-     , onClick $ \_ _ _ -> (dispatch $ ProjectsLoadProject projectId, Nothing)
-     ] $
-     if pEditable state
-     then div_ $
-          input_
-          [  classNames
-             [ ("inp", True)
-             , ("inp-error", pNameError state)
-             ]
-          , "value" &= pName state
-          , onChange $ \evt st ->
-              let value = target evt "value"
-              in ([], Just st { pName = value, pNameError = Text.null value})
-          , onKeyDown inputKeyDownHandler
-          ]
-     else div_ $ do
-       span_ $ elemText $ project' ^. projectName
-       button_
-         [ "className" $= "pure link-on-dark"
-         , onClick $ \ev _ st -> ([stopPropagation ev], Just st { pEditable = True, pName = project' ^. projectName})
-         ] $ faIcon_ "pencil"
-
-       button_
-         [ "className" $= "pure link-on-dark"
-         , onClick $ \ev _ _ -> (stopPropagation ev : dispatch (ProjectDelete projectId), Nothing)
-         ] $ faIcon_ "times"
 --
 
 tables_ :: Map (Id Table) Table -> Maybe (Id Table) -> Id Project -> ReactElementM eh ()
@@ -246,43 +178,26 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
          , onClick $ \_ _ _ -> (dispatch $ TablesLoadTable tableId, Nothing)
          ] $
      if tEditable state
-     then div_ $
-       input_
-         [  classNames
-            [ ("inp", True)
-            , ("inp-error", tNameError state)
+     then div_ $ input_
+            [ classNames
+              [ ("inp", True)
+              , ("inp-error", tNameError state)
+              ]
+            , "value" &= tName state
+            , onChange $ \ev st ->
+              let value = target ev "value"
+              in  ([], Just st { tName = value, tNameError = Text.null value})
+            , onKeyDown inputKeyDownHandler
             ]
-         , "value" &= tName state
-         , onChange $ \ev st ->
-             let value = target ev "value"
-             in ([], Just st { tName = value, tNameError = Text.null value})
-         , onKeyDown inputKeyDownHandler
-         ]
      else div_ $ do
        span_ $ elemText $ table' ^. tableName
 
        button_
-         [ "className" $= "pure link-on-dark"
+         [ "className" $= "pure on-dark"
          , onClick $ \ev _ st -> ([stopPropagation ev], Just st { tEditable = True, tName = table'  ^. tableName })
          ] $ faIcon_ "pencil"
 
        button_
-         [ "className" $= "pure link-on-dark"
+         [ "className" $= "pure on-dark"
          , onClick $ \ev _ _ -> (stopPropagation ev : dispatch (TableDelete tableId), Nothing)
          ] $ faIcon_ "times"
---
-
-inputNew_ :: Text -> (Text -> [SomeStoreAction]) -> ReactElementM eh ()
-inputNew_ !p !cb = view inputNew (p, cb) mempty
-
-inputNew :: ReactView (Text, Text -> [SomeStoreAction])
-inputNew = defineStatefulView "inputNew" ("" :: Text) $ \curText (p, cb) ->
-  input_
-    [ "placeholder" &= p
-    , "value" &= curText
-    , onChange $ \evt _ -> ([], Just $ target evt "value")
-    , onKeyDown $ \_ evt curState ->
-        if keyENTER evt && not (Text.null curState)
-           then (cb curState, Just "")
-           else ([], Nothing)
-    ]

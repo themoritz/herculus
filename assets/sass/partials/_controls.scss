@@ -61,13 +61,23 @@ button.pure {
   cursor: pointer;
 }
 
-button.link-on-dark {
+button.on-dark {
   color: $medium-gray;
   cursor: pointer;
   transition-property: color;
   transition-duration: 100ms;
   &:hover {
     color: $brand-dark;
+  }
+}
+
+a.on-dark {
+  color: $medium-gray;
+  cursor: pointer;
+  transition-property: color;
+  transition-duration: 100ms;
+  &:hover {
+    color: $brand-light;
   }
 }
 

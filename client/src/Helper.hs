@@ -1,7 +1,7 @@
 module Helper
-( keyESC
-, keyENTER
-) where
+  ( keyESC
+  , keyENTER
+  ) where
 
 import           React.Flux
 

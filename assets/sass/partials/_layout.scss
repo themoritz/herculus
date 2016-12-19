@@ -17,6 +17,7 @@
   background-color: $anthrazit;
   box-sizing: border-box;
   text-align: center;
+  color: $medium-gray;
 
   &:after {
     content: "";
@@ -135,7 +136,10 @@
     position: absolute;
     bottom: 5px;
     right: 0px;
+    padding: 10px;
     text-align: right;
+    font-weight: bold;
+    font-size: 16px;
   }
 }
 

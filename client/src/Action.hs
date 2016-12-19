@@ -57,6 +57,7 @@ data Action
   | GlobalSendWebSocket WsUpMessage
   -- Session
   | ToSignupForm
+  | ToLoginForm
   | Signup SignupData
   | Login LoginData
   | LoggedIn UserInfo

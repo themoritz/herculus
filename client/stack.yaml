@@ -23,6 +23,6 @@ packages:
     commit: 5bdfec9
 
 extra-deps:
-- react-flux-1.2.1
+- react-flux-1.2.3
 - ghcjs-dom-0.3.1.0
 - ghcjs-dom-jsffi-0.3.1.0

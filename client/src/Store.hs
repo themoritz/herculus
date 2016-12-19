@@ -225,6 +225,8 @@ instance StoreData State where
 
       ToSignupForm -> pure $ st & stateSession .~ StateLoggedOut LoggedOutSignupForm
 
+      ToLoginForm -> pure $ st & stateSession .~ StateLoggedOut LoggedOutLoginForm
+
       Login loginData -> do
         request api (Proxy :: Proxy Api.AuthLogin) loginData $ mkCallback $ \case
           LoginSuccess userInfo ->

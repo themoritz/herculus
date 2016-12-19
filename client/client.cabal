@@ -34,6 +34,7 @@ executable client
                      , Views.Foreign
                      , Views.Combinators
                      , Views.Common
+                     , Views.ProjectOverview
                      , Views.Util
   default-extensions:  OverloadedStrings
                      , TypeFamilies
