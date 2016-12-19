@@ -104,12 +104,15 @@ makeLenses ''ProjectDetailState
 
 forProjectDetail :: State -> (SessionKey -> ProjectDetailState -> IO ProjectDetailState) -> IO State
 forProjectDetail st action =
-  forLoggedIn st $ \liSt -> case liSt ^. stateProjectView of
-      StateProjectDetail pdSt -> mkStateProjectDetail liSt <$> action (liSt ^. stateSessionKey) pdSt
+    forLoggedIn st $ \liSt -> case liSt ^. stateProjectView of
+      StateProjectDetail pdSt -> updState liSt <$> action (liSt ^. stateSessionKey) pdSt
       StateProjectOverview _ -> do
         -- TODO: proper error message
         putStrLn "inconsistent client state: unexpected: project overview"
         pure liSt
+  where
+    updState :: LoggedInState -> ProjectDetailState -> LoggedInState
+    updState liSt pdSt = liSt & stateProjectView .~ StateProjectDetail pdSt
 
 forProjectDetail_ :: State -> (SessionKey -> ProjectDetailState -> IO ()) -> IO ()
 forProjectDetail_ st action =
@@ -127,9 +130,6 @@ forProjectDetail' st action =
         -- TODO: proper error message
         putStrLn "inconsistent client state: unexpected: project overview"
         pure st
-
-mkStateProjectDetail :: LoggedInState -> ProjectDetailState -> LoggedInState
-mkStateProjectDetail liSt pdSt = liSt & stateProjectView .~ StateProjectDetail pdSt
 
 -- execute action in case the user is logged in and error otherwise
 forLoggedIn :: State -> (LoggedInState -> IO LoggedInState) -> IO State
@@ -250,16 +250,36 @@ instance StoreData State where
       -- Cache
 
       RecordCacheGet tableId ->
-        forProjectDetail st $ \sKey pdSt ->
-          case pdSt ^. stateCacheRecords . at tableId of
-            Just _ -> pure pdSt
-            -- cache not yet initialized: no key in map => Nothing
-            Nothing -> do
-              request api (Proxy :: Proxy Api.RecordListWithData)
-                      (session sKey) tableId $ mkCallback $
-                      \records -> [RecordCacheAction tableId $ RecordCache.Set records]
-              -- initialize cache with empty map
-              pure $ pdSt & stateCacheRecords . at tableId ?~ RecordCache.empty
+        forLoggedIn st $ \liSt ->
+          case liSt ^. stateProjectView of
+            StateProjectDetail pdSt -> do
+              pdSt' <- case pdSt ^. stateCacheRecords . at tableId of
+                Just _  -> pure pdSt
+               -- cache not yet initialized: no key in map => Nothing
+                Nothing -> do
+                  request api (Proxy :: Proxy Api.RecordListWithData)
+                          (session $ liSt ^. stateSessionKey) tableId $ mkCallback $
+                          \records -> [RecordCacheAction tableId $ RecordCache.Set records]
+                  -- initialize cache with empty map
+                  pure $ pdSt & stateCacheRecords . at tableId ?~ RecordCache.empty
+              pure $ liSt & stateProjectView .~ StateProjectDetail pdSt'
+
+            StateProjectOverview _ -> do
+              putStrLn "inconsistent client state: unexpected: project overview"
+              pure liSt
+        -- TODO: forProjectDetail doesn't seem to work as intended
+        -- even though it yields "pure pdSt" a rerender is triggered, and thus a react loop
+        --
+        -- forProjectDetail st $ \sKey pdSt ->
+        --   case pdSt ^. stateCacheRecords . at tableId of
+        --     Just _ -> pure pdSt
+        --     -- cache not yet initialized: no key in map => Nothing
+        --     Nothing -> do
+        --       request api (Proxy :: Proxy Api.RecordListWithData)
+        --               (session sKey) tableId $ mkCallback $
+        --               \records -> [RecordCacheAction tableId $ RecordCache.Set records]
+        --       -- initialize cache with empty map
+        --       pure $ pdSt & stateCacheRecords . at tableId ?~ RecordCache.empty
 
       RecordCacheAction tableId a ->
         forProjectDetail st $ \_ pdSt ->
