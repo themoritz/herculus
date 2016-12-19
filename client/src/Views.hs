@@ -85,9 +85,15 @@ appHeader = defineView "header" $ \st ->
           StateProjectDetail pdSt -> do
             tables_ (pdSt ^. stateTables) (pdSt ^. stateTableId) (pdSt ^. stateProjectId)
             button_
-              [ classNames [ ("pure", True), ("backToOverview", True) ]
+              [ classNames
+                [ ("pure", True)
+                , ("backToOverview", True)
+                , ("link-on-dark", True)
+                ]
               , onClick $ \_ _ -> dispatch $ SetProjectOverview (liSt ^. stateSessionKey)
-              ] "Back 2 Overview"
+              ] $ do
+                faIcon_ "square-o"
+                "Projects"
         logout_ $ liSt ^. stateUserInfo . uiUserName
       StateLoggedOut _  -> pure ()
 
@@ -159,7 +165,8 @@ initialProjectInfoViewState = ProjectInfoViewState False "" False
 -- TODO: projectDetail will be become the projectView of ProjectDetailView
 
 projectInfo_ :: Id Project -> Project -> ReactElementM eh ()
-projectInfo_ !projectId !project' = viewWithSKey project (toJSString $ show projectId) (projectId, project') mempty
+projectInfo_ !projectId !project' =
+  viewWithSKey project (toJSString $ show projectId) (projectId, project') mempty
 
 projectInfo :: ReactView (Id Project, Project)
 projectInfo = defineStatefulView "project" initialProjectInfoViewState $ \state (projectId, project') ->
@@ -206,13 +213,15 @@ tables_ !ts !mTbl !prj = view tables (ts, mTbl, prj) mempty
 tables :: ReactView (Map (Id Table) Table, Maybe (Id Table), Id Project)
 tables = defineView "tables" $ \(ts, mTbl, projId) ->
   cldiv_ "tables" $ do
-    ul_ $ for_ (Map.toList ts) $ \(tableId, table') -> table_' tableId table' (Just tableId == mTbl)
+    ul_ $ for_ (Map.toList ts) $
+      \(tableId, table') -> table_' tableId table' (Just tableId == mTbl)
     inputNew_ "Add table..." (dispatch . TablesCreate . Table projId)
 
 --
 
 table_' :: Id Table -> Table -> Bool -> ReactElementM eh ()
-table_' !tableId !table' !selected = viewWithSKey table (toJSString $ show tableId) (tableId, table', selected) mempty
+table_' !tableId !table' !selected =
+  viewWithSKey table (toJSString $ show tableId) (tableId, table', selected) mempty
 
 data TableViewState = TableViewState
   { tEditable  :: Bool

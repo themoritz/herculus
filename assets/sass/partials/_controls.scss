@@ -11,16 +11,6 @@ a, span.link {
   }
 }
 
-.link-on-dark {
-  color: $gray;
-  cursor: pointer;
-  transition-property: color;
-  transition-duration: 100ms;
-  &:hover {
-    color: $brand-light;
-  }
-}
-
 a.active, span.active {
   font-weight: bold;
 }
@@ -69,6 +59,16 @@ button.pure {
     transform: none;
   }
   cursor: pointer;
+}
+
+button.link-on-dark {
+  color: $medium-gray;
+  cursor: pointer;
+  transition-property: color;
+  transition-duration: 100ms;
+  &:hover {
+    color: $brand-dark;
+  }
 }
 
 // Scrollbars

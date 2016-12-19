@@ -15,7 +15,6 @@ import           Control.Lens
 import           Data.Map           (Map)
 import qualified Data.Map           as Map
 import           Lib.Model          (Entity (Entity))
-import           Lib.Model.Auth     (SessionKey)
 import           Lib.Model.Cell     (CellContent)
 import           Lib.Model.Column   (Column)
 import           Lib.Model.Record   (Record)

@@ -51,6 +51,7 @@
     background: linear-gradient(to right, $brand-dark 0%, $brand-light 100%);
   }
 
+  // add table input box
   input {
     box-sizing: border-box;
     background: lighten($anthrazit, 3%);
@@ -78,43 +79,6 @@
     padding: 10px;
     font-size: 20px;
     color: white;
-  }
-
-  .projects {
-    position: absolute;
-    top: 20px;
-    height: 30px;
-    left: 150px;
-    right: 0px;
-    overflow: hidden;
-    text-align: right;
-    input {
-      margin-right: 10px;
-      margin-top: 2px;
-    }
-    ul {
-      list-style: none;
-      margin: 0px;
-      padding: 0px;
-      li {
-        float: right;
-        padding: 4px 10px;
-        font-weight: bold;
-        color: $gray;
-        cursor: pointer;
-        transition-property: color;
-        transition-duration: 100ms;
-        &:hover {
-          color: $brand-light;
-        }
-        &.active {
-          color: $brand-light;
-          background-color: lighten($anthrazit, 5%);
-          border-bottom-right-radius: 2px;
-          border-bottom-left-radius: 2px;
-        }
-      }
-    }
   }
 
   .tables {
@@ -162,6 +126,9 @@
     right: 0px;
     text-align: right;
     color: $light-gray;
+    .user {
+      font-weight: bold;
+    }
   }
 
   .backToOverview{
@@ -169,7 +136,6 @@
     bottom: 5px;
     right: 0px;
     text-align: right;
-    color: $light-gray;
   }
 }
 

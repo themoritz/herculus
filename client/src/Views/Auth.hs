@@ -132,14 +132,14 @@ logout = defineView "login" $ \userName -> cldiv_ "logout" $ do
   "Logged in as "
   span_ [ "className" $= "user"
     ] $ elemText userName
-  "("
+  " "
   button_
     [ classNames
-      [ ("pure", True)
+      [ ("pure"        , True)
+      , ("link-on-dark", True)
       ]
     , onClick $ \_ _ -> dispatch Logout
-    ] "Logout"
-  ")"
+    ] "(logout)"
 
 signup_ :: ReactElementM eh ()
 signup_ = view signup () mempty
