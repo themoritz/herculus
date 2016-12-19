@@ -83,8 +83,31 @@ executeCommand = \case
       defContent <- liftDB $ defaultContent emptyDataColType
       cellCreate $ newCell tableId columnId rowId defContent
 
-  CmdDataColUpdate columnId dataType isDerived formula -> do
-    undefined
+  CmdDataColUpdate columnId dataType isDerived code -> do
+    oldCol <- getColumn columnId
+    withDataCol oldCol $ \dataCol -> do
+      -- Apply changes
+      columnModify columnId $ columnKind . _ColumnData
+        %~ (dataColType .~ dataType)
+         . (dataColIsDerived .~ isDerived)
+         . (dataColSourceCode .~ code)
+      -- If the dataType has changed, we need to re-compile all the columns
+      -- that depend on this one.
+      when (dataCol ^. dataColType /= dataType) $
+        registerCompileColumnDependants (columnId, oldCol ^. columnTableId)
+      case isDerived of
+        Derived -> registerCompileTarget columnId
+        NotDerived -> if dataCol ^. dataColType == dataType
+          then do
+            cells <- getColumnCells columnId
+            for_ cells $ \(Cell _ c r content) -> case content of
+              CellError _ -> -- TODO:
+              CellValue _ -> pure ()
+            -- only new defaults for error cells:
+            -- for every cell: if error, set defaultContent
+                        
+          else -- updateReference dependencies
+               -- new defaults for new datatype
 
   CmdReportColCreate tableId ->
     void $ columnCreate (emptyReportCol tableId)
@@ -93,6 +116,20 @@ executeCommand = \case
     undefined
 
 --------------------------------------------------------------------------------
+
+registerCompileColumnDependants :: MonadEngine m => (Id Column, Id Table) -> m ()
+registerCompileColumnDependants (columnId, tableId) = do
+  dependants <- graphGets $ getAllColumnDependants (columnId, tableId)
+  mapM_ registerCompileTarget dependants
+
+setAndPropagateCellContent :: Id Table -> Id Column -> Id Row -> CellContent -> m ()
+setAndPropagateCellContent tableId columnId rowId content = do
+  setCellContent columnId rowId content
+  childs <- graphGets $ getAllColumnDependants (columnId, tableId)
+  for_ childs $ \(childId, mode) ->
+    case mode of
+      AddOne -> scheduleEvalCell childId rowId
+      AddAll -> scheduleEvalColumn childId
 
 -- TODO: configurable by user
 defaultContent :: MonadHexl m => DataType -> m CellContent
@@ -108,3 +145,8 @@ defaultContent = \case
       Right (Entity i _) -> Just i
   DataList _   -> pure . CellValue $ VList []
   DataMaybe _  -> pure . CellValue $ VMaybe Nothing
+
+withDataCol :: Monad m => Column -> (DataCol -> m a) -> m a
+withDataCol col f = case col ^? columnKind . _ColumnData of
+  Nothing      -> throwError $ ErrBug "withDataCol failed"
+  Just dataCol -> f dataCol

@@ -2,7 +2,9 @@
 {-# LANGUAGE TupleSections       #-}
 -- |
 
-module Engine.Compile where
+module Engine.Compile
+  ( compileColumn
+  ) where
 
 import           Control.Lens
 import           Control.Monad
@@ -37,7 +39,7 @@ import           Monads
 -- the dependency graph, and update the dependencies of the column.
 --
 -- For a report column: compile and update the dependencies.
-compileColumn :: forall db m. MonadEngine db m => Id Column -> m (Entity Column)
+compileColumn :: forall db m. MonadEngine db m => Id Column -> m ()
 compileColumn columnId = do
   col <- getColumn columnId
   let abort :: Text -> m (CompileResult a)
@@ -74,7 +76,7 @@ compileColumn columnId = do
           pure $ CompileResultOk tTpl
       pure $ col & columnKind . _ColumnReport . reportColCompiledTemplate .~ compileResult
   liftDB $ update columnId $ const newCol
-  pure $ Entity columnId newCol
+  pure ()
 
 --------------------------------------------------------------------------------
 

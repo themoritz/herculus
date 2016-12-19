@@ -219,8 +219,8 @@ handleTableSetName (UserInfo userId _ _) tableId name = do
 
 handleTableDelete :: MonadHexl m => SessionData -> Id Table -> m ()
 handleTableDelete (UserInfo userId _ _) tableId = do
-  permissionTable userId tableId
-  runCommand $ CmdTableDelete tableId
+    permissionTable userId tableId
+    runCommand $ CmdTableDelete tableId
 
 --------------------------------------------------------------------------------
 

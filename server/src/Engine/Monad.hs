@@ -13,9 +13,12 @@ import           Control.Lens
 import           Control.Monad.Except
 import           Control.Monad.State
 
+import           Data.Foldable                (for_)
 import           Data.Map                     (Map)
 import qualified Data.Map                     as Map
 import           Data.Proxy
+import           Data.Set                     (Set)
+import qualified Data.Set                     as Set
 
 import           Database.MongoDB             ((=:))
 
@@ -64,16 +67,24 @@ makeLenses ''Cache
 emptyCache :: Cache
 emptyCache = Cache Map.empty Map.empty Map.empty Map.empty
 
+data EvalTargets
+  = CompleteColumn
+  | SpecificRows (Set (Id Row))
+  deriving (Eq)
+
 data EngineState = EngineState
-  { _engineChanges :: Changes
-  , _engineCache   :: Cache
-  , _engineGraph   :: DependencyGraph
+  { _engineChanges        :: Changes
+  , _engineCache          :: Cache
+  , _engineGraph          :: DependencyGraph
+  , _engineCompileTargets :: Set (Id Column)
+  , _engineEvalTargets    :: Map (Id Column) EvalTargets
   }
 
 makeLenses ''EngineState
 
 newEngineState :: DependencyGraph -> EngineState
-newEngineState graph = EngineState emptyChanges emptyCache graph
+newEngineState graph =
+  EngineState emptyChanges emptyCache graph Set.empty Map.empty
 
 --------------------------------------------------------------------------------
 
@@ -83,7 +94,7 @@ class (MonadError AppError m, MonadHexl h) => MonadEngine h m | m -> h where
   graphSetDependencies :: Id Column
     -> ([(Id Column, ColumnDependency)], [(Id Table, TableDependency)]) -> m Bool
 
-  -- Fallback (to be eliminated)
+  -- | Fallback (to be eliminated)
   liftDB :: h a -> m a
 
   tableCreate :: Table -> m (Id Table)
@@ -91,16 +102,29 @@ class (MonadError AppError m, MonadHexl h) => MonadEngine h m | m -> h where
   tableDelete :: Id Table -> m ()
 
   columnCreate :: Column -> m (Id Column)
+  columnModify :: Id Column -> (Column -> Column) -> m ()
 
   cellCreate :: Cell -> m (Id Cell)
 
-  -- Cached
+  -- Get cached values
+
   getCellValue    :: Id Column -> Id Row -> m (Maybe Value)
-  setCellContent  :: Id Column -> Id Row -> CellContent -> m ()
-  getColumnValues :: Id Column -> m [Maybe Value]
+  getColumnCells  :: Id Column -> m [Entity Cell]
   getTableRows    :: Id Table -> m [Id Row]
   getRowField     :: Id Row -> Ref Column -> m (Maybe Value)
   getColumn       :: Id Column -> m Column
+
+  setCellContent :: Id Column -> Id Row -> CellContent -> m ()
+
+  -- Prepare compilation and propagation
+
+  -- | Also schedules evaluation of the column.
+  scheduleCompileColumn :: Id Column -> m ()
+  scheduleEvalColumn :: Id Column -> m ()
+  scheduleEvalCell :: Id Column -> Id Row -> m ()
+
+  getEvalRoots :: m [Id Column]
+  getEvalTargets :: Id Column -> m [Id Row]
 
 --------------------------------------------------------------------------------
 
@@ -134,6 +158,30 @@ instance MonadHexl m => MonadEngine m (EngineT m) where
     lift $ deleteByQuery (Proxy :: Proxy Cell) query
     lift $ deleteByQuery (Proxy :: Proxy Row) query
     opDelete changesTables tableId
+
+  scheduleCompileColumn columnId = do
+    engineCompileTargets . at columnId .= Just ()
+    scheduleEvalColumn columnId
+
+  scheduleEvalColumn columnId =
+    engineEvalTargets . at columnId .= Just CompleteColumn
+
+  scheduleEvalCell columnId rowId =
+    engineEvalTargets . at columnId . non (SpecificRows Set.empty) %= \case
+      SpecificRows rows -> SpecificRows $ Set.insert rowId rows
+      CompleteColumn    -> CompleteColumn
+
+  getEvalRoots = Map.keys <$> use engineEvalTargets
+
+  getEvalTargets columnId =
+    use (engineEvalTargets . at columnId . non (SpecificRows Set.empty)) >>= \case
+      SpecificRows rs -> pure $ Set.toList rs
+      CompleteColumn -> do
+        col <- getColumn columnId
+        rows <- lift $ listByQuery [ "tableId" =: toObjectId (_columnTableId col) ]
+        pure $ map entityId rows
+
+
 
 --------------------------------------------------------------------------------
 
