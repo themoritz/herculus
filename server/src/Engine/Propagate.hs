@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE GADTs               #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -24,6 +23,7 @@ import           Lib.Model.Row
 import           Lib.Types
 
 import           Engine.Monad
+import           Engine.Util
 import           Monads
 
 propagate :: MonadEngine db m => m ()

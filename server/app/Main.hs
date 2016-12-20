@@ -17,8 +17,9 @@ import qualified Database.MongoDB               as Mongo
 import           Network.Wai.Handler.Warp       as Warp
 import           Network.Wai.Handler.WebSockets
 import           Network.WebSockets
-import           Servant                        ((:<|>) (..), (:>), Context (..), Raw,
-                                                 Server, serveDirectory,
+import           Servant                        ((:<|>) (..), (:>),
+                                                 Context (..), Raw, Server,
+                                                 serveDirectory,
                                                  serveWithContext)
 
 import           Auth                           (AuthMiddleware, authHandler)
@@ -30,7 +31,7 @@ import           Lib.Api.Rest                   (Routes)
 import           Lib.Model.Cell
 import           Lib.Model.Class
 import           Lib.Model.Column
-import           Lib.Model.Record
+import           Lib.Model.Row
 import           Monads
 import           Options                        (Options (..), getOptions)
 
@@ -82,7 +83,7 @@ main = do
   Mongo.access pipe Mongo.master optMongoCollection $ do
     let collColumn = collectionName (Proxy :: Proxy Column)
         collCell   = collectionName (Proxy :: Proxy Cell)
-        collRecord = collectionName (Proxy :: Proxy Record)
+        collRecord = collectionName (Proxy :: Proxy Row)
         asc = 1 :: Int
     Mongo.ensureIndex $ Mongo.index collColumn [ "tableId" =: asc ]
     Mongo.ensureIndex $ Mongo.index collRecord [ "tableId" =: asc ]

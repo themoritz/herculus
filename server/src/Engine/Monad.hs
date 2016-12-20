@@ -97,22 +97,33 @@ class (MonadError AppError m, MonadHexl h) => MonadEngine h m | m -> h where
   -- | Fallback (to be eliminated)
   liftDB :: h a -> m a
 
-  tableCreate :: Table -> m (Id Table)
-  tableModify :: Id Table -> (Table -> Table) -> m ()
-  tableDelete :: Id Table -> m ()
+  -- Perform changes to DB objects. Guiding principles:
+  -- * Functions cascade
+  -- * Changes are stored in cache
+  -- * Changes will be collected and commited / broadcasted at the end
 
-  columnCreate :: Column -> m (Id Column)
-  columnModify :: Id Column -> (Column -> Column) -> m ()
+  createTable :: Table -> m (Id Table)
+  modifyTable :: Id Table -> (Table -> Table) -> m ()
+  deleteTable :: Id Table -> m ()
 
-  cellCreate :: Cell -> m (Id Cell)
+  createColumn :: Column -> m (Id Column)
+  modifyColumn :: Id Column -> (Column -> Column) -> m ()
+  deleteColumn :: Id Column -> m ()
+
+  createRow :: Row -> m (Id Row)
+  deleteRow :: Id Row -> m ()
+
+  createCell :: Cell -> m (Id Cell)
 
   -- Get cached values
 
   getCellValue    :: Id Column -> Id Row -> m (Maybe Value)
   getColumnCells  :: Id Column -> m [Entity Cell]
   getTableRows    :: Id Table -> m [Id Row]
+  getTableColumns :: Id Table -> m [Entity Column]
   getRowField     :: Id Row -> Ref Column -> m (Maybe Value)
   getColumn       :: Id Column -> m Column
+  getRow          :: Id Row -> m Row
 
   setCellContent :: Id Column -> Id Row -> CellContent -> m ()
 
@@ -137,8 +148,8 @@ newtype EngineT m a = EngineT
              , MonadState EngineState
              )
 
-runEngine :: MonadHexl m => DependencyGraph -> EngineT m () -> m EngineState
-runEngine graph action = execStateT (unEngineT action) (newEngineState graph)
+runEngineT :: DependencyGraph -> EngineT m a -> m (a, EngineState)
+runEngineT graph action = runStateT (unEngineT action) (newEngineState graph)
 
 --------------------------------------------------------------------------------
 
@@ -152,12 +163,17 @@ instance MonadError AppError m => MonadError AppError (EngineT m) where
 instance MonadHexl m => MonadEngine m (EngineT m) where
   graphGets f = f <$> use engineGraph
 
-  tableDelete tableId = do
+  deleteTable tableId = do
     let query = [ "tableId" =: toObjectId tableId ]
     lift $ deleteByQuery (Proxy :: Proxy Column) query
     lift $ deleteByQuery (Proxy :: Proxy Cell) query
     lift $ deleteByQuery (Proxy :: Proxy Row) query
     opDelete changesTables tableId
+
+  deleteColumn columnId = do
+    lift $ deleteByQuery (Proxy :: Proxy Cell)
+      [ "columnId" =: toObjectId columnId ]
+    opDelete changesColumns columnId
 
   scheduleCompileColumn columnId = do
     engineCompileTargets . at columnId .= Just ()
@@ -180,8 +196,6 @@ instance MonadHexl m => MonadEngine m (EngineT m) where
         col <- getColumn columnId
         rows <- lift $ listByQuery [ "tableId" =: toObjectId (_columnTableId col) ]
         pure $ map entityId rows
-
-
 
 --------------------------------------------------------------------------------
 

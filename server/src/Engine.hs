@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TupleSections    #-}
 -- |
 
 module Engine
@@ -22,9 +24,8 @@ import           Lib.Model.Row
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Engine.Compile
 import           Engine.Monad
-import           Engine.Propagate
+import           Engine.Util
 import           Monads
 
 --------------------------------------------------------------------------------
@@ -40,8 +41,8 @@ data Command
   | CmdDataColUpdate (Id Column) DataType IsDerived Text
   | CmdReportColCreate (Id Table)
   | CmdReportColUpdate (Id Column) Text ReportFormat (Maybe ReportLanguage)
-  | CmdColumnDelete (Id Column)
   | CmdColumnSetName (Id Column) Text
+  | CmdColumnDelete (Id Column)
   | CmdRowCreate (Id Table)
   | CmdRowDelete (Id Row)
   | CmdCellSet (Id Column) (Id Row) Value
@@ -51,17 +52,17 @@ data Command
 runCommand :: MonadHexl m => Command -> m ()
 runCommand cmd = do
   graph <- undefined -- get initial
-  endState <- runEngine graph (executeCommand cmd)
+  endState <- runEngineT graph (executeCommand cmd)
   undefined endState -- commit changes
 
 executeCommand :: MonadEngine h m => Command -> m ()
 executeCommand = \case
 
   CmdTableCreate projectId name ->
-    void $ tableCreate $ Table projectId name
+    void $ createTable $ Table projectId name
 
   CmdTableSetName tableId name -> do
-    tableModify tableId $ tableName .~ name
+    modifyTable tableId $ tableName .~ name
     -- Recompile every column that mentions this table in a formula
     dependantCols <- graphGets $ getTableDependants tableId
     let relevantCols = map fst $ flip filter dependantCols $ \(_, typ) ->
@@ -69,60 +70,119 @@ executeCommand = \case
             TblDepColumnRef -> True
             TblDepTableRef  -> True
             TblDepRow       -> False
-    mapM_ compileColumn relevantCols
-    -- Propagate
-    propagate [ RootWholeColumns relevantCols ]
+    mapM_ scheduleCompileColumn relevantCols
 
-  CmdTableDelete tableId -> tableDelete tableId
+  CmdTableDelete tableId -> do
+    deleteTable tableId
+    -- TODO: Purge dependencies
+    -- TODO: Recompile dependent columns as if containing columns have changed
 
   CmdDataColCreate tableId -> do
-    columnId <- columnCreate (emptyDataCol tableId)
+    columnId <- createColumn (emptyDataCol tableId)
     -- Create a new cell for every row in the table
     rows <- liftDB $ listByQuery [ "tableId" =: toObjectId tableId ]
     for_ rows $ \(Entity rowId _) -> do
       defContent <- liftDB $ defaultContent emptyDataColType
-      cellCreate $ newCell tableId columnId rowId defContent
+      createCell $ newCell tableId columnId rowId defContent
 
   CmdDataColUpdate columnId dataType isDerived code -> do
     oldCol <- getColumn columnId
     withDataCol oldCol $ \dataCol -> do
       -- Apply changes
-      columnModify columnId $ columnKind . _ColumnData
-        %~ (dataColType .~ dataType)
-         . (dataColIsDerived .~ isDerived)
+      modifyColumn columnId $ columnKind . _ColumnData
+        %~ (dataColType       .~ dataType)
+         . (dataColIsDerived  .~ isDerived)
          . (dataColSourceCode .~ code)
       -- If the dataType has changed, we need to re-compile all the columns
       -- that depend on this one.
       when (dataCol ^. dataColType /= dataType) $
-        registerCompileColumnDependants (columnId, oldCol ^. columnTableId)
+        scheduleCompileColumnDependants (columnId, oldCol ^. columnTableId)
       case isDerived of
-        Derived -> registerCompileTarget columnId
-        NotDerived -> if dataCol ^. dataColType == dataType
-          then do
-            cells <- getColumnCells columnId
-            for_ cells $ \(Cell _ c r content) -> case content of
-              CellError _ -> -- TODO:
+        Derived ->
+          scheduleCompileColumn columnId
+        NotDerived -> do
+          cells <- getColumnCells columnId
+          if dataCol ^. dataColType == dataType
+            then for_ cells $ \(Entity _ (Cell content t c r)) -> case content of
+              CellError _ -> do
+                def <- liftDB $ defaultContent dataType
+                setAndPropagateCellContent t c r def
               CellValue _ -> pure ()
-            -- only new defaults for error cells:
-            -- for every cell: if error, set defaultContent
-                        
-          else -- updateReference dependencies
-               -- new defaults for new datatype
+            else for_ cells $ \(Entity _ (Cell _ t c r)) -> do
+              def <- liftDB $ defaultContent dataType
+              setAndPropagateCellContent t c r def
+              -- TODO: update reference dependencies
 
   CmdReportColCreate tableId ->
-    void $ columnCreate (emptyReportCol tableId)
+    void $ createColumn (emptyReportCol tableId)
 
   CmdReportColUpdate columnId template format language -> do
-    undefined
+    oldCol <- getColumn columnId
+    withReportCol oldCol $ \_ -> do
+      modifyColumn columnId $ columnKind . _ColumnReport
+        %~ (reportColTemplate .~ template)
+         . (reportColFormat   .~ format)
+         . (reportColLanguage .~ language)
+    scheduleCompileColumn columnId
+
+  CmdColumnSetName columnId name -> do
+    modifyColumn columnId $ columnName .~ name
+    column <- getColumn columnId
+    scheduleCompileColumnDependants (columnId, column ^. columnTableId)
+
+  CmdColumnDelete columnId -> do
+    column <- getColumn columnId
+    deleteColumn columnId
+    scheduleCompileColumnDependants (columnId, column ^. columnTableId)
+    -- TODO: remove dependencies
+
+  CmdRowCreate tableId -> do
+    rowId <- createRow $ Row tableId
+    columns <- getTableColumns tableId
+    for_ columns $ \(Entity columnId column) ->
+      case column ^? columnKind . _ColumnData of
+        Nothing -> pure ()
+        Just dataCol -> do
+          def <- liftDB $ defaultContent (dataCol ^. dataColType)
+          void $ createCell $ newCell tableId columnId rowId def
+          case dataCol ^. dataColIsDerived of
+            NotDerived -> setAndPropagateCellContent tableId columnId rowId def
+            Derived    -> scheduleEvalCell columnId rowId
+
+  CmdRowDelete rowId -> do
+    row <- getRow rowId
+    let tableId = row ^. rowTableId
+    deleteRow rowId
+    columns <- getTableColumns tableId
+    -- TODO: Only those with `AddAll` mode
+    mapM_ (scheduleCompileColumnDependants . (,tableId) . entityId) columns
+    -- For every cell that is part of a column that references this table in its
+    -- type, we need to invalidate the reference in the value.
+    refingCols <- graphGets $ getTableDependantsOnly TblDepRow tableId
+    for_ refingCols $ \columnId -> do
+      cells <- getColumnCells columnId
+      for_ cells $ \(Entity _ cell) -> case cell ^. cellContent of
+        CellError _ -> pure ()
+        CellValue val -> case invalidateRowRef rowId val of
+          Nothing -> pure ()
+          Just newVal -> setAndPropagateCellContent
+                           tableId columnId (cell ^. cellRowId)
+                           (CellValue newVal)
+
+  CmdCellSet columnId rowId value -> do
+    column <- getColumn columnId
+    setAndPropagateCellContent
+      (column ^. columnTableId) columnId rowId
+      (CellValue value)
 
 --------------------------------------------------------------------------------
 
-registerCompileColumnDependants :: MonadEngine m => (Id Column, Id Table) -> m ()
-registerCompileColumnDependants (columnId, tableId) = do
+scheduleCompileColumnDependants :: MonadEngine db m => (Id Column, Id Table) -> m ()
+scheduleCompileColumnDependants (columnId, tableId) = do
   dependants <- graphGets $ getAllColumnDependants (columnId, tableId)
-  mapM_ registerCompileTarget dependants
+  mapM_ (scheduleCompileColumn . fst) dependants
 
-setAndPropagateCellContent :: Id Table -> Id Column -> Id Row -> CellContent -> m ()
+setAndPropagateCellContent :: MonadEngine db m => Id Table -> Id Column -> Id Row -> CellContent -> m ()
 setAndPropagateCellContent tableId columnId rowId content = do
   setCellContent columnId rowId content
   childs <- graphGets $ getAllColumnDependants (columnId, tableId)
@@ -145,8 +205,3 @@ defaultContent = \case
       Right (Entity i _) -> Just i
   DataList _   -> pure . CellValue $ VList []
   DataMaybe _  -> pure . CellValue $ VMaybe Nothing
-
-withDataCol :: Monad m => Column -> (DataCol -> m a) -> m a
-withDataCol col f = case col ^? columnKind . _ColumnData of
-  Nothing      -> throwError $ ErrBug "withDataCol failed"
-  Just dataCol -> f dataCol

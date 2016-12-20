@@ -1,10 +1,12 @@
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
 module Lib.Model.Row where
 
 import           Control.DeepSeq
+import           Control.Lens
 
 import           Data.Aeson      (FromJSON, ToJSON)
 
@@ -18,8 +20,10 @@ import           Lib.Model.Table
 import           Lib.Types
 
 data Row = Row
-  { rowTableId :: Id Table
+  { _rowTableId :: Id Table
   } deriving (Generic, NFData, Eq, Ord, Show)
+
+makeLenses ''Row
 
 instance Model Row where
   collectionName = const "rows"

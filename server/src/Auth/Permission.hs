@@ -11,7 +11,7 @@ import           Lib.Model            (Entity)
 import           Lib.Model.Auth       (User)
 import           Lib.Model.Column     (Column, columnTableId)
 import           Lib.Model.Project    (Project)
-import           Lib.Model.Row        (Row (..))
+import           Lib.Model.Row
 import           Lib.Model.Table      (Table, tableProjectId)
 import           Lib.Types            (Id, toObjectId)
 import           Monads               (AppError (ErrForbidden), MonadHexl,
@@ -40,4 +40,4 @@ permissionColumn userId columnId = do
 permissionRow :: MonadHexl m => Id User -> Id Row -> m ()
 permissionRow userId rowId = do
   row <- getById' rowId
-  permissionTable userId $ rowTableId row
+  permissionTable userId $ row ^. rowTableId

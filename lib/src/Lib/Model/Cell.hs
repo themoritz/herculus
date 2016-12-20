@@ -2,10 +2,12 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
 module Lib.Model.Cell where
 
 import           Control.DeepSeq
+import           Control.Lens
 import           Control.Monad.Writer
 
 import           Data.Aeson           (FromJSON, ToJSON)
@@ -103,11 +105,13 @@ invalidateRowRef r old =
 --
 
 data Cell = Cell
-  { cellContent  :: CellContent
-  , cellTableId  :: Id Table
-  , cellColumnId :: Id Column
-  , cellRowId    :: Id Row
+  { _cellContent  :: CellContent
+  , _cellTableId  :: Id Table
+  , _cellColumnId :: Id Column
+  , _cellRowId    :: Id Row
   } deriving (Generic, NFData, Show)
+
+makeLenses ''Cell
 
 newCell :: Id Table -> Id Column -> Id Row -> CellContent -> Cell
 newCell t c r content = Cell content t c r

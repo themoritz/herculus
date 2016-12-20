@@ -17,9 +17,10 @@ library
                      , Auth.Permission
                      , ConnectionManager
                      , Engine
-                     , Engine.Monad
                      , Engine.Compile
+                     , Engine.Monad
                      , Engine.Propagate
+                     , Engine.Util
                      , Handler.WebSocket
                      , Handler.Rest
                      , HexlNat

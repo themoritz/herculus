@@ -102,7 +102,7 @@ type DataColUpdate      = SessionProtect :> "dataCol"   :> "update"         :> C
 type ReportColCreate    = SessionProtect :> "reportCol" :> "create"         :> ReqBody '[JSON] (Id Table)                                                                   :> Post '[JSON] ()
 type ReportColUpdate    = SessionProtect :> "reportCol" :> "update"         :> Capture "columnId" (Id Column) :> ReqBody '[JSON] (Text, ReportFormat, Maybe ReportLanguage) :> Post '[JSON] ()
 
-type RowCreate          = SessionProtect :> "row"       :> "create"         :> ReqBody '[JSON] (Id Table)   :> Post '[JSON] (Entity Row, [Entity Cell])
+type RowCreate          = SessionProtect :> "row"       :> "create"         :> ReqBody '[JSON] (Id Table)   :> Post '[JSON] ()
 type RowDelete          = SessionProtect :> "row"       :> "delete"         :> Capture "rowId" (Id Row)     :> Get '[JSON] ()
 type RowData            = SessionProtect :> "row"       :> "data"           :> Capture "rowId" (Id Row)     :> Get '[JSON] [(Entity Column, CellContent)]
 type RowList            = SessionProtect :> "row"       :> "list"           :> Capture "tableId" (Id Table) :> Get '[JSON] [Entity Row]
