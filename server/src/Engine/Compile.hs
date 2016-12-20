@@ -44,7 +44,7 @@ compileColumn columnId = do
   col <- getColumn columnId
   let abort :: Text -> m (CompileResult a)
       abort msg = do
-        void $ graphSetDependencies columnId mempty
+        void $ graphSetCodeDependencies columnId mempty
         pure $ CompileResultError msg
   newCol <- case col ^. columnKind of
     ColumnData dataCol -> do
@@ -59,8 +59,8 @@ compileColumn columnId = do
                    "` does not match column type `" <>
                    show colType <> "`."
             else do
-              let deps = collectDependencies expr
-              cycles <- graphSetDependencies columnId deps
+              let deps = collectCodeDependencies expr
+              cycles <- graphSetCodeDependencies columnId deps
               if cycles then abort "Dependency graph has cycles"
                         else pure $ CompileResultOk expr
       pure $ col & columnKind . _ColumnData . dataColCompileResult .~ compileResult
@@ -70,8 +70,8 @@ compileColumn columnId = do
       compileResult <- case res of
         Left msg -> abort msg
         Right tTpl -> do
-          let deps = collectTplDependencies tTpl
-          cycles <- graphSetDependencies columnId deps
+          let deps = collectTplCodeDependencies tTpl
+          cycles <- graphSetCodeDependencies columnId deps
           when cycles $ throwError $ ErrBug "Setting report dependencies generated cycle"
           pure $ CompileResultOk tTpl
       pure $ col & columnKind . _ColumnReport . reportColCompiledTemplate .~ compileResult

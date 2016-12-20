@@ -11,18 +11,17 @@ module Lib.Model.Column where
 import           Control.DeepSeq
 
 import           Control.Lens
-import           Data.Aeson         (FromJSON (..), ToJSON (..))
+import           Data.Aeson                   (FromJSON (..), ToJSON (..))
 import           Data.Aeson.Bson
-import           Data.Bson          (Val, (=:))
-import qualified Data.Bson          as Bson
-import           Data.Set           (Set)
-import qualified Data.Set           as Set
-import           Data.Text          (Text, pack)
+import           Data.Bson                    (Val, (=:))
+import qualified Data.Bson                    as Bson
+import           Data.Text                    (Text, pack)
 
 import           GHC.Generics
 
 import           Lib.Compiler.Types
 import           Lib.Model.Class
+import           Lib.Model.Dependencies.Types
 import           Lib.Model.Table
 import           Lib.Template.Types
 import           Lib.Types
@@ -43,15 +42,15 @@ instance FromJSON DataType
 instance ToBSON DataType
 instance FromBSON DataType
 
-getReferences :: DataType -> Set (Id Table)
-getReferences = \case
-  DataBool      -> Set.empty
-  DataString    -> Set.empty
-  DataNumber    -> Set.empty
-  DataTime      -> Set.empty
-  DataRowRef t  -> Set.singleton t
-  DataList sub  -> getReferences sub
-  DataMaybe sub -> getReferences sub
+getTypeDependencies :: DataType -> TypeDependencies
+getTypeDependencies = \case
+  DataBool      -> mempty
+  DataString    -> mempty
+  DataNumber    -> mempty
+  DataTime      -> mempty
+  DataRowRef t  -> singleRowRef t
+  DataList sub  -> getTypeDependencies sub
+  DataMaybe sub -> getTypeDependencies sub
 
 data Column = Column
   { _columnTableId :: Id Table

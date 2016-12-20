@@ -13,7 +13,8 @@ module Lib.Model.Dependencies
   , getDirectColumnDependants
   , getTableDependants
   , getTableDependantsOnly
-  , setDependencies
+  , setCodeDependencies
+  , setTypeDependencies
   , getDependantsTopological
   , ColumnOrder
   ) where
@@ -42,8 +43,8 @@ import           Lib.Types
 --------------------------------------------------------------------------------
 
 data DependencyGraph = DependencyGraph
-  { _columnDependants :: Map (Id Column) (Id Table, Map (Id Column) ColumnDependency)
-  , _tableDependants  :: Map (Id Table) (Map (Id Column) TableDependency)
+  { _columnDependants :: Map (Id Column) (Id Table, Map (Id Column) ColumnDependant)
+  , _tableDependants  :: Map (Id Table) (Map (Id Column) TableDependant)
   } deriving (Show, Generic)
 
 makeLenses ''DependencyGraph
@@ -55,12 +56,12 @@ emptyDependencyGraph = DependencyGraph Map.empty Map.empty
 
 --------------------------------------------------------------------------------
 
-setColumnDependants :: (Id Column, Id Table) -> [(Id Column, ColumnDependency)]
+setColumnDependants :: (Id Column, Id Table) -> [(Id Column, ColumnDependant)]
                     -> DependencyGraph -> DependencyGraph
 setColumnDependants (c, t) edges =
   columnDependants . at c . non (t, Map.empty) . _2 .~ Map.fromList edges
 
-getDirectColumnDependants :: Id Column -> DependencyGraph -> [(Id Column, ColumnDependency)]
+getDirectColumnDependants :: Id Column -> DependencyGraph -> [(Id Column, ColumnDependant)]
 getDirectColumnDependants c graph = case graph ^. columnDependants . at c of
   Nothing        -> []
   Just (_, deps) -> Map.toList deps
@@ -81,35 +82,44 @@ getAllColumnDependants' c graph = Map.toList $ case graph ^. columnDependants . 
     let indirect = fromMaybe nil (graph ^. tableDependants . at t)
     in alignWith alignDeps direct indirect
 
-alignDeps :: These ColumnDependency TableDependency -> AddTargetMode
+alignDeps :: These ColumnDependant TableDependant -> AddTargetMode
 alignDeps (This ColDepRef) = AddOne
 alignDeps _                = AddAll
 
 --------------------------------------------------------------------------------
 
-getTableDependants :: Id Table -> DependencyGraph -> [(Id Column, TableDependency)]
+getTableDependants :: Id Table -> DependencyGraph -> [(Id Column, TableDependant)]
 getTableDependants t graph = case graph ^. tableDependants . at t of
   Nothing   -> []
   Just deps -> Map.toList deps
 
-getTableDependantsOnly :: TableDependency -> Id Table -> DependencyGraph -> [Id Column]
+getTableDependantsOnly :: TableDependant -> Id Table -> DependencyGraph -> [Id Column]
 getTableDependantsOnly typ t graph =
   map fst $ filter (\(_, typ') -> typ == typ') $ getTableDependants t graph
 
 --------------------------------------------------------------------------------
 
-setDependencies :: Monad m
-                => (Id Column -> m (Id Table))
-                -- ^ A monadic function that can get the tableId of a column
-                -> Id Column
-                -- ^ The column to set the dependencies for
-                -> ([(Id Column, ColumnDependency)], [(Id Table, TableDependency)])
-                -> DependencyGraph
-                -> m (Maybe DependencyGraph)
-setDependencies getTableId c (colDeps, tblDeps) graph = do
+setTypeDependencies :: Monad m
+                    => (Id Column -> m (Id Table))
+                    -> Id Column
+                    -> TypeDependencies
+                    -> DependencyGraph
+                    -> m (Maybe DependencyGraph)
+setTypeDependencies = undefined
+-- TODO:
+
+setCodeDependencies :: Monad m
+                    => (Id Column -> m (Id Table))
+                    -- ^ A monadic function that can get the tableId of a column
+                    -> Id Column
+                    -- ^ The column to set the dependencies for
+                    -> CodeDependencies
+                    -> DependencyGraph
+                    -> m (Maybe DependencyGraph)
+setCodeDependencies getTableId c codeDeps graph = do
   graph' <- flip execStateT graph $ do
-    let colDepsSet = Set.fromList $ map fst colDeps
-        tblDepsSet = Set.fromList $ map fst tblDeps
+    let colDepsSet = columnsOfCodeDeps codeDeps
+        tblDepsSet = tablesOfCodeDeps codeDeps
     -- Remove edges
     columnDependants . itraversed . withIndex
                      . filtered (flip Set.notMember colDepsSet . fst)
@@ -117,16 +127,17 @@ setDependencies getTableId c (colDeps, tblDeps) graph = do
     tableDependants  . itraversed . withIndex
                      . filtered (flip Set.notMember tblDepsSet . fst)
                      . _2 . at c .= Nothing
+    -- TODO:
     -- Add edges
-    for_ colDeps $ \(dep, typ) -> do
-      mNode <- use (columnDependants . at dep)
-      let addEdge tblId =
-            columnDependants . at dep . non (tblId, Map.empty) . _2 . at c .= Just typ
-      case mNode of
-        Just (tblId, _) -> addEdge tblId
-        Nothing         -> lift (getTableId dep) >>= addEdge
-    for_ tblDeps $ \(dep, typ) ->
-      tableDependants . at dep . non Map.empty . at c .= Just typ
+    -- for_ colDeps $ \(dep, typ) -> do
+    --   mNode <- use (columnDependants . at dep)
+    --   let addEdge tblId =
+    --         columnDependants . at dep . non (tblId, Map.empty) . _2 . at c .= Just typ
+    --   case mNode of
+    --     Just (tblId, _) -> addEdge tblId
+    --     Nothing         -> lift (getTableId dep) >>= addEdge
+    -- for_ tblDeps $ \(dep, typ) ->
+    --   tableDependants . at dep . non Map.empty . at c .= Just typ
   case getDependantsTopological [c] graph' of
     Nothing -> pure Nothing
     Just _  -> pure $ Just graph'

@@ -69,7 +69,7 @@ executeCommand = \case
           case typ of
             TblDepColumnRef -> True
             TblDepTableRef  -> True
-            TblDepRow       -> False
+            TblDepRowRef    -> False
     mapM_ scheduleCompileColumn relevantCols
 
   CmdTableDelete tableId -> do
@@ -85,6 +85,8 @@ executeCommand = \case
       defContent <- liftDB $ defaultContent emptyDataColType
       createCell $ newCell tableId columnId rowId defContent
 
+  -- TODO: structure in three parts for when type, derived and code changed
+  -- respectively
   CmdDataColUpdate columnId dataType isDerived code -> do
     oldCol <- getColumn columnId
     withDataCol oldCol $ \dataCol -> do
@@ -158,7 +160,7 @@ executeCommand = \case
     mapM_ (scheduleCompileColumnDependants . (,tableId) . entityId) columns
     -- For every cell that is part of a column that references this table in its
     -- type, we need to invalidate the reference in the value.
-    refingCols <- graphGets $ getTableDependantsOnly TblDepRow tableId
+    refingCols <- graphGets $ getTableDependantsOnly TblDepRowRef tableId
     for_ refingCols $ \columnId -> do
       cells <- getColumnCells columnId
       for_ cells $ \(Entity _ cell) -> case cell ^. cellContent of

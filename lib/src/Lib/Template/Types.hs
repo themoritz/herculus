@@ -15,9 +15,7 @@ import           Data.Text                    (Text)
 import           GHC.Generics
 
 import           Lib.Compiler.Types
-import {-# SOURCE #-}           Lib.Model.Column
 import           Lib.Model.Dependencies.Types
-import           Lib.Model.Table
 import           Lib.Types
 
 newtype PTemplate = PTemplate [PTplExpr]
@@ -55,16 +53,14 @@ data CTplExpr
 instance ToJSON CTplExpr
 instance FromJSON CTplExpr
 
-collectTplDependencies :: CTemplate -> ( [(Id Column, ColumnDependency)]
-                                       , [(Id Table, TableDependency)]
-                                       )
-collectTplDependencies = go
+collectTplCodeDependencies :: CTemplate -> CodeDependencies
+collectTplCodeDependencies = go
   where go (CTemplate tpls) = mconcat $ map goOne tpls
         goOne e' = case e' of
-          CTplText _           -> ([], [])
-          CTplFor _ e body     -> collectDependencies e <> go body
-          CTplIf e then' else' -> collectDependencies e <> go then' <> go else'
-          CTplShow e           -> collectDependencies e
+          CTplText _           -> mempty
+          CTplFor _ e body     -> collectCodeDependencies e <> go body
+          CTplIf e then' else' -> collectCodeDependencies e <> go then' <> go else'
+          CTplShow e           -> collectCodeDependencies e
 
 toCoreTpl :: MonadError TypeError m => TTemplate -> m CTemplate
 toCoreTpl (TTemplate tpls) = CTemplate <$> mapM toCore tpls

@@ -91,8 +91,8 @@ newEngineState graph =
 class (MonadError AppError m, MonadHexl h) => MonadEngine h m | m -> h where
   graphGets :: (DependencyGraph -> a) -> m a
   graphModify :: (DependencyGraph -> DependencyGraph) -> m ()
-  graphSetDependencies :: Id Column
-    -> ([(Id Column, ColumnDependency)], [(Id Table, TableDependency)]) -> m Bool
+  graphSetCodeDependencies :: Id Column -> CodeDependencies -> m Bool
+  graphSetTypeDependencies :: Id Column -> TypeDependencies -> m Bool
 
   -- | Fallback (to be eliminated)
   liftDB :: h a -> m a

@@ -195,18 +195,16 @@ toCoreExpr = \case
 
 --
 
-collectDependencies :: CExpr -> ( [(Id Column, ColumnDependency)]
-                                , [(Id Table, TableDependency)]
-                                )
-collectDependencies = go
+collectCodeDependencies :: CExpr -> CodeDependencies
+collectCodeDependencies = go
   where go e' = case e' of
           CLam _ body         -> go body
           CApp f e            -> go f <> go e
           CLet _ e body       -> go e <> go body
           CIf c t e           -> go c <> go t <> go e
-          CVar _              -> ([], [])
-          CLit _              -> ([], [])
+          CVar _              -> mempty
+          CLit _              -> mempty
           CPrjRecord e _      -> go e
-          CColumnRef c        -> ([(c, ColDepRef)], [])
-          CWholeColumnRef t c -> ([(c, ColDepWholeRef)], [(t, TblDepColumnRef)])
-          CTableRef t         -> ([], [(t, TblDepTableRef)])
+          CColumnRef c        -> singleColumnRef c
+          CWholeColumnRef t c -> singleWholeColumnRef t c
+          CTableRef t         -> singleTableRef t
