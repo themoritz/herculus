@@ -21,7 +21,6 @@ import           Lib.Model.Table
 import           Lib.Types
 
 import           Action                (Action (..))
-import           Helper                (keyENTER, keyESC)
 import           Store                 (LoggedOutState (..),
                                         ProjectViewState (..),
                                         SessionState (..), State, dispatch,
@@ -32,6 +31,7 @@ import           Store                 (LoggedOutState (..),
                                         stateTableId, stateTables, store)
 import           Views.Auth            (login_, signup_)
 import           Views.Combinators     (clspan_, inputNew_)
+import           Views.Common          (keyENTER, keyESC)
 import           Views.ProjectOverview (projectsOverview_)
 import           Views.Table           (TableGridProps (..), tableGrid_)
 

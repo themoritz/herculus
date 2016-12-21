@@ -8,17 +8,17 @@ import           GHC.Generics    (Generic)
 
 import           Data.Text       (Text)
 import qualified Data.Text       as Text
-import           Helper          (keyENTER)
 
 import           React.Flux      (ReactElementM, ReactView, button_, classNames,
-                                  cldiv_, defineStatefulView, defineView,
-                                  elemText, input_, label_, onChange, onClick,
-                                  onKeyDown, p_, span_, strong_, table_, target,
-                                  tbody_, td_, textarea_, tr_, view, ($=), (&=))
+                                  cldiv_, defineStatefulView, input_, label_,
+                                  onChange, onClick, onKeyDown, p_, strong_,
+                                  table_, target, tbody_, td_, textarea_, tr_,
+                                  view, ($=), (&=))
 
-import           Action          (Action (Login, Logout, Signup, ToLoginForm, ToSignupForm))
+import           Action          (Action (Login, Signup, ToLoginForm, ToSignupForm))
 import           Lib.Model.Auth  (LoginData (..), SignupData (..))
 import           Store           (dispatch)
+import           Views.Common    (keyENTER)
 
 
 -- validation helpers
