@@ -7,14 +7,18 @@ module Engine
   , runCommand
   ) where
 
-import           Control.Lens
+import           Control.Lens                 hiding (op)
 import           Control.Monad.Except
 
 import           Data.Foldable                (for_)
+import qualified Data.Map                     as Map
+import           Data.Maybe                   (mapMaybe)
 import           Data.Text                    (Text)
 
+import           Lib.Api.WebSocket
 import           Lib.Model
 import           Lib.Model.Cell
+import           Lib.Model.Class
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
 import           Lib.Model.Dependencies.Types
@@ -23,7 +27,9 @@ import           Lib.Model.Row
 import           Lib.Model.Table
 import           Lib.Types
 
+import           Engine.Compile
 import           Engine.Monad
+import           Engine.Propagate
 import           Engine.Util
 import           Monads
 
@@ -33,7 +39,6 @@ import           Monads
 -- within a project.
 data Command
   = CmdTableCreate (Id Project) Text
-  -- ^ TODO: In the future, this should include ids to be deterministic
   | CmdTableSetName (Id Table) Text
   | CmdTableDelete (Id Table)
   | CmdDataColCreate (Id Table)
@@ -46,13 +51,61 @@ data Command
   | CmdRowDelete (Id Row)
   | CmdCellSet (Id Column) (Id Row) Value
 
+projectOfCommand :: MonadHexl m => Command -> m (Id Project)
+projectOfCommand = \case
+    CmdTableCreate p _         -> pure p
+    CmdTableSetName t _        -> ofTable t
+    CmdTableDelete t           -> ofTable t
+    CmdDataColCreate t         -> ofTable t
+    CmdDataColUpdate c _ _ _   -> ofColumn c
+    CmdReportColCreate t       -> ofTable t
+    CmdReportColUpdate c _ _ _ -> ofColumn c
+    CmdColumnSetName c _       -> ofColumn c
+    CmdColumnDelete c          -> ofColumn c
+    CmdRowCreate t             -> ofTable t
+    CmdRowDelete r             -> ofRow r
+    CmdCellSet c _ _           -> ofColumn c
+  where
+    ofTable t = _tableProjectId <$> getById' t
+    ofColumn c = _columnTableId <$> getById' c >>= ofTable
+    ofRow r = _rowTableId <$> getById' r >>= ofTable
+
 --------------------------------------------------------------------------------
 
 runCommand :: MonadHexl m => Command -> m ()
 runCommand cmd = do
-  graph <- undefined -- get initial
-  endState <- runEngineT graph (executeCommand cmd)
-  undefined endState -- commit changes
+  projectId <- projectOfCommand cmd
+  graph <- _projectDependencyGraph <$> getById' projectId
+  -- Run command in engine, compile, and propagate
+  (_ , state) <- runEngineT graph $ do
+    executeCommand cmd
+    getCompileTargets >>= mapM_ compileColumn
+    propagate
+  -- Commit changes
+  let Changes{..} = state ^. engineChanges
+  commit _changesCells
+  commit _changesColumns
+  commit _changesRows
+  commit _changesTables
+  -- Send changes to clients
+  sendWS $ WsDownProjectDiff (Map.toList _changesCells)
+                             (Map.toList _changesColumns)
+                             (Map.toList _changesRows)
+                             (Map.toList _changesTables)
+
+commit :: (Model a, MonadHexl m) => ChangeMap a -> m ()
+commit m = do
+  let filterUpserts (i, op) = case op of
+        Create _ -> Nothing
+        Update a -> Just $ Entity i a
+        Delete   -> Nothing
+      filterDeletes (i, op) = case op of
+        Create _ -> Nothing
+        Update _ -> Nothing
+        Delete   -> Just i
+      changes = Map.toList m
+  upsertMany $ mapMaybe filterUpserts changes
+  mapM_ delete $ mapMaybe filterDeletes changes
 
 -- | Core of the engine logic
 executeCommand :: MonadEngine m => Command -> m ()

@@ -23,11 +23,15 @@ data WsUpMessage
 instance ToJSON WsUpMessage
 instance FromJSON WsUpMessage
 
+type Diff a = [(Id a, ChangeOp a)]
+
 data WsDownMessage
-  = WsDownCellsChanged [Cell]
-  | WsDownColumnsChanged [Entity Column]
-  | WsDownRowCreated (Id Table) (Id Row) [(Entity Column, CellContent)]
+  = WsDownRowCreated (Id Table) (Id Row) [(Entity Column, CellContent)]
   | WsDownRowDeleted (Id Table) (Id Row)
+  | WsDownProjectDiff (Diff Cell)
+                      (Diff Column)
+                      (Diff Row)
+                      (Diff Table)
   deriving (Generic)
 
 instance ToJSON WsDownMessage

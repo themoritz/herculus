@@ -160,3 +160,14 @@ instance Serialize Utf8Text where
 --
 
 type Name = Text
+
+--
+
+data ChangeOp a
+  = Create a
+  | Update a
+  | Delete
+  deriving (Generic)
+
+instance ToJSON a => ToJSON (ChangeOp a)
+instance FromJSON a => FromJSON (ChangeOp a)

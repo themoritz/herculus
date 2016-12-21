@@ -34,16 +34,13 @@ import           Monads
 
 --------------------------------------------------------------------------------
 
-data ChangeOp a
-  = Created a
-  | Update a
-  | Delete
+type ChangeMap a = Map (Id a) (ChangeOp a)
 
 data Changes = Changes
-  { _changesCells   :: Map (Id Cell) (ChangeOp Cell)
-  , _changesColumns :: Map (Id Column) (ChangeOp Column)
-  , _changesRows    :: Map (Id Row) (ChangeOp Row)
-  , _changesTables  :: Map (Id Table) (ChangeOp Table)
+  { _changesCells   :: ChangeMap Cell
+  , _changesColumns :: ChangeMap Column
+  , _changesRows    :: ChangeMap Row
+  , _changesTables  :: ChangeMap Table
   }
 
 makeLenses ''Changes
@@ -54,9 +51,9 @@ emptyChanges :: Changes
 emptyChanges = Changes Map.empty Map.empty Map.empty Map.empty
 
 data Cache = Cache
-  { _cacheCell        :: !(Map (Id Column, Id Row) (Entity Cell))
-  , _cacheColumnCells :: !(Map (Id Column) [CellContent])
-  , _cacheColumn      :: !(Map (Id Column) Column)
+  { _cacheCells       :: Map (Id Column, Id Row) (Entity Cell)
+  , _cacheColumnCells :: Map (Id Column) [CellContent]
+  , _cacheColumns     :: Map (Id Column) Column
   }
 
 makeLenses ''Cache
@@ -88,7 +85,7 @@ newEngineState graph =
 class MonadError AppError m => MonadEngine m where
   -- Operations on dependency graph
 
-  graphGets :: (DependencyGraph -> a) -> m a
+  graphGets   :: (DependencyGraph -> a) -> m a
   graphModify :: (DependencyGraph -> DependencyGraph) -> m ()
   graphSetCodeDependencies :: Id Column -> CodeDependencies -> m Bool
   graphSetTypeDependencies :: Id Column -> TypeDependencies -> m Bool
@@ -132,11 +129,12 @@ class MonadError AppError m => MonadEngine m where
 
   -- | Also schedules evaluation of the column.
   scheduleCompileColumn :: Id Column -> m ()
-  scheduleEvalColumn :: Id Column -> m ()
-  scheduleEvalCell :: Id Column -> Id Row -> m ()
+  scheduleEvalColumn    :: Id Column -> m ()
+  scheduleEvalCell      :: Id Column -> Id Row -> m ()
 
-  getEvalRoots :: m [Id Column]
-  getEvalTargets :: Id Column -> m [Id Row]
+  getCompileTargets :: m [Id Column]
+  getEvalRoots      :: m [Id Column]
+  getEvalTargets    :: Id Column -> m [Id Row]
 
 --------------------------------------------------------------------------------
 
