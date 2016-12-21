@@ -9,7 +9,7 @@ import           Data.Foldable       (for_)
 import qualified Data.IntMap.Strict  as IntMap
 import           Data.Map.Strict     (Map)
 import qualified Data.Map.Strict     as Map
-import           Data.Monoid         ((<>))
+import           Data.Monoid         ((<>), mempty)
 import           Data.Text           (Text)
 import qualified Data.Text           as Text
 import           GHC.Generics        (Generic)
@@ -78,14 +78,12 @@ appHeader_ !st = view appHeader st mempty
 appHeader :: ReactView State
 appHeader = defineView "header" $ \st ->
   cldiv_ "menubar" $ do
-    cldiv_ "logo" $ do
-      -- img_
-      --   [ "src" $= "img/herculus.svg"
-      --   , "height" $= "100px"
-      --   , "width" $= "100px"
-      --   , "alt" $= "logo"
-      --   ]
-      "Herculus"
+    cldiv_ "title" $ do
+      cldiv_ "logo" $ img_
+        [ "src" $= "img/herculus.svg"
+        , "alt" $= "logo"
+        ] mempty
+      cldiv_ "text" "Herculus"
     case st ^. stateSession of
       StateLoggedIn liSt -> do
         case liSt ^. stateProjectView of

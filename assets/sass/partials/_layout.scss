@@ -71,15 +71,32 @@
     }
   }
 
-  .logo {
+  .title {
     position: absolute;
     top: 0px;
     left: 0px;
-    width: 150px;
-    bottom: 30px;
-    padding: 10px;
-    font-size: 20px;
-    color: white;
+    height: 46px;
+    padding-left: 10px;
+    font-weight: bold;
+    display: table;
+    .logo {
+        display: table-cell;
+        width: 30px;
+        height: 46px;
+        vertical-align: middle;
+        img {
+          width: 30px;
+          height: 30px;
+          padding-top: 6px;
+        }
+    }
+    .text {
+      display: table-cell;
+      vertical-align: middle;
+      padding-left: 10px;
+      font-size: 26px;
+      color: $brand-light;
+    }
   }
 
   .tables {
