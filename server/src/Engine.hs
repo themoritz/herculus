@@ -55,6 +55,7 @@ runCommand cmd = do
   endState <- runEngineT graph (executeCommand cmd)
   undefined endState -- commit changes
 
+-- | Core of the engine logic
 executeCommand :: MonadEngine h m => Command -> m ()
 executeCommand = \case
 
@@ -64,18 +65,25 @@ executeCommand = \case
   CmdTableSetName tableId name -> do
     modifyTable tableId $ tableName .~ name
     -- Recompile every column that mentions this table in a formula
-    dependantCols <- graphGets $ getTableDependants tableId
-    let relevantCols = map fst $ flip filter dependantCols $ \(_, typ) ->
-          case typ of
-            TblDepColumnRef -> True
-            TblDepTableRef  -> True
-            TblDepRowRef    -> False
-    mapM_ scheduleCompileColumn relevantCols
+    dependantCols <- graphGets $ getTableDependantsOnly tableId $ \case
+      TblDepColumnRef -> True
+      TblDepTableRef  -> True
+      TblDepRowRef    -> False
+    mapM_ scheduleCompileColumn dependantCols
 
   CmdTableDelete tableId -> do
     deleteTable tableId
-    -- TODO: Purge dependencies
-    -- TODO: Recompile dependent columns as if containing columns have changed
+    columns <- getTableColumns tableId
+    mapM_ (executeCommand . CmdColumnDelete . entityId) columns
+    graphModify $ purgeTable tableId
+    dependantCols <- graphGets $ getTableDependantsOnly tableId $ \case
+      TblDepColumnRef -> False
+      TblDepTableRef  -> False
+      TblDepRowRef    -> True
+    for_ dependantCols $ \columnId -> do
+      -- TODO: invalidate rowrefs, but currently we have no concept of
+      -- an "invalid type", so what to do?
+      pure ()
 
   CmdDataColCreate tableId -> do
     columnId <- createColumn (emptyDataCol tableId)
@@ -85,8 +93,6 @@ executeCommand = \case
       defContent <- liftDB $ defaultContent emptyDataColType
       createCell $ newCell tableId columnId rowId defContent
 
-  -- TODO: structure in three parts for when type, derived and code changed
-  -- respectively
   CmdDataColUpdate columnId dataType isDerived code -> do
     oldCol <- getColumn columnId
     withDataCol oldCol $ \dataCol -> do
@@ -95,25 +101,35 @@ executeCommand = \case
         %~ (dataColType       .~ dataType)
          . (dataColIsDerived  .~ isDerived)
          . (dataColSourceCode .~ code)
-      -- If the dataType has changed, we need to re-compile all the columns
-      -- that depend on this one.
-      when (dataCol ^. dataColType /= dataType) $
+      -- When the code has changed:
+      when (dataCol ^. dataColSourceCode /= code) $
+        scheduleCompileColumn columnId
+      -- When the dataType has changed:
+      when (dataCol ^. dataColType /= dataType) $ do
+        scheduleCompileColumn columnId
         scheduleCompileColumnDependants (columnId, oldCol ^. columnTableId)
-      case isDerived of
-        Derived ->
-          scheduleCompileColumn columnId
-        NotDerived -> do
+        when (isDerived == NotDerived) $ do
           cells <- getColumnCells columnId
-          if dataCol ^. dataColType == dataType
-            then for_ cells $ \(Entity _ (Cell content t c r)) -> case content of
-              CellError _ -> do
-                def <- liftDB $ defaultContent dataType
-                setAndPropagateCellContent t c r def
-              CellValue _ -> pure ()
-            else for_ cells $ \(Entity _ (Cell _ t c r)) -> do
+          for_ cells $ \(Entity _ (Cell _ t c r)) -> do
+            def <- liftDB $ defaultContent dataType
+            setAndPropagateCellContent t c r def
+          let refDeps = getTypeDependencies dataType
+          cycles <- graphSetTypeDependencies columnId refDeps
+          -- TODO: Instead of throwing an error here, should mark the column as
+          -- having a broken type.
+          when cycles $ throwError $ ErrUser "Dependency graph contains cycles."
+      -- When isDerived has changed:
+      case (dataCol ^. dataColIsDerived, isDerived) of
+        (NotDerived, Derived) ->
+          scheduleCompileColumn columnId
+        (Derived, NotDerived) -> do
+          cells <- getColumnCells columnId
+          for_ cells $ \(Entity _ (Cell content t c r)) -> case content of
+            CellError _ -> do
               def <- liftDB $ defaultContent dataType
               setAndPropagateCellContent t c r def
-              -- TODO: update reference dependencies
+            CellValue _ -> pure ()
+        _ -> pure ()
 
   CmdReportColCreate tableId ->
     void $ createColumn (emptyReportCol tableId)
@@ -136,7 +152,7 @@ executeCommand = \case
     column <- getColumn columnId
     deleteColumn columnId
     scheduleCompileColumnDependants (columnId, column ^. columnTableId)
-    -- TODO: remove dependencies
+    graphModify $ purgeColumn columnId
 
   CmdRowCreate tableId -> do
     rowId <- createRow $ Row tableId
@@ -155,12 +171,21 @@ executeCommand = \case
     row <- getRow rowId
     let tableId = row ^. rowTableId
     deleteRow rowId
+    -- Recompile those dependants of any of the table's columns with an
+    -- `AddAll` mode
     columns <- getTableColumns tableId
-    -- TODO: Only those with `AddAll` mode
-    mapM_ (scheduleCompileColumnDependants . (,tableId) . entityId) columns
+    for_ columns $ \(Entity columnId column) -> do
+      dependants <- graphGets $
+        getAllColumnDependants (columnId, column ^. columnTableId)
+      for_ dependants $ \(depId, typ) -> case typ of
+        AddAll -> scheduleCompileColumn depId
+        AddOne -> pure ()
     -- For every cell that is part of a column that references this table in its
     -- type, we need to invalidate the reference in the value.
-    refingCols <- graphGets $ getTableDependantsOnly TblDepRowRef tableId
+    refingCols <- graphGets $ getTableDependantsOnly tableId $ \case
+      TblDepRowRef    -> True
+      TblDepTableRef  -> False
+      TblDepColumnRef -> False
     for_ refingCols $ \columnId -> do
       cells <- getColumnCells columnId
       for_ cells $ \(Entity _ cell) -> case cell ^. cellContent of
@@ -179,12 +204,15 @@ executeCommand = \case
 
 --------------------------------------------------------------------------------
 
-scheduleCompileColumnDependants :: MonadEngine db m => (Id Column, Id Table) -> m ()
+scheduleCompileColumnDependants :: MonadEngine db m
+                                => (Id Column, Id Table) -> m ()
 scheduleCompileColumnDependants (columnId, tableId) = do
   dependants <- graphGets $ getAllColumnDependants (columnId, tableId)
   mapM_ (scheduleCompileColumn . fst) dependants
 
-setAndPropagateCellContent :: MonadEngine db m => Id Table -> Id Column -> Id Row -> CellContent -> m ()
+setAndPropagateCellContent :: MonadEngine db m
+                           => Id Table -> Id Column -> Id Row
+                           -> CellContent -> m ()
 setAndPropagateCellContent tableId columnId rowId content = do
   setCellContent columnId rowId content
   childs <- graphGets $ getAllColumnDependants (columnId, tableId)
@@ -193,7 +221,6 @@ setAndPropagateCellContent tableId columnId rowId content = do
       AddOne -> scheduleEvalCell childId rowId
       AddAll -> scheduleEvalColumn childId
 
--- TODO: configurable by user
 defaultContent :: MonadHexl m => DataType -> m CellContent
 defaultContent = \case
   DataBool     -> pure . CellValue $ VBool False

@@ -1,7 +1,9 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric   #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Lib.Model.Dependencies.Types where
 
+import           Data.Foldable    (for_)
 import           Data.Monoid
 import           Data.Serialize
 import           Data.Set         (Set)
@@ -13,20 +15,20 @@ import {-# SOURCE #-}           Lib.Model.Column
 import {-# SOURCE #-}           Lib.Model.Table
 import           Lib.Types
 
-data ColumnDependant
+data ColumnDependency
   = ColDepRef
   | ColDepWholeRef
   deriving (Generic, Eq, Ord, Show)
 
-instance Serialize ColumnDependant
+instance Serialize ColumnDependency
 
-data TableDependant
+data TableDependency
   = TblDepColumnRef
   | TblDepTableRef
   | TblDepRowRef
   deriving (Generic, Eq, Ord, Show)
 
-instance Serialize TableDependant
+instance Serialize TableDependency
 
 data AddTargetMode
   = AddOne
@@ -45,10 +47,12 @@ instance Monoid CodeDependencies where
     CodeDependencies (c1 <> c2) (w1 <> w2) (t1 <> t2)
 
 columnsOfCodeDeps :: CodeDependencies -> Set (Id Column)
-columnsOfCodeDeps = undefined
+columnsOfCodeDeps CodeDependencies{..} =
+  codeDepColumnRefs `Set.union` Set.map snd codeDepWholeColumnRefs
 
 tablesOfCodeDeps :: CodeDependencies -> Set (Id Table)
-tablesOfCodeDeps = undefined
+tablesOfCodeDeps CodeDependencies{..} =
+  codeDepTableRefs `Set.union` Set.map fst codeDepWholeColumnRefs
 
 singleColumnRef :: Id Column -> CodeDependencies
 singleColumnRef columnId =
@@ -62,10 +66,22 @@ singleTableRef :: Id Table -> CodeDependencies
 singleTableRef tableId =
   CodeDependencies Set.empty Set.empty (Set.singleton tableId)
 
+forCodeDeps_ :: Monad m => CodeDependencies
+             -> (Either (Id Column, ColumnDependency) (Id Table, TableDependency) -> m ()) -> m ()
+forCodeDeps_ CodeDependencies{..} f = do
+  for_ (Set.toList codeDepColumnRefs) $ \c -> f $ Left (c, ColDepRef)
+  for_ (Set.toList codeDepWholeColumnRefs) $ \(t, c) -> do
+    f $ Left (c, ColDepWholeRef)
+    f $ Right (t, TblDepColumnRef)
+  for_ (Set.toList codeDepTableRefs) $ \t -> f $ Right (t, TblDepTableRef)
+
 -- | Kinds of type dependencies (from the view of a column)
 data TypeDependencies = TypeDependencies
   { typeDepsRowRef :: Set (Id Table)
   }
+
+tablesOfTypeDeps :: TypeDependencies -> Set (Id Table)
+tablesOfTypeDeps = typeDepsRowRef
 
 instance Monoid TypeDependencies where
   mempty = TypeDependencies Set.empty

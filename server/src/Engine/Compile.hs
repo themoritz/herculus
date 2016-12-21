@@ -46,9 +46,10 @@ compileColumn columnId = do
       abort msg = do
         void $ graphSetCodeDependencies columnId mempty
         pure $ CompileResultError msg
-  newCol <- case col ^. columnKind of
+  case col ^. columnKind of
     ColumnData dataCol -> do
-      res <- compile (dataCol ^. dataColSourceCode) (mkTypecheckEnv $ col ^. columnTableId)
+      res <- compile (dataCol ^. dataColSourceCode)
+                     (mkTypecheckEnv $ col ^. columnTableId)
       compileResult <- case res of
         Left msg -> abort msg
         Right (expr, inferredType) -> do
@@ -61,9 +62,10 @@ compileColumn columnId = do
             else do
               let deps = collectCodeDependencies expr
               cycles <- graphSetCodeDependencies columnId deps
-              if cycles then abort "Dependency graph has cycles"
+              if cycles then abort "Dependency graph has cycles."
                         else pure $ CompileResultOk expr
-      pure $ col & columnKind . _ColumnData . dataColCompileResult .~ compileResult
+      modifyColumn columnId $
+        columnKind . _ColumnData . dataColCompileResult .~ compileResult
     ColumnReport repCol -> do
       res <- compileTemplate (repCol ^. reportColTemplate)
                              (mkTypecheckEnv $ col ^. columnTableId)
@@ -72,11 +74,11 @@ compileColumn columnId = do
         Right tTpl -> do
           let deps = collectTplCodeDependencies tTpl
           cycles <- graphSetCodeDependencies columnId deps
-          when cycles $ throwError $ ErrBug "Setting report dependencies generated cycle"
+          when cycles $
+            throwError $ ErrBug "Setting report dependencies generated cycle"
           pure $ CompileResultOk tTpl
-      pure $ col & columnKind . _ColumnReport . reportColCompiledTemplate .~ compileResult
-  liftDB $ update columnId $ const newCol
-  pure ()
+      modifyColumn columnId $
+        columnKind . _ColumnReport . reportColCompiledTemplate .~ compileResult
 
 --------------------------------------------------------------------------------
 
@@ -103,7 +105,8 @@ mkTypecheckEnv ownTblId = TypecheckEnv
 
     }
   where
-    resolveColumnRef :: Id Table -> Ref Column -> m (Maybe (Id Table, Id Column, DataCol))
+    resolveColumnRef :: Id Table -> Ref Column
+                     -> m (Maybe (Id Table, Id Column, DataCol))
     resolveColumnRef tableId colName = do
       let colQuery =
             [ "name" =: colName
@@ -112,14 +115,16 @@ mkTypecheckEnv ownTblId = TypecheckEnv
       columnRes <- liftDB $ getOneByQuery colQuery
       pure $ case columnRes of
         Left _               -> Nothing
-        Right (Entity i col) -> fmap (tableId,i,) (col ^? columnKind . _ColumnData)
+        Right (Entity i col) -> fmap (tableId,i,)
+                                     (col ^? columnKind . _ColumnData)
 
 getTableRowType :: MonadEngine db m => Id Table -> m Type
 getTableRowType t = do
   cols <- liftDB $ listByQuery [ "tableId" =: toObjectId t ]
   let toRow [] = pure $ Type TyRecordNil
-      toRow ((name, col):rest) = Type <$> (TyRecordCons (Ref name)
-                                    <$> typeOfDataType getTableRowType (col ^. dataColType)
-                                    <*> toRow rest)
+      toRow ((name, col):rest) = Type
+        <$> (TyRecordCons (Ref name)
+        <$> typeOfDataType getTableRowType (col ^. dataColType)
+        <*> toRow rest)
   toRow $ flip mapMaybe cols $ \(Entity _ col) ->
     fmap (col ^. columnName,) (col ^? columnKind . _ColumnData)
