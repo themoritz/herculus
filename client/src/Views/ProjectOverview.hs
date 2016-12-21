@@ -1,19 +1,39 @@
--- |
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric  #-}
 
 module Views.ProjectOverview where
 
-import Control.Lens ((^.))
-import Data.Map (Map)
-import qualified Data.Map as Map
-import Data.Foldable (for_)
-import React.Flux.Internal (toJSString)
-import React.Flux (ReactElementM, ReactView, view, defineView, ul_, li_, viewWithSKey, classNames, span_, elemText, onClick, div_, cldiv_, h1_, p_)
+import           Control.DeepSeq     (NFData)
+import           Control.Lens        ((^.))
+import           Data.Foldable       (for_)
+import           Data.Map            (Map)
+import qualified Data.Map            as Map
+import           Data.Text           (Text)
+import qualified Data.Text           as Text
+import           GHC.Generics        (Generic)
+import           React.Flux          (ReactElementM, ReactView, button_,
+                                      classNames, cldiv_, defineStatefulView,
+                                      defineView, div_, elemText, faIcon_, h1_,
+                                      input_, li_, onChange, onClick, onKeyDown,
+                                      p_, span_, stopPropagation, target, ul_,
+                                      view, viewWithSKey, ($=), (&=))
+import           React.Flux.Internal (toJSString)
 
-import Lib.Model.Project (Project, projectName)
-import Lib.Types (Id)
-import Store (dispatch)
-import Action (Action (ProjectsCreate, ProjectsLoadProject))
-import Views.Combinators (inputNew_)
+import           Action              (Action (ProjectDelete, ProjectSetName, ProjectsCreate, ProjectsLoadProject))
+import           Helper              (keyENTER, keyESC)
+import           Lib.Model.Project   (Project, projectName)
+import           Lib.Types           (Id)
+import           Store               (dispatch)
+import           Views.Combinators   (inputNew_)
+
+data TileState = TileState
+  { tsEditable  :: Bool
+  , tsName      :: Text
+  , tsNameError :: Bool
+  } deriving (Generic, Show, NFData)
+
+initialTileState :: TileState
+initialTileState = TileState False "" False
 
 projectsOverview_ :: Map (Id Project) Project -> ReactElementM eh ()
 projectsOverview_ !ps = view projectsOverview ps mempty
@@ -34,32 +54,50 @@ projectTile_ :: Id Project -> Project -> ReactElementM eh ()
 projectTile_ !projectId !project = viewWithSKey projectTile (toJSString $ show projectId) (projectId, project) mempty
 
 projectTile :: ReactView (Id Project, Project)
-projectTile = defineView "project" $ \(projectId, project) ->
-  div_
-    [ classNames [ ("tile", True)]
-    , onClick $ \_ _ -> dispatch $ ProjectsLoadProject projectId
-    ] $ p_ $ elemText $ project ^. projectName
+projectTile = defineStatefulView "project" initialTileState $
+    \st@TileState{..} (projectId, project) ->
+      if tsEditable
+        then
+          div_
+            [ classNames [ ("tile", True) ]
+            ] $ input_
+              [ "value" &= tsName
+              , onChange $ \evt st ->
+                let value = target evt "value"
+                in  ([], Just st { tsName = value, tsNameError = Text.null value})
+              , onKeyDown inputKeyDownHandler
+              ]
+        else
+          div_
+            [ classNames [ ("tile", True) ]
+            , onClick $ \_ _ _ ->
+                (dispatch $ ProjectsLoadProject projectId, Nothing)
+            ] $ do
+              span_ $ elemText $ project ^. projectName
+              button_
+                [ "className" $= "pure"
+                , onClick $ \ev _ st ->
+                    ([stopPropagation ev],
+                     Just st { tsEditable = True
+                             , tsName = project ^. projectName
+                             }
+                    )
+                ] $ faIcon_ "pencil"
+              button_
+                [ "className" $= "pure"
+                , onClick $ \ev _ _ ->
+                    (stopPropagation ev : dispatch (ProjectDelete projectId), Nothing)
+                ] $ faIcon_ "times"
+  where
+    -- saveHandler :: TileState -> ([SomeStoreAction], Maybe TileState)
+    saveHandler st@TileState{..} =
+      (dispatch $ ProjectSetName tsName, Just st { tsEditable = False })
 
--- TODO: projectDetail will be become the projectView of ProjectDetailView
+    inputKeyDownHandler _ evt st@TileState{..}
+      | keyENTER evt && not (Text.null tsName) = saveHandler st
+      | keyESC evt = ([] , Just st { tsEditable = False })
+      | otherwise = ([], Just st)
 
--- projectInfo_ :: Id Project -> Project -> ReactElementM eh ()
--- projectInfo_ !projectId !project' =
---   viewWithSKey project (toJSString $ show projectId) (projectId, project') mempty
---
--- projectInfo :: ReactView (Id Project, Project)
--- projectInfo = defineStatefulView "project" initialProjectInfoViewState $ \state (projectId, project') ->
---   let saveHandler st = (dispatch $ ProjectSetName (pName st), Just st { pEditable = False })
---       inputKeyDownHandler _ evt st
---         | keyENTER evt && not (Text.null $ pName st) = saveHandler st
---         | keyESC evt = ([] , Just st { pEditable = False })
---         | otherwise = ([], Just st)
---   in li_
---      [ classNames
---        [ ("link", True)
---        ]
---      , onClick $ \_ _ _ -> (dispatch $ ProjectsLoadProject projectId, Nothing)
---      ] $
---      if pEditable state
 --      then div_ $ input_
 --             [ classNames
 --               [ ("inp", True)
@@ -77,19 +115,4 @@ projectTile = defineView "project" $ \(projectId, project) ->
 --          [ "className" $= "pure link-on-dark"
 --          , onClick $ \ev _ st -> ([stopPropagation ev], Just st { pEditable = True, pName = project' ^. projectName})
 --          ] $ faIcon_ "pencil"
---
---        button_
---          [ "className" $= "pure link-on-dark"
---          , onClick $ \ev _ _ -> (stopPropagation ev : dispatch (ProjectDelete projectId), Nothing)
---          ] $ faIcon_ "times"
-
--- data ProjectInfoViewState = ProjectInfoViewState
---   { pEditable  :: Bool
---   , pName      :: Text
---   , pNameError :: Bool
---   } deriving (Generic, Show, NFData)
---
--- initialProjectInfoViewState :: ProjectInfoViewState
--- initialProjectInfoViewState = ProjectInfoViewState False "" False
-
 --

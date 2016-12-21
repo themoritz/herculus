@@ -21,15 +21,16 @@
 
 div.tile {
   float: left;
-  width: 220px;
-  height: 110px;
+  width: 200px;
+  height: 90px;
   background-color: $medium-gray;
   color: $anthrazit;
   margin: 12px;
   text-align: left;
-  p {
-    margin-top: 6px;
-    margin-left: 8px;
+  cursor: pointer;
+  padding: 10px;
+  span {
+    padding: 3px;
     text-transform: capitalize;
   }
 }

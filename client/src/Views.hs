@@ -3,41 +3,41 @@
 
 module Views where
 
-import           Control.DeepSeq     (NFData)
-import           Control.Lens        hiding (view)
-import           Data.Foldable       (for_)
-import qualified Data.IntMap.Strict  as IntMap
-import           Data.Map.Strict     (Map)
-import qualified Data.Map.Strict     as Map
-import           Data.Monoid         ((<>), mempty)
-import           Data.Text           (Text)
-import qualified Data.Text           as Text
-import           GHC.Generics        (Generic)
+import           Control.DeepSeq       (NFData)
+import           Control.Lens          hiding (view)
+import           Data.Foldable         (for_)
+import qualified Data.IntMap.Strict    as IntMap
+import           Data.Map.Strict       (Map)
+import qualified Data.Map.Strict       as Map
+import           Data.Monoid           (mempty, (<>))
+import           Data.Text             (Text)
+import qualified Data.Text             as Text
+import           GHC.Generics          (Generic)
 import           React.Flux
-import           React.Flux.Internal (toJSString)
+import           React.Flux.Internal   (toJSString)
 
-import           Lib.Model.Auth      (uiUserName)
+import           Lib.Model.Auth        (uiUserName)
 import           Lib.Model.Project
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Action              (Action (..))
-import           Helper              (keyENTER, keyESC)
-import           Store               (LoggedOutState (..),
-                                      ProjectViewState (..), SessionState (..),
-                                      State, dispatch, stateCells, stateColumns,
-                                      stateMessage, stateProjectId,
-                                      stateProjectView, stateRecords,
-                                      stateSession, stateSessionKey,
-                                      stateTableId, stateTables, stateUserInfo,
-                                      store)
-import           Views.Auth          (login_, logout_, signup_)
-import           Views.Combinators   (clspan_, inputNew_)
-import           Views.Table         (TableGridProps (..), tableGrid_)
+import           Action                (Action (..))
+import           Helper                (keyENTER, keyESC)
+import           Store                 (LoggedOutState (..),
+                                        ProjectViewState (..),
+                                        SessionState (..), State, dispatch,
+                                        stateCells, stateColumns, stateMessage,
+                                        stateProjectId, stateProjectView,
+                                        stateRecords, stateSession,
+                                        stateSessionKey, stateTableId,
+                                        stateTables, stateUserInfo, store)
+import           Views.Auth            (login_, signup_)
+import           Views.Combinators     (clspan_, inputNew_)
 import           Views.ProjectOverview (projectsOverview_)
+import           Views.Table           (TableGridProps (..), tableGrid_)
 
-import           Store.Message       (Message (Message))
-import qualified Store.Message       as Message
+import           Store.Message         (Message (Message))
+import qualified Store.Message         as Message
 
 app :: ReactView ()
 app = defineControllerView "app" store $ \st () ->
@@ -90,17 +90,19 @@ appHeader = defineView "header" $ \st ->
           StateProjectOverview _  -> pure ()
           StateProjectDetail pdSt -> do
             tables_ (pdSt ^. stateTables) (pdSt ^. stateTableId) (pdSt ^. stateProjectId)
-            button_
-              [ classNames
-                [ ("pure", True)
-                , ("backToOverview", True)
-                , ("on-dark", True)
-                ]
-              , onClick $ \_ _ -> dispatch $ SetProjectOverview (liSt ^. stateSessionKey)
-              ] $ do
-                faIcon_ "square-o"
-                " Projects"
-        logout_ $ liSt ^. stateUserInfo . uiUserName
+            cldiv_ "navigation" $ do
+              button_
+                [ classNames [ ("logout", True)]
+                  , onClick $ \_ _ -> dispatch Logout
+                ] $ do
+                  faIcon_ "power-off"
+                  " Log Out"
+              button_
+                [ classNames [ ("backToOverview", True)]
+                , onClick $ \_ _ -> dispatch $ SetProjectOverview (liSt ^. stateSessionKey)
+                ] $ do
+                  faIcon_ "th-large"
+                  " Projects"
       StateLoggedOut _  -> pure ()
 
 message_ :: Message -> ReactElementM eh ()
@@ -177,11 +179,7 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
          ] $
      if tEditable state
      then div_ $ input_
-            [ classNames
-              [ ("inp", True)
-              , ("inp-error", tNameError state)
-              ]
-            , "value" &= tName state
+            [ "value" &= tName state
             , onChange $ \ev st ->
               let value = target ev "value"
               in  ([], Just st { tName = value, tNameError = Text.null value})

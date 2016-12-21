@@ -1,10 +1,13 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveAnyClass  #-}
+{-# LANGUAGE DeriveGeneric   #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Views.Common
   ( EditBoxProps(..)
   , editBox_
+  , keyESC
+  , keyENTER
+  , (?:)
   ) where
 
 import           Control.Applicative ((<|>))
@@ -83,6 +86,15 @@ editBox = defineStatefulView "editBox" emptyEditBox $
           [ classNames [("placeholder", text == "")]
           , onClick $ \_ _ st -> ([], Just $ st & ebsIsEditing .~ True)
           ] $ if text == "" then elemText editBoxPlaceholder else elemText text
+
+keyESC :: KeyboardEvent -> Bool
+keyESC = compareKeyCode 27
+
+keyENTER :: KeyboardEvent -> Bool
+keyENTER = compareKeyCode 13
+
+compareKeyCode :: Int -> KeyboardEvent -> Bool
+compareKeyCode keyCode' = (==) keyCode' . keyCode
 
 (?:) :: Maybe a -> a -> a
 (?:) = flip fromMaybe

@@ -13,11 +13,10 @@ import           Helper          (keyENTER)
 import           React.Flux      (ReactElementM, ReactView, button_, classNames,
                                   cldiv_, defineStatefulView, defineView,
                                   elemText, input_, label_, onChange, onClick,
-                                  onKeyDown, span_, table_, target, tbody_, td_,
-                                  textarea_, tr_, view, ($=), (&=), p_, strong_)
+                                  onKeyDown, p_, span_, strong_, table_, target,
+                                  tbody_, td_, textarea_, tr_, view, ($=), (&=))
 
-import           Action          (Action (Login, Logout, Signup, ToSignupForm,
-                                          ToLoginForm))
+import           Action          (Action (Login, Logout, Signup, ToLoginForm, ToSignupForm))
 import           Lib.Model.Auth  (LoginData (..), SignupData (..))
 import           Store           (dispatch)
 
@@ -124,23 +123,6 @@ login = defineStatefulView "login" initialLoginViewState $ \viewState _ ->
              , onClick $ \_ _ _ -> (dispatch ToSignupForm, Nothing)
              ] "Sign up"
            "."
-
-logout_ :: Text -> ReactElementM eh ()
-logout_ !userName = view logout userName mempty
-
-logout :: ReactView Text
-logout = defineView "login" $ \userName -> cldiv_ "logout" $ do
-  "Logged in as "
-  span_ [ "className" $= "user"
-    ] $ elemText userName
-  " "
-  button_
-    [ classNames
-      [ ("pure"   , True)
-      , ("on-dark", True)
-      ]
-    , onClick $ \_ _ -> dispatch Logout
-    ] "(logout)"
 
 signup_ :: ReactElementM eh ()
 signup_ = view signup () mempty

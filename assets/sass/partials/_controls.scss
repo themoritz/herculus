@@ -71,6 +71,28 @@ button.on-dark {
   }
 }
 
+.navigation {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+
+  button {
+    background-color: $light-anthrazit;
+    color: $medium-gray;
+    border: none;
+    box-shadow: none;
+    padding: 5px;
+    margin-left: 3px;
+    text-align: right;
+    font-weight: bold;
+    font-size: 16px;
+    float: right;
+    &:hover {
+      color: $brand-light;
+    }
+  }
+}
+
 a.on-dark {
   color: $medium-gray;
   cursor: pointer;

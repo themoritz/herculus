@@ -80,22 +80,22 @@
     font-weight: bold;
     display: table;
     .logo {
-        display: table-cell;
+      display: table-cell;
+      width: 30px;
+      height: 46px;
+      vertical-align: middle;
+      img {
         width: 30px;
-        height: 46px;
-        vertical-align: middle;
-        img {
-          width: 30px;
-          height: 30px;
-          padding-top: 6px;
-        }
+        height: 30px;
+        padding-top: 6px;
+      }
     }
     .text {
       display: table-cell;
       vertical-align: middle;
       padding-left: 10px;
       font-size: 26px;
-      color: $brand-light;
+      color: $brand-dark;
     }
   }
 
@@ -138,26 +138,6 @@
       }
     }
   }
-  .logout {
-    position: absolute;
-    top: 0px;
-    right: 0px;
-    text-align: right;
-    color: $light-gray;
-    .user {
-      font-weight: bold;
-    }
-  }
-
-  .backToOverview{
-    position: absolute;
-    bottom: 5px;
-    right: 0px;
-    padding: 10px;
-    text-align: right;
-    font-weight: bold;
-    font-size: 16px;
-  }
 }
 
 .message {
@@ -191,8 +171,6 @@
         }
       }
     }
-  }
-  .content {
   }
 }
 .message.info {
