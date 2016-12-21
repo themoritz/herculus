@@ -1,14 +1,14 @@
 module Views.Combinators where
 
-import Data.Monoid ((<>))
-import Data.Text (Text)
-import qualified Data.Text as Text
+import           Data.Monoid  ((<>))
+import           Data.Text    (Text)
+import qualified Data.Text    as Text
 
-import GHCJS.Types (JSString)
+import           GHCJS.Types  (JSString)
 
-import React.Flux
+import           React.Flux
 
-import Helper (keyENTER)
+import           Views.Common (keyENTER)
 
 faButton_ :: JSString -> handler -> ReactElementM handler ()
 faButton_ !icon !h = button_

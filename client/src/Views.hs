@@ -16,7 +16,6 @@ import           GHC.Generics          (Generic)
 import           React.Flux
 import           React.Flux.Internal   (toJSString)
 
-import           Lib.Model.Auth        (uiUserName)
 import           Lib.Model.Project
 import           Lib.Model.Table
 import           Lib.Types
@@ -27,10 +26,10 @@ import           Store                 (LoggedOutState (..),
                                         ProjectViewState (..),
                                         SessionState (..), State, dispatch,
                                         stateCells, stateColumns, stateMessage,
-                                        stateProjectId, stateProjectView,
-                                        stateRecords, stateSession,
-                                        stateSessionKey, stateTableId,
-                                        stateTables, stateUserInfo, store)
+                                        stateProject, stateProjectId,
+                                        stateProjectView, stateRecords,
+                                        stateSession, stateSessionKey,
+                                        stateTableId, stateTables, store)
 import           Views.Auth            (login_, signup_)
 import           Views.Combinators     (clspan_, inputNew_)
 import           Views.ProjectOverview (projectsOverview_)
@@ -41,34 +40,34 @@ import qualified Store.Message         as Message
 
 app :: ReactView ()
 app = defineControllerView "app" store $ \st () ->
-  cldiv_ "container" $ do
-    appHeader_ st
-    for_ (st ^. stateMessage) message_
-    case st ^. stateSession of
-      StateLoggedOut LoggedOutLoginForm -> login_
-      StateLoggedOut LoggedOutSignupForm -> signup_
-      StateLoggedIn liSt ->
-        case liSt ^. stateProjectView of
-          StateProjectOverview ps  ->
-            cldiv_ "overview" $ projectsOverview_ ps
-          StateProjectDetail pdSt ->
-            case (pdSt ^. stateProjectId, null $ pdSt ^. stateTables) of
-              (projectId, False) ->
-                let cols = pdSt ^. stateColumns
-                    recs = pdSt ^. stateRecords
-                    -- TODO: put tables deeper into view state hierarchy under projectId
-                    tableGridProps = TableGridProps
-                      { _cells      = pdSt ^. stateCells
-                      , _colByIndex = IntMap.fromList $ zip [0..] (Map.toList cols)
-                      , _recByIndex = IntMap.fromList $ zip [0..] (Map.toList recs)
-                      , _tableId    = pdSt ^. stateTableId
-                      , _projectId  = projectId
-                      , _sKey       = liSt ^. stateSessionKey
-                      }
-                in  cldiv_ "tableGrid" $ tableGrid_ tableGridProps
-              _ -> cldiv_ "" mempty
-
-    appFooter_ st
+    cldiv_ "container" $ do
+      appHeader_ st
+      for_ (st ^. stateMessage) message_
+      case st ^. stateSession of
+        StateLoggedOut LoggedOutLoginForm -> login_
+        StateLoggedOut LoggedOutSignupForm -> signup_
+        StateLoggedIn liSt ->
+          case liSt ^. stateProjectView of
+            StateProjectOverview ps -> cldiv_ "overview" $ projectsOverview_ ps
+            StateProjectDetail pdSt ->
+              if null $ pdSt ^. stateTables
+                then cldiv_ "" mempty
+                else projectDetailView_ pdSt $ liSt ^. stateSessionKey
+      appFooter_ st
+  where
+    projectDetailView_ pdSt sKey =
+      let cols = pdSt ^. stateColumns
+          recs = pdSt ^. stateRecords
+          -- TODO: put tables deeper into view state hierarchy under projectId
+          tableGridProps = TableGridProps
+            { _cells      = pdSt ^. stateCells
+            , _colByIndex = IntMap.fromList $ zip [0..] (Map.toList cols)
+            , _recByIndex = IntMap.fromList $ zip [0..] (Map.toList recs)
+            , _tableId    = pdSt ^. stateTableId
+            , _projectId  = pdSt ^. stateProjectId
+            , _sKey       = sKey
+            }
+      in  cldiv_ "tableGrid" $ tableGrid_ tableGridProps
 
 -- header
 
@@ -85,11 +84,12 @@ appHeader = defineView "header" $ \st ->
         ] mempty
       cldiv_ "text" "Herculus"
     case st ^. stateSession of
-      StateLoggedIn liSt -> do
+      StateLoggedIn liSt ->
         case liSt ^. stateProjectView of
           StateProjectOverview _  -> pure ()
           StateProjectDetail pdSt -> do
             tables_ (pdSt ^. stateTables) (pdSt ^. stateTableId) (pdSt ^. stateProjectId)
+            projectNameComp_ (pdSt ^. stateProjectId) $ pdSt ^. stateProject
             cldiv_ "navigation" $ do
               button_
                 [ classNames [ ("logout", True)]
@@ -104,6 +104,66 @@ appHeader = defineView "header" $ \st ->
                   faIcon_ "th-large"
                   " Projects"
       StateLoggedOut _  -> pure ()
+
+data ProjectNameState = ProjectNameState
+  { pnsEditable  :: Bool
+  , pnsName      :: Text
+  , pnsNameError :: Bool
+  } deriving (Generic, Show, NFData)
+
+initalProjectName :: ProjectNameState
+initalProjectName = ProjectNameState False "" False
+
+projectNameComp_ :: Id Project -> Project -> ReactElementM eh ()
+projectNameComp_ !projectId !project =
+  view projectNameComp (projectId, project) mempty
+
+projectNameComp :: ReactView (Id Project, Project)
+projectNameComp = defineStatefulView "project name" initalProjectName $
+    \ProjectNameState{..} (projectId, project) ->
+      cldiv_ "projectName" $ if pnsEditable
+        then
+          div_ $ input_
+              [ "value" &= pnsName
+              , "autoFocus" &= True
+              , onChange $ \evt st ->
+                let value = target evt "value"
+                in  ([], Just st { pnsName = value,
+                                   pnsNameError = Text.null value})
+              , onKeyDown inputKeyDownHandler
+              ]
+        else do
+          span_ $ elemText $ project ^. projectName
+          " "
+          button_
+            [ classNames [ ("pure"   , True)
+                         , ("on-dark", True)
+                         ]
+            , onClick $ \ev _ st ->
+              ([stopPropagation ev],
+               Just st { pnsEditable = True
+                       , pnsName = project ^. projectName
+                       }
+              )
+            ] $ faIcon_ "pencil"
+          button_
+            [ classNames [ ("pure"   , True)
+                         , ("on-dark", True)
+                         ]
+            , onClick $ \ev _ _ ->
+              (stopPropagation ev :
+                 dispatch (ProjectDelete $ projectId), Nothing)
+            ] $ faIcon_ "times"
+  where
+    -- saveHandler :: TileState -> ([SomeStoreAction], Maybe TileState)
+    saveHandler st@ProjectNameState{..} =
+      (dispatch $ ProjectSetName pnsName, Just st { pnsEditable = False })
+
+    inputKeyDownHandler _ evt st@ProjectNameState{..}
+      | keyENTER evt && not (Text.null pnsName) = saveHandler st
+      | keyESC evt = ([] , Just st { pnsEditable = False })
+      | otherwise = ([], Just st)
+
 
 message_ :: Message -> ReactElementM eh ()
 message_ !msg = view message msg mempty
