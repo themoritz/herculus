@@ -15,6 +15,7 @@ import qualified Data.Text                      as T
 
 import           Lib.Compiler.Interpreter
 import           Lib.Compiler.Interpreter.Types
+import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
@@ -26,7 +27,7 @@ import           Engine.Monad
 import           Engine.Util
 import           Monads
 
-propagate :: MonadEngine db m => m ()
+propagate :: MonadEngine m => m ()
 propagate = do
   startCols <- getEvalRoots
   graphGets (getDependantsTopological startCols) >>= \case
@@ -35,7 +36,7 @@ propagate = do
       , "Please report this as a bug!" ]
     Just order -> propagate' order
 
-propagate' :: forall db m. MonadEngine db m => ColumnOrder -> m ()
+propagate' :: forall m. MonadEngine m => ColumnOrder -> m ()
 propagate' [] = pure ()
 propagate' ((nextId, children):rest) = do
   let hop rowId = for_ children $ \(childId, mode) -> case mode of
@@ -51,11 +52,11 @@ propagate' ((nextId, children):rest) = do
             result <- case compileResult of
               CompileResultOk expr -> do
                 let env = EvalEnv
-                            { envGetCellValue    = flip getCellValue r
-                            , envGetColumnValues = getColumnValues
-                            , envGetTableRows    = getTableRows
-                            , envGetRowField     = getRowField
-                            }
+                      { envGetCellValue    = flip getCellValue r
+                      , envGetColumnValues = getColumnValues
+                      , envGetTableRows    = fmap (map entityId) . getTableRows
+                      , envGetRowField     = getRowField
+                      }
                 interpret expr env >>= \case
                   Left e -> pure $ CellError e
                   Right v -> pure $ CellValue v
@@ -84,7 +85,7 @@ data CellUpdateAction
   | DoNothing
   -- ^ For report columns
 
-whatToDoWithCells :: MonadEngine db m => Id Column -> m CellUpdateAction
+whatToDoWithCells :: MonadEngine m => Id Column -> m CellUpdateAction
 whatToDoWithCells c = do
   col <- getColumn c
   case col ^. columnKind of

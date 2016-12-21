@@ -1,6 +1,4 @@
 {-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE FunctionalDependencies     #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE RankNTypes                 #-}
@@ -56,16 +54,15 @@ emptyChanges :: Changes
 emptyChanges = Changes Map.empty Map.empty Map.empty Map.empty
 
 data Cache = Cache
-  { _cacheCell          :: !(Map (Id Column, Id Row) Cell)
-  , _cacheCellsModified :: !(Map (Id Column, Id Row) (Entity Cell))
-  , _cacheColumnCells   :: !(Map (Id Column) [CellContent])
-  , _cacheColumn        :: !(Map (Id Column) Column)
+  { _cacheCell        :: !(Map (Id Column, Id Row) (Entity Cell))
+  , _cacheColumnCells :: !(Map (Id Column) [CellContent])
+  , _cacheColumn      :: !(Map (Id Column) Column)
   }
 
 makeLenses ''Cache
 
 emptyCache :: Cache
-emptyCache = Cache Map.empty Map.empty Map.empty Map.empty
+emptyCache = Cache Map.empty Map.empty Map.empty
 
 data EvalTargets
   = CompleteColumn
@@ -88,14 +85,19 @@ newEngineState graph =
 
 --------------------------------------------------------------------------------
 
-class (MonadError AppError m, MonadHexl h) => MonadEngine h m | m -> h where
+class MonadError AppError m => MonadEngine m where
+  -- Operations on dependency graph
+
   graphGets :: (DependencyGraph -> a) -> m a
   graphModify :: (DependencyGraph -> DependencyGraph) -> m ()
   graphSetCodeDependencies :: Id Column -> CodeDependencies -> m Bool
   graphSetTypeDependencies :: Id Column -> TypeDependencies -> m Bool
 
-  -- | Fallback (to be eliminated)
-  liftDB :: h a -> m a
+  -- Misc database queries
+
+  getTableByName :: Ref Table -> m (Maybe (Entity Table))
+  getColumnOfTableByName :: Id Table -> Ref Column -> m (Maybe (Entity Column))
+  makeDefaultValue :: DataType -> m Value
 
   -- Perform changes to DB objects. Guiding principles:
   -- * Functions cascade
@@ -114,18 +116,17 @@ class (MonadError AppError m, MonadHexl h) => MonadEngine h m | m -> h where
   deleteRow :: Id Row -> m ()
 
   createCell :: Cell -> m (Id Cell)
+  setCellContent :: Id Column -> Id Row -> CellContent -> m ()
 
   -- Get cached values
 
-  getCellValue    :: Id Column -> Id Row -> m (Maybe Value)
-  getColumnCells  :: Id Column -> m [Entity Cell]
-  getTableRows    :: Id Table -> m [Id Row]
-  getTableColumns :: Id Table -> m [Entity Column]
-  getRowField     :: Id Row -> Ref Column -> m (Maybe Value)
+  getCell         :: Id Column -> Id Row -> m (Entity Cell)
   getColumn       :: Id Column -> m Column
+  getColumnCells  :: Id Column -> m [Entity Cell]
+  getTableRows    :: Id Table -> m [Entity Row]
+  getTableColumns :: Id Table -> m [Entity Column]
   getRow          :: Id Row -> m Row
-
-  setCellContent :: Id Column -> Id Row -> CellContent -> m ()
+  getRowField     :: Id Row -> Ref Column -> m (Maybe Value)
 
   -- Prepare compilation and propagation
 
@@ -160,8 +161,28 @@ instance MonadError AppError m => MonadError AppError (EngineT m) where
   throwError = lift . throwError
   catchError a h = EngineT $ unEngineT a `catchError` (unEngineT . h)
 
-instance MonadHexl m => MonadEngine m (EngineT m) where
+instance MonadHexl m => MonadEngine (EngineT m) where
   graphGets f = f <$> use engineGraph
+
+  getColumnOfTableByName tableId name = do
+    let colQuery =
+          [ "name" =: name
+          , "tableId" =: toObjectId tableId
+          ]
+    eitherToMaybe <$> lift (getOneByQuery colQuery)
+
+  makeDefaultValue = \case
+    DataBool     -> pure $ VBool False
+    DataString   -> pure $ VString ""
+    DataNumber   -> pure $ VNumber 0
+    DataTime     -> VTime <$> lift getCurrentTime
+    DataRowRef t -> do
+      res <- lift $ getOneByQuery [ "tableId" =: toObjectId t ]
+      pure $ VRowRef $ case res of
+        Left _             -> Nothing
+        Right (Entity i _) -> Just i
+    DataList _   -> pure $ VList []
+    DataMaybe _  -> pure $ VMaybe Nothing
 
   deleteTable tableId = do
     let query = [ "tableId" =: toObjectId tableId ]
@@ -198,6 +219,10 @@ instance MonadHexl m => MonadEngine m (EngineT m) where
         pure $ map entityId rows
 
 --------------------------------------------------------------------------------
+
+eitherToMaybe :: Either a b -> Maybe b
+eitherToMaybe (Left _)  = Nothing
+eitherToMaybe (Right b) = Just b
 
 opDelete :: (MonadHexl m, Model a) => What a -> Id a -> EngineT m ()
 opDelete what i = do

@@ -14,8 +14,6 @@ import           Data.Maybe                     (mapMaybe)
 import           Data.Monoid
 import           Data.Text                      (Text, pack)
 
-import           Database.MongoDB               ((=:))
-
 import           Lib.Compiler
 import           Lib.Compiler.Typechecker.Prim
 import           Lib.Compiler.Typechecker.Types
@@ -39,7 +37,7 @@ import           Monads
 -- the dependency graph, and update the dependencies of the column.
 --
 -- For a report column: compile and update the dependencies.
-compileColumn :: forall db m. MonadEngine db m => Id Column -> m ()
+compileColumn :: forall m. MonadEngine m => Id Column -> m ()
 compileColumn columnId = do
   col <- getColumn columnId
   let abort :: Text -> m (CompileResult a)
@@ -82,22 +80,22 @@ compileColumn columnId = do
 
 --------------------------------------------------------------------------------
 
-mkTypecheckEnv :: forall db m. MonadEngine db m => Id Table -> TypecheckEnv m
+mkTypecheckEnv :: forall m. MonadEngine m => Id Table -> TypecheckEnv m
 mkTypecheckEnv ownTblId = TypecheckEnv
     { envResolveColumnRef = \cRef ->
         (fmap.fmap) (\(_,i,c) -> (i,c)) $ resolveColumnRef ownTblId cRef
 
     , envResolveColumnOfTableRef = \tblName colName -> do
-        tableRes <- liftDB $ getOneByQuery [ "name" =: tblName ]
+        tableRes <- getTableByName tblName
         case tableRes of
-          Left _             -> pure Nothing
-          Right (Entity i _) -> resolveColumnRef i colName
+          Nothing           -> pure Nothing
+          Just (Entity i _) -> resolveColumnRef i colName
 
     , envResolveTableRef = \tblName -> do
-        tableRes <- liftDB $ getOneByQuery [ "name" =: tblName ]
+        tableRes <- getTableByName tblName
         case tableRes of
-          Left _                 -> pure Nothing
-          Right (Entity tblId _) -> pure $ Just tblId
+          Nothing               -> pure Nothing
+          Just (Entity tblId _) -> pure $ Just tblId
 
     , envGetTableRowType = getTableRowType
 
@@ -108,19 +106,15 @@ mkTypecheckEnv ownTblId = TypecheckEnv
     resolveColumnRef :: Id Table -> Ref Column
                      -> m (Maybe (Id Table, Id Column, DataCol))
     resolveColumnRef tableId colName = do
-      let colQuery =
-            [ "name" =: colName
-            , "tableId" =: toObjectId tableId
-            ]
-      columnRes <- liftDB $ getOneByQuery colQuery
+      columnRes <- getColumnOfTableByName tableId colName
       pure $ case columnRes of
-        Left _               -> Nothing
-        Right (Entity i col) -> fmap (tableId,i,)
+        Nothing             -> Nothing
+        Just (Entity i col) -> fmap (tableId,i,)
                                      (col ^? columnKind . _ColumnData)
 
-getTableRowType :: MonadEngine db m => Id Table -> m Type
+getTableRowType :: MonadEngine m => Id Table -> m Type
 getTableRowType t = do
-  cols <- liftDB $ listByQuery [ "tableId" =: toObjectId t ]
+  cols <- getTableColumns t
   let toRow [] = pure $ Type TyRecordNil
       toRow ((name, col):rest) = Type
         <$> (TyRecordCons (Ref name)

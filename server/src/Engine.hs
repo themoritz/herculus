@@ -12,7 +12,6 @@ import           Control.Monad.Except
 
 import           Data.Foldable                (for_)
 import           Data.Text                    (Text)
-import           Database.MongoDB             ((=:))
 
 import           Lib.Model
 import           Lib.Model.Cell
@@ -56,7 +55,7 @@ runCommand cmd = do
   undefined endState -- commit changes
 
 -- | Core of the engine logic
-executeCommand :: MonadEngine h m => Command -> m ()
+executeCommand :: MonadEngine m => Command -> m ()
 executeCommand = \case
 
   CmdTableCreate projectId name ->
@@ -88,10 +87,10 @@ executeCommand = \case
   CmdDataColCreate tableId -> do
     columnId <- createColumn (emptyDataCol tableId)
     -- Create a new cell for every row in the table
-    rows <- liftDB $ listByQuery [ "tableId" =: toObjectId tableId ]
+    rows <- getTableRows tableId
     for_ rows $ \(Entity rowId _) -> do
-      defContent <- liftDB $ defaultContent emptyDataColType
-      createCell $ newCell tableId columnId rowId defContent
+      def <- makeDefaultValue emptyDataColType
+      createCell $ newCell tableId columnId rowId (CellValue def)
 
   CmdDataColUpdate columnId dataType isDerived code -> do
     oldCol <- getColumn columnId
@@ -111,8 +110,8 @@ executeCommand = \case
         when (isDerived == NotDerived) $ do
           cells <- getColumnCells columnId
           for_ cells $ \(Entity _ (Cell _ t c r)) -> do
-            def <- liftDB $ defaultContent dataType
-            setAndPropagateCellContent t c r def
+            def <- makeDefaultValue dataType
+            setAndPropagateCellContent t c r (CellValue def)
           let refDeps = getTypeDependencies dataType
           cycles <- graphSetTypeDependencies columnId refDeps
           -- TODO: Instead of throwing an error here, should mark the column as
@@ -126,8 +125,8 @@ executeCommand = \case
           cells <- getColumnCells columnId
           for_ cells $ \(Entity _ (Cell content t c r)) -> case content of
             CellError _ -> do
-              def <- liftDB $ defaultContent dataType
-              setAndPropagateCellContent t c r def
+              def <- makeDefaultValue dataType
+              setAndPropagateCellContent t c r (CellValue def)
             CellValue _ -> pure ()
         _ -> pure ()
 
@@ -161,10 +160,11 @@ executeCommand = \case
       case column ^? columnKind . _ColumnData of
         Nothing -> pure ()
         Just dataCol -> do
-          def <- liftDB $ defaultContent (dataCol ^. dataColType)
-          void $ createCell $ newCell tableId columnId rowId def
+          def <- makeDefaultValue (dataCol ^. dataColType)
+          void $ createCell $ newCell tableId columnId rowId (CellValue def)
           case dataCol ^. dataColIsDerived of
-            NotDerived -> setAndPropagateCellContent tableId columnId rowId def
+            NotDerived -> setAndPropagateCellContent tableId columnId rowId
+                                                     (CellValue def)
             Derived    -> scheduleEvalCell columnId rowId
 
   CmdRowDelete rowId -> do
@@ -204,13 +204,13 @@ executeCommand = \case
 
 --------------------------------------------------------------------------------
 
-scheduleCompileColumnDependants :: MonadEngine db m
+scheduleCompileColumnDependants :: MonadEngine m
                                 => (Id Column, Id Table) -> m ()
 scheduleCompileColumnDependants (columnId, tableId) = do
   dependants <- graphGets $ getAllColumnDependants (columnId, tableId)
   mapM_ (scheduleCompileColumn . fst) dependants
 
-setAndPropagateCellContent :: MonadEngine db m
+setAndPropagateCellContent :: MonadEngine m
                            => Id Table -> Id Column -> Id Row
                            -> CellContent -> m ()
 setAndPropagateCellContent tableId columnId rowId content = do
@@ -220,17 +220,3 @@ setAndPropagateCellContent tableId columnId rowId content = do
     case mode of
       AddOne -> scheduleEvalCell childId rowId
       AddAll -> scheduleEvalColumn childId
-
-defaultContent :: MonadHexl m => DataType -> m CellContent
-defaultContent = \case
-  DataBool     -> pure . CellValue $ VBool False
-  DataString   -> pure . CellValue $ VString ""
-  DataNumber   -> pure . CellValue $ VNumber 0
-  DataTime     -> CellValue . VTime <$> getCurrentTime
-  DataRowRef t -> do
-    res <- getOneByQuery [ "tableId" =: toObjectId t ]
-    pure $ CellValue $ VRowRef $ case res of
-      Left _             -> Nothing
-      Right (Entity i _) -> Just i
-  DataList _   -> pure . CellValue $ VList []
-  DataMaybe _  -> pure . CellValue $ VMaybe Nothing

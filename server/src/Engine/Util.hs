@@ -9,16 +9,24 @@ import           Control.Monad.Except
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
+import           Lib.Model.Row
 import           Lib.Types
 
 import           Engine.Monad
 import           Monads
 
-getColumnValues :: MonadEngine db m => Id Column -> m [Maybe Value]
+getCellValue :: MonadEngine m => Id Column -> Id Row -> m (Maybe Value)
+getCellValue columnId rowId = do
+  Entity _ cell <- getCell columnId rowId
+  pure $ case cell ^. cellContent of
+    CellError _ -> Nothing
+    CellValue v -> Just v
+
+getColumnValues :: MonadEngine m => Id Column -> m [Maybe Value]
 getColumnValues columnId = map toMaybe <$> getColumnCells columnId
   where toMaybe (Entity _ (Cell content _ _ _)) = case content of
-          CellError _   -> Nothing
-          CellValue val -> Just val
+          CellError _ -> Nothing
+          CellValue v -> Just v
 
 withDataCol :: MonadError AppError m => Column -> (DataCol -> m a) -> m a
 withDataCol col f = case col ^? columnKind . _ColumnData of

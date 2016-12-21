@@ -402,7 +402,7 @@ evalReport columnId recordId = do
       let env = EvalEnv
                   { envGetCellValue = flip getCellValue recordId
                   , envGetColumnValues = getColumnValues
-                  , envGetTableRows = getTableRows
+                  , envGetTableRows = fmap (map entityId) . getTableRows
                   , envGetRowField = getRowField
                   }
       runEvalTemplate env ttpl >>= \case
