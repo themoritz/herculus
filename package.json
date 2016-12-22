@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "autoprefixer": "^6.4.1",
+    "basil.js": "git+https://github.com/Wisembly/basil.js.git",
     "bluebird": "^3.4.6",
     "browser-sync": "^2.13.0",
     "codemirror": "^5.18.2",

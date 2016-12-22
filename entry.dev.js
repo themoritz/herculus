@@ -37,3 +37,7 @@ require('./assets/sass/main.scss')
 global.hexl$getClientGitRev = function () {
   return process.env.GIT_REV
 }
+
+// Basil for local storage
+require('basil.js')
+global.basil = new window.Basil({expireDays: 60})

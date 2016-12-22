@@ -77,7 +77,7 @@ login = defineStatefulView "login" initialLoginViewState $ \viewState _ ->
        tr_ $ do
          td_ $ label_
            [ "htmlFor" $= "username"
-           ] "User name"
+           ] "E-Mail"
          td_ $ input_
            [ classNames
                [ ("auth-input", True)
@@ -199,7 +199,7 @@ signup = defineStatefulView "signup" initialSignupViewState $ \viewState _ ->
          tr_ $ do
            td_ $ label_
              [ "htmlFor" $= "username"
-             ] "User name"
+             ] "E-Mail"
            td_ $ input_
              [ classNames
                  [ ("auth-input", True)

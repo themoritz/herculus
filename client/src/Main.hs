@@ -9,7 +9,7 @@ import           React.Flux.Ajax (initAjax)
 import           Action          (Action (GlobalInit))
 import qualified Config
 import           Store           (store)
-import           Views
+import           Views           (app)
 
 main :: IO ()
 main = do

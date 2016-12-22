@@ -33,6 +33,7 @@ import           Action                    (Action (..), api, session)
 import qualified Store.Column              as Column
 import qualified Store.Message             as Message
 import qualified Store.RecordCache         as RecordCache
+import           Store.Session             (recoverSession)
 
 data Coords = Coords (Id Column) (Id Record)
   deriving (Eq, Ord, Show)
@@ -95,6 +96,7 @@ mkProjectDetailState i p = ProjectDetailState
 data LoggedOutState
   = LoggedOutLoginForm
   | LoggedOutSignupForm
+  | LoggedOutUninitialized
 
 makeLenses ''State
 makeLenses ''LoggedInState
@@ -102,6 +104,7 @@ makePrisms ''SessionState
 makePrisms ''ProjectViewState
 makeLenses ''ProjectDetailState
 
+-- TODO: fix rerender loop triggered by use of this function
 forProjectDetail :: State -> (SessionKey -> ProjectDetailState -> IO ProjectDetailState) -> IO State
 forProjectDetail st action =
     forLoggedIn st $ \liSt -> case liSt ^. stateProjectView of
@@ -184,7 +187,7 @@ store :: ReactStore State
 store = mkStore State
   { _stateWebSocket = Nothing
   , _stateMessage   = Nothing
-  , _stateSession   = StateLoggedOut LoggedOutLoginForm
+  , _stateSession   = StateLoggedOut LoggedOutUninitialized
   }
 
 instance StoreData State where
@@ -201,10 +204,18 @@ instance StoreData State where
           WsDownRecordCreated t r dat -> RecordCacheAction t $ RecordCache.Add r dat
           WsDownRecordDeleted t r     -> RecordCacheAction t $ RecordCache.Delete r
         case st ^. stateSession of
-          StateLoggedIn liSt ->
+          StateLoggedIn liSt -> do
             setProjectOverview (liSt ^. stateSessionKey)
-          StateLoggedOut _ -> pure ()
-        pure $ st & stateWebSocket .~ Just ws
+            pure $ st & stateWebSocket .~ Just ws
+          StateLoggedOut LoggedOutUninitialized ->
+            recoverSession >>= \case
+              Just sessionKey -> do
+                setProjectOverview sessionKey
+                pure $ st & stateWebSocket .~ Just ws
+              Nothing -> pure $ st & stateWebSocket .~ Just ws
+                                   & stateSession .~ StateLoggedOut LoggedOutLoginForm
+          StateLoggedOut _ ->
+            pure $ st & stateWebSocket .~ Just ws
 
       GlobalSendWebSocket msg -> do
         for_ (st ^. stateWebSocket) $ \ws -> jsonWebSocketSend msg ws

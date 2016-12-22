@@ -17,11 +17,12 @@ executable client
                      , Action.RecordCache
                      , Action.Message
                      , Action.Column
-                     , Store.RecordCache
-                     , Store.Message
-                     , Store.Column
-                     , Config
                      , Store
+                     , Store.Column
+                     , Store.Message
+                     , Store.RecordCache
+                     , Store.Session
+                     , Config
                      , Views
                      , Views.Auth
                      , Views.Table
