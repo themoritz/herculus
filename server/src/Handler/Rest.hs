@@ -39,7 +39,8 @@ import           Lib.Model.Auth                 (LoginData (..),
                                                  SignupResponse (..),
                                                  User (User),
                                                  UserInfo (UserInfo), mkPwHash,
-                                                 sessionKey, userPwHash,
+                                                 sessionKey, sessionUserId,
+                                                 userName, userPwHash,
                                                  verifyPassword)
 import           Lib.Model.Cell
 import           Lib.Model.Column
@@ -67,6 +68,7 @@ handle =
        handleAuthLogin
   :<|> handleAuthLogout
   :<|> handleAuthSignup
+  :<|> handleAuthGetUserInfo
 
   :<|> handleProjectCreate
   :<|> handleProjectList
@@ -103,19 +105,19 @@ handle =
 -- Auth
 
 handleAuthLogin :: (MonadIO m, MonadHexl m) => LoginData -> m LoginResponse
-handleAuthLogin (LoginData userName pwd) =
+handleAuthLogin (LoginData uName pwd) =
     checkLogin >>= \case
       Left  err    -> pure $ LoginFailed err
       Right userId -> do
         session <- getSession userId
-        pure $ LoginSuccess $ UserInfo userId userName $ session ^. sessionKey
+        pure $ LoginSuccess $ UserInfo userId uName $ session ^. sessionKey
   where
     checkLogin = runExceptT $ do
       Entity userId user <- getUser
       checkPassword_ user
       pure userId
     getUser = ExceptT $ over _Left (\_ -> "username unknown") <$>
-      getOneByQuery [ "name" =: userName ]
+      getOneByQuery [ "name" =: uName ]
     checkPassword_ user =
       if verifyPassword pwd (user ^. userPwHash)
         then pure ()
@@ -134,15 +136,26 @@ handleAuthLogout (UserInfo userId _ _) =
     Right (Entity sessionId _) -> delete (sessionId :: Id Session)
 
 handleAuthSignup :: (MonadIO m, MonadHexl m) => SignupData -> m SignupResponse
-handleAuthSignup (SignupData userName pwd intention) =
-  getOneByQuery [ "name" =: userName ] >>= \case
+handleAuthSignup (SignupData uName pwd intention) =
+  getOneByQuery [ "name" =: uName ] >>= \case
     Right (_ :: Entity User) -> pure $ SignupFailed "username already exists"
     Left _  -> do
       pwHash <- mkPwHash pwd
-      _ <- create $ User userName pwHash intention
-      handleAuthLogin (LoginData userName pwd) >>= \case
+      _ <- create $ User uName pwHash intention
+      handleAuthLogin (LoginData uName pwd) >>= \case
         LoginSuccess userInfo -> pure $ SignupSuccess userInfo
         LoginFailed  msg      -> throwError $ ErrBug $ "signed up, but login failed: " <> msg
+
+handleAuthGetUserInfo :: (MonadIO m, MonadHexl m) => SessionKey -> m LoginResponse
+handleAuthGetUserInfo sKey = do
+  eUser <- runExceptT $ do
+    Entity _ session <- ExceptT $ getOneByQuery [ "sessionKey" =: sKey ]
+    let userId = session ^. sessionUserId
+    user <- ExceptT $ getById userId
+    pure (userId, user ^. userName)
+  pure $ case eUser of
+    Left err             -> LoginFailed err
+    Right (userId, name) -> LoginSuccess $ UserInfo userId name sKey
 
 -- Project
 

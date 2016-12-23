@@ -33,7 +33,7 @@ import           Action                    (Action (..), api, session)
 import qualified Store.Column              as Column
 import qualified Store.Message             as Message
 import qualified Store.RecordCache         as RecordCache
-import           Store.Session             (recoverSession)
+import           Store.Session             (persistSession, recoverSession)
 
 data Coords = Coords (Id Column) (Id Record)
   deriving (Eq, Ord, Show)
@@ -210,7 +210,11 @@ instance StoreData State where
           StateLoggedOut LoggedOutUninitialized ->
             recoverSession >>= \case
               Just sessionKey -> do
-                setProjectOverview sessionKey
+                request api (Proxy :: Proxy Api.AuthGetUserInfo) sessionKey $ mkCallback $ \case
+                  LoginSuccess userInfo -> [LoggedIn userInfo]
+                  LoginFailed msg ->
+                    -- todo: delete localstorege
+                    [ MessageAction $ Message.SetError msg ]
                 pure $ st & stateWebSocket .~ Just ws
               Nothing -> pure $ st & stateWebSocket .~ Just ws
                                    & stateSession .~ StateLoggedOut LoggedOutLoginForm
@@ -250,6 +254,7 @@ instance StoreData State where
         pure st
 
       LoggedIn userInfo@(UserInfo _ _ sKey) -> do
+        persistSession sKey
         setProjectOverview sKey
         pure $ updStateLoggedIn st $ initLoggedInState sKey userInfo
 

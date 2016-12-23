@@ -31,6 +31,7 @@ type Routes =
       AuthLogin
  :<|> AuthLogout
  :<|> AuthSignup
+ :<|> AuthGetUserInfo -- given session key, retrieve user info
 
  :<|> ProjectCreate
  :<|> ProjectList
@@ -77,6 +78,7 @@ sessionParamBStr = original sessionParam
 type AuthLogin            = "auth"          :> "login"      :> ReqBody '[JSON] LoginData        :> Post '[JSON] LoginResponse
 type AuthLogout           = SessionProtect  :> "auth"       :> "logout"                         :> Get '[JSON] ()
 type AuthSignup           = "auth"          :> "signup"     :> ReqBody '[JSON] SignupData       :> Post '[JSON] SignupResponse
+type AuthGetUserInfo      = "auth"          :> "userInfo"   :> ReqBody '[JSON] SessionKey       :> Post '[JSON] LoginResponse
 
 type ProjectCreate        = SessionProtect  :> "project"    :> "create"   :> ReqBody '[JSON] Text          :> Post '[JSON] (Entity Project)
 type ProjectList          = SessionProtect  :> "project"    :> "list"     :> Get '[JSON] [Entity Project]

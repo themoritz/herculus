@@ -46,6 +46,7 @@ app = defineControllerView "app" store $ \st () ->
       case st ^. stateSession of
         StateLoggedOut LoggedOutLoginForm -> login_
         StateLoggedOut LoggedOutSignupForm -> signup_
+        StateLoggedOut LoggedOutUninitialized -> "Failed to load. Please reload."
         StateLoggedIn liSt ->
           case liSt ^. stateProjectView of
             StateProjectOverview ps -> cldiv_ "overview" $ projectsOverview_ ps
