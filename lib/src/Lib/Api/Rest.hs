@@ -17,9 +17,10 @@ import           Servant.API.Experimental.Auth (AuthProtect)
 
 import           Lib.Api.Rest.Report
 import           Lib.Model
-import           Lib.Model.Auth                (LoginData, LoginResponse,
-                                                SessionKey, SignupData,
-                                                SignupResponse, UserInfo)
+import           Lib.Model.Auth                (GetUserInfoResponse, LoginData,
+                                                LoginResponse, SessionKey,
+                                                SignupData, SignupResponse,
+                                                UserInfo)
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Project
@@ -78,7 +79,7 @@ sessionParamBStr = original sessionParam
 type AuthLogin            = "auth"          :> "login"      :> ReqBody '[JSON] LoginData        :> Post '[JSON] LoginResponse
 type AuthLogout           = SessionProtect  :> "auth"       :> "logout"                         :> Get '[JSON] ()
 type AuthSignup           = "auth"          :> "signup"     :> ReqBody '[JSON] SignupData       :> Post '[JSON] SignupResponse
-type AuthGetUserInfo      = "auth"          :> "userInfo"   :> ReqBody '[JSON] SessionKey       :> Post '[JSON] LoginResponse
+type AuthGetUserInfo      = "auth"          :> "userInfo"   :> ReqBody '[JSON] SessionKey       :> Post '[JSON] GetUserInfoResponse
 
 type ProjectCreate        = SessionProtect  :> "project"    :> "create"   :> ReqBody '[JSON] Text          :> Post '[JSON] (Entity Project)
 type ProjectList          = SessionProtect  :> "project"    :> "list"     :> Get '[JSON] [Entity Project]

@@ -33,7 +33,8 @@ import           Lib.Compiler.Typechecker.Prim
 import           Lib.Compiler.Typechecker.Types hiding (union)
 import           Lib.Compiler.Types
 import           Lib.Model
-import           Lib.Model.Auth                 (LoginData (..),
+import           Lib.Model.Auth                 (GetUserInfoResponse (..),
+                                                 LoginData (..),
                                                  LoginResponse (..), Session,
                                                  SessionKey, SignupData (..),
                                                  SignupResponse (..),
@@ -146,7 +147,7 @@ handleAuthSignup (SignupData uName pwd intention) =
         LoginSuccess userInfo -> pure $ SignupSuccess userInfo
         LoginFailed  msg      -> throwError $ ErrBug $ "signed up, but login failed: " <> msg
 
-handleAuthGetUserInfo :: (MonadIO m, MonadHexl m) => SessionKey -> m LoginResponse
+handleAuthGetUserInfo :: (MonadIO m, MonadHexl m) => SessionKey -> m GetUserInfoResponse
 handleAuthGetUserInfo sKey = do
   eUser <- runExceptT $ do
     Entity _ session <- ExceptT $ getOneByQuery [ "sessionKey" =: sKey ]
@@ -154,8 +155,8 @@ handleAuthGetUserInfo sKey = do
     user <- ExceptT $ getById userId
     pure (userId, user ^. userName)
   pure $ case eUser of
-    Left err             -> LoginFailed err
-    Right (userId, name) -> LoginSuccess $ UserInfo userId name sKey
+    Left err             -> GetUserInfoFailed err
+    Right (userId, name) -> GetUserInfoSuccess $ UserInfo userId name sKey
 
 -- Project
 

@@ -18,7 +18,8 @@ import           WebSocket
 import qualified Lib.Api.Rest              as Api
 import           Lib.Api.WebSocket         (WsDownMessage (..))
 import           Lib.Model
-import           Lib.Model.Auth            (LoginResponse (..), SessionKey,
+import           Lib.Model.Auth            (GetUserInfoResponse (..),
+                                            LoginResponse (..), SessionKey,
                                             SignupResponse (..),
                                             UserInfo (UserInfo))
 import           Lib.Model.Cell            (Aspects (..), Cell (..),
@@ -33,7 +34,8 @@ import           Action                    (Action (..), api, session)
 import qualified Store.Column              as Column
 import qualified Store.Message             as Message
 import qualified Store.RecordCache         as RecordCache
-import           Store.Session             (persistSession, recoverSession)
+import           Store.Session             (clearSession, persistSession,
+                                            recoverSession)
 
 data Coords = Coords (Id Column) (Id Record)
   deriving (Eq, Ord, Show)
@@ -211,10 +213,11 @@ instance StoreData State where
             recoverSession >>= \case
               Just sessionKey -> do
                 request api (Proxy :: Proxy Api.AuthGetUserInfo) sessionKey $ mkCallback $ \case
-                  LoginSuccess userInfo -> [LoggedIn userInfo]
-                  LoginFailed msg ->
-                    -- todo: delete localstorege
-                    [ MessageAction $ Message.SetError msg ]
+                  GetUserInfoSuccess userInfo -> [ RecoverSessionDone userInfo ]
+                  GetUserInfoFailed _ ->
+                    [ RecoverSessionFailed
+                    , MessageAction $ Message.SetWarning "Failed to restore local session"
+                    ]
                 pure $ st & stateWebSocket .~ Just ws
               Nothing -> pure $ st & stateWebSocket .~ Just ws
                                    & stateSession .~ StateLoggedOut LoggedOutLoginForm
@@ -259,10 +262,19 @@ instance StoreData State where
         pure $ updStateLoggedIn st $ initLoggedInState sKey userInfo
 
       Logout -> do
+        clearSession
         forLoggedIn_ st $ \liSt ->
           request api (Proxy :: Proxy Api.AuthLogout)
                       (session $ liSt ^. stateSessionKey) $ mkCallback $
                       const [MessageAction $ Message.SetSuccess "Successfully logged out."]
+        pure $ st & stateSession .~ StateLoggedOut LoggedOutLoginForm
+
+      RecoverSessionDone userInfo@(UserInfo _ _ sKey) -> do
+        setProjectOverview sKey
+        pure $ updStateLoggedIn st $ initLoggedInState sKey userInfo
+
+      RecoverSessionFailed -> do
+        clearSession
         pure $ st & stateSession .~ StateLoggedOut LoggedOutLoginForm
 
       -- Cache

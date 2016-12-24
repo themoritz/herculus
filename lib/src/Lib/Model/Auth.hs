@@ -10,6 +10,7 @@ module Lib.Model.Auth
   , LoginResponse (..)
   , SignupData (..)
   , SignupResponse (..)
+  , GetUserInfoResponse (..)
   , mkPwHash
   , SessionKey
   , Session (..)
@@ -70,6 +71,11 @@ data SignupData = SignupData
 data SignupResponse
   = SignupSuccess UserInfo
   | SignupFailed Text
+  deriving (Generic, FromJSON, ToJSON)
+
+data GetUserInfoResponse
+  = GetUserInfoSuccess UserInfo
+  | GetUserInfoFailed Text
   deriving (Generic, FromJSON, ToJSON)
 
 mkPwHash :: MonadIO m => Text -> m PwHash

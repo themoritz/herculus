@@ -87,17 +87,13 @@ appHeader = defineView "header" $ \st ->
     case st ^. stateSession of
       StateLoggedIn liSt ->
         case liSt ^. stateProjectView of
-          StateProjectOverview _  -> pure ()
+          StateProjectOverview _  ->
+            cldiv_ "navigation" $ btnLogout_
           StateProjectDetail pdSt -> do
             tables_ (pdSt ^. stateTables) (pdSt ^. stateTableId) (pdSt ^. stateProjectId)
             projectNameComp_ (pdSt ^. stateProjectId) $ pdSt ^. stateProject
             cldiv_ "navigation" $ do
-              button_
-                [ classNames [ ("logout", True)]
-                  , onClick $ \_ _ -> dispatch Logout
-                ] $ do
-                  faIcon_ "power-off"
-                  " Log Out"
+              btnLogout_
               button_
                 [ classNames [ ("backToOverview", True)]
                 , onClick $ \_ _ -> dispatch $ SetProjectOverview (liSt ^. stateSessionKey)
@@ -111,6 +107,14 @@ data ProjectNameState = ProjectNameState
   , pnsName      :: Text
   , pnsNameError :: Bool
   } deriving (Generic, Show, NFData)
+
+btnLogout_ :: ReactElementM ViewEventHandler ()
+btnLogout_ = button_
+  [ classNames [ ("logout", True) ]
+  , onClick $ \_ _ -> dispatch Logout
+  ] $ do
+    faIcon_ "power-off"
+    " Log Out"
 
 initalProjectName :: ProjectNameState
 initalProjectName = ProjectNameState False "" False

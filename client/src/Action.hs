@@ -62,6 +62,8 @@ data Action
   | Login LoginData
   | LoggedIn UserInfo
   | Logout
+  | RecoverSessionDone UserInfo
+  | RecoverSessionFailed
 
   | RecordCacheGet (Id Table)
   | RecordCacheAction (Id Table) RecordCache.Action

@@ -25,14 +25,27 @@ recoverSession = do
 persistSession :: SessionKey -> IO ()
 persistSession = persistLS sessionKey . Text.decodeUtf8 . toStrict . Json.encode
 
+clearSession :: IO ()
+clearSession = removeLS sessionKey
+
+-- basil
+
 recoverLS :: PFromJSVal a => JSString -> IO (Maybe a)
 recoverLS key = fmap pFromJSVal . nullableToMaybe <$> basilGet key
 
 persistLS :: PToJSVal a => JSString -> a -> IO ()
 persistLS key value = basilSet key $ pToJSVal value
 
+removeLS :: JSString -> IO ()
+removeLS = basilRemove
+
+-- https://github.com/Wisembly/basil.js
+
 foreign import javascript unsafe "basil.set($1, $2)"
   basilSet :: JSString -> JSVal -> IO ()
 
 foreign import javascript unsafe "basil.get($1)"
   basilGet :: JSString -> IO (Nullable JSVal)
+
+foreign import javascript unsafe "basil.remove($1)"
+  basilRemove :: JSString -> IO ()
