@@ -82,28 +82,33 @@ runCommand cmd = do
     getCompileTargets >>= mapM_ compileColumn
     propagate
   -- Commit changes
-  let Changes{..} = state ^. engineChanges
-  commit _changesCells
-  commit _changesColumns
-  commit _changesRows
-  commit _changesTables
+  let Store{..} = state ^. engineStore
+  commit _storeCells
+  commit _storeColumns
+  commit _storeRows
+  commit _storeTables
   -- Send changes to clients
-  sendWS $ WsDownProjectDiff (Map.toList _changesCells)
-                             (Map.toList _changesColumns)
-                             (Map.toList _changesRows)
-                             (Map.toList _changesTables)
+  sendWS $ WsDownProjectDiff (filterChanges _storeCells)
+                             (filterChanges _storeColumns)
+                             (filterChanges _storeRows)
+                             (filterChanges _storeTables)
 
-commit :: (Model a, MonadHexl m) => ChangeMap a -> m ()
+filterChanges :: StoreMap a -> [(Id a, ChangeOp, a)]
+filterChanges = mapMaybe f . Map.toList
+  where f (i, (Change op, a)) = Just (i, op, a)
+        f (_, (Cached, _))    = Nothing
+
+commit :: (Model a, MonadHexl m) => StoreMap a -> m ()
 commit m = do
-  let filterUpserts (i, op) = case op of
-        Create _ -> Nothing
-        Update a -> Just $ Entity i a
-        Delete   -> Nothing
-      filterDeletes (i, op) = case op of
-        Create _ -> Nothing
-        Update _ -> Nothing
-        Delete   -> Just i
-      changes = Map.toList m
+  let filterUpserts (i, op, a) = case op of
+        Create -> Nothing
+        Update -> Just $ Entity i a
+        Delete -> Nothing
+      filterDeletes (i, op, _) = case op of
+        Create -> Nothing
+        Update -> Nothing
+        Delete -> Just i
+      changes = filterChanges m
   upsertMany $ mapMaybe filterUpserts changes
   mapM_ delete $ mapMaybe filterDeletes changes
 
@@ -137,13 +142,8 @@ executeCommand = \case
       -- an "invalid type", so what to do?
       pure ()
 
-  CmdDataColCreate tableId -> do
-    columnId <- createColumn (emptyDataCol tableId)
-    -- Create a new cell for every row in the table
-    rows <- getTableRows tableId
-    for_ rows $ \(Entity rowId _) -> do
-      def <- makeDefaultValue emptyDataColType
-      createCell $ newCell tableId columnId rowId (CellValue def)
+  CmdDataColCreate tableId ->
+    void $ createColumn (emptyDataCol tableId)
 
   CmdDataColUpdate columnId dataType isDerived code -> do
     oldCol <- getColumn columnId
@@ -212,13 +212,9 @@ executeCommand = \case
     for_ columns $ \(Entity columnId column) ->
       case column ^? columnKind . _ColumnData of
         Nothing -> pure ()
-        Just dataCol -> do
-          def <- makeDefaultValue (dataCol ^. dataColType)
-          void $ createCell $ newCell tableId columnId rowId (CellValue def)
-          case dataCol ^. dataColIsDerived of
-            NotDerived -> setAndPropagateCellContent tableId columnId rowId
-                                                     (CellValue def)
-            Derived    -> scheduleEvalCell columnId rowId
+        Just dataCol -> case dataCol ^. dataColIsDerived of
+          NotDerived -> propagateCell tableId columnId rowId
+          Derived    -> scheduleEvalCell columnId rowId
 
   CmdRowDelete rowId -> do
     row <- getRow rowId
@@ -268,6 +264,10 @@ setAndPropagateCellContent :: MonadEngine m
                            -> CellContent -> m ()
 setAndPropagateCellContent tableId columnId rowId content = do
   setCellContent columnId rowId content
+  propagateCell tableId columnId rowId
+
+propagateCell :: MonadEngine m => Id Table -> Id Column -> Id Row -> m ()
+propagateCell tableId columnId rowId = do
   childs <- graphGets $ getAllColumnDependants (columnId, tableId)
   for_ childs $ \(childId, mode) ->
     case mode of

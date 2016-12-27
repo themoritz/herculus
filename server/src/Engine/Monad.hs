@@ -11,15 +11,16 @@ import           Control.Lens
 import           Control.Monad.Except
 import           Control.Monad.State
 
-import           Data.Foldable                (for_)
+import           Data.Foldable                (find, foldl', for_)
 import           Data.Functor                 (($>))
 import           Data.Map                     (Map)
 import qualified Data.Map                     as Map
+import           Data.Maybe                   (mapMaybe)
 import           Data.Proxy
 import           Data.Set                     (Set)
 import qualified Data.Set                     as Set
 
-import           Database.MongoDB             ((=:))
+import           Database.MongoDB             (Selector, (=:))
 
 import           Lib.Model
 import           Lib.Model.Cell
@@ -35,34 +36,35 @@ import           Monads
 
 --------------------------------------------------------------------------------
 
-type ChangeMap a = Map (Id a) (ChangeOp a)
+data ChangeOrCached
+  = Change ChangeOp
+  | Cached
 
-data Changes = Changes
-  { _changesCells   :: ChangeMap Cell
-  , _changesColumns :: ChangeMap Column
-  , _changesRows    :: ChangeMap Row
-  , _changesTables  :: ChangeMap Table
+type StoreMap a = Map (Id a) (ChangeOrCached, a)
+
+data Store = Store
+  { _storeCells   :: StoreMap Cell
+  , _storeColumns :: StoreMap Column
+  , _storeRows    :: StoreMap Row
+  , _storeTables  :: StoreMap Table
   }
 
-makeLenses ''Changes
+makeLenses ''Store
 
-type What a = Lens' Changes (Map (Id a) (ChangeOp a))
+type What a = Lens' Store (Map (Id a) (ChangeOrCached, a))
 
-emptyChanges :: Changes
-emptyChanges = Changes Map.empty Map.empty Map.empty Map.empty
+emptyChanges :: Store
+emptyChanges = Store Map.empty Map.empty Map.empty Map.empty
 
--- | Note: cache does not have a notion that columns of cells have been deleted
--- earlier in the transaction.
 data Cache = Cache
-  { _cacheCells       :: Map (Id Column, Id Row) (Entity Cell)
+  { _cacheCellByCoord :: Map (Id Column, Id Row) (Entity Cell)
   , _cacheColumnCells :: Map (Id Column) [Entity Cell]
-  , _cacheColumns     :: Map (Id Column) Column
   }
 
 makeLenses ''Cache
 
 emptyCache :: Cache
-emptyCache = Cache Map.empty Map.empty Map.empty
+emptyCache = Cache Map.empty Map.empty
 
 data EvalTargets
   = CompleteColumn
@@ -70,7 +72,7 @@ data EvalTargets
   deriving (Eq)
 
 data EngineState = EngineState
-  { _engineChanges        :: Changes
+  { _engineStore          :: Store
   , _engineCache          :: Cache
   , _engineGraph          :: DependencyGraph
   , _engineCompileTargets :: Set (Id Column)
@@ -95,8 +97,6 @@ class MonadError AppError m => MonadEngine m where
 
   -- Misc database queries
 
-  getTableByName :: Ref Table -> m (Maybe (Entity Table))
-  getColumnOfTableByName :: Id Table -> Ref Column -> m (Maybe (Entity Column))
   makeDefaultValue :: DataType -> m Value
 
   -- Perform changes to DB objects. Guiding principles:
@@ -111,22 +111,26 @@ class MonadError AppError m => MonadEngine m where
   createColumn :: Column -> m (Id Column)
   modifyColumn :: Id Column -> (Column -> Column) -> m ()
   deleteColumn :: Id Column -> m ()
+  getColumn    :: Id Column -> m Column
 
   createRow :: Row -> m (Id Row)
   deleteRow :: Id Row -> m ()
+  getRow    :: Id Row -> m Row
 
-  createCell :: Cell -> m (Id Cell)
   setCellContent :: Id Column -> Id Row -> CellContent -> m ()
 
-  -- Get cached values
+  -- Complex Queries
 
-  getCell         :: Id Column -> Id Row -> m (Entity Cell)
-  getColumn       :: Id Column -> m Column
-  getColumnCells  :: Id Column -> m [Entity Cell]
-  getTableRows    :: Id Table -> m [Entity Row]
-  getTableColumns :: Id Table -> m [Entity Column]
-  getRow          :: Id Row -> m Row
-  getRowField     :: Id Row -> Ref Column -> m (Maybe Value)
+  -- Cached
+  getCellByCoord :: Id Column -> Id Row -> m (Entity Cell)
+  getColumnCells :: Id Column -> m [Entity Cell]
+
+  -- Not cached (still need to combine with store)
+  getTableRows           :: Id Table -> m [Entity Row]
+  getTableColumns        :: Id Table -> m [Entity Column]
+  getRowField            :: Id Row -> Ref Column -> m (Maybe Value)
+  getTableByName         :: Ref Table -> m (Maybe (Entity Table))
+  getColumnOfTableByName :: Id Table -> Ref Column -> m (Maybe (Entity Column))
 
   -- Prepare compilation and propagation
 
@@ -183,15 +187,6 @@ instance MonadHexl m => MonadEngine (EngineT m) where
 
   --
 
-  getTableByName name =
-    let query = [ "name" =: name ]
-    in  eitherToMaybe <$> lift (getOneByQuery query)
-
-  getColumnOfTableByName tableId name =
-    let query = [ "name" =: name
-                , "tableId" =: toObjectId tableId ]
-    in  eitherToMaybe <$> lift (getOneByQuery query)
-
   makeDefaultValue = \case
     DataBool     -> pure $ VBool False
     DataString   -> pure $ VString ""
@@ -207,76 +202,137 @@ instance MonadHexl m => MonadEngine (EngineT m) where
 
   --
 
-  createTable = logCreate changesTables
+  createTable = storeCreate storeTables
 
   modifyTable tableId f = do
     table <- lift $ getById' tableId
-    logUpdate changesTables tableId $ f table
+    storeUpdate storeTables tableId $ f table
 
   deleteTable tableId = do
     let query = [ "tableId" =: toObjectId tableId ]
     lift $ deleteByQuery (Proxy :: Proxy Column) query
     lift $ deleteByQuery (Proxy :: Proxy Cell) query
     lift $ deleteByQuery (Proxy :: Proxy Row) query
-    logDelete changesTables tableId
+    storeDelete storeTables tableId
 
   createColumn column = do
-    columnId <- logCreate changesColumns column
-    engineCache . cacheColumns . at columnId .= Just column
+    columnId <- storeCreate storeColumns column
+    case column ^. columnKind of
+      ColumnReport _ -> pure ()
+      ColumnData dataCol -> do
+        let tableId = column ^. columnTableId
+        rows <- getTableRows tableId
+        for_ rows $ \(Entity rowId _) -> do
+          def <- makeDefaultValue (dataCol ^. dataColType)
+          let cell = newCell tableId columnId rowId (CellValue def)
+          storeCreate storeCells cell
     pure columnId
 
   modifyColumn columnId f = do
     column <- getColumn columnId
     let newColumn = f column
-    logUpdate changesColumns columnId newColumn
-    engineCache . cacheColumns . at columnId .= Just column
+    storeUpdate storeColumns columnId newColumn
 
   deleteColumn columnId = do
     -- Cascade delete cells
     lift $ deleteByQuery (Proxy :: Proxy Cell)
       [ "columnId" =: toObjectId columnId ]
-    logDelete changesColumns columnId
+    storeDelete storeColumns columnId
+
+  getColumn = storeGetById' storeColumns
 
   createRow row = do
-    -- FIXME: We invalidate the columnCells cache. This should work since the
-    -- next time a column is queried, the cells will have been created.
-    -- Still really ugly.
-    columns <- getTableColumns $ row ^. rowTableId
-    for_ columns $ \(Entity columnId _) ->
+    rowId <- storeCreate storeRows row
+    let tableId = row ^. rowTableId
+    columns <- getTableColumns tableId
+    for_ columns $ \(Entity columnId column) -> do
+      -- Invalidate cache
       engineCache . cacheColumnCells . at columnId .= Nothing
-    logCreate changesRows row
+      -- Create cells for every data column
+      case column ^. columnKind of
+        ColumnReport _ -> pure ()
+        ColumnData dataCol -> do
+          def <- makeDefaultValue (dataCol ^. dataColType)
+          let cell = newCell tableId columnId rowId (CellValue def)
+          void $ storeCreate storeCells cell
+    pure rowId
 
   deleteRow rowId = do
     -- Cascade delete cells
     lift $ deleteByQuery (Proxy :: Proxy Cell)
       [ "rowId" =: toObjectId rowId ]
-    -- Update cache
+    -- Invalidate cache
     row <- getRow rowId
     columns <- getTableColumns $ row ^. rowTableId
     for_ columns $ \(Entity columnId _) -> do
-      engineCache . cacheCells . at (columnId, rowId) .= Nothing
-      engineCache . cacheColumnCells . at columnId . _Just %= filter
-        (\(Entity _ cell) -> cell ^. cellRowId /= rowId)
+      engineCache . cacheCellByCoord . at (columnId, rowId) .= Nothing
+      engineCache . cacheColumnCells . at columnId .= Nothing
     -- Log
-    logDelete changesRows rowId
+    storeDelete storeRows rowId
 
-  createCell cell = do
-    cellId <- logCreate changesCells cell
-    engineCache . cacheCells . at (cell ^. cellColumnId, cell ^. cellRowId) .=
-      Just (Entity cellId cell)
-    pure cellId
+  getRow = storeGetById' storeRows
 
   setCellContent columnId rowId content = do
-    Entity cellId cell <- getCell columnId rowId
+    Entity cellId cell <- getCellByCoord columnId rowId
     let cell' = cell & cellContent .~ content
-    engineCache . cacheCells . at (columnId, rowId) .=
+    -- Update / Invalidate cache
+    engineCache . cacheCellByCoord . at (columnId, rowId) .=
       Just (Entity cellId cell')
-    -- FIXME: Need also to update the column lists, but should be safe for now.
-    logUpdate changesCells cellId cell'
+    engineCache . cacheColumnCells . at columnId .= Nothing
+    storeUpdate storeCells cellId cell'
 
   --
 
-  -- TODO: cache functions
+  getCellByCoord columnId rowId =
+    use (engineCache . cacheCellByCoord . at (columnId, rowId)) >>= \case
+      Just c -> pure c
+      Nothing -> do
+        cell <- storeGetByQuery' storeCells
+          [ "columnId" =: toObjectId columnId
+          , "rowId"    =: toObjectId rowId ]
+          (\cell -> cell ^. cellColumnId == columnId
+                 && cell ^. cellRowId == rowId)
+        engineCache . cacheCellByCoord . at (columnId, rowId) .= Just cell
+        pure cell
+
+  getColumnCells columnId =
+    use (engineCache . cacheColumnCells . at columnId) >>= \case
+      Just cells -> pure cells
+      Nothing -> do
+        result <- storeListByQuery storeCells
+          [ "columnId" =: toObjectId columnId ]
+          (\cell -> cell ^. cellColumnId == columnId)
+        engineCache . cacheColumnCells . at columnId .= Just result
+        pure result
+
+  getTableRows tableId = storeListByQuery storeRows
+    [ "tableId" =: toObjectId tableId ]
+    (\row -> row ^. rowTableId == tableId)
+
+  getTableColumns tableId = storeListByQuery storeColumns
+    [ "tableId" =: toObjectId tableId ]
+    (\column -> column ^. columnTableId == tableId)
+
+  getRowField rowId columnRef = do
+    row <- storeGetById' storeRows rowId
+    result <- getColumnOfTableByName (row ^. rowTableId) columnRef
+    case result of
+      Nothing -> lift $ throwError $ ErrBug "getRowField: column not found"
+      Just (Entity columnId _) -> do
+        Entity _ cell <- getCellByCoord columnId rowId
+        case cell ^. cellContent of
+          CellError _ -> pure Nothing
+          CellValue v -> pure $ Just v
+
+  getTableByName name = storeGetByQuery storeTables
+    [ "name" =: name ]
+    (\table -> table ^. tableName == unRef name)
+
+  getColumnOfTableByName tableId name = storeGetByQuery storeColumns
+    [ "name" =: name
+    , "tableId" =: toObjectId tableId ]
+    (\column -> column ^. columnName == unRef name
+             && column ^. columnTableId == tableId)
 
   --
 
@@ -297,29 +353,97 @@ instance MonadHexl m => MonadEngine (EngineT m) where
   getEvalRoots = Map.keys <$> use engineEvalTargets
 
   getEvalTargets columnId =
-    use (engineEvalTargets . at columnId . non (SpecificRows Set.empty)) >>= \case
-      SpecificRows rs -> pure $ Set.toList rs
-      CompleteColumn -> do
-        col <- getColumn columnId
-        rows <- lift $ listByQuery [ "tableId" =: toObjectId (_columnTableId col) ]
-        pure $ map entityId rows
+    use (engineEvalTargets . at columnId . non (SpecificRows Set.empty)) >>=
+      \case
+        SpecificRows rs -> pure $ Set.toList rs
+        CompleteColumn -> do
+          col <- getColumn columnId
+          rows <- lift $ listByQuery
+            [ "tableId" =: toObjectId (_columnTableId col) ]
+          pure $ map entityId rows
 
 --------------------------------------------------------------------------------
 
-eitherToMaybe :: Either a b -> Maybe b
-eitherToMaybe (Left _)  = Nothing
-eitherToMaybe (Right b) = Just b
+-- | First looks in the store, then in the DB
+storeGetById :: (MonadHexl m, Model a) => What a -> Id a -> EngineT m (Maybe a)
+storeGetById what i = use (engineStore . what . at i) >>= \case
+  Just (x, a) -> case x of
+    Change Create -> pure $ Just a
+    Change Update -> pure $ Just a
+    Change Delete -> pure Nothing
+    Cached        -> pure $ Just a
+  Nothing -> lift (getById i) >>= \case
+    Left _  -> pure Nothing
+    Right a -> do
+      engineStore . what . at i .= Just (Cached, a)
+      pure $ Just a
+
+storeGetById' :: (MonadHexl m, Model a) => What a -> Id a -> EngineT m a
+storeGetById' what i = storeGetById what i >>= \case
+  Just a -> pure a
+  Nothing -> lift $ throwError $ ErrBug "storeGetById': not found"
+
+storeGetChangedList :: (MonadHexl m) => What a -> EngineT m [Entity a]
+storeGetChangedList what = do
+  m <- use (engineStore . what)
+  let p (i, (x, a)) = case x of
+        Change Create -> Just (Entity i a)
+        Change Update -> Just (Entity i a)
+        Change Delete -> Nothing
+        Cached        -> Nothing
+  pure $ mapMaybe p (Map.toList m)
+
+storeGetByQuery :: (MonadHexl m, Model a)
+                => What a -> Selector -> (a -> Bool)
+                -> EngineT m (Maybe (Entity a))
+storeGetByQuery what query p = do
+  changes <- storeGetChangedList what
+  case find (p . entityVal) changes of
+    Just e  -> pure $ Just e
+    Nothing -> lift (getOneByQuery query) >>= \case
+      Left _ -> pure Nothing
+      Right e -> pure $ Just e
+
+storeGetByQuery' :: (MonadHexl m, Model a)
+                 => What a -> Selector -> (a -> Bool)
+                 -> EngineT m (Entity a)
+storeGetByQuery' what query p = storeGetByQuery what query p >>= \case
+  Nothing -> lift $ throwError $ ErrBug "storeGetByQuery': not found"
+  Just e -> pure e
+
+storeListByQuery :: (MonadHexl m, Model a)
+                 => What a -> Selector -> (a -> Bool)
+                 -> EngineT m [Entity a]
+storeListByQuery what query p = do
+    list <- lift $ listByQuery query
+    changes <- use (engineStore . what)
+    pure $ foldl' apply list (Map.toList changes)
+  where
+    updateList :: (a -> Bool) -> a -> [a] -> [a]
+    updateList _ _ [] = []
+    updateList p' a (x:xs) = if p' x then a : updateList p' a xs
+                                     else x : updateList p' a xs
+    apply as (i, (x, a)) = if p a
+      then case x of
+        Cached        -> as
+        Change Create -> as ++ [Entity i a]
+        Change Update -> updateList (\(Entity i' _) -> i' == i)
+                                    (Entity i a) as
+        Change Delete -> filter (\(Entity i' _) -> i' /= i) as
+      else as
 
 -- | Also actually creates the entity, because otherwise we wouldn't be able
 -- to get the id...
-logCreate :: (MonadHexl m, Model a) => What a -> a -> EngineT m (Id a)
-logCreate what a = do
+storeCreate :: (MonadHexl m, Model a) => What a -> a -> EngineT m (Id a)
+storeCreate what a = do
   i <- lift $ create a
-  engineChanges . what . at i .= Just (Create a)
+  engineStore . what . at i .= Just (Change Create, a)
   pure i
 
-logUpdate :: MonadHexl m => What a -> Id a -> a -> EngineT m ()
-logUpdate what i a = engineChanges . what . at i .= Just (Update a)
+storeUpdate :: MonadHexl m => What a -> Id a -> a -> EngineT m ()
+storeUpdate what i a = engineStore . what . at i .= Just (Change Update, a)
 
-logDelete :: MonadHexl m => What a -> Id a -> EngineT m ()
-logDelete what i = engineChanges . what . at i .= Just Delete
+storeDelete :: (MonadHexl m, Model a) => What a -> Id a -> EngineT m ()
+storeDelete what i = do
+  a <- storeGetById' what i
+  engineStore . what . at i .= Just (Change Delete, a)

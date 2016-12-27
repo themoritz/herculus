@@ -23,7 +23,7 @@ data WsUpMessage
 instance ToJSON WsUpMessage
 instance FromJSON WsUpMessage
 
-type Diff a = [(Id a, ChangeOp a)]
+type Diff a = [(Id a, ChangeOp, a)]
 
 data WsDownMessage
   = WsDownRowCreated (Id Table) (Id Row) [(Entity Column, CellContent)]

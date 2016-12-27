@@ -17,7 +17,7 @@ import           Monads
 
 getCellValue :: MonadEngine m => Id Column -> Id Row -> m (Maybe Value)
 getCellValue columnId rowId = do
-  Entity _ cell <- getCell columnId rowId
+  Entity _ cell <- getCellByCoord columnId rowId
   pure $ case cell ^. cellContent of
     CellError _ -> Nothing
     CellValue v -> Just v
