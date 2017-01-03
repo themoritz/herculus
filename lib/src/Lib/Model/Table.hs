@@ -7,7 +7,7 @@ module Lib.Model.Table where
 
 import           Control.DeepSeq
 
-import           Control.Lens      (makeLenses)
+import           Control.Lens      (Lens', lens)
 import           Data.Aeson        (FromJSON, ToJSON)
 import           Data.Text         (Text)
 
@@ -25,7 +25,11 @@ data Table = Table
   , _tableName      :: Text
   } deriving (Generic, NFData)
 
-makeLenses ''Table
+tableProjectId :: Lens' Table (Id Project)
+tableProjectId = lens _tableProjectId (\s a -> s { _tableProjectId = a })
+
+tableName :: Lens' Table Text
+tableName = lens _tableName (\s a -> s { _tableName = a })
 
 instance Model Table where
   collectionName = const "tables"

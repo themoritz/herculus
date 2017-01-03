@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 
 module Lib.Model.Auth
@@ -29,7 +29,7 @@ module Lib.Model.Auth
   ) where
 
 import           Control.DeepSeq        (NFData)
-import           Control.Lens           (makeLenses)
+import           Control.Lens           (Lens', lens)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Crypto.PasswordStore   (makePassword)
 import qualified Crypto.PasswordStore
@@ -93,6 +93,14 @@ data User = User
   , _userIntention :: Text
   } deriving (Generic, NFData)
 
+userName :: Lens' User Text
+userName = lens _userName (\s a -> s { _userName = a })
+
+userPwHash :: Lens' User PwHash
+userPwHash = lens _userPwHash (\s a -> s { _userPwHash = a })
+
+userIntention :: Lens' User Text
+userIntention = lens _userIntention (\s a -> s { _userIntention = a })
 
 instance Model User where
   collectionName = const "users"
@@ -123,6 +131,15 @@ data UserInfo = UserInfo
   , _uiSessionKey :: SessionKey
   } deriving (Generic, FromJSON, ToJSON, NFData)
 
+uiUserId :: Lens' UserInfo (Id User)
+uiUserId = lens _uiUserId (\s a -> s { _uiUserId = a })
+
+uiUserName :: Lens' UserInfo Text
+uiUserName = lens _uiUserName (\s a -> s { _uiUserName = a })
+
+uiSessionKey :: Lens' UserInfo SessionKey
+uiSessionKey = lens _uiSessionKey (\s a -> s { _uiSessionKey = a })
+
 -- Session
 
 data Session = Session
@@ -131,26 +148,27 @@ data Session = Session
   , _sessionExpDate :: Time
   } deriving (Generic, NFData)
 
+sessionUserId :: Lens' Session (Id User)
+sessionUserId = lens _sessionUserId (\s a -> s { _sessionUserId = a })
+
+sessionKey :: Lens' Session SessionKey
+sessionKey = lens _sessionKey (\s a -> s { _sessionKey = a })
+
+sessionExpDate :: Lens' Session Time
+sessionExpDate = lens _sessionExpDate (\s a -> s { _sessionExpDate = a })
+
 instance Model Session where
   collectionName = const "sessions"
 
 instance ToDocument Session where
-  toDocument Session
-    { _sessionUserId = userId
-    , _sessionKey = sessionKey
-    , _sessionExpDate = sessionExpDate
-    } =
-      [ "userId" =: toObjectId userId
-      , "sessionKey" =: sessionKey
-      , "sessionExpDate" =: sessionExpDate
-      ]
+  toDocument Session{..} =
+    [ "userId"         =: toObjectId _sessionUserId
+    , "sessionKey"     =: _sessionKey
+    , "sessionExpDate" =: _sessionExpDate
+    ]
 
 instance FromDocument Session where
   parseDocument doc = Session
     <$> (fromObjectId <$> Bson.lookup "userId" doc)
     <*> Bson.lookup "sessionKey" doc
     <*> Bson.lookup "sessionExpDate" doc
-
-makeLenses ''User
-makeLenses ''UserInfo
-makeLenses ''Session

@@ -23,7 +23,8 @@ data Row = Row
   { _rowTableId :: Id Table
   } deriving (Generic, NFData, Eq, Ord, Show)
 
-makeLenses ''Row
+rowTableId :: Lens' Row (Id Table)
+rowTableId = lens _rowTableId (\s a -> s { _rowTableId = a })
 
 instance Model Row where
   collectionName = const "rows"

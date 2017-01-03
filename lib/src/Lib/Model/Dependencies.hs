@@ -3,7 +3,6 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
-{-# LANGUAGE TemplateHaskell   #-}
 {-# LANGUAGE TupleSections     #-}
 
 module Lib.Model.Dependencies
@@ -44,12 +43,21 @@ import           Lib.Types
 
 --------------------------------------------------------------------------------
 
+type ColumnDependendants =
+  Map (Id Column) (Id Table, Map (Id Column) ColumnDependency)
+type TableDependendants =
+  Map (Id Table) (Map (Id Column) TableDependency)
+
 data DependencyGraph = DependencyGraph
-  { _columnDependants :: Map (Id Column) (Id Table, Map (Id Column) ColumnDependency)
-  , _tableDependants  :: Map (Id Table) (Map (Id Column) TableDependency)
+  { _columnDependants :: ColumnDependendants
+  , _tableDependants  :: TableDependendants
   } deriving (Show, Generic)
 
-makeLenses ''DependencyGraph
+columnDependants :: Lens' DependencyGraph ColumnDependendants
+columnDependants = lens _columnDependants (\s a -> s { _columnDependants = a })
+
+tableDependants :: Lens' DependencyGraph TableDependendants
+tableDependants = lens _tableDependants (\s a -> s { _tableDependants = a })
 
 instance Serialize DependencyGraph
 

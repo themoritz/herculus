@@ -2,13 +2,12 @@
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE TemplateHaskell       #-}
 
 module Lib.Model.Project where
 
 import           Control.DeepSeq
 
-import           Control.Lens           (makeLenses)
+import           Control.Lens           (Lens', lens)
 import           Data.Aeson             (FromJSON, ToJSON)
 import           Data.Serialize         (decode, encode)
 import           Data.Text              (Text)
@@ -41,7 +40,14 @@ data Project = Project
   , _projectDependencyGraph :: DependencyGraph
   }
 
-makeLenses ''Project
+projectName :: Lens' Project Text
+projectName = lens _projectName (\s a -> s { _projectName = a })
+
+projectOwner :: Lens' Project (Id User)
+projectOwner = lens _projectOwner (\s a -> s { _projectOwner = a })
+
+projectDependencyGraph :: Lens' Project DependencyGraph
+projectDependencyGraph = lens _projectDependencyGraph (\s a -> s { _projectDependencyGraph = a })
 
 --------------------------------------------------------------------------------
 
