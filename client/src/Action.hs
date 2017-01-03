@@ -60,16 +60,13 @@ data Action
   | ToLoginForm
   | Signup SignupData
   | Login LoginData
-  | LoggedIn UserInfo
   | Logout
-  | RecoverSessionDone UserInfo
-  | RecoverSessionFailed
-
+  -- RowCache
   | RowCacheGet (Id Table)
   | RowCacheAction (Id Table) RowCache.Action
+
   | SetProjectOverview SessionKey
   -- Projects
-  | ProjectsSet [Entity ProjectClient]
   | ProjectsCreate Text -- project name
   | ProjectsAdd (Entity ProjectClient)
   | ProjectsLoadProject (Id ProjectClient)

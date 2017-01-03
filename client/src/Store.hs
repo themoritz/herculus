@@ -65,6 +65,13 @@ data LoggedInState = LoggedInState
   , _stateProjectView :: ProjectViewState
   }
 
+initLoggedInState :: SessionKey -> UserInfo -> LoggedInState
+initLoggedInState sKey userInfo = LoggedInState
+  { _stateUserInfo     = userInfo
+  , _stateSessionKey   = sKey
+  , _stateProjectView  = StateProjectOverview Map.empty
+  }
+
 data ProjectViewState
   = StateProjectOverview ProjectOverviewState
   | StateProjectDetail ProjectDetailState
@@ -106,84 +113,84 @@ makePrisms ''SessionState
 makePrisms ''ProjectViewState
 makeLenses ''ProjectDetailState
 
--- TODO: fix rerender loop triggered by use of this function
-forProjectDetail :: State -> (SessionKey -> ProjectDetailState -> IO ProjectDetailState) -> IO State
-forProjectDetail st action =
-    forLoggedIn st $ \liSt -> case liSt ^. stateProjectView of
-      StateProjectDetail pdSt -> updState liSt <$> action (liSt ^. stateSessionKey) pdSt
-      StateProjectOverview _ -> do
-        -- TODO: proper error message
-        putStrLn "inconsistent client state: unexpected: project overview"
-        pure liSt
-  where
-    updState :: LoggedInState -> ProjectDetailState -> LoggedInState
-    updState liSt pdSt = liSt & stateProjectView .~ StateProjectDetail pdSt
+--------------------------------------------------------------------------------
 
-forProjectDetail_ :: State -> (SessionKey -> ProjectDetailState -> IO ()) -> IO ()
-forProjectDetail_ st action =
-  forLoggedIn_ st $ \liSt -> case liSt ^. stateProjectView of
-      StateProjectDetail pdSt -> action (liSt ^. stateSessionKey) pdSt
-      StateProjectOverview _ ->
-        -- TODO: proper error message
-        putStrLn "inconsistent client state: unexpected: project overview"
+forProjectDetail :: (SessionKey -> ProjectDetailState -> App a) -> App a
+forProjectDetail action =
+  forLoggedIn st $ \liSt -> case liSt ^. stateProjectView of
+    StateProjectDetail pdSt -> action (liSt ^. stateSessionKey) pdSt
+    StateProjectOverview _ -> do
+      showMessage $ Message.SetError
+        "inconsistent client state: unexpected: project overview"
+      halt
 
-forProjectDetail' :: State -> (SessionKey -> ProjectDetailState -> IO State) -> IO State
-forProjectDetail' st action =
-  forLoggedIn' st $ \liSt -> case liSt ^. stateProjectView of
-      StateProjectDetail pdSt -> action (liSt ^. stateSessionKey) pdSt
-      StateProjectOverview _ -> do
-        -- TODO: proper error message
-        putStrLn "inconsistent client state: unexpected: project overview"
-        pure st
+forProjectDetail' :: (SessionKey -> ProjectDetailState -> App ProjectDetailState) -> App ()
+forProjectDetail' action = do
+  new <- forProjectDetail action
+  stateSession . _StateLoggedIn . stateProjectView . _StateProjectDetail .= new
 
--- execute action in case the user is logged in and error otherwise
-forLoggedIn :: State -> (LoggedInState -> IO LoggedInState) -> IO State
-forLoggedIn st action = case st ^. stateSession of
-  StateLoggedIn  liSt -> updStateLoggedIn st <$> action liSt
-  StateLoggedOut _    -> do
-    -- TODO: proper error message
-    putStrLn "inconsistent client state: unexpected: not logged in"
-    pure st
+forProjectDetail_ :: (SessionKey -> ProjectDetailState -> App a) -> App ()
+forProjectDetail_ = void . forProjectDetail
 
--- execute action in case the user is logged in and error otherwise
--- use the state read-only for the action
-forLoggedIn_ :: State -> (LoggedInState -> IO ()) -> IO ()
-forLoggedIn_ st action = case st ^. stateSession of
-  StateLoggedIn  liSt -> action liSt
-  StateLoggedOut _    ->
-    -- TODO: proper error message
-    putStrLn "inconsistent client state: unexpected: not logged in"
-
--- execute action in case the user is logged in and error otherwise
--- in this variant, the action takes care of transforming the
--- LoggedInState to State
-forLoggedIn' :: State -> (LoggedInState -> IO State) -> IO State
-forLoggedIn' st action = case st ^. stateSession of
+-- | Execute action in case the user is logged in and error otherwise
+-- throw an error.
+forLoggedIn :: (LoggedInState -> App a) -> App a
+forLoggedIn action = use stateSession >>= \case
   StateLoggedIn  liSt -> action liSt
   StateLoggedOut _    -> do
-    -- TODO: proper error message
-    putStrLn "inconsistent client state: unexpected: not logged in"
-    pure st
+    showMessage $ Message.SetError
+      "inconsistent client state: unexpected: not logged in"
+    halt
 
-updStateProjectDetail :: State -> ProjectDetailState -> State
-updStateProjectDetail st pdSt =
-  st & stateSession . _StateLoggedIn . stateProjectView .~ StateProjectDetail pdSt
+forLoggedIn' :: (LoggedInState -> App LoggedInState) -> App ()
+forLoggedIn' action = do
+  new <- forLoggedIn action
+  stateSession .= StateLoggedIn new
 
-updStateLoggedIn :: State -> LoggedInState -> State
-updStateLoggedIn st liSt = st & stateSession .~ StateLoggedIn liSt
+forLoggedIn_ :: (LoggedInState -> App a) -> App ()
+forLoggedIn_ = void . forLoggedIn
 
-initLoggedInState :: SessionKey -> UserInfo -> LoggedInState
-initLoggedInState sKey userInfo = LoggedInState
-  { _stateUserInfo     = userInfo
-  , _stateSessionKey   = sKey
-  , _stateProjectView  = StateProjectOverview Map.empty
-  }
+--------------------------------------------------------------------------------
 
-setProjectOverview :: SessionKey -> IO ()
-setProjectOverview sKey =
-  request api (Proxy :: Proxy Api.ProjectList)
-    (session sKey) $ mkCallback $
-    \projects -> [ProjectsSet projects]
+setProjects :: [ProjectClient] -> App ()
+setProjects ps = 
+  forLoggedIn' $ \liSt ->
+    pure $ liSt & stateProjectView .~ StateProjectOverview projectsMap
+      where
+        projectsMap = Map.fromList $ map entityToTuple ps
+
+setProjectDetailState :: ProjectDetailState -> App ()
+setProjectDetailState pdSt =
+  stateSession . _StateLoggedIn . stateProjectView .= StateProjectDetail pdSt
+
+setProjectOverview :: SessionKey -> App ()
+setProjectOverview sKey = do
+  projects <- ajax' $ request api (Proxy :: Proxy Api.ProjectList) (session sKey)
+  setProjects projects
+
+ajax' :: (HandleResponse a -> IO ()) -> App a
+ajax' go = ajax go >>= \case
+  Left (401, e) -> do
+    showMessage $ Message.SetWarning $
+      "Unauthorized. Are you logged in?" <>
+      " (401) " <> Text.pack e
+    halt
+  Left (n, e) -> do
+    showMessage $ Message.SetError $
+      " (" <> (Text.pack . show) n <> ") " <> Text.pack e
+    halt
+  Right x -> pure x
+
+performLogin :: UserInfo -> App ()
+performLogin userInfo@(UserInfo _ _ sKey) = do
+  persistSession sKey
+  setProjectOverview sKey
+  stateSession .= StateLoggedIn (initLoggedInState sKey userInfo)
+
+showMessage :: Message.Action -> App ()
+showMessage a = stateMessage .= Message.runAction a
+
+--------------------------------------------------------------------------------
 
 store :: ReactStore State
 store = mkStore State
@@ -203,88 +210,79 @@ instance StoreData State where
 
 update :: Action -> App ()
 update = \case
-      MessageAction a ->
-        pure $ st & stateMessage .~ Message.runAction a
 
-      GlobalInit wsUrl -> do
-        ws <- jsonWebSocketNew wsUrl $ pure . dispatch . \case
-          WsDownCellsChanged cs    -> TableUpdateCells cs
-          WsDownColumnsChanged cs  -> TableUpdateColumns cs
-          WsDownRowCreated t r dat -> RowCacheAction t $ RowCache.Add r dat
-          WsDownRowDeleted t r     -> RowCacheAction t $ RowCache.Delete r
-        case st ^. stateSession of
-          StateLoggedIn liSt -> do
-            setProjectOverview (liSt ^. stateSessionKey)
-            pure $ st & stateWebSocket .~ Just ws
-          StateLoggedOut LoggedOutUninitialized ->
-            recoverSession >>= \case
-              Just sessionKey -> do
-                request api (Proxy :: Proxy Api.AuthGetUserInfo) sessionKey $ mkCallback $ \case
-                  GetUserInfoSuccess userInfo -> [ RecoverSessionDone userInfo ]
-                  GetUserInfoFailed _ ->
-                    [ RecoverSessionFailed
-                    , MessageAction $ Message.SetWarning "Failed to restore local session"
-                    ]
-                pure $ st & stateWebSocket .~ Just ws
-              Nothing -> pure $ st & stateWebSocket .~ Just ws
-                                   & stateSession .~ StateLoggedOut LoggedOutLoginForm
-          StateLoggedOut _ ->
-            pure $ st & stateWebSocket .~ Just ws
+  MessageAction a ->
+    stateMessage .= Message.runAction a
 
-      GlobalSendWebSocket msg -> do
-        for_ (st ^. stateWebSocket) $ \ws -> jsonWebSocketSend msg ws
-        pure st
+  GlobalInit wsUrl -> do
+    ws <- jsonWebSocketNew wsUrl $ pure . dispatch . \case
+      -- WsDownCellsChanged cs    -> TableUpdateCells cs
+      -- WsDownColumnsChanged cs  -> TableUpdateColumns cs
+      WsDownRowCreated t r dat -> RowCacheAction t $ RowCache.Add r dat
+      WsDownRowDeleted t r     -> RowCacheAction t $ RowCache.Delete r
+    stateWebSocket .= Just ws
 
-      -- Session
+    use stateSession >>= \case
 
-      Signup signupData -> do
-        request api (Proxy :: Proxy Api.AuthSignup) signupData $ mkCallback $ \case
-          SignupSuccess userInfo ->
-            [ LoggedIn userInfo
-            , MessageAction $ Message.SetSuccess "Successfully signed up."
-            ]
-          SignupFailed txt ->
-            [ MessageAction $ Message.SetWarning txt
-            ]
-        pure st
+      StateLoggedIn liSt -> do
+        setProjectOverview (liSt ^. stateSessionKey)
 
-      ToSignupForm -> pure $ st & stateSession .~ StateLoggedOut LoggedOutSignupForm
+      StateLoggedOut LoggedOutUninitialized ->
+        (liftIO recoverSession) >>= \case
+          Just sessionKey -> do
+            result <- ajax' $ request api (Proxy :: Proxy Api.AuthGetUserInfo) sessionKey
+            case result of
+              GetUserInfoSuccess userInfo -> do
+                setProjectOverview (sKey userInfo)
+                stateSession .= StateLoggedIn (initLoggedInState (sKey userInfo) userInfo)
+              GetUserInfoFailed _ -> do
+                liftIO clearSession
+                stateSession .= StateLoggedOut LoggedOutLoginForm
+                showMessage $ Message.SetWarning "Failed to restore local session"
+          Nothing ->
+            stateSession .= StateLoggedOut LoggedOutLoginForm
 
-      ToLoginForm -> pure $ st & stateSession .~ StateLoggedOut LoggedOutLoginForm
+      StateLoggedOut _ -> pure ()
 
-      Login loginData -> do
-        request api (Proxy :: Proxy Api.AuthLogin) loginData $ mkCallback $ \case
-          LoginSuccess userInfo ->
-            [ LoggedIn userInfo
-            , MessageAction $ Message.SetSuccess "Successfully logged in."
-            ]
-          LoginFailed txt ->
-            [ MessageAction $ Message.SetWarning txt
-            ]
-        pure st
+  GlobalSendWebSocket msg -> do
+    mWS <- use stateWebSocket
+    for_ mWS $ jsonWebSocketSend msg
 
-      LoggedIn userInfo@(UserInfo _ _ sKey) -> do
-        persistSession sKey
-        setProjectOverview sKey
-        pure $ updStateLoggedIn st $ initLoggedInState sKey userInfo
+  -- Session -------------------------------------------------------------------
 
-      Logout -> do
-        clearSession
-        forLoggedIn_ st $ \liSt ->
-          request api (Proxy :: Proxy Api.AuthLogout)
-                      (session $ liSt ^. stateSessionKey) $ mkCallback $
-                      const [MessageAction $ Message.SetSuccess "Successfully logged out."]
-        pure $ st & stateSession .~ StateLoggedOut LoggedOutLoginForm
+  Signup signupData -> do
+    result <- ajax' $ request api (Proxy :: Proxy Api.AuthSignup) signupData
+    case result of
+      SignupSuccess userInfo -> do
+        performLogin userInfo
+        showMessage $ Message.SetSuccess "Successfully signed up."
+      SignupFailed txt ->
+        showMessage $ Message.SetWarning txt
 
-      RecoverSessionDone userInfo@(UserInfo _ _ sKey) -> do
-        setProjectOverview sKey
-        pure $ updStateLoggedIn st $ initLoggedInState sKey userInfo
+  ToSignupForm ->
+    stateSession .= StateLoggedOut LoggedOutSignupForm
 
-      RecoverSessionFailed -> do
-        clearSession
-        pure $ st & stateSession .~ StateLoggedOut LoggedOutLoginForm
+  ToLoginForm ->
+    stateSession .= StateLoggedOut LoggedOutLoginForm
 
-      -- Cache
+  Login loginData -> do
+    result <- ajax' $ request api (Proxy :: Proxy Api.AuthLogin) loginData
+    case result of
+      LoginSuccess userInfo -> do
+        performLogin userInfo
+        showMessage $ Message.SetSuccess "Successfully logged in."
+      LoginFailed txt ->
+        showMessage $ Message.SetWarning txt
+
+  Logout -> do
+    liftIO $ clearSession
+    forLoggedIn_ $ \liSt -> do
+      ajax' $ request api (Proxy :: Proxy Api.AuthLogout)
+                          (session $ liSt ^. stateSessionKey)
+      showMessage $ Message.SetSuccess "Successfully logged out."
+      stateSession .= StateLoggedOut LoggedOutLoginForm
+
+  -- Cache ---------------------------------------------------------------------
 
       RowCacheGet tableId ->
         forLoggedIn st $ \liSt ->
@@ -333,13 +331,6 @@ update = \case
       -- Projects
       SetProjectOverview sKey -> do
         setProjectOverview sKey
-        pure st
-
-      ProjectsSet ps ->
-        forLoggedIn st $ \liSt ->
-          pure $ liSt & stateProjectView .~ StateProjectOverview projectsMap
-            where
-              projectsMap = Map.fromList $ map entityToTuple ps
 
       ProjectsCreate name -> do
         forLoggedIn_ st $ \liSt ->
@@ -499,7 +490,7 @@ update = \case
                           <|> Map.lookupGT tableId (pdSt ^. stateTables)
 
 
-                  st' = updStateProjectDetail st $ pdSt
+                  st' = setProjectDetailState st $ pdSt
                           & stateTables %~ Map.delete tableId
                           & stateColumns .~ Map.empty
                           & stateCells .~ Map.empty
@@ -511,7 +502,7 @@ update = \case
                   React.Flux.transform (TablesLoadTable nextTableId) st'
                 Nothing -> pure st'
             else
-              pure $ updStateProjectDetail st $ pdSt & stateTables %~ Map.delete tableId
+              pure $ setProjectDetailState st $ pdSt & stateTables %~ Map.delete tableId
 
       -- Cell
 
@@ -530,13 +521,3 @@ update = \case
 
 toCellUpdate :: Entity Cell -> (Id Column, Id Row, CellContent)
 toCellUpdate (Entity _ (Cell content _ c r)) = (c, r, content)
-
-mkCallback :: (a -> [Action])
-           -> HandleResponse a
-mkCallback cbSuccess = pure . \case
-  Left (401, e) -> dispatch $ MessageAction $ Message.SetWarning $
-                    "Unauthorized. Are you logged in?" <>
-                    " (401) " <> Text.pack e
-  Left (n, e)   -> dispatch $ MessageAction $ Message.SetError $
-                    " (" <> (Text.pack . show) n <> ") " <> Text.pack e
-  Right x       -> SomeStoreAction store <$> cbSuccess x
