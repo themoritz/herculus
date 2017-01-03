@@ -12,17 +12,17 @@ cabal-version:       >=1.10
 
 executable client
   main-is:             Main.hs
-  other-modules:       WebSocket
-                     , Action
+  other-modules:       Action
                      , Action.RowCache
                      , Action.Message
                      , Action.Column
+                     , Config
+                     , React.Flux.Addons.Free
                      , Store
                      , Store.Column
                      , Store.Message
                      , Store.RowCache
                      , Store.Session
-                     , Config
                      , Views
                      , Views.Auth
                      , Views.Table
@@ -36,6 +36,7 @@ executable client
                      , Views.Common
                      , Views.ProjectOverview
                      , Views.Util
+                     , WebSocket
   default-extensions:  OverloadedStrings
                      , TypeFamilies
                      , LambdaCase
@@ -51,6 +52,7 @@ executable client
                      , ghcjs-base
                      , http-api-data
                      , lens
+                     , lifted-base
                      , herculus-lib
                      , mtl
                      , react-flux

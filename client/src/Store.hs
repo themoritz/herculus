@@ -12,6 +12,7 @@ import           Data.Monoid               ((<>))
 import           Data.Proxy
 import qualified Data.Text                 as Text
 import           React.Flux
+import           React.Flux.Addons.Free
 import           React.Flux.Addons.Servant (HandleResponse, request)
 import           WebSocket
 
@@ -191,10 +192,17 @@ store = mkStore State
   , _stateSession   = StateLoggedOut LoggedOutUninitialized
   }
 
-instance StoreData State where
-  type StoreAction State = Action
-  transform action st = case action of
+dispatch :: Action -> [SomeStoreAction]
+dispatch a = [SomeStoreAction store freeFluxDispatch a]
 
+type App = FreeFlux State
+
+instance StoreData State where
+  type StoreAction State = FreeFluxAction State Action
+  transform = freeFluxTransform store update
+
+update :: Action -> App ()
+update = \case
       MessageAction a ->
         pure $ st & stateMessage .~ Message.runAction a
 
@@ -522,9 +530,6 @@ instance StoreData State where
 
 toCellUpdate :: Entity Cell -> (Id Column, Id Row, CellContent)
 toCellUpdate (Entity _ (Cell content _ c r)) = (c, r, content)
-
-dispatch :: Action -> [SomeStoreAction]
-dispatch a = [SomeStoreAction store a]
 
 mkCallback :: (a -> [Action])
            -> HandleResponse a
