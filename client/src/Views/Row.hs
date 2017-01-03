@@ -1,4 +1,4 @@
-module Views.Record where
+module Views.Row where
 
 import           React.Flux
 
@@ -9,9 +9,9 @@ import           Action            (Action (TableDeleteRecord))
 import           Store             (dispatch)
 import           Views.Combinators
 
-record_ :: Entity Record -> ReactElementM eh ()
-record_ !c = view record c mempty
+row_ :: Entity Row -> ReactElementM eh ()
+row_ !c = view row c mempty
 
-record :: ReactView (Entity Record)
-record = defineView "record" $ \(Entity i _) ->
+row :: ReactView (Entity Row)
+row = defineView "record" $ \(Entity i _) ->
   faButton_ "minus-circle" $ dispatch $ TableDeleteRecord i

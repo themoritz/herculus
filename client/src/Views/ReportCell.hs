@@ -15,7 +15,7 @@ import           Web.HttpApiData   (toUrlPiece)
 import           Lib.Api.Rest      (sessionParamStr)
 import           Lib.Model.Auth    (SessionKey)
 import           Lib.Model.Column
-import           Lib.Model.Record
+import           Lib.Model.Row
 import           Lib.Types
 
 import           Views.Combinators (clspan_)
@@ -23,7 +23,7 @@ import           Views.Combinators (clspan_)
 data ReportCellProps = ReportCellProps
   { reportCellSKey      :: !SessionKey
   , reportCellColId     :: !(Id Column)
-  , reportCellRecId     :: !(Id Record)
+  , reportCellRecId     :: !(Id Row)
   , reportCellColReport :: !ReportCol
   }
 
@@ -49,16 +49,16 @@ reportCell = defineView "reportCell" $ \ReportCellProps{..} -> cldiv_ "reportCel
           , "target" $= "_blank"
           ] $ faIcon_ "file-code-o fa-lg"
 
-getPlain :: SessionKey -> Id Column -> Id Record -> Text
+getPlain :: SessionKey -> Id Column -> Id Row -> Text
 getPlain = getReportPath "getReportPlain"
 
-getPDF :: SessionKey -> Id Column -> Id Record -> Text
+getPDF :: SessionKey -> Id Column -> Id Row -> Text
 getPDF = getReportPath "getReportPDF"
 
-getHTML :: SessionKey -> Id Column -> Id Record -> Text
+getHTML :: SessionKey -> Id Column -> Id Row -> Text
 getHTML = getReportPath "getReportHTML"
 
-getReportPath :: Text -> SessionKey -> Id Column -> Id Record -> Text
+getReportPath :: Text -> SessionKey -> Id Column -> Id Row -> Text
 getReportPath directory sKey columnId recordId =
   "/api/cell/" <> directory <>
   "/" <> (Text.pack . show) columnId <>

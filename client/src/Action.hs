@@ -26,15 +26,15 @@ import           Lib.Model.Auth                 (LoginData, SessionKey,
                                                  SignupData, UserInfo)
 import           Lib.Model.Cell                 (Cell, CellContent, Value)
 import           Lib.Model.Column               (Column)
-import           Lib.Model.Project              (Project)
-import           Lib.Model.Record               (Record)
+import           Lib.Model.Project              (ProjectClient)
+import           Lib.Model.Row                  (Row)
 import           Lib.Model.Table                (Table)
 import           Lib.Types                      (Id)
 import           Lib.Util.Base64                (unBase64Url)
 
 import qualified Action.Column                  as Column
 import qualified Action.Message                 as Message
-import qualified Action.RecordCache             as RecordCache
+import qualified Action.RowCache                as RowCache
 
 type instance AuthClientData Api.SessionProtect = SessionKey
 
@@ -65,35 +65,34 @@ data Action
   | RecoverSessionDone UserInfo
   | RecoverSessionFailed
 
-  | RecordCacheGet (Id Table)
-  | RecordCacheAction (Id Table) RecordCache.Action
+  | RowCacheGet (Id Table)
+  | RowCacheAction (Id Table) RowCache.Action
   | SetProjectOverview SessionKey
   -- Projects
-  | ProjectsSet [Entity Project]
+  | ProjectsSet [Entity ProjectClient]
   | ProjectsCreate Text -- project name
-  | ProjectsAdd (Entity Project)
-  | ProjectsLoadProject (Id Project)
-  | ProjectDelete (Id Project)
+  | ProjectsAdd (Entity ProjectClient)
+  | ProjectsLoadProject (Id ProjectClient)
+  | ProjectDelete (Id ProjectClient)
   -- Project
   | ProjectSetName Text
-  | ProjectLoadDone (Id Project) Project [Entity Table]
+  | ProjectLoadDone (Id ProjectClient) ProjectClient [Entity Table]
   -- Tables
   | TablesCreate Table
   | TablesAdd (Entity Table)
   | TablesLoadTable (Id Table)
   -- Table
-  | TableSet ([Entity Column], [Entity Record], [(Id Column, Id Record, CellContent)])
+  | TableSet ([Entity Column], [Entity Row], [(Id Column, Id Row, CellContent)])
   | TableUpdateCells [Cell]
   | TableUpdateColumns [Entity Column]
-  | TableAddColumn Column
-  | TableAddColumnDone (Entity Column, [Entity Cell])
+  | TableAddDataCol
+  | TableAddReportCol
   | TableDeleteColumn (Id Column)
-  | TableAddRecord
-  | TableAddRecordDone (Entity Record, [Entity Cell])
-  | TableDeleteRecord (Id Record)
+  | TableAddRow
+  | TableDeleteRow (Id Row)
   | TableSetName (Id Table) Text
   | TableDelete (Id Table)
   -- Cell
-  | CellSetValue (Id Column) (Id Record) Value
+  | CellSetValue (Id Column) (Id Row) Value
   | ColumnAction (Id Column) Column.Action
   deriving (Typeable, Generic, NFData)

@@ -14,13 +14,13 @@ executable client
   main-is:             Main.hs
   other-modules:       WebSocket
                      , Action
-                     , Action.RecordCache
+                     , Action.RowCache
                      , Action.Message
                      , Action.Column
                      , Store
                      , Store.Column
                      , Store.Message
-                     , Store.RecordCache
+                     , Store.RowCache
                      , Store.Session
                      , Config
                      , Views
@@ -28,7 +28,7 @@ executable client
                      , Views.Table
                      , Views.Column
                      , Views.Column.ConfigDialog
-                     , Views.Record
+                     , Views.Row
                      , Views.Cell
                      , Views.ReportCell
                      , Views.Foreign

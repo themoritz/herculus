@@ -22,22 +22,21 @@ import           Lib.Model.Auth            (GetUserInfoResponse (..),
                                             LoginResponse (..), SessionKey,
                                             SignupResponse (..),
                                             UserInfo (UserInfo))
-import           Lib.Model.Cell            (Aspects (..), Cell (..),
-                                            CellContent (..))
+import           Lib.Model.Cell            (Cell (..), CellContent (..))
 import           Lib.Model.Column          (Column, columnTableId)
 import           Lib.Model.Project
-import           Lib.Model.Record
+import           Lib.Model.Row
 import           Lib.Model.Table
 import           Lib.Types
 
 import           Action                    (Action (..), api, session)
 import qualified Store.Column              as Column
 import qualified Store.Message             as Message
-import qualified Store.RecordCache         as RecordCache
+import qualified Store.RowCache            as RowCache
 import           Store.Session             (clearSession, persistSession,
                                             recoverSession)
 
-data Coords = Coords (Id Column) (Id Record)
+data Coords = Coords (Id Column) (Id Row)
   deriving (Eq, Ord, Show)
 
 data CellInfo = CellInfo
@@ -73,26 +72,26 @@ type ProjectOverviewState = Map (Id Project) Project
 
 -- TODO: maybe put tableId and tables one level deeper into project?
 data ProjectDetailState = ProjectDetailState
-  { _stateProjectId    :: Id Project
-  , _stateProject      :: Project
-  , _stateCacheRecords :: Map (Id Table) RecordCache.State
-  , _stateTableId      :: Maybe (Id Table)
-  , _stateColumns      :: Map (Id Column) Column.State
-  , _stateTables       :: Map (Id Table) Table
-  , _stateCells        :: Map Coords CellContent
-  , _stateRecords      :: Map (Id Record) Record
+  { _stateProjectId :: Id ProjectClient
+  , _stateProject   :: ProjectClient
+  , _stateCacheRows :: Map (Id Table) RowCache.State
+  , _stateTableId   :: Maybe (Id Table)
+  , _stateColumns   :: Map (Id Column) Column.State
+  , _stateTables    :: Map (Id Table) Table
+  , _stateCells     :: Map Coords CellContent
+  , _stateRows      :: Map (Id Row) Row
 }
 
-mkProjectDetailState :: Id Project -> Project -> ProjectDetailState
+mkProjectDetailState :: Id ProjectClient -> ProjectClient -> ProjectDetailState
 mkProjectDetailState i p = ProjectDetailState
-  { _stateProjectId    = i
-  , _stateProject      = p
-  , _stateCacheRecords = Map.empty
-  , _stateTableId      = Nothing
-  , _stateColumns      = Map.empty
-  , _stateTables       = Map.empty
-  , _stateCells        = Map.empty
-  , _stateRecords      = Map.empty
+  { _stateProjectId = i
+  , _stateProject   = p
+  , _stateCacheRows = Map.empty
+  , _stateTableId   = Nothing
+  , _stateColumns   = Map.empty
+  , _stateTables    = Map.empty
+  , _stateCells     = Map.empty
+  , _stateRows      = Map.empty
   }
 
 data LoggedOutState
@@ -201,10 +200,10 @@ instance StoreData State where
 
       GlobalInit wsUrl -> do
         ws <- jsonWebSocketNew wsUrl $ pure . dispatch . \case
-          WsDownCellsChanged cs       -> TableUpdateCells cs
-          WsDownColumnsChanged cs     -> TableUpdateColumns cs
-          WsDownRecordCreated t r dat -> RecordCacheAction t $ RecordCache.Add r dat
-          WsDownRecordDeleted t r     -> RecordCacheAction t $ RecordCache.Delete r
+          WsDownCellsChanged cs    -> TableUpdateCells cs
+          WsDownColumnsChanged cs  -> TableUpdateColumns cs
+          WsDownRowCreated t r dat -> RowCacheAction t $ RowCache.Add r dat
+          WsDownRowDeleted t r     -> RowCacheAction t $ RowCache.Delete r
         case st ^. stateSession of
           StateLoggedIn liSt -> do
             setProjectOverview (liSt ^. stateSessionKey)
@@ -279,19 +278,19 @@ instance StoreData State where
 
       -- Cache
 
-      RecordCacheGet tableId ->
+      RowCacheGet tableId ->
         forLoggedIn st $ \liSt ->
           case liSt ^. stateProjectView of
             StateProjectDetail pdSt -> do
-              pdSt' <- case pdSt ^. stateCacheRecords . at tableId of
+              pdSt' <- case pdSt ^. stateCacheRows . at tableId of
                 Just _  -> pure pdSt
                -- cache not yet initialized: no key in map => Nothing
                 Nothing -> do
-                  request api (Proxy :: Proxy Api.RecordListWithData)
+                  request api (Proxy :: Proxy Api.RowListWithData)
                           (session $ liSt ^. stateSessionKey) tableId $ mkCallback $
-                          \records -> [RecordCacheAction tableId $ RecordCache.Set records]
+                          \records -> [RowCacheAction tableId $ RowCache.Set records]
                   -- initialize cache with empty map
-                  pure $ pdSt & stateCacheRecords . at tableId ?~ RecordCache.empty
+                  pure $ pdSt & stateCacheRows . at tableId ?~ RowCache.empty
               pure $ liSt & stateProjectView .~ StateProjectDetail pdSt'
 
             StateProjectOverview _ -> do
@@ -301,20 +300,20 @@ instance StoreData State where
         -- even though it yields "pure pdSt" a rerender is triggered, and thus a react loop
         --
         -- forProjectDetail st $ \sKey pdSt ->
-        --   case pdSt ^. stateCacheRecords . at tableId of
+        --   case pdSt ^. stateCacheRows . at tableId of
         --     Just _ -> pure pdSt
         --     -- cache not yet initialized: no key in map => Nothing
         --     Nothing -> do
-        --       request api (Proxy :: Proxy Api.RecordListWithData)
+        --       request api (Proxy :: Proxy Api.RowListWithData)
         --               (session sKey) tableId $ mkCallback $
-        --               \records -> [RecordCacheAction tableId $ RecordCache.Set records]
+        --               \records -> [RowCacheAction tableId $ RowCache.Set records]
         --       -- initialize cache with empty map
-        --       pure $ pdSt & stateCacheRecords . at tableId ?~ RecordCache.empty
+        --       pure $ pdSt & stateCacheRows . at tableId ?~ RowCache.empty
 
-      RecordCacheAction tableId a ->
+      RowCacheAction tableId a ->
         forProjectDetail st $ \_ pdSt ->
           pure $ pdSt &
-            stateCacheRecords . at tableId . _Just %~ RecordCache.runAction tableId a
+            stateCacheRows . at tableId . _Just %~ RowCache.runAction tableId a
 
       -- Column
 
@@ -411,17 +410,17 @@ instance StoreData State where
       TableSet (cols, recs, entries) ->
         forProjectDetail st $ \_ pdSt -> pure $
           pdSt & stateColumns .~ Map.fromList (map entityToTuple cols)
-               & stateRecords .~ Map.fromList (map entityToTuple recs)
+               & stateRows .~ Map.fromList (map entityToTuple recs)
                & stateCells   .~ fillEntries entries Map.empty
 
       TableUpdateCells cells ->
         forProjectDetail st $ \_ pdSt -> pure $
-          let toEntry (Cell content (Aspects _ c r)) = (c, r, content)
-              setRecordInCache pdSt'' (Cell content (Aspects t c r)) =
-                pdSt'' & stateCacheRecords . at t . _Just
-                     . RecordCache.recordCache . at r . _Just
+          let toEntry (Cell content _ c r) = (c, r, content)
+              setRowInCache pdSt'' (Cell content (Aspects t c r)) =
+                pdSt'' & stateCacheRows . at t . _Just
+                     . RowCache.recordCache . at r . _Just
                      . at c . _Just . _2 .~ content
-              pdSt' = foldl' setRecordInCache pdSt cells
+              pdSt' = foldl' setRowInCache pdSt cells
           in pdSt' & stateCells %~ fillEntries (map toEntry cells)
 
       TableUpdateColumns entities ->
@@ -453,24 +452,24 @@ instance StoreData State where
           pure $ pdSt & stateColumns %~ Map.delete i
                       & stateCells %~ Map.filterWithKey (\(Coords c _) _ -> c /= i)
 
-      TableAddRecord ->
+      TableAddRow ->
         forProjectDetail st $ \sKey pdSt -> do
           for_ (pdSt ^. stateTableId) $ \table ->
-            request api (Proxy :: Proxy Api.RecordCreate)
+            request api (Proxy :: Proxy Api.RowCreate)
                         (session sKey) table $ mkCallback $
-                        \record -> [TableAddRecordDone record]
+                        \record -> [TableAddRowDone record]
           pure pdSt
 
-      TableAddRecordDone (Entity i r, cells) ->
+      TableAddRowDone (Entity i r, cells) ->
         forProjectDetail st $ \_ pdSt -> pure $
-          pdSt & stateRecords %~ Map.insert i r
+          pdSt & stateRows %~ Map.insert i r
                & stateCells %~ fillEntries (map toCellUpdate cells)
 
-      TableDeleteRecord i ->
+      TableDeleteRow i ->
         forProjectDetail st $ \sKey pdSt -> do
-          request api (Proxy :: Proxy Api.RecordDelete)
+          request api (Proxy :: Proxy Api.RowDelete)
                       (session sKey) i $ mkCallback $ const []
-          pure $ pdSt & stateRecords %~ Map.delete i
+          pure $ pdSt & stateRows %~ Map.delete i
                       & stateCells %~ Map.filterWithKey (\(Coords _ r) _ -> r /= i)
 
       TableSetName i name ->
@@ -496,7 +495,7 @@ instance StoreData State where
                           & stateTables %~ Map.delete tableId
                           & stateColumns .~ Map.empty
                           & stateCells .~ Map.empty
-                          & stateRecords .~ Map.empty
+                          & stateRows .~ Map.empty
                           & stateTableId .~ (fst <$> nextTable)
 
               case nextTable of
@@ -521,8 +520,8 @@ instance StoreData State where
           toCoords (colId, recId, val) = (Coords colId recId, val)
           acc m' (c, v) = Map.insert c v m'
 
-toCellUpdate :: Entity Cell -> (Id Column, Id Record, CellContent)
-toCellUpdate (Entity _ (Cell content (Aspects _ c r))) = (c, r, content)
+toCellUpdate :: Entity Cell -> (Id Column, Id Row, CellContent)
+toCellUpdate (Entity _ (Cell content _ c r)) = (c, r, content)
 
 dispatch :: Action -> [SomeStoreAction]
 dispatch a = [SomeStoreAction store a]
