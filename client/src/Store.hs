@@ -4,9 +4,10 @@ module Store where
 
 import           Control.Applicative       ((<|>))
 import           Control.DeepSeq           (NFData)
-import           Control.Lens
-import           Control.Monad             (void)
+import           Control.Lens              hiding (op)
+import           Control.Monad             (void, when)
 import           Control.Monad.IO.Class    (liftIO)
+import           Control.Monad.State       (execStateT, lift)
 
 import           Data.Foldable             (foldl', for_)
 import           Data.Map.Strict           (Map)
@@ -26,8 +27,8 @@ import           Lib.Model.Auth            (GetUserInfoResponse (..),
                                             LoginResponse (..), SessionKey,
                                             SignupResponse (..),
                                             UserInfo (UserInfo))
-import           Lib.Model.Cell            (Cell (..), CellContent (..))
-import           Lib.Model.Column          (Column)
+import           Lib.Model.Cell
+import           Lib.Model.Column          (Column, columnTableId)
 import           Lib.Model.Project
 import           Lib.Model.Row
 import           Lib.Model.Table
@@ -224,11 +225,7 @@ update = \case
     stateMessage .= Message.runAction a
 
   GlobalInit wsUrl -> do
-    ws <- jsonWebSocketNew wsUrl $ pure . dispatch . \case
-      -- WsDownCellsChanged cs    -> TableUpdateCells cs
-      -- WsDownColumnsChanged cs  -> TableUpdateColumns cs
-      WsDownRowCreated t r dat -> undefined -- RowCacheAction t $ RowCache.Add r dat
-      WsDownRowDeleted t r     -> undefined -- RowCacheAction t $ RowCache.Delete r
+    ws <- jsonWebSocketNew wsUrl $ pure . dispatch . ApplyWebSocketMsg
     stateWebSocket .= Just ws
 
     use stateSession >>= \case
@@ -242,8 +239,8 @@ update = \case
             result <- ajax' $ request api (Proxy :: Proxy Api.AuthGetUserInfo) sessionKey
             case result of
               GetUserInfoSuccess userInfo -> do
-                setProjectOverview sessionKey
                 stateSession .= StateLoggedIn (mkLoggedInState sessionKey userInfo)
+                setProjectOverview sessionKey
               GetUserInfoFailed _ -> do
                 liftIO clearSession
                 stateSession .= StateLoggedOut LoggedOutLoginForm
@@ -252,6 +249,61 @@ update = \case
             stateSession .= StateLoggedOut LoggedOutLoginForm
 
       StateLoggedOut _ -> pure ()
+
+  ApplyWebSocketMsg msg -> case msg of
+
+    WsDownProjectDiff cellDiff columnDiff rowDiff tableDiff ->
+      forProjectDetail' $ \_ pdSt ->
+        flip execStateT pdSt $ do
+          -- Cells, columns and rows are only updated if we are currently
+          -- viewing a table.
+          for_ (pdSt ^. stateTableId) $ \tableId -> do
+            -- Cells
+            for_ cellDiff $ \(_, op, cell) ->
+              when (cell ^. cellTableId == tableId) $ do
+                let coords = Coords (cell ^. cellColumnId) (cell ^. cellRowId)
+                    content = cell ^. cellContent
+                stateCells . at coords .= case op of
+                  Create -> Just content
+                  Update -> Just content
+                  Delete -> Nothing
+            -- Columns
+            for_ columnDiff $ \(columnId, op, column) ->
+              when (column ^. columnTableId == tableId) $ do
+                stateColumns . at columnId .= case op of
+                  Create -> Just column
+                  Update -> Just column
+                  Delete -> Nothing
+                when (op == Delete) $
+                  stateCells %= Map.filterWithKey
+                                  (\(Coords c _) _ -> c /= columnId)
+            -- Rows
+            for_ rowDiff $ \(rowId, op, row) ->
+              when (row ^. rowTableId == tableId) $ do
+                stateRows . at rowId .= case op of
+                  Create -> Just row
+                  Update -> Just row
+                  Delete -> Nothing
+                -- TODO: On delete: delete all cells of the row
+          -- Tables
+          for_ tableDiff $ \(tableId, op, table) -> do
+            stateTables . at tableId .= case op of
+              Create -> Just table
+              Update -> Just table
+              Delete -> Nothing
+            -- Select another table if available
+            when (op == Delete) $ do
+              stateColumns .= Map.empty
+              stateRows .= Map.empty
+              stateCells .= Map.empty
+              tables <- use stateTables
+              let mNextTableId = Map.lookupLT tableId tables
+                             <|> Map.lookupGT tableId tables
+              case mNextTableId of
+                Nothing -> pure ()
+                Just (nextTableId, _) ->
+                  lift $ liftIO $ alterStore store $
+                    freeFluxDispatch $ TablesLoadTable nextTableId
 
   GlobalSendWebSocket msg -> do
     mWS <- use stateWebSocket
@@ -348,44 +400,20 @@ update = \case
       ajax' $ request api (Proxy :: Proxy Api.TableCreate)
                           (session sKey) projectId name
 
-  -- TODO: move to websocket event
-  -- TablesAdd (Entity i t) ->
-  --   forProjectDetail st $ \_ pdSt ->
-  --     pure $ pdSt & stateTables . at i .~ Just t
-  --                 & stateTableId .~ Just i
-
   TablesLoadTable tableId ->
     forProjectDetail' $ \sKey pdSt -> do
       (cols, rows, cells) <- ajax' $
         request api (Proxy :: Proxy Api.TableGetWhole) (session sKey) tableId
+      let fillEntries entries m = foldl' acc m $ map toCoords entries
+            where
+              toCoords (colId, recId, val) = (Coords colId recId, val)
+              acc m' (c, v) = Map.insert c v m'
       pure $ pdSt & stateColumns .~ Map.fromList (map entityToTuple cols)
                   & stateRows    .~ Map.fromList (map entityToTuple rows)
                   & stateCells   .~ fillEntries cells Map.empty
                   & stateTableId .~ Just tableId
 
   -- Table
-
-  -- TODO: move to websocket event
-  -- TableUpdateCells cells ->
-  --   forProjectDetail st $ \_ pdSt -> pure $
-  --     let toEntry (Cell content _ c r) = (c, r, content)
-  --         setRowInCache pdSt'' (Cell content (Aspects t c r)) =
-  --           pdSt'' & stateCacheRows . at t . _Just
-  --                . RowCache.recordCache . at r . _Just
-  --                . at c . _Just . _2 .~ content
-  --         pdSt' = foldl' setRowInCache pdSt cells
-  --     in pdSt' & stateCells %~ fillEntries (map toEntry cells)
-
-  -- TODO: move to websocket event
-  -- TableUpdateColumns entities ->
-  --   forProjectDetail st $ \_ pdSt ->
-  --       pure $ pdSt & stateColumns %~ \cols ->
-  --         foldl' acc cols $ filter (tableColumn pdSt) entities
-  --   where
-  --     tableColumn pdSt (Entity _ column) =
-  --       pdSt ^. stateTableId == Just (column ^. columnTableId)
-  --     acc cols' (Entity columnId column) =
-  --       Map.insert columnId column cols'
 
   TableCreateDataCol ->
     forProjectDetail_ $ \sKey pdSt ->
@@ -398,12 +426,6 @@ update = \case
       for_ (pdSt ^. stateTableId) $ \tableId ->
         ajax' $ request api (Proxy :: Proxy Api.ReportColCreate)
                             (session sKey) tableId
-
-  -- TODO: move to websocket event
-  -- TableAddColumnDone (Entity i c, cells) ->
-  --   forProjectDetail st $ \_ pdSt -> pure $
-  --     pdSt & stateColumns %~ Map.insert i c
-  --          & stateCells %~ fillEntries (map toCellUpdate cells)
 
   TableRenameColumn columnId name ->
     forProjectDetail_ $ \sKey _ ->
@@ -424,9 +446,6 @@ update = \case
     forProjectDetail_ $ \sKey _ ->
       ajax' $ request api (Proxy :: Proxy Api.ColumnDelete)
                           (session sKey) columnId
-      -- TODO: move to websocket event
-      -- pure $ pdSt & stateColumns %~ Map.delete i
-      --             & stateCells %~ Map.filterWithKey (\(Coords c _) _ -> c /= i)
 
   TableAddRow ->
     forProjectDetail_ $ \sKey pdSt ->
@@ -434,53 +453,20 @@ update = \case
         ajax' $ request api (Proxy :: Proxy Api.RowCreate)
                             (session sKey) tableId
 
-  -- TODO: move to websocket event
-  -- TableAddRowDone (Entity i r, cells) ->
-  --   forProjectDetail st $ \_ pdSt -> pure $
-  --     pdSt & stateRows %~ Map.insert i r
-  --          & stateCells %~ fillEntries (map toCellUpdate cells)
-
   TableDeleteRow rowId ->
     forProjectDetail_ $ \sKey _ ->
       ajax' $ request api (Proxy :: Proxy Api.RowDelete)
                           (session sKey) rowId
 
-      -- TODO: move to websocket event
-      -- pure $ pdSt & stateRows %~ Map.delete i
-      --             & stateCells %~ Map.filterWithKey (\(Coords _ r) _ -> r /= i)
-
   TableSetName tableId name ->
     forProjectDetail_ $ \sKey _ ->
       ajax' $ request api (Proxy :: Proxy Api.TableSetName)
                           (session sKey) tableId name
-      -- TODO: move to websocket event
-      -- pure $ pdSt & stateTables . at i . _Just . tableName .~ name
 
   TableDelete tableId ->
     forProjectDetail_ $ \sKey _ ->
       ajax' $ request api (Proxy :: Proxy Api.TableDelete)
                           (session sKey) tableId
-
-      -- TODO: to websocket event
-      -- if pdSt ^. stateTableId == Just tableId
-      --   then do
-      --     let nextTable = Map.lookupLT tableId (pdSt ^. stateTables)
-      --                 <|> Map.lookupGT tableId (pdSt ^. stateTables)
-
-
-      --         st' = setProjectDetailState st $ pdSt
-      --                 & stateTables %~ Map.delete tableId
-      --                 & stateColumns .~ Map.empty
-      --                 & stateCells .~ Map.empty
-      --                 & stateRows .~ Map.empty
-      --                 & stateTableId .~ (fst <$> nextTable)
-
-      --     case nextTable of
-      --       Just (nextTableId, _) ->
-      --         React.Flux.transform (TablesLoadTable nextTableId) st'
-      --       Nothing -> pure st'
-      --   else
-      --     pure $ setProjectDetailState st $ pdSt & stateTables %~ Map.delete tableId
 
   -- Cell
 
@@ -488,12 +474,3 @@ update = \case
     forProjectDetail_ $ \sKey _ ->
       ajax' $ request api (Proxy :: Proxy Api.CellSet)
                           (session sKey) c r val
-
-fillEntries :: [(Id Column, Id Row, a)] -> Map Coords a -> Map Coords a
-fillEntries entries m = foldl' acc m $ map toCoords entries
-  where
-    toCoords (colId, recId, val) = (Coords colId recId, val)
-    acc m' (c, v) = Map.insert c v m'
-
-toCellUpdate :: Entity Cell -> (Id Column, Id Row, CellContent)
-toCellUpdate (Entity _ (Cell content _ c r)) = (c, r, content)

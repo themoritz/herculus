@@ -19,7 +19,7 @@ import           React.Flux.Addons.Servant.Auth (AuthClientData,
 
 import qualified Config
 import           Lib.Api.Rest                   as Api
-import           Lib.Api.WebSocket              (WsUpMessage)
+import           Lib.Api.WebSocket              (WsDownMessage, WsUpMessage)
 import           Lib.Model.Auth                 (LoginData, SessionKey,
                                                  SignupData)
 import           Lib.Model.Cell                 (Value)
@@ -48,6 +48,7 @@ data Action
   -- Global
   = MessageAction Message.Action
   | GlobalInit Text -- WebSocket URL
+  | ApplyWebSocketMsg WsDownMessage
   | GlobalSendWebSocket WsUpMessage
   -- Session
   | ToSignupForm

@@ -9,7 +9,6 @@ import           Data.Aeson       (FromJSON, ToJSON)
 
 import           GHC.Generics
 
-import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Row
@@ -26,13 +25,11 @@ instance FromJSON WsUpMessage
 type Diff a = [(Id a, ChangeOp, a)]
 
 data WsDownMessage
-  = WsDownRowCreated (Id Table) (Id Row) [(Entity Column, CellContent)]
-  | WsDownRowDeleted (Id Table) (Id Row)
-  | WsDownProjectDiff (Diff Cell)
+  = WsDownProjectDiff (Diff Cell)
                       (Diff Column)
                       (Diff Row)
                       (Diff Table)
-  deriving (Generic)
+  deriving (Generic, NFData)
 
 instance ToJSON WsDownMessage
 instance FromJSON WsDownMessage
