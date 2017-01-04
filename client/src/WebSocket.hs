@@ -20,6 +20,7 @@ import           GHCJS.DOM.Types                   hiding (Text)
 import           GHCJS.DOM.WebSocket               (closeEvent, message, open)
 import qualified GHCJS.DOM.WebSocket               as GD
 import           GHCJS.Foreign.Internal
+import           GHCJS.Marshal.Pure                (PFromJSVal (..))
 import           GHCJS.Types
 import           JavaScript.TypedArray.ArrayBuffer as JS
 
