@@ -12,7 +12,6 @@ import qualified Data.Text.Encoding             as Text
 import           Data.Typeable                  (Typeable)
 import           GHC.Generics                   (Generic)
 import           React.Flux.Addons.Servant      (ApiRequestConfig (..),
-                                                 HandleResponse,
                                                  RequestTimeout (NoTimeout))
 import           React.Flux.Addons.Servant.Auth (AuthClientData,
                                                  AuthenticateReq,
@@ -21,20 +20,17 @@ import           React.Flux.Addons.Servant.Auth (AuthClientData,
 import qualified Config
 import           Lib.Api.Rest                   as Api
 import           Lib.Api.WebSocket              (WsUpMessage)
-import           Lib.Model                      (Entity)
 import           Lib.Model.Auth                 (LoginData, SessionKey,
-                                                 SignupData, UserInfo)
-import           Lib.Model.Cell                 (Cell, CellContent, Value)
-import           Lib.Model.Column               (Column)
+                                                 SignupData)
+import           Lib.Model.Cell                 (Value)
+import           Lib.Model.Column
 import           Lib.Model.Project              (ProjectClient)
 import           Lib.Model.Row                  (Row)
 import           Lib.Model.Table                (Table)
 import           Lib.Types                      (Id)
 import           Lib.Util.Base64                (unBase64Url)
 
-import qualified Action.Column                  as Column
 import qualified Action.Message                 as Message
-import qualified Action.RowCache                as RowCache
 
 type instance AuthClientData Api.SessionProtect = SessionKey
 
@@ -47,8 +43,6 @@ session key = mkAuthenticateReq key mkAuthHeader
 
 api :: ApiRequestConfig Routes
 api = ApiRequestConfig Config.apiUrl NoTimeout
-
-type Callback = forall b. ((b -> [Action]) -> HandleResponse b)
 
 data Action
   -- Global
@@ -63,27 +57,22 @@ data Action
   | Logout
   -- RowCache
   | RowCacheGet (Id Table)
-  | RowCacheAction (Id Table) RowCache.Action
 
   | SetProjectOverview SessionKey
-  -- Projects
+  -- Project overview
   | ProjectsCreate Text -- project name
-  | ProjectsAdd (Entity ProjectClient)
   | ProjectsLoadProject (Id ProjectClient)
-  | ProjectDelete (Id ProjectClient)
-  -- Project
   | ProjectSetName Text
-  | ProjectLoadDone (Id ProjectClient) ProjectClient [Entity Table]
+  | ProjectDelete (Id ProjectClient)
   -- Tables
-  | TablesCreate Table
-  | TablesAdd (Entity Table)
+  | TablesCreate (Id ProjectClient) Text
   | TablesLoadTable (Id Table)
   -- Table
-  | TableSet ([Entity Column], [Entity Row], [(Id Column, Id Row, CellContent)])
-  | TableUpdateCells [Cell]
-  | TableUpdateColumns [Entity Column]
-  | TableAddDataCol
-  | TableAddReportCol
+  | TableCreateDataCol
+  | TableCreateReportCol
+  | TableRenameColumn (Id Column) Text
+  | TableUpdateDataCol (Id Column) DataType IsDerived Text
+  | TableUpdateReportCol (Id Column) Text ReportFormat (Maybe ReportLanguage)
   | TableDeleteColumn (Id Column)
   | TableAddRow
   | TableDeleteRow (Id Row)
@@ -91,5 +80,4 @@ data Action
   | TableDelete (Id Table)
   -- Cell
   | CellSetValue (Id Column) (Id Row) Value
-  | ColumnAction (Id Column) Column.Action
   deriving (Typeable, Generic, NFData)

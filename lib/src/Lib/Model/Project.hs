@@ -29,6 +29,12 @@ data ProjectClient = ProjectClient
   , _projectClientOwner :: Id User
   } deriving (Generic, NFData)
 
+projectClientName :: Lens' ProjectClient Text
+projectClientName = lens _projectClientName (\s a -> s { _projectClientName = a })
+
+projectClientOwner :: Lens' ProjectClient (Id User)
+projectClientOwner = lens _projectClientOwner (\s a -> s { _projectClientOwner = a })
+
 instance ToJSON ProjectClient
 instance FromJSON ProjectClient
 

@@ -162,31 +162,35 @@ handleProjectList :: MonadHexl m => SessionData -> m [Entity ProjectClient]
 handleProjectList (UserInfo userId _ _) =
   map toClient <$> listByQuery [ "owner" =: toObjectId userId ]
 
-handleProjectSetName :: MonadHexl m => SessionData -> Id Project -> Text -> m ()
+handleProjectSetName :: MonadHexl m => SessionData -> Id ProjectClient -> Text -> m ()
 handleProjectSetName (UserInfo userId _ _) projectId name = do
-  permissionProject userId projectId
-  update projectId $ projectName .~ name
+  let i = fromClientId projectId
+  permissionProject userId i
+  update i $ projectName .~ name
 
-handleProjectDelete :: MonadHexl m => SessionData -> Id Project -> m ()
+handleProjectDelete :: MonadHexl m => SessionData -> Id ProjectClient -> m ()
 handleProjectDelete sessionData@(UserInfo userId _ _) projectId = do
-  permissionProject userId projectId
-  tables <- listByQuery [ "projectId" =: toObjectId projectId ]
+  let i = fromClientId projectId
+  permissionProject userId i
+  tables <- listByQuery [ "projectId" =: toObjectId i ]
   traverse_ (handleTableDelete sessionData . entityId) tables
-  delete projectId
+  delete i
 
-handleProjectLoad :: MonadHexl m => SessionData -> Id Project -> m (ProjectClient, [Entity Table])
-handleProjectLoad (UserInfo userId _ _) projId = do
-  permissionProject userId projId
-  tables <- listByQuery [ "projectId" =: toObjectId projId ]
-  project <- getById' projId
+handleProjectLoad :: MonadHexl m => SessionData -> Id ProjectClient -> m (ProjectClient, [Entity Table])
+handleProjectLoad (UserInfo userId _ _) projectId = do
+  let i = fromClientId projectId
+  permissionProject userId i
+  tables <- listByQuery [ "projectId" =: toObjectId i ]
+  project <- getById' i
   pure (toClient project, tables)
 
 --------------------------------------------------------------------------------
 
-handleTableCreate :: MonadHexl m => SessionData -> Table -> m ()
-handleTableCreate (UserInfo userId _ _) (Table projectId name) = do
-  permissionProject userId projectId
-  runCommand $ CmdTableCreate projectId name
+handleTableCreate :: MonadHexl m => SessionData -> Id ProjectClient -> Text -> m ()
+handleTableCreate (UserInfo userId _ _) projectId name = do
+  let i = fromClientId projectId
+  permissionProject userId i
+  runCommand $ CmdTableCreate i name
 
 handleTableData :: MonadHexl m => SessionData -> Id Table -> m [(Id Column, Id Row, CellContent)]
 handleTableData (UserInfo userId _ _) tblId = do

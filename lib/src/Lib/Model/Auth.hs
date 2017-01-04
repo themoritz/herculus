@@ -60,7 +60,7 @@ type SessionKey = Base64Url
 data LoginResponse
   = LoginSuccess UserInfo
   | LoginFailed Text
-  deriving (Generic, FromJSON, ToJSON)
+  deriving (Generic, FromJSON, ToJSON, NFData)
 
 data SignupData = SignupData
   { suUserName  :: Text
@@ -71,12 +71,12 @@ data SignupData = SignupData
 data SignupResponse
   = SignupSuccess UserInfo
   | SignupFailed Text
-  deriving (Generic, FromJSON, ToJSON)
+  deriving (Generic, FromJSON, ToJSON, NFData)
 
 data GetUserInfoResponse
   = GetUserInfoSuccess UserInfo
   | GetUserInfoFailed Text
-  deriving (Generic, FromJSON, ToJSON)
+  deriving (Generic, FromJSON, ToJSON, NFData)
 
 mkPwHash :: MonadIO m => Text -> m PwHash
 mkPwHash txt = liftIO $ toBase64Unsafe <$> makePassword (Text.encodeUtf8 txt) 17

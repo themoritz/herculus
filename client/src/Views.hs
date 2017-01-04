@@ -26,7 +26,7 @@ import           Store                 (LoggedOutState (..),
                                         SessionState (..), State, dispatch,
                                         stateCells, stateColumns, stateMessage,
                                         stateProject, stateProjectId,
-                                        stateProjectView, stateRecords,
+                                        stateProjectView, stateRows,
                                         stateSession, stateSessionKey,
                                         stateTableId, stateTables, store)
 import           Views.Auth            (login_, signup_)
@@ -58,7 +58,7 @@ app = defineControllerView "app" store $ \st () ->
   where
     projectDetailView_ pdSt sKey =
       let cols = pdSt ^. stateColumns
-          recs = pdSt ^. stateRecords
+          recs = pdSt ^. stateRows
           -- TODO: put tables deeper into view state hierarchy under projectId
           tableGridProps = TableGridProps
             { _cells      = pdSt ^. stateCells
@@ -119,11 +119,11 @@ btnLogout_ = button_
 initalProjectName :: ProjectNameState
 initalProjectName = ProjectNameState False "" False
 
-projectNameComp_ :: Id Project -> Project -> ReactElementM eh ()
+projectNameComp_ :: Id ProjectClient -> ProjectClient -> ReactElementM eh ()
 projectNameComp_ !projectId !project =
   view projectNameComp (projectId, project) mempty
 
-projectNameComp :: ReactView (Id Project, Project)
+projectNameComp :: ReactView (Id ProjectClient, ProjectClient)
 projectNameComp = defineStatefulView "project name" initalProjectName $
     \ProjectNameState{..} (projectId, project) ->
       cldiv_ "projectName" $ if pnsEditable
@@ -138,7 +138,7 @@ projectNameComp = defineStatefulView "project name" initalProjectName $
               , onKeyDown inputKeyDownHandler
               ]
         else do
-          span_ $ elemText $ project ^. projectName
+          span_ $ elemText $ project ^. projectClientName
           " "
           button_
             [ classNames [ ("pure"   , True)
@@ -147,7 +147,7 @@ projectNameComp = defineStatefulView "project name" initalProjectName $
             , onClick $ \ev _ st ->
               ([stopPropagation ev],
                Just st { pnsEditable = True
-                       , pnsName = project ^. projectName
+                       , pnsName = project ^. projectClientName
                        }
               )
             ] $ faIcon_ "pencil"
@@ -157,7 +157,7 @@ projectNameComp = defineStatefulView "project name" initalProjectName $
                          ]
             , onClick $ \ev _ _ ->
               (stopPropagation ev :
-                 dispatch (ProjectDelete $ projectId), Nothing)
+                 dispatch (ProjectDelete projectId), Nothing)
             ] $ faIcon_ "times"
   where
     -- saveHandler :: TileState -> ([SomeStoreAction], Maybe TileState)
@@ -204,15 +204,15 @@ appFooter = defineView "footer" $ \_ ->
 
 --
 
-tables_ :: Map (Id Table) Table -> Maybe (Id Table) -> Id Project -> ReactElementM eh ()
+tables_ :: Map (Id Table) Table -> Maybe (Id Table) -> Id ProjectClient -> ReactElementM eh ()
 tables_ !ts !mTbl !prj = view tables (ts, mTbl, prj) mempty
 
-tables :: ReactView (Map (Id Table) Table, Maybe (Id Table), Id Project)
+tables :: ReactView (Map (Id Table) Table, Maybe (Id Table), Id ProjectClient)
 tables = defineView "tables" $ \(ts, mTbl, projId) ->
   cldiv_ "tables" $ do
     ul_ $ for_ (Map.toList ts) $
       \(tableId, table') -> table_' tableId table' (Just tableId == mTbl)
-    inputNew_ "Add table..." (dispatch . TablesCreate . Table projId)
+    inputNew_ "Add table..." (dispatch . TablesCreate projId)
 
 --
 

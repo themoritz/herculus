@@ -3,18 +3,21 @@
 module Store where
 
 import           Control.Applicative       ((<|>))
-import           Control.Concurrent        (forkIO)
+import           Control.DeepSeq           (NFData)
 import           Control.Lens
+import           Control.Monad             (void)
+import           Control.Monad.IO.Class    (liftIO)
+
 import           Data.Foldable             (foldl', for_)
 import           Data.Map.Strict           (Map)
 import qualified Data.Map.Strict           as Map
 import           Data.Monoid               ((<>))
 import           Data.Proxy
 import qualified Data.Text                 as Text
+
 import           React.Flux
 import           React.Flux.Addons.Free
 import           React.Flux.Addons.Servant (HandleResponse, request)
-import           WebSocket
 
 import qualified Lib.Api.Rest              as Api
 import           Lib.Api.WebSocket         (WsDownMessage (..))
@@ -24,18 +27,18 @@ import           Lib.Model.Auth            (GetUserInfoResponse (..),
                                             SignupResponse (..),
                                             UserInfo (UserInfo))
 import           Lib.Model.Cell            (Cell (..), CellContent (..))
-import           Lib.Model.Column          (Column, columnTableId)
+import           Lib.Model.Column          (Column)
 import           Lib.Model.Project
 import           Lib.Model.Row
 import           Lib.Model.Table
 import           Lib.Types
 
 import           Action                    (Action (..), api, session)
-import qualified Store.Column              as Column
 import qualified Store.Message             as Message
 import qualified Store.RowCache            as RowCache
 import           Store.Session             (clearSession, persistSession,
                                             recoverSession)
+import           WebSocket
 
 data Coords = Coords (Id Column) (Id Row)
   deriving (Eq, Ord, Show)
@@ -65,8 +68,8 @@ data LoggedInState = LoggedInState
   , _stateProjectView :: ProjectViewState
   }
 
-initLoggedInState :: SessionKey -> UserInfo -> LoggedInState
-initLoggedInState sKey userInfo = LoggedInState
+mkLoggedInState :: SessionKey -> UserInfo -> LoggedInState
+mkLoggedInState sKey userInfo = LoggedInState
   { _stateUserInfo     = userInfo
   , _stateSessionKey   = sKey
   , _stateProjectView  = StateProjectOverview Map.empty
@@ -76,7 +79,7 @@ data ProjectViewState
   = StateProjectOverview ProjectOverviewState
   | StateProjectDetail ProjectDetailState
 
-type ProjectOverviewState = Map (Id Project) Project
+type ProjectOverviewState = Map (Id ProjectClient) ProjectClient
 
 -- TODO: maybe put tableId and tables one level deeper into project?
 data ProjectDetailState = ProjectDetailState
@@ -84,7 +87,7 @@ data ProjectDetailState = ProjectDetailState
   , _stateProject   :: ProjectClient
   , _stateCacheRows :: Map (Id Table) RowCache.State
   , _stateTableId   :: Maybe (Id Table)
-  , _stateColumns   :: Map (Id Column) Column.State
+  , _stateColumns   :: Map (Id Column) Column
   , _stateTables    :: Map (Id Table) Table
   , _stateCells     :: Map Coords CellContent
   , _stateRows      :: Map (Id Row) Row
@@ -117,7 +120,7 @@ makeLenses ''ProjectDetailState
 
 forProjectDetail :: (SessionKey -> ProjectDetailState -> App a) -> App a
 forProjectDetail action =
-  forLoggedIn st $ \liSt -> case liSt ^. stateProjectView of
+  forLoggedIn $ \liSt -> case liSt ^. stateProjectView of
     StateProjectDetail pdSt -> action (liSt ^. stateSessionKey) pdSt
     StateProjectOverview _ -> do
       showMessage $ Message.SetError
@@ -152,8 +155,8 @@ forLoggedIn_ = void . forLoggedIn
 
 --------------------------------------------------------------------------------
 
-setProjects :: [ProjectClient] -> App ()
-setProjects ps = 
+setProjects :: [Entity ProjectClient] -> App ()
+setProjects ps =
   forLoggedIn' $ \liSt ->
     pure $ liSt & stateProjectView .~ StateProjectOverview projectsMap
       where
@@ -168,7 +171,7 @@ setProjectOverview sKey = do
   projects <- ajax' $ request api (Proxy :: Proxy Api.ProjectList) (session sKey)
   setProjects projects
 
-ajax' :: (HandleResponse a -> IO ()) -> App a
+ajax' :: NFData a => (HandleResponse a -> IO ()) -> App a
 ajax' go = ajax go >>= \case
   Left (401, e) -> do
     showMessage $ Message.SetWarning $
@@ -183,12 +186,18 @@ ajax' go = ajax go >>= \case
 
 performLogin :: UserInfo -> App ()
 performLogin userInfo@(UserInfo _ _ sKey) = do
-  persistSession sKey
+  liftIO $ persistSession sKey
   setProjectOverview sKey
-  stateSession .= StateLoggedIn (initLoggedInState sKey userInfo)
+  stateSession .= StateLoggedIn (mkLoggedInState sKey userInfo)
 
 showMessage :: Message.Action -> App ()
 showMessage a = stateMessage .= Message.runAction a
+
+withRowCache :: Id Table -> RowCache.Action -> App ()
+withRowCache tableId a =
+  forProjectDetail' $ \_ pdSt ->
+    pure $ pdSt &
+      stateCacheRows . at tableId . _Just %~ RowCache.runAction tableId a
 
 --------------------------------------------------------------------------------
 
@@ -200,7 +209,7 @@ store = mkStore State
   }
 
 dispatch :: Action -> [SomeStoreAction]
-dispatch a = [SomeStoreAction store freeFluxDispatch a]
+dispatch a = [SomeStoreAction store $ freeFluxDispatch a]
 
 type App = FreeFlux State
 
@@ -218,23 +227,23 @@ update = \case
     ws <- jsonWebSocketNew wsUrl $ pure . dispatch . \case
       -- WsDownCellsChanged cs    -> TableUpdateCells cs
       -- WsDownColumnsChanged cs  -> TableUpdateColumns cs
-      WsDownRowCreated t r dat -> RowCacheAction t $ RowCache.Add r dat
-      WsDownRowDeleted t r     -> RowCacheAction t $ RowCache.Delete r
+      WsDownRowCreated t r dat -> undefined -- RowCacheAction t $ RowCache.Add r dat
+      WsDownRowDeleted t r     -> undefined -- RowCacheAction t $ RowCache.Delete r
     stateWebSocket .= Just ws
 
     use stateSession >>= \case
 
-      StateLoggedIn liSt -> do
+      StateLoggedIn liSt ->
         setProjectOverview (liSt ^. stateSessionKey)
 
       StateLoggedOut LoggedOutUninitialized ->
-        (liftIO recoverSession) >>= \case
+        liftIO recoverSession >>= \case
           Just sessionKey -> do
             result <- ajax' $ request api (Proxy :: Proxy Api.AuthGetUserInfo) sessionKey
             case result of
               GetUserInfoSuccess userInfo -> do
-                setProjectOverview (sKey userInfo)
-                stateSession .= StateLoggedIn (initLoggedInState (sKey userInfo) userInfo)
+                setProjectOverview sessionKey
+                stateSession .= StateLoggedIn (mkLoggedInState sessionKey userInfo)
               GetUserInfoFailed _ -> do
                 liftIO clearSession
                 stateSession .= StateLoggedOut LoggedOutLoginForm
@@ -284,240 +293,207 @@ update = \case
 
   -- Cache ---------------------------------------------------------------------
 
-      RowCacheGet tableId ->
-        forLoggedIn st $ \liSt ->
-          case liSt ^. stateProjectView of
-            StateProjectDetail pdSt -> do
-              pdSt' <- case pdSt ^. stateCacheRows . at tableId of
-                Just _  -> pure pdSt
-               -- cache not yet initialized: no key in map => Nothing
-                Nothing -> do
-                  request api (Proxy :: Proxy Api.RowListWithData)
-                          (session $ liSt ^. stateSessionKey) tableId $ mkCallback $
-                          \records -> [RowCacheAction tableId $ RowCache.Set records]
-                  -- initialize cache with empty map
-                  pure $ pdSt & stateCacheRows . at tableId ?~ RowCache.empty
-              pure $ liSt & stateProjectView .~ StateProjectDetail pdSt'
+  RowCacheGet tableId ->
+    forProjectDetail_ $ \sKey pdSt ->
+      case pdSt ^. stateCacheRows . at tableId of
+        Just _  -> pure ()
+        -- cache not yet initialized: no key in map => Nothing
+        Nothing -> do
+          records <- ajax' $ request api (Proxy :: Proxy Api.RowListWithData)
+            (session sKey) tableId
+          withRowCache tableId $ RowCache.Set records
 
-            StateProjectOverview _ -> do
-              putStrLn "inconsistent client state: unexpected: project overview"
-              pure liSt
-        -- TODO: forProjectDetail doesn't seem to work as intended
-        -- even though it yields "pure pdSt" a rerender is triggered, and thus a react loop
-        --
-        -- forProjectDetail st $ \sKey pdSt ->
-        --   case pdSt ^. stateCacheRows . at tableId of
-        --     Just _ -> pure pdSt
-        --     -- cache not yet initialized: no key in map => Nothing
-        --     Nothing -> do
-        --       request api (Proxy :: Proxy Api.RowListWithData)
-        --               (session sKey) tableId $ mkCallback $
-        --               \records -> [RowCacheAction tableId $ RowCache.Set records]
-        --       -- initialize cache with empty map
-        --       pure $ pdSt & stateCacheRows . at tableId ?~ RowCache.empty
+  -- Project Overview ----------------------------------------------------------
 
-      RowCacheAction tableId a ->
-        forProjectDetail st $ \_ pdSt ->
-          pure $ pdSt &
-            stateCacheRows . at tableId . _Just %~ RowCache.runAction tableId a
+  SetProjectOverview sKey ->
+    setProjectOverview sKey
 
-      -- Column
+  ProjectsCreate name ->
+    forLoggedIn' $ \liSt -> do
+      Entity i p <- ajax' $ request api (Proxy :: Proxy Api.ProjectCreate)
+                                        (session $ liSt ^. stateSessionKey) name
+      pure $ liSt &
+        stateProjectView .~ StateProjectDetail (mkProjectDetailState i p)
 
-      ColumnAction columnId a ->
-        forProjectDetail st $ \sKey pdSt ->
-          pdSt & stateColumns . at columnId . _Just %%~ \col ->
-            Column.runAction mkCallback sKey columnId a col
+  ProjectsLoadProject i ->
+    forLoggedIn_ $ \liSt -> do
+      (p, ts) <- ajax' $ request api (Proxy :: Proxy Api.ProjectLoad)
+                 (session $ liSt ^. stateSessionKey) i
+      -- Load first table if exists
+      case ts of
+        []               -> pure ()
+        Entity tId _ : _ -> liftIO $ alterStore store $ freeFluxDispatch $ TablesLoadTable tId
 
-      -- Projects
-      SetProjectOverview sKey -> do
-        setProjectOverview sKey
+      let tablesMap = Map.fromList $ map entityToTuple ts
+      setProjectDetailState $
+        mkProjectDetailState i p & stateTables .~ tablesMap
 
-      ProjectsCreate name -> do
-        forLoggedIn_ st $ \liSt ->
-          request api (Proxy :: Proxy Api.ProjectCreate)
-                  (session $ liSt ^. stateSessionKey)
-                  name $
-                  mkCallback $ \project -> [ProjectsAdd project]
-        pure st
+  ProjectSetName name ->
+    forProjectDetail' $ \sKey pdSt -> do
+      ajax' $ request api (Proxy :: Proxy Api.ProjectSetName)
+                          (session sKey) (pdSt ^. stateProjectId) name
+      pure $ pdSt & stateProject . projectClientName .~ name
 
-      ProjectsAdd (Entity i p) ->
-        forLoggedIn st $ \liSt ->
-          pure $ liSt & stateProjectView .~ StateProjectDetail (mkProjectDetailState i p)
+  ProjectDelete projectId ->
+    forLoggedIn_ $ \liSt -> do
+      let sKey = liSt ^. stateSessionKey
+      ajax' $ request api (Proxy :: Proxy Api.ProjectDelete)
+                          (session sKey) projectId
+      liftIO $ alterStore store $ freeFluxDispatch $ SetProjectOverview sKey
 
-      -- Project
+  -- Tables --------------------------------------------------------------------
 
-      ProjectsLoadProject i -> do
-        forLoggedIn_ st $ \liSt ->
-          request api (Proxy :: Proxy Api.ProjectLoad)
-            (session $ liSt ^. stateSessionKey) i $ mkCallback $
-            \(project, tables) -> [ProjectLoadDone i project tables]
-        pure st
+  TablesCreate projectId name ->
+    forProjectDetail_ $ \sKey _ ->
+      ajax' $ request api (Proxy :: Proxy Api.TableCreate)
+                          (session sKey) projectId name
 
-      ProjectLoadDone pId p ts -> do
-        st' <- forLoggedIn st $ \liSt -> do
-                  _ <- forkIO $ case ts of
-                    []             -> pure ()
-                    Entity tId _ : _ -> alterStore store $ TablesLoadTable tId
+  -- TODO: move to websocket event
+  -- TablesAdd (Entity i t) ->
+  --   forProjectDetail st $ \_ pdSt ->
+  --     pure $ pdSt & stateTables . at i .~ Just t
+  --                 & stateTableId .~ Just i
 
-                  pure $ liSt & stateProjectView .~
-                    StateProjectDetail (mkProjectDetailState pId p)
+  TablesLoadTable tableId ->
+    forProjectDetail' $ \sKey pdSt -> do
+      (cols, rows, cells) <- ajax' $
+        request api (Proxy :: Proxy Api.TableGetWhole) (session sKey) tableId
+      pure $ pdSt & stateColumns .~ Map.fromList (map entityToTuple cols)
+                  & stateRows    .~ Map.fromList (map entityToTuple rows)
+                  & stateCells   .~ fillEntries cells Map.empty
+                  & stateTableId .~ Just tableId
 
-        forProjectDetail st' $ \_ pdSt ->
-          pure $ pdSt & stateTables .~ tablesMap
-          where
-            tablesMap = Map.fromList $ map entityToTuple ts
+  -- Table
 
-      ProjectSetName name ->
-        forProjectDetail st $ \sKey pdSt -> do
-          request api (Proxy :: Proxy Api.ProjectSetName)
-                      (session sKey)
-                      (pdSt ^. stateProjectId) name $ mkCallback $ const []
-          pure $ pdSt & stateProject . projectName .~ name
+  -- TODO: move to websocket event
+  -- TableUpdateCells cells ->
+  --   forProjectDetail st $ \_ pdSt -> pure $
+  --     let toEntry (Cell content _ c r) = (c, r, content)
+  --         setRowInCache pdSt'' (Cell content (Aspects t c r)) =
+  --           pdSt'' & stateCacheRows . at t . _Just
+  --                . RowCache.recordCache . at r . _Just
+  --                . at c . _Just . _2 .~ content
+  --         pdSt' = foldl' setRowInCache pdSt cells
+  --     in pdSt' & stateCells %~ fillEntries (map toEntry cells)
 
-      ProjectDelete projectId -> do
-        forLoggedIn_ st $ \liSt -> do
-          let sKey = liSt ^. stateSessionKey
-          request api (Proxy :: Proxy Api.ProjectDelete)
-                      (session sKey) projectId $ mkCallback $
-                      const [SetProjectOverview sKey]
-        pure st
+  -- TODO: move to websocket event
+  -- TableUpdateColumns entities ->
+  --   forProjectDetail st $ \_ pdSt ->
+  --       pure $ pdSt & stateColumns %~ \cols ->
+  --         foldl' acc cols $ filter (tableColumn pdSt) entities
+  --   where
+  --     tableColumn pdSt (Entity _ column) =
+  --       pdSt ^. stateTableId == Just (column ^. columnTableId)
+  --     acc cols' (Entity columnId column) =
+  --       Map.insert columnId column cols'
 
-      -- Tables
+  TableCreateDataCol ->
+    forProjectDetail_ $ \sKey pdSt ->
+      for_ (pdSt ^. stateTableId) $ \tableId ->
+        ajax' $ request api (Proxy :: Proxy Api.DataColCreate)
+                            (session sKey) tableId
 
-      TablesCreate table -> do
-        forLoggedIn_ st $ \liSt ->
-          request api (Proxy :: Proxy Api.TableCreate)
-                      (session $ liSt ^. stateSessionKey)
-                      table $ mkCallback $
-                      \tableId -> [TablesAdd $ Entity tableId table]
-        pure st
+  TableCreateReportCol ->
+    forProjectDetail_ $ \sKey pdSt ->
+      for_ (pdSt ^. stateTableId) $ \tableId ->
+        ajax' $ request api (Proxy :: Proxy Api.ReportColCreate)
+                            (session sKey) tableId
 
-      TablesAdd (Entity i t) ->
-        forProjectDetail st $ \_ pdSt ->
-          pure $ pdSt & stateTables . at i .~ Just t
-                      & stateTableId .~ Just i
+  -- TODO: move to websocket event
+  -- TableAddColumnDone (Entity i c, cells) ->
+  --   forProjectDetail st $ \_ pdSt -> pure $
+  --     pdSt & stateColumns %~ Map.insert i c
+  --          & stateCells %~ fillEntries (map toCellUpdate cells)
 
-      TablesLoadTable i ->
-        forProjectDetail st $ \sKey pdSt -> do
-          request api (Proxy :: Proxy Api.TableGetWhole)
-                      (session sKey) i $ mkCallback $
-                      \table -> [ TableSet table ]
-          pure $ pdSt & stateTableId .~ Just i
+  TableRenameColumn columnId name ->
+    forProjectDetail_ $ \sKey _ ->
+      ajax' $ request api (Proxy :: Proxy Api.ColumnSetName)
+                          (session sKey) columnId name
 
-      -- Table
+  TableUpdateDataCol columnId dt inpTyp src ->
+    forProjectDetail_ $ \sKey _ ->
+      ajax' $ request api (Proxy :: Proxy Api.DataColUpdate)
+                          (session sKey) columnId (dt, inpTyp, src)
 
-      TableSet (cols, recs, entries) ->
-        forProjectDetail st $ \_ pdSt -> pure $
-          pdSt & stateColumns .~ Map.fromList (map entityToTuple cols)
-               & stateRows .~ Map.fromList (map entityToTuple recs)
-               & stateCells   .~ fillEntries entries Map.empty
+  TableUpdateReportCol columnId template format lang ->
+    forProjectDetail_ $ \sKey _ ->
+      ajax' $ request api (Proxy :: Proxy Api.ReportColUpdate)
+                          (session sKey) columnId (template, format, lang)
 
-      TableUpdateCells cells ->
-        forProjectDetail st $ \_ pdSt -> pure $
-          let toEntry (Cell content _ c r) = (c, r, content)
-              setRowInCache pdSt'' (Cell content (Aspects t c r)) =
-                pdSt'' & stateCacheRows . at t . _Just
-                     . RowCache.recordCache . at r . _Just
-                     . at c . _Just . _2 .~ content
-              pdSt' = foldl' setRowInCache pdSt cells
-          in pdSt' & stateCells %~ fillEntries (map toEntry cells)
+  TableDeleteColumn columnId ->
+    forProjectDetail_ $ \sKey _ ->
+      ajax' $ request api (Proxy :: Proxy Api.ColumnDelete)
+                          (session sKey) columnId
+      -- TODO: move to websocket event
+      -- pure $ pdSt & stateColumns %~ Map.delete i
+      --             & stateCells %~ Map.filterWithKey (\(Coords c _) _ -> c /= i)
 
-      TableUpdateColumns entities ->
-        forProjectDetail st $ \_ pdSt ->
-            pure $ pdSt & stateColumns %~ \cols ->
-              foldl' acc cols $ filter (tableColumn pdSt) entities
-        where
-          tableColumn pdSt (Entity _ column) =
-            pdSt ^. stateTableId == Just (column ^. columnTableId)
-          acc cols' (Entity columnId column) =
-            Map.insert columnId column cols'
+  TableAddRow ->
+    forProjectDetail_ $ \sKey pdSt ->
+      for_ (pdSt ^. stateTableId) $ \tableId ->
+        ajax' $ request api (Proxy :: Proxy Api.RowCreate)
+                            (session sKey) tableId
 
-      TableAddColumn col -> do
-        forLoggedIn_ st $ \liSt ->
-          request api (Proxy :: Proxy Api.ColumnCreate)
-                      (session $ liSt ^. stateSessionKey) col $ mkCallback $
-                      \column -> [TableAddColumnDone column]
-        pure st
+  -- TODO: move to websocket event
+  -- TableAddRowDone (Entity i r, cells) ->
+  --   forProjectDetail st $ \_ pdSt -> pure $
+  --     pdSt & stateRows %~ Map.insert i r
+  --          & stateCells %~ fillEntries (map toCellUpdate cells)
 
-      TableAddColumnDone (Entity i c, cells) ->
-        forProjectDetail st $ \_ pdSt -> pure $
-          pdSt & stateColumns %~ Map.insert i c
-               & stateCells %~ fillEntries (map toCellUpdate cells)
+  TableDeleteRow rowId ->
+    forProjectDetail_ $ \sKey _ ->
+      ajax' $ request api (Proxy :: Proxy Api.RowDelete)
+                          (session sKey) rowId
 
-      TableDeleteColumn i ->
-        forProjectDetail st $ \sKey pdSt -> do
-          request api (Proxy :: Proxy Api.ColumnDelete)
-                      (session sKey) i $ mkCallback $ const []
-          pure $ pdSt & stateColumns %~ Map.delete i
-                      & stateCells %~ Map.filterWithKey (\(Coords c _) _ -> c /= i)
+      -- TODO: move to websocket event
+      -- pure $ pdSt & stateRows %~ Map.delete i
+      --             & stateCells %~ Map.filterWithKey (\(Coords _ r) _ -> r /= i)
 
-      TableAddRow ->
-        forProjectDetail st $ \sKey pdSt -> do
-          for_ (pdSt ^. stateTableId) $ \table ->
-            request api (Proxy :: Proxy Api.RowCreate)
-                        (session sKey) table $ mkCallback $
-                        \record -> [TableAddRowDone record]
-          pure pdSt
+  TableSetName tableId name ->
+    forProjectDetail_ $ \sKey _ ->
+      ajax' $ request api (Proxy :: Proxy Api.TableSetName)
+                          (session sKey) tableId name
+      -- TODO: move to websocket event
+      -- pure $ pdSt & stateTables . at i . _Just . tableName .~ name
 
-      TableAddRowDone (Entity i r, cells) ->
-        forProjectDetail st $ \_ pdSt -> pure $
-          pdSt & stateRows %~ Map.insert i r
-               & stateCells %~ fillEntries (map toCellUpdate cells)
+  TableDelete tableId ->
+    forProjectDetail_ $ \sKey _ ->
+      ajax' $ request api (Proxy :: Proxy Api.TableDelete)
+                          (session sKey) tableId
 
-      TableDeleteRow i ->
-        forProjectDetail st $ \sKey pdSt -> do
-          request api (Proxy :: Proxy Api.RowDelete)
-                      (session sKey) i $ mkCallback $ const []
-          pure $ pdSt & stateRows %~ Map.delete i
-                      & stateCells %~ Map.filterWithKey (\(Coords _ r) _ -> r /= i)
-
-      TableSetName i name ->
-        forProjectDetail st $ \sKey pdSt -> do
-          request api (Proxy :: Proxy Api.TableSetName)
-                      (session sKey)
-                      i name $ mkCallback $ const []
-          pure $ pdSt & stateTables . at i . _Just . tableName .~ name
-
-      TableDelete tableId ->
-        forProjectDetail' st $ \sKey pdSt -> do
-          request api (Proxy :: Proxy Api.TableDelete)
-                      (session sKey)
-                      tableId $ mkCallback $ const []
-
-          if pdSt ^. stateTableId == Just tableId
-            then do
-              let nextTable = Map.lookupLT tableId (pdSt ^. stateTables)
-                          <|> Map.lookupGT tableId (pdSt ^. stateTables)
+      -- TODO: to websocket event
+      -- if pdSt ^. stateTableId == Just tableId
+      --   then do
+      --     let nextTable = Map.lookupLT tableId (pdSt ^. stateTables)
+      --                 <|> Map.lookupGT tableId (pdSt ^. stateTables)
 
 
-                  st' = setProjectDetailState st $ pdSt
-                          & stateTables %~ Map.delete tableId
-                          & stateColumns .~ Map.empty
-                          & stateCells .~ Map.empty
-                          & stateRows .~ Map.empty
-                          & stateTableId .~ (fst <$> nextTable)
+      --         st' = setProjectDetailState st $ pdSt
+      --                 & stateTables %~ Map.delete tableId
+      --                 & stateColumns .~ Map.empty
+      --                 & stateCells .~ Map.empty
+      --                 & stateRows .~ Map.empty
+      --                 & stateTableId .~ (fst <$> nextTable)
 
-              case nextTable of
-                Just (nextTableId, _) ->
-                  React.Flux.transform (TablesLoadTable nextTableId) st'
-                Nothing -> pure st'
-            else
-              pure $ setProjectDetailState st $ pdSt & stateTables %~ Map.delete tableId
+      --     case nextTable of
+      --       Just (nextTableId, _) ->
+      --         React.Flux.transform (TablesLoadTable nextTableId) st'
+      --       Nothing -> pure st'
+      --   else
+      --     pure $ setProjectDetailState st $ pdSt & stateTables %~ Map.delete tableId
 
-      -- Cell
+  -- Cell
 
-      CellSetValue c r val ->
-        forProjectDetail st $ \sKey pdSt -> do
-          request api (Proxy :: Proxy Api.CellSet)
-                      (session sKey) c r val $ mkCallback $
-                      const []
-          pure $ pdSt & stateCells %~ fillEntries [(c, r, CellValue val)]
+  CellSetValue c r val ->
+    forProjectDetail_ $ \sKey _ ->
+      ajax' $ request api (Proxy :: Proxy Api.CellSet)
+                          (session sKey) c r val
 
-    where
-      fillEntries entries m = foldl' acc m $ map toCoords entries
-        where
-          toCoords (colId, recId, val) = (Coords colId recId, val)
-          acc m' (c, v) = Map.insert c v m'
+fillEntries :: [(Id Column, Id Row, a)] -> Map Coords a -> Map Coords a
+fillEntries entries m = foldl' acc m $ map toCoords entries
+  where
+    toCoords (colId, recId, val) = (Coords colId recId, val)
+    acc m' (c, v) = Map.insert c v m'
 
 toCellUpdate :: Entity Cell -> (Id Column, Id Row, CellContent)
 toCellUpdate (Entity _ (Cell content _ c r)) = (c, r, content)

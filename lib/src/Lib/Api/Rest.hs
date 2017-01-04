@@ -82,13 +82,13 @@ type AuthLogout         = SessionProtect :> "auth"      :> "logout"             
 type AuthSignup         =                   "auth"      :> "signup"         :> ReqBody '[JSON] SignupData :> Post '[JSON] SignupResponse
 type AuthGetUserInfo    =                   "auth"      :> "userInfo"       :> ReqBody '[JSON] SessionKey :> Post '[JSON] GetUserInfoResponse
 
-type ProjectCreate      = SessionProtect :> "project"   :> "create"         :> ReqBody '[JSON] Text                                     :> Post '[JSON] (Entity ProjectClient)
-type ProjectList        = SessionProtect :> "project"   :> "list"                                                                       :> Get '[JSON] [Entity ProjectClient]
-type ProjectSetName     = SessionProtect :> "project"   :> "setName"        :> Capture "projectId" (Id Project) :> ReqBody '[JSON] Text :> Post '[JSON] ()
-type ProjectDelete      = SessionProtect :> "project"   :> "delete"         :> Capture "projectId" (Id Project)                         :> Delete '[JSON] ()
-type ProjectLoad        = SessionProtect :> "table"     :> "list"           :> Capture "projectId" (Id Project)                         :> Get '[JSON] (ProjectClient, [Entity Table])
+type ProjectCreate      = SessionProtect :> "project"   :> "create"         :> ReqBody '[JSON] Text                                           :> Post '[JSON] (Entity ProjectClient)
+type ProjectList        = SessionProtect :> "project"   :> "list"                                                                             :> Get '[JSON] [Entity ProjectClient]
+type ProjectSetName     = SessionProtect :> "project"   :> "setName"        :> Capture "projectId" (Id ProjectClient) :> ReqBody '[JSON] Text :> Post '[JSON] ()
+type ProjectDelete      = SessionProtect :> "project"   :> "delete"         :> Capture "projectId" (Id ProjectClient)                         :> Delete '[JSON] ()
+type ProjectLoad        = SessionProtect :> "table"     :> "list"           :> Capture "projectId" (Id ProjectClient)                         :> Get '[JSON] (ProjectClient, [Entity Table])
 
-type TableCreate        = SessionProtect :> "table"     :> "create"         :> ReqBody '[JSON] Table                                :> Post '[JSON] ()
+type TableCreate        = SessionProtect :> "table"     :> "create"         :> Capture "projectId" (Id ProjectClient) :> ReqBody '[JSON] Text :> Post '[JSON] ()
 type TableData          = SessionProtect :> "table"     :> "data"           :> Capture "tableId" (Id Table)                         :> Get '[JSON] [(Id Column, Id Row, CellContent)]
 type TableGetWhole      = SessionProtect :> "table"     :> "getWhole"       :> Capture "tableId" (Id Table)                         :> Get '[JSON] ([Entity Column], [Entity Row], [(Id Column, Id Row, CellContent)])
 type TableSetName       = SessionProtect :> "table"     :> "setName"        :> Capture "tableId" (Id Table) :> ReqBody '[JSON] Text :> Post '[JSON] ()

@@ -7,41 +7,43 @@ import           Control.Applicative       ((<|>))
 import           Control.DeepSeq           (NFData)
 import           Control.Lens              hiding (view)
 import           Control.Monad             (join, when)
+
 import           Data.Foldable             (for_)
 import           Data.Map                  (Map)
 import qualified Data.Map                  as Map
 import           Data.Maybe                (fromMaybe, isJust)
 import           Data.Monoid               ((<>))
 import           Data.Text                 (Text)
+
 import           GHC.Generics              (Generic)
-import           React.Flux
 import           Text.Read                 (readMaybe)
+
+import           React.Flux
+import           React.Flux.Addons.Free
 
 import           Lib.Model
 import           Lib.Model.Auth            (SessionKey)
 import           Lib.Model.Column
-import           Lib.Model.Project         (Project)
+import           Lib.Model.Project         (ProjectClient)
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Action                    (Action (ColumnAction, TableDeleteColumn))
+import           Action                    (Action (..))
 import           Store                     (dispatch, store)
 import           Views.Combinators
 import           Views.Common              (EditBoxProps (..), editBox_)
 import           Views.Foreign
 
-import qualified Action.Column             as Column
-import           Store.Column
 import qualified Views.Column.ConfigDialog as Dialog
 
 --
 
 -- | column action, concerns the column given by the id of the main store
-mkColumnAction :: Id Column -> Column.Action -> SomeStoreAction
-mkColumnAction i = SomeStoreAction store . ColumnAction i
+mkColumnAction :: Action -> SomeStoreAction
+mkColumnAction = SomeStoreAction store . freeFluxDispatch
 
-dispatchColumnAction :: Id Column -> Column.Action -> [SomeStoreAction]
-dispatchColumnAction i a = [mkColumnAction i a]
+dispatchColumnAction :: Action -> [SomeStoreAction]
+dispatchColumnAction a = [mkColumnAction a]
 
 type SelBranchCallback = DataType -> [SomeStoreAction]
 type SelTableCallback  = Id Table -> [SomeStoreAction]
@@ -63,7 +65,7 @@ toBranch = \case
   DataString   -> BString
   DataNumber   -> BNumber
   DataTime     -> BTime
-  DataRecord _ -> BRecord
+  DataRowRef _ -> BRecord
   DataList   _ -> BList
   DataMaybe  _ -> BMaybe
 
@@ -100,7 +102,7 @@ subType (DataMaybe a) = Just a
 subType _             = Nothing
 
 recordTableId :: DataType -> Maybe (Id Table)
-recordTableId (DataRecord tId) = Just tId
+recordTableId (DataRowRef tId) = Just tId
 recordTableId _                = Nothing
 
 --
@@ -109,10 +111,10 @@ recordTableId _                = Nothing
 
 --
 
-column_ :: Id Project -> SessionKey -> Entity Column -> ReactElementM eh ()
+column_ :: Id ProjectClient -> SessionKey -> Entity Column -> ReactElementM eh ()
 column_ !projectId !sKey !c = view column (projectId, sKey, c) mempty
 
-column :: ReactView (Id Project, SessionKey, Entity Column)
+column :: ReactView (Id ProjectClient, SessionKey, Entity Column)
 column = defineView "column" $ \(projectId, sKey, c@(Entity i col)) -> cldiv_ "column" $ do
   cldiv_ "head" $ do
     editBox_ EditBoxProps
@@ -121,17 +123,17 @@ column = defineView "column" $ \(projectId, sKey, c@(Entity i col)) -> cldiv_ "c
       , editBoxClassName   = "columnName"
       , editBoxShow        = id
       , editBoxValidator   = Just
-      , editBoxOnSave      = dispatchColumnAction i . Rename
+      , editBoxOnSave      = dispatchColumnAction . TableRenameColumn i
       }
     columnInfo_ projectId sKey c
   columnConfig_ projectId sKey c
 
 -- column info, a summary of datatype and isDerived
 
-columnInfo_ :: Id Project -> SessionKey -> Entity Column -> ReactElementM eh ()
+columnInfo_ :: Id ProjectClient -> SessionKey -> Entity Column -> ReactElementM eh ()
 columnInfo_ !projectId !sKey !c = view columnInfo (projectId, sKey, c) mempty
 
-columnInfo :: ReactView (Id Project, SessionKey, Entity Column)
+columnInfo :: ReactView (Id ProjectClient, SessionKey, Entity Column)
 columnInfo = defineView "column info" $ \(projectId, sKey, Entity _ col) ->
   cldiv_ "info" $
     case col ^. columnKind of
@@ -146,10 +148,10 @@ columnInfo = defineView "column info" $ \(projectId, sKey, Entity _ col) ->
 
 -- configure column
 
-columnConfig_ :: Id Project -> SessionKey -> Entity Column -> ReactElementM eh ()
+columnConfig_ :: Id ProjectClient -> SessionKey -> Entity Column -> ReactElementM eh ()
 columnConfig_ !projectId !sKey !c = view columnConfig (projectId, sKey, c) mempty
 
-columnConfig :: ReactView (Id Project, SessionKey, Entity Column)
+columnConfig :: ReactView (Id ProjectClient, SessionKey, Entity Column)
 columnConfig = defineControllerView "column configuration" Dialog.store $
   \st (projectId, sKey, Entity i col) -> cldiv_ "config" $ do
     let mError = getColumnError col
@@ -175,12 +177,12 @@ reportInfo_ !r = view reportInfo r mempty
 reportInfo :: ReactView ReportCol
 reportInfo = defineView "report info" $ \r -> clspan_ "reportInfo" $ do
   let format = case r ^. reportColFormat of
-        ReportFormatPlain     -> "Plaintext"
-        ReportFormatPDF       -> "PDF"
-        ReportFormatHTML      -> "HTML"
+        ReportFormatPlain -> "Plaintext"
+        ReportFormatPDF   -> "PDF"
+        ReportFormatHTML  -> "HTML"
         -- ReportFormatMarkdown  -> "Markdown"
       lang = case r ^. reportColLanguage of
-        Nothing               -> "Plaintext"
+        Nothing                     -> "Plaintext"
         Just ReportLanguageMarkdown -> "Markdown"
         Just ReportLanguageLatex    -> "Latex"
         Just ReportLanguageHTML     -> "HTML"
@@ -221,7 +223,7 @@ reportColConf = defineControllerView "report column config" Dialog.store $
           ]
         deleteActions = dispatch $ TableDeleteColumn i
         saveActions   =
-          mkColumnAction i (ReportColUpdate template format lang) :
+          mkColumnAction (TableUpdateReportCol i template format lang) :
             map Dialog.mkAction
               [ Dialog.SetVisibility i False
               , Dialog.UnsetTmpReportLang i
@@ -282,10 +284,10 @@ inputTemplate = defineView "input template" $ \(i, t, lang) -> do
 
 -- column kind: data
 
-dataTypeInfo_ :: Id Project -> SessionKey -> DataType -> ReactElementM eh ()
+dataTypeInfo_ :: Id ProjectClient -> SessionKey -> DataType -> ReactElementM eh ()
 dataTypeInfo_ !projectId !sKey !dt = view dataTypeInfo (projectId, sKey, dt) mempty
 
-dataTypeInfo :: ReactView (Id Project, SessionKey, DataType)
+dataTypeInfo :: ReactView (Id ProjectClient, SessionKey, DataType)
 dataTypeInfo = defineControllerView "datatype info" Dialog.store $
   \st (projectId, sKey, dt) -> span_ [ "className" $= "dataType" ] $
     case dt of
@@ -293,7 +295,7 @@ dataTypeInfo = defineControllerView "datatype info" Dialog.store $
       DataString   -> "String"
       DataNumber   -> "Number"
       DataTime     -> "Time"
-      DataRecord t -> do
+      DataRowRef t -> do
         onDidMount_ (Dialog.dispatch $ Dialog.GetTableCache projectId sKey) mempty
         let tblName = Map.lookup t (st ^. Dialog.stTableCache)
                         ?: "missing table"
@@ -305,7 +307,7 @@ dataTypeInfo = defineControllerView "datatype info" Dialog.store $
                          dataTypeInfo_ projectId sKey d
                          ")"
 
-dataColConf_ :: Id Project
+dataColConf_ :: Id ProjectClient
              -> SessionKey
              -> Id Column
              -> DataCol
@@ -313,7 +315,7 @@ dataColConf_ :: Id Project
 dataColConf_ !projectId !sKey !i !d =
   view dataColConf (projectId, sKey, i, d) mempty
 
-dataColConf :: ReactView (Id Project, SessionKey, Id Column, DataCol)
+dataColConf :: ReactView (Id ProjectClient, SessionKey, Id Column, DataCol)
 dataColConf = defineControllerView "data column configuration" Dialog.store $
   \st (projectId, sKey, i, dat) -> cldiv_ "dialog data" $ do
       let mError = case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of
@@ -344,7 +346,7 @@ dataColConf = defineControllerView "data column configuration" Dialog.store $
           -- in the Nothing case: nothing has changed
           deleteActions = dispatch $ TableDeleteColumn i
           saveActions =
-            mkColumnAction i (DataColUpdate dt isDerived formula) :
+            mkColumnAction (TableUpdateDataCol i dt isDerived formula) :
               map Dialog.mkAction
                 [ Dialog.SetVisibility i False
                 , Dialog.UnsetTmpDataType i
@@ -377,7 +379,7 @@ confButtons = defineView "column configuration buttons" $
 
 -- select datatype
 
-selDatatype_ :: Id Project
+selDatatype_ :: Id ProjectClient
              -> SessionKey
              -> Id Column
              -> DataCol
@@ -386,7 +388,7 @@ selDatatype_ :: Id Project
 selDatatype_  !projectId !sKey !i !dat !tables =
   view selDatatype (projectId, sKey, i, dat, tables) mempty
 
-selDatatype :: ReactView (Id Project,
+selDatatype :: ReactView (Id ProjectClient,
                           SessionKey,
                           Id Column,
                           DataCol,
@@ -397,7 +399,7 @@ selDatatype =
     selBranch_ projectId sKey (Just $ dat ^. dataColType) tables $
       Dialog.dispatch . Dialog.SetTmpDataType i
 
-selBranch_ :: Id Project
+selBranch_ :: Id ProjectClient
            -> SessionKey
            -> Maybe DataType
            -> Dialog.TableCache
@@ -406,7 +408,7 @@ selBranch_ :: Id Project
 selBranch_ !projectId !sKey !mDt !tables !cb =
   view selBranch (projectId, sKey, mDt, tables, cb) mempty
 
-selBranch :: ReactView (Id Project,
+selBranch :: ReactView (Id ProjectClient,
                         SessionKey,
                         Maybe DataType,
                         Dialog.TableCache,
@@ -431,10 +433,10 @@ selBranch = defineStatefulView "selBranch" Nothing $
     case selectedBranch of
       BMaybe  -> selBranch_ projectId sKey (subType =<< mDt) tables (cb . DataMaybe)
       BList   -> selBranch_ projectId sKey (subType =<< mDt) tables (cb . DataList)
-      BRecord -> selTable_ projectId sKey (recordTableId =<< mDt) tables (cb . DataRecord)
+      BRecord -> selTable_ projectId sKey (recordTableId =<< mDt) tables (cb . DataRowRef)
       _       -> pure ()
 
-selTable_ :: Id Project
+selTable_ :: Id ProjectClient
           -> SessionKey
           -> Maybe (Id Table)
           -> Dialog.TableCache
@@ -443,7 +445,7 @@ selTable_ :: Id Project
 selTable_ !projectId !sKey !mTableId !tables !cb =
   view selTable (projectId, sKey, mTableId, tables, cb) mempty
 
-selTable :: ReactView (Id Project,
+selTable :: ReactView (Id ProjectClient,
                        SessionKey,
                        Maybe (Id Table),
                        Dialog.TableCache,

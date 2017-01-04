@@ -26,7 +26,7 @@ import           Lib.Model                 (Entity (..))
 import           Lib.Model.Auth            (SessionKey)
 import           Lib.Model.Column          (Column, DataType, IsDerived,
                                             ReportFormat, ReportLanguage)
-import           Lib.Model.Project         (Project)
+import           Lib.Model.Project         (ProjectClient)
 import           Lib.Model.Table           (Table, tableName)
 import           Lib.Types                 (Id)
 import qualified Store                     as MainStore
@@ -112,7 +112,7 @@ data DialogAction
   | SetTmpReportTemplate   (Id Column) Text
   | UnsetTmpReportTemplate (Id Column)
   -- table cache
-  | GetTableCache          (Id Project) SessionKey
+  | GetTableCache          (Id ProjectClient) SessionKey
   | SetTableCache          TableCache
   deriving (NFData, Generic)
 

@@ -10,15 +10,15 @@ import           React.Flux          (ReactElementM, ReactView, classNames,
 import           React.Flux.Internal (toJSString)
 
 import           Action              (Action (ProjectsCreate, ProjectsLoadProject))
-import           Lib.Model.Project   (Project, projectName)
+import           Lib.Model.Project   (ProjectClient, projectClientName)
 import           Lib.Types           (Id)
 import           Store               (dispatch)
 import           Views.Combinators   (inputNew_)
 
-projectsOverview_ :: Map (Id Project) Project -> ReactElementM eh ()
+projectsOverview_ :: Map (Id ProjectClient) ProjectClient -> ReactElementM eh ()
 projectsOverview_ !ps = view projectsOverview ps mempty
 
-projectsOverview :: ReactView (Map (Id Project) Project)
+projectsOverview :: ReactView (Map (Id ProjectClient) ProjectClient)
 projectsOverview = defineView "projects" $ \ps -> cldiv_ "projects" $ do
   h1_ "My projects"
   div_
@@ -30,12 +30,12 @@ projectsOverview = defineView "projects" $ \ps -> cldiv_ "projects" $ do
       inputNew_ "Project name" (dispatch . ProjectsCreate)
   for_ (Map.toList ps) $ uncurry projectTile_
 
-projectTile_ :: Id Project -> Project -> ReactElementM eh ()
+projectTile_ :: Id ProjectClient -> ProjectClient -> ReactElementM eh ()
 projectTile_ !projectId !project = viewWithSKey projectTile (toJSString $ show projectId) (projectId, project) mempty
 
-projectTile :: ReactView (Id Project, Project)
+projectTile :: ReactView (Id ProjectClient, ProjectClient)
 projectTile = defineView "project" $
     \(projectId, project) -> div_
       [ classNames [ ("tile", True) ]
       , onClick $ \_ _ -> dispatch $ ProjectsLoadProject projectId
-      ] $ span_ $ elemText $ project ^. projectName
+      ] $ span_ $ elemText $ project ^. projectClientName

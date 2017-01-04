@@ -101,15 +101,15 @@
   text-align: right;
 }
 
-// Record
+// RowRef
 
-.record {
+.rowref {
   select {
     width: 100%;
   }
 }
 
-.expanded .record {
+.expanded .rowref {
   background-color: lightgray;
   border-spacing: 1px;
   border-collapse: separate;
