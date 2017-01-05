@@ -265,3 +265,75 @@ signup = defineStatefulView "signup" initialSignupViewState $ \viewState _ ->
            , onClick $ \_ _ _ -> (dispatch ToLoginForm, Nothing)
            ] "login"
          "."
+
+changePassword_ :: ReactElementM eh ()
+changePassword_ = view changePassword () mempty
+
+changePassword :: ReactView ()
+changePassword =
+  defineStatefulView "change password" ("", "") $ \st _ -> do
+    let (pwd, pwdConfirm) = st
+        pwdValid = not $ Text.null pwd
+        pwdConfirmValid = pwd == pwdConfirm
+        formValid = pwdValid && pwdConfirmValid
+    cldiv_ "change password" $ do
+       table_ $ tbody_ $ do
+         tr_ $ do
+           td_ $
+             label_
+               [ "htmlFor" $= "password"
+               ] "New password"
+           td_ $ input_
+             [ classNames
+                 [ ("auth-input", True)
+                 , ("invalid", pwdValid)
+                 ]
+             , "type" $= "text"
+             , "value" &= pwd
+             , "autoFocus" &= True
+             , "name" $= "password"
+             , onChange $ \ev st -> ([], Just (target ev "value", pwdConfirm))
+             , onKeyDown $ \_ evt st' ->
+                 if keyENTER evt
+                 then undefined -- todo change password ajax
+                 else ([], Nothing)
+             ]
+         tr_ $ do
+            td_ $ label_
+              [ "htmlFor" $= "passwordConfirm"
+              ] "Confirm new password"
+            td_ $ input_
+              [ classNames
+                  [ ("auth-input", True)
+                  , ("invalid", showSignupErrors viewState && signupPwdError)
+                  ]
+              , "type" $= "password"
+              , "value" &= signupPwd viewState
+              , "name" $= "password"
+              , onChange $ \ev st -> ([], Just st {
+                 signupPwd = target ev "value"})
+              , onKeyDown inputKeyDownHandler
+              ]
+         tr_ $ do
+            td_ $ label_
+              [ "htmlFor" $= "passwordConfirm"
+              ] "Password (again)"
+            td_ $ input_
+              [ classNames
+                  [ ("auth-input", True)
+                  , ("invalid", showSignupErrors viewState && signupPwdConfirmError)
+                  ]
+              , "type" $= "password"
+              , "value" &= signupPwdConfirm viewState
+              , "name" $= "passwordConfirm"
+              , onChange $ \ev st -> ([], Just st {
+                 signupPwdConfirm = target ev "value"})
+              , onKeyDown inputKeyDownHandler
+              ]
+         tr_ $ td_
+            [ "className" $= "submit"
+            , "colSpan" $= "2"
+            ] $ button_
+              [ classNames [ ("enabled", validFormData)]
+              , onClick $ \_ _ st -> signupHandler st
+              ] "Submit"

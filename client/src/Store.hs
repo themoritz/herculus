@@ -86,6 +86,7 @@ mkLoggedInState sKey userInfo = LoggedInState
 data LoggedInSubState
   = LiStProjectOverview ProjectOverviewState
   | LiStProjectDetail ProjectDetailState
+  | LiStChangePassword
 
 type ProjectOverviewState = Map (Id ProjectClient) ProjectClient
 
@@ -134,9 +135,9 @@ forProjectDetail :: (SessionKey -> ProjectDetailState -> App a) -> App a
 forProjectDetail action =
   forLoggedIn $ \liSt -> case liSt ^. liStSubState of
     LiStProjectDetail pdSt -> action (liSt ^. liStSessionKey) pdSt
-    LiStProjectOverview _ -> do
+    _ -> do
       showMessage $ Message.SetError
-        "inconsistent client state: unexpected: project overview"
+        "inconsistent client state: expected: project detail view"
       halt
 
 forProjectDetail' ::(SessionKey -> ProjectDetailState -> App ProjectDetailState)

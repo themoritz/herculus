@@ -32,7 +32,7 @@ import           Store                 (LoggedInSubState (..),
                                         stateNewColShow, stateProject,
                                         stateProjectId, stateRows, stateSession,
                                         stateTableId, stateTables, store)
-import           Views.Auth            (login_, signup_)
+import           Views.Auth            (changePassword_, login_, signup_)
 import           Views.Combinators     (clspan_, inputNew_, menuItem_)
 import           Views.Common          (keyENTER, keyESC)
 import           Views.ProjectOverview (projectsOverview_)
@@ -57,6 +57,7 @@ app = defineControllerView "app" store $ \st () ->
               if null $ pdSt ^. stateTables
                 then cldiv_ "" mempty
                 else projectDetailView_ pdSt $ liSt ^. liStSessionKey
+            LiStChangePassword -> changePassword_
       appFooter_ st
   where
     projectDetailView_ pdSt sKey =
@@ -92,10 +93,6 @@ appHeader = defineView "header" $ \st ->
     case st ^. stateSession of
       StateLoggedIn liSt ->
         case liSt ^. liStSubState of
-          LiStProjectOverview _  ->
-            cldiv_ "navigation" $
-              btnUserSettings_ (liSt ^. liStUserSettingsShow)
-                               (liSt ^. liStUserInfo . uiUserName)
           LiStProjectDetail pdSt -> do
             tables_ (pdSt ^. stateTables) (pdSt ^. stateTableId) (pdSt ^. stateProjectId)
             projectNameComp_ (pdSt ^. stateProjectId) $ pdSt ^. stateProject
@@ -108,6 +105,10 @@ appHeader = defineView "header" $ \st ->
                 ] $ do
                   faIcon_ "th-large"
                   " Projects"
+          _  ->
+            cldiv_ "navigation" $
+              btnUserSettings_ (liSt ^. liStUserSettingsShow)
+                               (liSt ^. liStUserInfo . uiUserName)
       StateLoggedOut _  -> pure ()
 
 data ProjectNameState = ProjectNameState
