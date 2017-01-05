@@ -67,6 +67,7 @@ app = defineControllerView "app" store $ \st () ->
             , _tableId    = pdSt ^. stateTableId
             , _projectId  = pdSt ^. stateProjectId
             , _sKey       = sKey
+            , _tables     = (^. tableName) <$> (pdSt ^. stateTables)
             }
       in  cldiv_ "tableGrid" $ tableGrid_ tableGridProps
 

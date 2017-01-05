@@ -7,36 +7,25 @@ module Views.Column.ConfigDialog where
 
 import           Control.DeepSeq           (NFData)
 import           Control.Lens
-import           Control.Monad             (when)
 import           Data.Map                  (Map)
 import qualified Data.Map                  as Map
 import           Data.Monoid               ((<>))
-import           Data.Proxy                (Proxy (..))
 import           Data.Text                 (Text)
 import qualified Data.Text                 as Text
 import           GHC.Generics              (Generic)
 import           React.Flux                (ReactStore, SomeStoreAction (..),
                                             StoreData (..), mkStore)
-import           React.Flux.Addons.Servant (HandleResponse, request)
+import           React.Flux.Addons.Servant (HandleResponse)
 
-import           Action                    (api, session)
 import qualified Action                    as MainAction
-import qualified Lib.Api.Rest              as Api
-import           Lib.Model                 (Entity (..))
-import           Lib.Model.Auth            (SessionKey)
 import           Lib.Model.Column          (Column, DataType, IsDerived,
                                             ReportFormat, ReportLanguage)
-import           Lib.Model.Project         (ProjectClient)
-import           Lib.Model.Table           (Table, tableName)
 import           Lib.Types                 (Id)
 import qualified Store                     as MainStore
 import qualified Store.Message             as Message
 
-type TableCache = Map (Id Table) Text
-
 data State = State
   { _stDialogs    :: Map (Id Column) DialogState
-  , _stTableCache :: TableCache
   }
 
 data DialogState = DialogState
@@ -91,7 +80,6 @@ mkCallback cbSuccess = pure . \case
 store :: ReactStore State
 store = mkStore $ State
   { _stDialogs    = Map.empty
-  , _stTableCache = Map.empty
   }
 
 data Action = Action DialogAction
@@ -111,9 +99,6 @@ data DialogAction
   | UnsetTmpReportFormat   (Id Column)
   | SetTmpReportTemplate   (Id Column) Text
   | UnsetTmpReportTemplate (Id Column)
-  -- table cache
-  | GetTableCache          (Id ProjectClient) SessionKey
-  | SetTableCache          TableCache
   deriving (NFData, Generic)
 
 instance StoreData State where
@@ -146,16 +131,3 @@ instance StoreData State where
         pure $ st & atDialog i . stTmpReportTemplate .~ Just templ
       UnsetTmpReportTemplate i ->
         pure $ st & atDialog i . stTmpReportTemplate .~ Nothing
-      GetTableCache projectId sessionKey -> do
-          when (Map.null $ st ^. stTableCache) $
-            request api (Proxy :: Proxy Api.ProjectLoad)
-                    (session sessionKey)
-                    projectId $
-                    mkCallback $
-                    \(_, tables) -> [SetTableCache $ toTableMap tables]
-          pure st
-        where
-          toTableMap = Map.fromList . map entityToPair
-          entityToPair (Entity tableId table) = (tableId, table ^. tableName)
-      SetTableCache m ->
-       pure $ st & stTableCache .~ m

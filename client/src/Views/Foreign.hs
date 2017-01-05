@@ -75,11 +75,11 @@ codemirror_ !props = do
 -- react-datepicker
 
 data DatePickerProps func = DatePickerProps
-  { datePickerSelected :: Text
+  { datePickerSelected        :: Text
   , datePickerPlaceholderText :: Text
-  , datePickerDateFormat :: Text
-  , datePickerOnChange :: func -- JSString -> a
-  , datePickerClassNames :: [(Text, Bool)]
+  , datePickerDateFormat      :: Text
+  , datePickerOnChange        :: func -- JSString -> a
+  , datePickerClassNames      :: [(Text, Bool)]
   }
 
 datePicker_ :: CallbackFunction eh func
@@ -95,6 +95,8 @@ datePicker_ !props =
 
 -- own: OnLoad
 
+-- | Careful: Issuing `alterStore` inside the callback might trigger an
+-- infinite re-render loop!
 onDidMount_ :: CallbackFunction eh func
             => func -> ReactElementM eh a -> ReactElementM eh a
 onDidMount_ !f =

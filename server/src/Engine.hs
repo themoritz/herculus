@@ -189,7 +189,7 @@ executeCommand = \case
 
   CmdReportColUpdate columnId template format language -> do
     oldCol <- getColumn columnId
-    withReportCol oldCol $ \_ -> do
+    withReportCol oldCol $ \_ ->
       modifyColumn columnId $ columnKind . _ColumnReport
         %~ (reportColTemplate .~ template)
          . (reportColFormat   .~ format)

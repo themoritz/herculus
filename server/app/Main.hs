@@ -89,7 +89,7 @@ main = do
     Mongo.ensureIndex $ Mongo.index collRecord [ "tableId" =: asc ]
     Mongo.ensureIndex $ Mongo.index collCell   [ "tableId" =: asc ]
     Mongo.ensureIndex $ Mongo.index collCell   [ "columnId" =: asc ]
-    Mongo.ensureIndex $ Mongo.index collCell   [ "recordId" =: asc ]
+    Mongo.ensureIndex $ Mongo.index collCell   [ "rowId" =: asc ]
   --
   connections <- atomically $ newTVar newConnectionManager
   let env = HexlEnv pipe optMongoCollection connections

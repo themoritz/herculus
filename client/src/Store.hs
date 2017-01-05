@@ -2,44 +2,48 @@
 
 module Store where
 
-import           Control.Applicative       ((<|>))
-import           Control.Concurrent        (forkIO)
-import           Control.DeepSeq           (NFData)
-import           Control.Lens              hiding (op)
-import           Control.Monad             (void, when)
-import           Control.Monad.IO.Class    (liftIO)
-import           Control.Monad.State       (execStateT, lift)
+import           Control.Applicative          ((<|>))
+import           Control.Arrow                (second)
+import           Control.Concurrent           (forkIO)
+import           Control.DeepSeq              (NFData)
+import           Control.Lens                 hiding (op)
+import           Control.Monad                (void, when)
+import           Control.Monad.IO.Class       (liftIO)
+import           Control.Monad.State          (execStateT, lift)
 
-import           Data.Foldable             (foldl', for_)
-import           Data.Map.Strict           (Map)
-import qualified Data.Map.Strict           as Map
-import           Data.Monoid               ((<>))
+import           Data.Foldable                (foldl', for_)
+import           Data.Map.Strict              (Map)
+import qualified Data.Map.Strict              as Map
+import           Data.Monoid                  ((<>))
 import           Data.Proxy
-import qualified Data.Text                 as Text
+import qualified Data.Set                     as Set
+import qualified Data.Text                    as Text
 
 import           React.Flux
 import           React.Flux.Addons.Free
-import           React.Flux.Addons.Servant (HandleResponse, request)
+import           React.Flux.Addons.Servant    (HandleResponse, request)
 
-import qualified Lib.Api.Rest              as Api
-import           Lib.Api.WebSocket         (WsDownMessage (..))
+import qualified Lib.Api.Rest                 as Api
+import           Lib.Api.WebSocket            (WsDownMessage (..))
 import           Lib.Model
-import           Lib.Model.Auth            (GetUserInfoResponse (..),
-                                            LoginResponse (..), SessionKey,
-                                            SignupResponse (..),
-                                            UserInfo (UserInfo))
+import           Lib.Model.Auth               (GetUserInfoResponse (..),
+                                               LoginResponse (..), SessionKey,
+                                               SignupResponse (..),
+                                               UserInfo (UserInfo))
 import           Lib.Model.Cell
-import           Lib.Model.Column          (Column, columnTableId)
+import           Lib.Model.Column
+import           Lib.Model.Dependencies.Types (tablesOfTypeDeps)
 import           Lib.Model.Project
 import           Lib.Model.Row
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Action                    (Action (..), api, session)
-import qualified Store.Message             as Message
-import qualified Store.RowCache            as RowCache
-import           Store.Session             (clearSession, persistSession,
-                                            recoverSession)
+import           Debug.Trace
+
+import           Action                       (Action (..), api, session)
+import qualified Store.Message                as Message
+import           Store.Session                (clearSession, persistSession,
+                                               recoverSession)
 import           WebSocket
 
 data Coords = Coords (Id Column) (Id Row)
@@ -83,11 +87,13 @@ data ProjectViewState
 
 type ProjectOverviewState = Map (Id ProjectClient) ProjectClient
 
+type RowCacheState = Map (Id Row) (Map (Id Column) (Column, CellContent))
+
 -- TODO: maybe put tableId and tables one level deeper into project?
 data ProjectDetailState = ProjectDetailState
   { _stateProjectId :: Id ProjectClient
   , _stateProject   :: ProjectClient
-  , _stateCacheRows :: Map (Id Table) RowCache.State
+  , _stateCacheRows :: Map (Id Table) RowCacheState
   , _stateTableId   :: Maybe (Id Table)
   , _stateColumns   :: Map (Id Column) Column
   , _stateTables    :: Map (Id Table) Table
@@ -195,11 +201,19 @@ performLogin userInfo@(UserInfo _ _ sKey) = do
 showMessage :: Message.Action -> App ()
 showMessage a = stateMessage .= Message.runAction a
 
-withRowCache :: Id Table -> RowCache.Action -> App ()
-withRowCache tableId a =
-  forProjectDetail' $ \_ pdSt ->
-    pure $ pdSt &
-      stateCacheRows . at tableId . _Just %~ RowCache.runAction tableId a
+getRowCache :: Id Table -> App ()
+getRowCache tableId =
+  forProjectDetail' $ \sKey pdSt ->
+    case pdSt ^. stateCacheRows . at tableId of
+      -- Cache not yet initialized: no key in map => Nothing
+      Just _  -> pure pdSt
+      Nothing -> do
+        records <- ajax' $ request api (Proxy :: Proxy Api.RowListWithData)
+          (session sKey) tableId
+        let toCol (Entity c col, content) = (c, (col, content))
+            recMaps = map (second $ Map.fromList . map toCol) records
+        traceShowM recMaps
+        pure $ pdSt & stateCacheRows . at tableId .~ Just (Map.fromList recMaps)
 
 --------------------------------------------------------------------------------
 
@@ -337,24 +351,12 @@ update = \case
         showMessage $ Message.SetWarning txt
 
   Logout -> do
-    liftIO $ clearSession
+    liftIO clearSession
     forLoggedIn_ $ \liSt -> do
       ajax' $ request api (Proxy :: Proxy Api.AuthLogout)
                           (session $ liSt ^. stateSessionKey)
       showMessage $ Message.SetSuccess "Successfully logged out."
       stateSession .= StateLoggedOut LoggedOutLoginForm
-
-  -- Cache ---------------------------------------------------------------------
-
-  RowCacheGet tableId ->
-    forProjectDetail_ $ \sKey pdSt ->
-      case pdSt ^. stateCacheRows . at tableId of
-        Just _  -> pure ()
-        -- cache not yet initialized: no key in map => Nothing
-        Nothing -> do
-          records <- ajax' $ request api (Proxy :: Proxy Api.RowListWithData)
-            (session sKey) tableId
-          withRowCache tableId $ RowCache.Set records
 
   -- Project Overview ----------------------------------------------------------
 
@@ -403,10 +405,11 @@ update = \case
       ajax' $ request api (Proxy :: Proxy Api.TableCreate)
                           (session sKey) projectId name
 
-  TablesLoadTable tableId ->
-    forProjectDetail' $ \sKey pdSt -> do
-      (cols, rows, cells) <- ajax' $
-        request api (Proxy :: Proxy Api.TableGetWhole) (session sKey) tableId
+  TablesLoadTable tableId -> do
+    (cols, rows, cells) <- forProjectDetail $ \sKey _ ->
+      ajax' $ request api (Proxy :: Proxy Api.TableGetWhole) (session sKey) tableId
+
+    forProjectDetail' $ \_ pdSt -> do
       let fillEntries entries m = foldl' acc m $ map toCoords entries
             where
               toCoords (colId, recId, val) = (Coords colId recId, val)
@@ -415,6 +418,14 @@ update = \case
                   & stateRows    .~ Map.fromList (map entityToTuple rows)
                   & stateCells   .~ fillEntries cells Map.empty
                   & stateTableId .~ Just tableId
+
+    -- For every column that has a reference to a table in its type, fill
+    -- the rowcache for that table.
+    for_ cols $ \(Entity _ column) ->
+      case column ^? columnKind . _ColumnData . dataColType of
+        Nothing -> pure ()
+        Just typ -> mapM_ getRowCache $
+                    Set.toList $ tablesOfTypeDeps $ getTypeDependencies typ
 
   -- Table
 

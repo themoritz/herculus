@@ -56,9 +56,6 @@ data Action
   | Signup SignupData
   | Login LoginData
   | Logout
-  -- RowCache
-  | RowCacheGet (Id Table)
-
   | SetProjectOverview SessionKey
   -- Project overview
   | ProjectsCreate Text -- project name

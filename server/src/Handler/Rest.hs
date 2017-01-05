@@ -278,7 +278,7 @@ handleRowData :: MonadHexl m => SessionData
 handleRowData (UserInfo userId _ _) recId = do
   permissionRow userId recId
   cells <- listByQuery
-    [ "recordId" =: toObjectId recId ]
+    [ "rowId" =: toObjectId recId ]
   for cells $ \(Entity _ cell) -> do
     let i = cell ^. cellColumnId
     col <- getById' i
@@ -309,9 +309,9 @@ handleCellSet (UserInfo userId _ _) columnId rowId value = do
 handleCellGetReportPDF :: MonadHexl m => SessionData
                        -> Maybe SessionKey -> Id Column -> Id Row
                        -> m BL.ByteString
-handleCellGetReportPDF (UserInfo userId _ _) _ columnId recordId = do
+handleCellGetReportPDF (UserInfo userId _ _) _ columnId rowId = do
   permissionColumn userId columnId
-  (repCol, plain) <- evalReport columnId recordId
+  (repCol, plain) <- evalReport columnId rowId
   case repCol ^. reportColLanguage of
     Nothing -> throwError $ ErrUser "Cannot generate PDF from plain text"
     Just lang -> case getPandocReader lang (repCol ^. reportColFormat) of
@@ -351,10 +351,10 @@ handleCellGetReportPDF (UserInfo userId _ _) _ columnId recordId = do
 
 handleCellGetReportHTML :: MonadHexl m => SessionData
                         -> Maybe SessionKey -> Id Column -> Id Row -> m Text
-handleCellGetReportHTML (UserInfo userId _ _) _ columnId recordId = do
+handleCellGetReportHTML (UserInfo userId _ _) _ columnId rowId = do
   permissionColumn userId columnId
   col <- getById' columnId
-  (repCol, plain) <- evalReport columnId recordId
+  (repCol, plain) <- evalReport columnId rowId
   case repCol ^. reportColLanguage of
     Nothing   -> pure plain
     Just lang -> case getPandocReader lang (repCol ^. reportColFormat) of
@@ -378,9 +378,9 @@ handleCellGetReportHTML (UserInfo userId _ _) _ columnId recordId = do
 
 handleCellGetReportPlain :: MonadHexl m => SessionData
                          -> Maybe SessionKey -> Id Column -> Id Row -> m Text
-handleCellGetReportPlain (UserInfo userId _ _) _ columnId recordId = do
+handleCellGetReportPlain (UserInfo userId _ _) _ columnId rowId = do
   permissionColumn userId columnId
-  snd <$> evalReport columnId recordId
+  snd <$> evalReport columnId rowId
 
 getPandocReader :: ReportLanguage
                 -> ReportFormat
@@ -399,12 +399,12 @@ getPandocReader lang format = case lang of
 -- Helper ----------------------------------------------------------------------
 
 evalReport :: MonadHexl m => Id Column -> Id Row -> m (ReportCol, Text)
-evalReport columnId recordId = do
+evalReport columnId rowId = do
   col <- getById' columnId
   withReportCol col $ \repCol -> case repCol ^. reportColCompiledTemplate of
     CompileResultOk ttpl -> fmap fst $ runEngineT emptyDependencyGraph $ do
       let env = EvalEnv
-                  { envGetCellValue = flip getCellValue recordId
+                  { envGetCellValue = flip getCellValue rowId
                   , envGetColumnValues = getColumnValues
                   , envGetTableRows = fmap (map entityId) . getTableRows
                   , envGetRowField = getRowField

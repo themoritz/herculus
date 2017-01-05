@@ -37,6 +37,7 @@ data TableGridProps = TableGridProps
   , _tableId    :: Maybe (Id Table)
   , _projectId  :: Id ProjectClient
   , _sKey       :: SessionKey
+  , _tables     :: TableNames
   }
 
 makeLenses ''TableGridProps
@@ -84,7 +85,7 @@ tableGrid = defineView "tableGrid" $ \props -> do
             faButton_ "plus-circle" $ dispatch TableCreateDataCol
             faButton_ "bars" $ dispatch TableCreateReportCol
         | y == 0 && 0 < x && x <= numCols =
-            column_ (props ^. projectId) (props ^. sKey) (getColumn (x - 1))
+            column_ (props ^. projectId) (props ^. sKey) (props ^. tables) (getColumn (x - 1))
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $
             renderCell (x - 1) (y - 1)
         | otherwise = cldiv_ "empty" mempty
