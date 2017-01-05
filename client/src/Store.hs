@@ -84,26 +84,28 @@ type ProjectOverviewState = Map (Id ProjectClient) ProjectClient
 
 -- TODO: maybe put tableId and tables one level deeper into project?
 data ProjectDetailState = ProjectDetailState
-  { _stateProjectId :: Id ProjectClient
-  , _stateProject   :: ProjectClient
-  , _stateCacheRows :: Map (Id Table) RowCache.State
-  , _stateTableId   :: Maybe (Id Table)
-  , _stateColumns   :: Map (Id Column) Column
-  , _stateTables    :: Map (Id Table) Table
-  , _stateCells     :: Map Coords CellContent
-  , _stateRows      :: Map (Id Row) Row
-}
+  { _stateProjectId  :: Id ProjectClient
+  , _stateProject    :: ProjectClient
+  , _stateCacheRows  :: Map (Id Table) RowCache.State
+  , _stateTableId    :: Maybe (Id Table)
+  , _stateColumns    :: Map (Id Column) Column
+  , _stateTables     :: Map (Id Table) Table
+  , _stateCells      :: Map Coords CellContent
+  , _stateRows       :: Map (Id Row) Row
+  , _stateNewColShow :: Bool
+  }
 
 mkProjectDetailState :: Id ProjectClient -> ProjectClient -> ProjectDetailState
 mkProjectDetailState i p = ProjectDetailState
-  { _stateProjectId = i
-  , _stateProject   = p
-  , _stateCacheRows = Map.empty
-  , _stateTableId   = Nothing
-  , _stateColumns   = Map.empty
-  , _stateTables    = Map.empty
-  , _stateCells     = Map.empty
-  , _stateRows      = Map.empty
+  { _stateProjectId  = i
+  , _stateProject    = p
+  , _stateCacheRows  = Map.empty
+  , _stateTableId    = Nothing
+  , _stateColumns    = Map.empty
+  , _stateTables     = Map.empty
+  , _stateCells      = Map.empty
+  , _stateRows       = Map.empty
+  , _stateNewColShow = False
   }
 
 data LoggedOutState
@@ -279,7 +281,7 @@ update = \case
                                   (\(Coords c _) _ -> c /= columnId)
             -- Rows
             for_ rowDiff $ \(rowId, op, row) ->
-              when (row ^. rowTableId == tableId) $ do
+              when (row ^. rowTableId == tableId) $
                 stateRows . at rowId .= case op of
                   Create -> Just row
                   Update -> Just row
@@ -336,7 +338,7 @@ update = \case
         showMessage $ Message.SetWarning txt
 
   Logout -> do
-    liftIO $ clearSession
+    liftIO clearSession
     forLoggedIn_ $ \liSt -> do
       ajax' $ request api (Proxy :: Proxy Api.AuthLogout)
                           (session $ liSt ^. stateSessionKey)
@@ -414,6 +416,13 @@ update = \case
                   & stateTableId .~ Just tableId
 
   -- Table
+
+  TableToggleNewColumnDialog ->
+    forProjectDetail' $ \_ pdSt -> pure $ pdSt & stateNewColShow .~
+      not (pdSt ^. stateNewColShow)
+
+  TableHideNewColumnDialog ->
+    forProjectDetail' $ \_ pdSt -> pure $ pdSt & stateNewColShow .~ False
 
   TableCreateDataCol ->
     forProjectDetail_ $ \sKey pdSt ->

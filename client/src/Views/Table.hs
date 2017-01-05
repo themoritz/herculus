@@ -4,6 +4,7 @@ module Views.Table where
 
 import           Control.Lens       hiding (view)
 
+import           Control.Monad      (when)
 import           Data.IntMap.Strict (IntMap)
 import qualified Data.IntMap.Strict as IntMap
 import           Data.Map.Strict    (Map)
@@ -21,7 +22,7 @@ import           Lib.Model.Row      (Row)
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Action             (Action (TableAddRow, TableCreateDataCol, TableCreateReportCol))
+import           Action             (Action (TableAddRow, TableCreateDataCol, TableCreateReportCol, TableToggleNewColumnDialog))
 import           Store              (Coords (..), dispatch)
 import           Views.Cell
 import           Views.Column
@@ -31,12 +32,13 @@ import           Views.ReportCell
 import           Views.Row
 
 data TableGridProps = TableGridProps
-  { _cells      :: Map Coords CellContent
-  , _colByIndex :: IntMap (Id Column, Column)
-  , _recByIndex :: IntMap (Id Row, Row)
-  , _tableId    :: Maybe (Id Table)
-  , _projectId  :: Id ProjectClient
-  , _sKey       :: SessionKey
+  { _cells            :: Map Coords CellContent
+  , _colByIndex       :: IntMap (Id Column, Column)
+  , _recByIndex       :: IntMap (Id Row, Row)
+  , _tableId          :: Maybe (Id Table)
+  , _projectId        :: Id ProjectClient
+  , _showNewColDialog :: Bool
+  , _sKey             :: SessionKey
   }
 
 makeLenses ''TableGridProps
@@ -81,8 +83,12 @@ tableGrid = defineView "tableGrid" $ \props -> do
         | x == 0 && 0 < y && y <= numRecs = cldiv_ "record" $
             row_ $ getRow (y - 1)
         | y == 0 && x == (numCols + 1) = cldiv_ "column-new" $ do
-            faButton_ "plus-circle" $ dispatch TableCreateDataCol
-            faButton_ "bars" $ dispatch TableCreateReportCol
+            faButton_ "plus-circle" $ dispatch TableToggleNewColumnDialog
+            when (props ^. showNewColDialog) $ cldiv_ "column-new-dialog" $ do
+                "asdf"
+                "asdf"
+              -- dispatch TableCreateDataCol
+              -- dispatch TableCreateReportCol
         | y == 0 && 0 < x && x <= numCols =
             column_ (props ^. projectId) (props ^. sKey) (getColumn (x - 1))
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $

@@ -25,10 +25,11 @@ import           Store                 (LoggedOutState (..),
                                         ProjectViewState (..),
                                         SessionState (..), State, dispatch,
                                         stateCells, stateColumns, stateMessage,
-                                        stateProject, stateProjectId,
-                                        stateProjectView, stateRows,
-                                        stateSession, stateSessionKey,
-                                        stateTableId, stateTables, store)
+                                        stateNewColShow, stateProject,
+                                        stateProjectId, stateProjectView,
+                                        stateRows, stateSession,
+                                        stateSessionKey, stateTableId,
+                                        stateTables, store)
 import           Views.Auth            (login_, signup_)
 import           Views.Combinators     (clspan_, inputNew_)
 import           Views.Common          (keyENTER, keyESC)
@@ -61,12 +62,13 @@ app = defineControllerView "app" store $ \st () ->
           recs = pdSt ^. stateRows
           -- TODO: put tables deeper into view state hierarchy under projectId
           tableGridProps = TableGridProps
-            { _cells      = pdSt ^. stateCells
-            , _colByIndex = IntMap.fromList $ zip [0..] (Map.toList cols)
-            , _recByIndex = IntMap.fromList $ zip [0..] (Map.toList recs)
-            , _tableId    = pdSt ^. stateTableId
-            , _projectId  = pdSt ^. stateProjectId
-            , _sKey       = sKey
+            { _cells            = pdSt ^. stateCells
+            , _colByIndex       = IntMap.fromList $ zip [0..] (Map.toList cols)
+            , _recByIndex       = IntMap.fromList $ zip [0..] (Map.toList recs)
+            , _tableId          = pdSt ^. stateTableId
+            , _projectId        = pdSt ^. stateProjectId
+            , _showNewColDialog = pdSt ^. stateNewColShow
+            , _sKey             = sKey
             }
       in  cldiv_ "tableGrid" $ tableGrid_ tableGridProps
 

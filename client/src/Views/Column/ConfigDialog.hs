@@ -89,7 +89,7 @@ mkCallback cbSuccess = pure . \case
   Right x       -> mkAction <$> cbSuccess x
 
 store :: ReactStore State
-store = mkStore $ State
+store = mkStore State
   { _stDialogs    = Map.empty
   , _stTableCache = Map.empty
   }
