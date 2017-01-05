@@ -84,11 +84,11 @@ tableGrid = defineView "tableGrid" $ \props -> do
             row_ $ getRow (y - 1)
         | y == 0 && x == (numCols + 1) = cldiv_ "column-new" $ do
             faButton_ "plus-circle" $ dispatch TableToggleNewColumnDialog
-            when (props ^. showNewColDialog) $ cldiv_ "column-new-dialog" $ do
-                "asdf"
-                "asdf"
-              -- dispatch TableCreateDataCol
-              -- dispatch TableCreateReportCol
+            when (props ^. showNewColDialog) $ cldiv_ "small-menu" $ do
+              menuItem_ "columns" "New data column" $
+                dispatch TableCreateDataCol
+              menuItem_ "file-text" "New report column" $
+                dispatch TableCreateReportCol
         | y == 0 && 0 < x && x <= numCols =
             column_ (props ^. projectId) (props ^. sKey) (getColumn (x - 1))
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $

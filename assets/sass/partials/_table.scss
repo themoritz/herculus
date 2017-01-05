@@ -39,15 +39,9 @@
     padding: 5px;
     box-sizing: border-box;
     text-align: center;
-    .column-new-dialog {
-      position: absolute;
-      left: -120px;
-      top: 2px;
-      z-index: 10;
-      background-color: white;
-      border-radius: 4px;
-      border: 1px solid lightgray;
-      box-shadow: 0px 0px 20px 0px lightgray;
+    .small-menu {
+      left: 10px;
+      top: 30px;
     }
   }
   .origin {

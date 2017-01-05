@@ -131,7 +131,8 @@ forProjectDetail action =
         "inconsistent client state: unexpected: project overview"
       halt
 
-forProjectDetail' :: (SessionKey -> ProjectDetailState -> App ProjectDetailState) -> App ()
+forProjectDetail' ::(SessionKey -> ProjectDetailState -> App ProjectDetailState)
+                  -> App ()
 forProjectDetail' action = do
   new <- forProjectDetail action
   stateSession . _StateLoggedIn . stateProjectView . _StateProjectDetail .= new
@@ -423,9 +424,6 @@ update = \case
   TableToggleNewColumnDialog ->
     forProjectDetail' $ \_ pdSt -> pure $ pdSt & stateNewColShow .~
       not (pdSt ^. stateNewColShow)
-
-  TableHideNewColumnDialog ->
-    forProjectDetail' $ \_ pdSt -> pure $ pdSt & stateNewColShow .~ False
 
   TableCreateDataCol ->
     forProjectDetail_ $ \sKey pdSt ->

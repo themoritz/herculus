@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Views.Combinators where
 
 import           Data.Monoid  ((<>))
@@ -33,3 +35,11 @@ inputNew p = defineStatefulView "inputNew" ("" :: Text) $ \curText cb ->
            then (cb curState, Just "")
            else ([], Nothing)
     ]
+
+-- todo type signature
+menuItem_ !icon !label !handler = button_
+  [ "className" $= "menu-item"
+  , onClick $ \_ _ -> handler
+  ] $ do
+    cldiv_ "icon" $ faIcon_ icon
+    cldiv_ "label" label

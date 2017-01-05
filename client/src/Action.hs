@@ -70,7 +70,6 @@ data Action
   | TablesLoadTable (Id Table)
   -- Table
   | TableToggleNewColumnDialog
-  | TableHideNewColumnDialog
   | TableCreateDataCol
   | TableCreateReportCol
   | TableRenameColumn (Id Column) Text
