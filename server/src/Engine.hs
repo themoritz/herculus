@@ -87,6 +87,7 @@ runCommand cmd = do
   commit _storeColumns
   commit _storeRows
   commit _storeTables
+  update projectId (projectDependencyGraph .~ (state ^. engineGraph))
   -- Send changes to clients
   sendWS $ WsDownProjectDiff (filterChanges _storeCells)
                              (filterChanges _storeColumns)

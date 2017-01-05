@@ -195,7 +195,7 @@ handleTableCreate (UserInfo userId _ _) projectId name = do
 handleTableData :: MonadHexl m => SessionData -> Id Table -> m [(Id Column, Id Row, CellContent)]
 handleTableData (UserInfo userId _ _) tblId = do
   permissionTable userId tblId
-  cells <- listByQuery [ "aspects.tableId" =: toObjectId tblId ]
+  cells <- listByQuery [ "tableId" =: toObjectId tblId ]
   let go (Cell v _ c r) = (c, r, v)
   pure $ map (go . entityVal) cells
 
@@ -278,7 +278,7 @@ handleRowData :: MonadHexl m => SessionData
 handleRowData (UserInfo userId _ _) recId = do
   permissionRow userId recId
   cells <- listByQuery
-    [ "aspects.recordId" =: toObjectId recId ]
+    [ "recordId" =: toObjectId recId ]
   for cells $ \(Entity _ cell) -> do
     let i = cell ^. cellColumnId
     col <- getById' i
