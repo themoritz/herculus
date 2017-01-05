@@ -221,14 +221,14 @@ executeCommand = \case
     row <- getRow rowId
     let tableId = row ^. rowTableId
     deleteRow rowId
-    -- Recompile those dependants of any of the table's columns with an
-    -- `AddAll` mode
+    -- Evaluate all cells of those dependants of any of the table's columns
+    -- with an `AddAll` mode.
     columns <- getTableColumns tableId
     for_ columns $ \(Entity columnId column) -> do
       dependants <- graphGets $
         getAllColumnDependants (columnId, column ^. columnTableId)
       for_ dependants $ \(depId, typ) -> case typ of
-        AddAll -> scheduleCompileColumn depId
+        AddAll -> scheduleEvalColumn depId
         AddOne -> pure ()
     -- For every cell that is part of a column that references this table in its
     -- type, we need to invalidate the reference in the value.
