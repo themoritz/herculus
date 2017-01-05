@@ -52,6 +52,38 @@
     background: linear-gradient(to right, $brand-dark 0%, $brand-light 100%);
   }
 
+  .navigation {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+
+    div.user-settings {
+      float: right;
+    }
+
+    button {
+      background-color: $light-anthrazit;
+      color: $medium-gray;
+      border: none;
+      box-shadow: none;
+      padding: 5px;
+      margin-left: 3px;
+      text-align: right;
+      font-weight: bold;
+      font-size: 16px;
+      float: right;
+      &:hover {
+        color: $brand-light;
+      }
+    }
+    .user-settings {
+      .small-menu {
+        right: 0px;
+        top: 30px;
+      }
+    }
+  }
+
   // add table input box
   input {
     box-sizing: border-box;

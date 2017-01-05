@@ -65,16 +65,18 @@ data SessionState
   -- data LoggedInState = LoggedInState
 
 data LoggedInState = LoggedInState
-  { _stateUserInfo    :: UserInfo
-  , _stateSessionKey  :: SessionKey
-  , _stateProjectView :: ProjectViewState
+  { _stateUserInfo         :: UserInfo
+  , _stateSessionKey       :: SessionKey
+  , _stateProjectView      :: ProjectViewState
+  , _stateUserSettingsShow :: Bool
   }
 
 mkLoggedInState :: SessionKey -> UserInfo -> LoggedInState
 mkLoggedInState sKey userInfo = LoggedInState
-  { _stateUserInfo     = userInfo
-  , _stateSessionKey   = sKey
-  , _stateProjectView  = StateProjectOverview Map.empty
+  { _stateUserInfo         = userInfo
+  , _stateSessionKey       = sKey
+  , _stateProjectView      = StateProjectOverview Map.empty
+  , _stateUserSettingsShow = False
   }
 
 data ProjectViewState
@@ -346,6 +348,11 @@ update = \case
                           (session $ liSt ^. stateSessionKey)
       showMessage $ Message.SetSuccess "Successfully logged out."
       stateSession .= StateLoggedOut LoggedOutLoginForm
+
+  ToggleUserSettingsDialog ->
+    forLoggedIn' $ \liSt ->
+      pure $ liSt & stateUserSettingsShow .~
+        not (liSt ^. stateUserSettingsShow)
 
   -- Cache ---------------------------------------------------------------------
 

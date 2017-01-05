@@ -21,6 +21,7 @@ select, button {
   background: $medium-gray;
   box-shadow: 0px 0px 2px 0px darken($medium-gray, 5%);
   color: $anthrazit;
+  outline: none;
 }
 
 button {
@@ -71,28 +72,6 @@ button.on-dark {
   }
 }
 
-.navigation {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-
-  button {
-    background-color: $light-anthrazit;
-    color: $medium-gray;
-    border: none;
-    box-shadow: none;
-    padding: 5px;
-    margin-left: 3px;
-    text-align: right;
-    font-weight: bold;
-    font-size: 16px;
-    float: right;
-    &:hover {
-      color: $brand-light;
-    }
-  }
-}
-
 a.on-dark {
   color: $medium-gray;
   cursor: pointer;
@@ -140,6 +119,7 @@ a.on-dark {
   button.menu-item {
     text-align: left;
     font-size: 12pt;
+    font-weight: normal;
     width: 100%;
     box-shadow: none;
     border: none;

@@ -5,6 +5,7 @@ module Views where
 
 import           Control.DeepSeq       (NFData)
 import           Control.Lens          hiding (view)
+import           Control.Monad         (when)
 import           Data.Foldable         (for_)
 import qualified Data.IntMap.Strict    as IntMap
 import           Data.Map.Strict       (Map)
@@ -16,6 +17,7 @@ import           GHC.Generics          (Generic)
 import           React.Flux
 import           React.Flux.Internal   (toJSString)
 
+import           Lib.Model.Auth        (uiUserName)
 import           Lib.Model.Project
 import           Lib.Model.Table
 import           Lib.Types
@@ -29,9 +31,10 @@ import           Store                 (LoggedOutState (..),
                                         stateProjectId, stateProjectView,
                                         stateRows, stateSession,
                                         stateSessionKey, stateTableId,
-                                        stateTables, store)
+                                        stateTables, stateUserInfo,
+                                        stateUserSettingsShow, store)
 import           Views.Auth            (login_, signup_)
-import           Views.Combinators     (clspan_, inputNew_)
+import           Views.Combinators     (clspan_, inputNew_, menuItem_)
 import           Views.Common          (keyENTER, keyESC)
 import           Views.ProjectOverview (projectsOverview_)
 import           Views.Table           (TableGridProps (..), tableGrid_)
@@ -90,15 +93,18 @@ appHeader = defineView "header" $ \st ->
       StateLoggedIn liSt ->
         case liSt ^. stateProjectView of
           StateProjectOverview _  ->
-            cldiv_ "navigation" $ btnLogout_
+            cldiv_ "navigation" $
+              btnUserSettings_ (liSt ^. stateUserSettingsShow)
+                               (liSt ^. stateUserInfo . uiUserName)
           StateProjectDetail pdSt -> do
             tables_ (pdSt ^. stateTables) (pdSt ^. stateTableId) (pdSt ^. stateProjectId)
             projectNameComp_ (pdSt ^. stateProjectId) $ pdSt ^. stateProject
             cldiv_ "navigation" $ do
-              btnLogout_
+              btnUserSettings_ (liSt ^. stateUserSettingsShow)
+                               (liSt ^. stateUserInfo . uiUserName)
               button_
-                [ classNames [ ("backToOverview", True)]
-                , onClick $ \_ _ -> dispatch $ SetProjectOverview (liSt ^. stateSessionKey)
+                [ onClick $ \_ _ ->
+                    dispatch $ SetProjectOverview (liSt ^. stateSessionKey)
                 ] $ do
                   faIcon_ "th-large"
                   " Projects"
@@ -110,13 +116,21 @@ data ProjectNameState = ProjectNameState
   , pnsNameError :: Bool
   } deriving (Generic, Show, NFData)
 
-btnLogout_ :: ReactElementM ViewEventHandler ()
-btnLogout_ = button_
-  [ classNames [ ("logout", True) ]
-  , onClick $ \_ _ -> dispatch Logout
-  ] $ do
-    faIcon_ "power-off"
-    " Log Out"
+btnUserSettings_ :: Bool -> Text -> ReactElementM ViewEventHandler ()
+btnUserSettings_ showMenu userName = cldiv_ "user-settings" $ do
+    button_
+      [ onClick $ \_ _ -> dispatch ToggleUserSettingsDialog
+      ] $ faIcon_ "cog"
+    when showMenu $ cldiv_ "small-menu" $ do
+      menuItem_ "power-off"
+                (elemText $ "Log out (" <> shortName <> ")")
+                (dispatch Logout)
+      menuItem_ "pencil" "Change password" []
+  where
+    shortName =
+      if Text.length userName > 12
+      then Text.take 9 userName <> "..."
+      else userName
 
 initalProjectName :: ProjectNameState
 initalProjectName = ProjectNameState False "" False

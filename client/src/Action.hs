@@ -56,6 +56,7 @@ data Action
   | Signup SignupData
   | Login LoginData
   | Logout
+  | ToggleUserSettingsDialog
   -- RowCache
   | RowCacheGet (Id Table)
 
