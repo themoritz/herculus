@@ -39,6 +39,7 @@ data TableGridProps = TableGridProps
   , _projectId        :: Id ProjectClient
   , _showNewColDialog :: Bool
   , _sKey             :: SessionKey
+  , _tables           :: TableNames
   }
 
 makeLenses ''TableGridProps
@@ -90,7 +91,7 @@ tableGrid = defineView "tableGrid" $ \props -> do
               menuItem_ "file-text" "New report column" $
                 dispatch TableCreateReportCol
         | y == 0 && 0 < x && x <= numCols =
-            column_ (props ^. projectId) (props ^. sKey) (getColumn (x - 1))
+            column_ (props ^. projectId) (props ^. sKey) (props ^. tables) (getColumn (x - 1))
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $
             renderCell (x - 1) (y - 1)
         | otherwise = cldiv_ "empty" mempty

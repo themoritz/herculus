@@ -29,9 +29,8 @@ import           Lib.Model.Row
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Action            (Action (CellSetValue, RowCacheGet))
+import           Action            (Action (CellSetValue))
 import           Store
-import qualified Store.RowCache    as RowCache
 import           Views.Combinators
 import           Views.Common
 import           Views.Foreign
@@ -235,9 +234,9 @@ cellRowRef :: ReactView ( Mode, IsDerived, Maybe (Id Row), Id Table
                         )
 cellRowRef = defineControllerView "cellRowRef" store $
   \st (mode, inpType, mr, t, cb) -> cldiv_ "rowref" $ do
-    onDidMount_ (dispatch $ RowCacheGet t) mempty
-    let rows = st ^. stateSession . _StateLoggedIn . liStSubState . _LiStProjectDetail
-                      . stateCacheRows . at t . _Just . RowCache.rowCache
+    let rows = st ^. stateSession . _StateLoggedIn
+                   . liStSubState . _LiStProjectDetail
+                   . stateCacheRows . at t . non Map.empty
         showPairs = intercalate ", " .
                     map (\(c, v) -> (c ^. columnName) <> ": " <> (pack . show) v) .
                     Map.elems

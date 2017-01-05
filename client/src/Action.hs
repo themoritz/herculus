@@ -57,8 +57,6 @@ data Action
   | Login LoginData
   | Logout
   | ToggleUserSettingsDialog
-  -- RowCache
-  | RowCacheGet (Id Table)
 
   | SetProjectOverview SessionKey
   -- Project overview

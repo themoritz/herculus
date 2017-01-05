@@ -7,7 +7,7 @@
 
 module Engine.Monad where
 
-import           Control.Lens
+import           Control.Lens                 hiding (op)
 import           Control.Monad.Except
 import           Control.Monad.State
 
