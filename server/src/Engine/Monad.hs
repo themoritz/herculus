@@ -358,8 +358,10 @@ instance MonadHexl m => MonadEngine (EngineT m) where
         SpecificRows rs -> pure $ Set.toList rs
         CompleteColumn -> do
           col <- getColumn columnId
-          rows <- lift $ listByQuery
-            [ "tableId" =: toObjectId (_columnTableId col) ]
+          let tableId = col ^. columnTableId
+          rows <- storeListByQuery storeRows
+            [ "tableId" =: toObjectId tableId ]
+            (\row -> row ^. rowTableId == tableId)
           pure $ map entityId rows
 
 --------------------------------------------------------------------------------
@@ -402,7 +404,16 @@ storeGetByQuery what query p = do
     Just e  -> pure $ Just e
     Nothing -> lift (getOneByQuery query) >>= \case
       Left _ -> pure Nothing
-      Right e -> pure $ Just e
+      Right e -> do
+        -- If e is found in the DB, we need to make sure that a perhaps
+        -- updated version of it in the store satisfies `p`.
+        use (engineStore . what . at (entityId e)) >>= \case
+          Nothing          -> pure $ Just e
+          Just (Cached, _) -> pure $ Just e
+          Just (Change op, a') -> case op of
+            Delete -> pure Nothing
+            _      -> pure $ if p a' then Just e
+                                     else Nothing
 
 storeGetByQuery' :: (MonadHexl m, Model a)
                  => What a -> Selector -> (a -> Bool)

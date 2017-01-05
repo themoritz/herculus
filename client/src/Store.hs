@@ -3,6 +3,7 @@
 module Store where
 
 import           Control.Applicative       ((<|>))
+import           Control.Concurrent        (forkIO)
 import           Control.DeepSeq           (NFData)
 import           Control.Lens              hiding (op)
 import           Control.Monad             (void, when)
@@ -376,7 +377,8 @@ update = \case
       -- Load first table if exists
       case ts of
         []               -> pure ()
-        Entity tId _ : _ -> liftIO $ alterStore store $ freeFluxDispatch $ TablesLoadTable tId
+        Entity tId _ : _ -> void $ liftIO $ forkIO $
+          alterStore store $ freeFluxDispatch $ TablesLoadTable tId
 
       let tablesMap = Map.fromList $ map entityToTuple ts
       setProjectDetailState $
@@ -393,7 +395,8 @@ update = \case
       let sKey = liSt ^. stateSessionKey
       ajax' $ request api (Proxy :: Proxy Api.ProjectDelete)
                           (session sKey) projectId
-      liftIO $ alterStore store $ freeFluxDispatch $ SetProjectOverview sKey
+      void $ liftIO $ forkIO $
+        alterStore store $ freeFluxDispatch $ SetProjectOverview sKey
 
   -- Tables --------------------------------------------------------------------
 
