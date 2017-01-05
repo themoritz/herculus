@@ -236,7 +236,7 @@ cellRowRef :: ReactView ( Mode, IsDerived, Maybe (Id Row), Id Table
 cellRowRef = defineControllerView "cellRowRef" store $
   \st (mode, inpType, mr, t, cb) -> cldiv_ "rowref" $ do
     onDidMount_ (dispatch $ RowCacheGet t) mempty
-    let rows = st ^. stateSession . _StateLoggedIn . stateProjectView . _StateProjectDetail
+    let rows = st ^. stateSession . _StateLoggedIn . liStSubState . _LiStProjectDetail
                       . stateCacheRows . at t . _Just . RowCache.rowCache
         showPairs = intercalate ", " .
                     map (\(c, v) -> (c ^. columnName) <> ": " <> (pack . show) v) .

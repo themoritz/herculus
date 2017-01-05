@@ -65,23 +65,23 @@ data SessionState
   -- data LoggedInState = LoggedInState
 
 data LoggedInState = LoggedInState
-  { _stateUserInfo         :: UserInfo
-  , _stateSessionKey       :: SessionKey
-  , _stateProjectView      :: ProjectViewState
-  , _stateUserSettingsShow :: Bool
+  { _liStUserInfo         :: UserInfo
+  , _liStSessionKey       :: SessionKey
+  , _liStSubState         :: LoggedInSubState
+  , _liStUserSettingsShow :: Bool
   }
 
 mkLoggedInState :: SessionKey -> UserInfo -> LoggedInState
 mkLoggedInState sKey userInfo = LoggedInState
-  { _stateUserInfo         = userInfo
-  , _stateSessionKey       = sKey
-  , _stateProjectView      = StateProjectOverview Map.empty
-  , _stateUserSettingsShow = False
+  { _liStUserInfo         = userInfo
+  , _liStSessionKey       = sKey
+  , _liStSubState         = LiStProjectOverview Map.empty
+  , _liStUserSettingsShow = False
   }
 
-data ProjectViewState
-  = StateProjectOverview ProjectOverviewState
-  | StateProjectDetail ProjectDetailState
+data LoggedInSubState
+  = LiStProjectOverview ProjectOverviewState
+  | LiStProjectDetail ProjectDetailState
 
 type ProjectOverviewState = Map (Id ProjectClient) ProjectClient
 
@@ -119,16 +119,16 @@ data LoggedOutState
 makeLenses ''State
 makeLenses ''LoggedInState
 makePrisms ''SessionState
-makePrisms ''ProjectViewState
+makePrisms ''LoggedInSubState
 makeLenses ''ProjectDetailState
 
 --------------------------------------------------------------------------------
 
 forProjectDetail :: (SessionKey -> ProjectDetailState -> App a) -> App a
 forProjectDetail action =
-  forLoggedIn $ \liSt -> case liSt ^. stateProjectView of
-    StateProjectDetail pdSt -> action (liSt ^. stateSessionKey) pdSt
-    StateProjectOverview _ -> do
+  forLoggedIn $ \liSt -> case liSt ^. liStSubState of
+    LiStProjectDetail pdSt -> action (liSt ^. liStSessionKey) pdSt
+    LiStProjectOverview _ -> do
       showMessage $ Message.SetError
         "inconsistent client state: unexpected: project overview"
       halt
@@ -137,7 +137,7 @@ forProjectDetail' ::(SessionKey -> ProjectDetailState -> App ProjectDetailState)
                   -> App ()
 forProjectDetail' action = do
   new <- forProjectDetail action
-  stateSession . _StateLoggedIn . stateProjectView . _StateProjectDetail .= new
+  stateSession . _StateLoggedIn . liStSubState . _LiStProjectDetail .= new
 
 forProjectDetail_ :: (SessionKey -> ProjectDetailState -> App a) -> App ()
 forProjectDetail_ = void . forProjectDetail
@@ -165,13 +165,13 @@ forLoggedIn_ = void . forLoggedIn
 setProjects :: [Entity ProjectClient] -> App ()
 setProjects ps =
   forLoggedIn' $ \liSt ->
-    pure $ liSt & stateProjectView .~ StateProjectOverview projectsMap
+    pure $ liSt & liStSubState .~ LiStProjectOverview projectsMap
       where
         projectsMap = Map.fromList $ map entityToTuple ps
 
 setProjectDetailState :: ProjectDetailState -> App ()
 setProjectDetailState pdSt =
-  stateSession . _StateLoggedIn . stateProjectView .= StateProjectDetail pdSt
+  stateSession . _StateLoggedIn . liStSubState .= LiStProjectDetail pdSt
 
 setProjectOverview :: SessionKey -> App ()
 setProjectOverview sKey = do
@@ -237,7 +237,7 @@ update = \case
     use stateSession >>= \case
 
       StateLoggedIn liSt ->
-        setProjectOverview (liSt ^. stateSessionKey)
+        setProjectOverview (liSt ^. liStSessionKey)
 
       StateLoggedOut LoggedOutUninitialized ->
         liftIO recoverSession >>= \case
@@ -345,14 +345,14 @@ update = \case
     liftIO clearSession
     forLoggedIn_ $ \liSt -> do
       ajax' $ request api (Proxy :: Proxy Api.AuthLogout)
-                          (session $ liSt ^. stateSessionKey)
+                          (session $ liSt ^. liStSessionKey)
       showMessage $ Message.SetSuccess "Successfully logged out."
       stateSession .= StateLoggedOut LoggedOutLoginForm
 
   ToggleUserSettingsDialog ->
     forLoggedIn' $ \liSt ->
-      pure $ liSt & stateUserSettingsShow .~
-        not (liSt ^. stateUserSettingsShow)
+      pure $ liSt & liStUserSettingsShow .~
+        not (liSt ^. liStUserSettingsShow)
 
   -- Cache ---------------------------------------------------------------------
 
@@ -374,14 +374,14 @@ update = \case
   ProjectsCreate name ->
     forLoggedIn' $ \liSt -> do
       Entity i p <- ajax' $ request api (Proxy :: Proxy Api.ProjectCreate)
-                                        (session $ liSt ^. stateSessionKey) name
+                                        (session $ liSt ^. liStSessionKey) name
       pure $ liSt &
-        stateProjectView .~ StateProjectDetail (mkProjectDetailState i p)
+        liStSubState .~ LiStProjectDetail (mkProjectDetailState i p)
 
   ProjectsLoadProject i ->
     forLoggedIn_ $ \liSt -> do
       (p, ts) <- ajax' $ request api (Proxy :: Proxy Api.ProjectLoad)
-                 (session $ liSt ^. stateSessionKey) i
+                 (session $ liSt ^. liStSessionKey) i
       -- Load first table if exists
       case ts of
         []               -> pure ()
@@ -400,7 +400,7 @@ update = \case
 
   ProjectDelete projectId ->
     forLoggedIn_ $ \liSt -> do
-      let sKey = liSt ^. stateSessionKey
+      let sKey = liSt ^. liStSessionKey
       ajax' $ request api (Proxy :: Proxy Api.ProjectDelete)
                           (session sKey) projectId
       void $ liftIO $ forkIO $

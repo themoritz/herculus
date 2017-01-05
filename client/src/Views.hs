@@ -23,16 +23,15 @@ import           Lib.Model.Table
 import           Lib.Types
 
 import           Action                (Action (..))
-import           Store                 (LoggedOutState (..),
-                                        ProjectViewState (..),
-                                        SessionState (..), State, dispatch,
-                                        stateCells, stateColumns, stateMessage,
+import           Store                 (LoggedInSubState (..),
+                                        LoggedOutState (..), SessionState (..),
+                                        State, dispatch, liStSessionKey,
+                                        liStSubState, liStUserInfo,
+                                        liStUserSettingsShow, stateCells,
+                                        stateColumns, stateMessage,
                                         stateNewColShow, stateProject,
-                                        stateProjectId, stateProjectView,
-                                        stateRows, stateSession,
-                                        stateSessionKey, stateTableId,
-                                        stateTables, stateUserInfo,
-                                        stateUserSettingsShow, store)
+                                        stateProjectId, stateRows, stateSession,
+                                        stateTableId, stateTables, store)
 import           Views.Auth            (login_, signup_)
 import           Views.Combinators     (clspan_, inputNew_, menuItem_)
 import           Views.Common          (keyENTER, keyESC)
@@ -52,12 +51,12 @@ app = defineControllerView "app" store $ \st () ->
         StateLoggedOut LoggedOutSignupForm -> signup_
         StateLoggedOut LoggedOutUninitialized -> "Failed to load. Please reload."
         StateLoggedIn liSt ->
-          case liSt ^. stateProjectView of
-            StateProjectOverview ps -> cldiv_ "overview" $ projectsOverview_ ps
-            StateProjectDetail pdSt ->
+          case liSt ^. liStSubState of
+            LiStProjectOverview ps -> cldiv_ "overview" $ projectsOverview_ ps
+            LiStProjectDetail pdSt ->
               if null $ pdSt ^. stateTables
                 then cldiv_ "" mempty
-                else projectDetailView_ pdSt $ liSt ^. stateSessionKey
+                else projectDetailView_ pdSt $ liSt ^. liStSessionKey
       appFooter_ st
   where
     projectDetailView_ pdSt sKey =
@@ -91,20 +90,20 @@ appHeader = defineView "header" $ \st ->
       cldiv_ "text" "Herculus"
     case st ^. stateSession of
       StateLoggedIn liSt ->
-        case liSt ^. stateProjectView of
-          StateProjectOverview _  ->
+        case liSt ^. liStSubState of
+          LiStProjectOverview _  ->
             cldiv_ "navigation" $
-              btnUserSettings_ (liSt ^. stateUserSettingsShow)
-                               (liSt ^. stateUserInfo . uiUserName)
-          StateProjectDetail pdSt -> do
+              btnUserSettings_ (liSt ^. liStUserSettingsShow)
+                               (liSt ^. liStUserInfo . uiUserName)
+          LiStProjectDetail pdSt -> do
             tables_ (pdSt ^. stateTables) (pdSt ^. stateTableId) (pdSt ^. stateProjectId)
             projectNameComp_ (pdSt ^. stateProjectId) $ pdSt ^. stateProject
             cldiv_ "navigation" $ do
-              btnUserSettings_ (liSt ^. stateUserSettingsShow)
-                               (liSt ^. stateUserInfo . uiUserName)
+              btnUserSettings_ (liSt ^. liStUserSettingsShow)
+                               (liSt ^. liStUserInfo . uiUserName)
               button_
                 [ onClick $ \_ _ ->
-                    dispatch $ SetProjectOverview (liSt ^. stateSessionKey)
+                    dispatch $ SetProjectOverview (liSt ^. liStSessionKey)
                 ] $ do
                   faIcon_ "th-large"
                   " Projects"
