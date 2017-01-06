@@ -1,5 +1,6 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric  #-}
+{-# LANGUAGE DeriveAnyClass   #-}
+{-# LANGUAGE DeriveGeneric    #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Views where
 
@@ -23,7 +24,7 @@ import           Lib.Model.Table
 import           Lib.Types
 
 import           Action                (Action (..))
-import           Store                 (LoggedInSubState (..),
+import           Store                 (LoggedInState, LoggedInSubState (..),
                                         LoggedOutState (..), SessionState (..),
                                         State, dispatch, liStSessionKey,
                                         liStSubState, liStUserInfo,
@@ -46,18 +47,18 @@ app = defineControllerView "app" store $ \st () ->
     cldiv_ "container" $ do
       appHeader_ st
       for_ (st ^. stateMessage) message_
-      case st ^. stateSession of
+      cldiv_ "content-body" $ case st ^. stateSession of
         StateLoggedOut LoggedOutLoginForm -> login_
         StateLoggedOut LoggedOutSignupForm -> signup_
-        StateLoggedOut LoggedOutUninitialized -> "Failed to load. Please reload."
+        StateLoggedOut LoggedOutUninitialized -> cldiv_ "form" "Failed to load. Please reload."
         StateLoggedIn liSt ->
           case liSt ^. liStSubState of
-            LiStProjectOverview ps -> cldiv_ "overview" $ projectsOverview_ ps
+            LiStProjectOverview ps -> projectsOverview_ ps
             LiStProjectDetail pdSt ->
               if null $ pdSt ^. stateTables
-                then cldiv_ "" mempty
+                then mempty
                 else projectDetailView_ pdSt $ liSt ^. liStSessionKey
-            LiStChangePassword -> changePassword_
+            LiStChangePassword valid -> changePassword_ valid
       appFooter_ st
   where
     projectDetailView_ pdSt sKey =
@@ -74,7 +75,7 @@ app = defineControllerView "app" store $ \st () ->
             , _sKey             = sKey
             , _tables           = (^. tableName) <$> (pdSt ^. stateTables)
             }
-      in  cldiv_ "tableGrid" $ tableGrid_ tableGridProps
+      in  tableGrid_ tableGridProps
 
 -- header
 
@@ -83,55 +84,60 @@ appHeader_ !st = view appHeader st mempty
 
 appHeader :: ReactView State
 appHeader = defineView "header" $ \st ->
-  cldiv_ "menubar" $ do
-    cldiv_ "title" $ do
-      cldiv_ "logo" $ img_
-        [ "src" $= "img/herculus.svg"
-        , "alt" $= "logo"
-        ] mempty
-      cldiv_ "text" "Herculus"
-    case st ^. stateSession of
-      StateLoggedIn liSt ->
-        case liSt ^. liStSubState of
-          LiStProjectDetail pdSt -> do
-            tables_ (pdSt ^. stateTables) (pdSt ^. stateTableId) (pdSt ^. stateProjectId)
-            projectNameComp_ (pdSt ^. stateProjectId) $ pdSt ^. stateProject
-            cldiv_ "navigation" $ do
-              btnUserSettings_ (liSt ^. liStUserSettingsShow)
-                               (liSt ^. liStUserInfo . uiUserName)
-              button_
-                [ onClick $ \_ _ ->
-                    dispatch $ SetProjectOverview (liSt ^. liStSessionKey)
-                ] $ do
-                  faIcon_ "th-large"
-                  " Projects"
-          _  ->
-            cldiv_ "navigation" $
-              btnUserSettings_ (liSt ^. liStUserSettingsShow)
-                               (liSt ^. liStUserInfo . uiUserName)
-      StateLoggedOut _  -> pure ()
+    cldiv_ "menubar" $ do
+      cldiv_ "title" $ do
+        cldiv_ "logo" $ img_
+          [ "src" $= "img/herculus.svg"
+          , "alt" $= "logo"
+          ] mempty
+        cldiv_ "text" "Herculus"
+      case st ^. stateSession of
+        StateLoggedIn liSt ->
+          case liSt ^. liStSubState of
+            LiStProjectDetail pdSt -> do
+              tables_ (pdSt ^. stateTables) (pdSt ^. stateTableId) (pdSt ^. stateProjectId)
+              projectNameComp_ (pdSt ^. stateProjectId) $ pdSt ^. stateProject
+              cldiv_ "navigation" $ do
+                btnUserSettings_ liSt
+                btnProjectOverView_ liSt
+            LiStChangePassword _ ->
+              cldiv_ "navigation" $ do
+                btnUserSettings_ liSt
+                btnProjectOverView_ liSt
+            _  ->
+              cldiv_ "navigation" $ btnUserSettings_ liSt
+        StateLoggedOut _  -> pure ()
+  where
+    btnUserSettings_ :: LoggedInState -> ReactElementM ViewEventHandler ()
+    btnUserSettings_ liSt = cldiv_ "user-settings" $ do
+        button_
+          [ onClick $ \_ _ -> dispatch ToggleUserSettingsDialog
+          ] $ faIcon_ "cog"
+        when (liSt ^. liStUserSettingsShow) $ cldiv_ "small-menu" $ do
+          menuItem_ "power-off"
+                    (elemText $ "Log out (" <> shortName <> ")")
+                    (dispatch Logout)
+          menuItem_ "pencil" "Change password" $ dispatch ToChangePasswordForm
+      where
+        shortName =
+          if Text.length userName > 12
+          then Text.take 9 userName <> "..."
+          else userName
+        userName = liSt ^. liStUserInfo . uiUserName
+
+    btnProjectOverView_ :: LoggedInState -> ReactElementM ViewEventHandler ()
+    btnProjectOverView_ liSt = button_
+      [ onClick $ \_ _ ->
+          dispatch $ SetProjectOverview (liSt ^. liStSessionKey)
+      ] $ do
+        faIcon_ "th-large"
+        " Projects"
 
 data ProjectNameState = ProjectNameState
   { pnsEditable  :: Bool
   , pnsName      :: Text
   , pnsNameError :: Bool
   } deriving (Generic, Show, NFData)
-
-btnUserSettings_ :: Bool -> Text -> ReactElementM ViewEventHandler ()
-btnUserSettings_ showMenu userName = cldiv_ "user-settings" $ do
-    button_
-      [ onClick $ \_ _ -> dispatch ToggleUserSettingsDialog
-      ] $ faIcon_ "cog"
-    when showMenu $ cldiv_ "small-menu" $ do
-      menuItem_ "power-off"
-                (elemText $ "Log out (" <> shortName <> ")")
-                (dispatch Logout)
-      menuItem_ "pencil" "Change password" []
-  where
-    shortName =
-      if Text.length userName > 12
-      then Text.take 9 userName <> "..."
-      else userName
 
 initalProjectName :: ProjectNameState
 initalProjectName = ProjectNameState False "" False

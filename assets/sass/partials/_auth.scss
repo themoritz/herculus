@@ -17,26 +17,17 @@
   }
 }
 
-.login {
-  position: absolute;
-  top: 150px;
-  left: 20px;
-  .submit {
-    text-align: right;
-  }
-}
-
-.signup {
-  position: absolute;
-  top: 150px;
-  left: 20px;
-  .submit {
-    text-align: right;
-  }
-  table td {
-    width: 300px;
-  }
-  .disclaimer {
-    text-align: center;
+.content-body {
+  .form {
+    padding: 20px;
+    .submit {
+      text-align: right;
+    }
+    table td {
+      width: 300px;
+    }
+    .disclaimer {
+      text-align: center;
+    }
   }
 }

@@ -26,12 +26,13 @@ import qualified Text.Pandoc.Error              as Pandoc
 import           Lib.Api.Rest
 import           Lib.Compiler.Interpreter.Types
 import           Lib.Model
-import           Lib.Model.Auth                 (GetUserInfoResponse (..),
+import           Lib.Model.Auth                 (ChangePwdData (..),
+                                                 ChangePwdResponse (..),
+                                                 GetUserInfoResponse (..),
                                                  LoginData (..),
                                                  LoginResponse (..), Session,
                                                  SessionKey, SignupData (..),
-                                                 SignupResponse (..),
-                                                 User (User),
+                                                 SignupResponse (..), User (..),
                                                  UserInfo (UserInfo), mkPwHash,
                                                  sessionKey, sessionUserId,
                                                  userName, userPwHash,
@@ -61,6 +62,7 @@ handle =
   :<|> handleAuthLogout
   :<|> handleAuthSignup
   :<|> handleAuthGetUserInfo
+  :<|> handleAuthChangePwd
 
   :<|> handleProjectCreate
   :<|> handleProjectList
@@ -149,6 +151,17 @@ handleAuthGetUserInfo sKey = do
   pure $ case eUser of
     Left err             -> GetUserInfoFailed err
     Right (userId, name) -> GetUserInfoSuccess $ UserInfo userId name sKey
+
+handleAuthChangePwd :: (MonadIO m, MonadHexl m)
+                    => SessionData -> ChangePwdData -> m ChangePwdResponse
+handleAuthChangePwd (UserInfo userId _ _) (ChangePwdData oldPwd newPwd) = do
+  user <- getById' userId
+  if verifyPassword oldPwd (user ^. userPwHash)
+    then do
+      pwHash <- mkPwHash newPwd
+      update userId (userPwHash .~ pwHash)
+      pure ChangePwdSuccess
+    else pure $ ChangePwdFailure "wrong password"
 
 -- Project ----------------------------------------------------------------------
 

@@ -26,7 +26,8 @@ import           React.Flux.Addons.Servant    (HandleResponse, request)
 import qualified Lib.Api.Rest                 as Api
 import           Lib.Api.WebSocket            (WsDownMessage (..))
 import           Lib.Model
-import           Lib.Model.Auth               (GetUserInfoResponse (..),
+import           Lib.Model.Auth               (ChangePwdResponse (..),
+                                               GetUserInfoResponse (..),
                                                LoginResponse (..), SessionKey,
                                                SignupResponse (..),
                                                UserInfo (UserInfo))
@@ -86,7 +87,7 @@ mkLoggedInState sKey userInfo = LoggedInState
 data LoggedInSubState
   = LiStProjectOverview ProjectOverviewState
   | LiStProjectDetail ProjectDetailState
-  | LiStChangePassword
+  | LiStChangePassword Bool -- Bool flag: True: valid old password or initial, False -> invalid old password
 
 type ProjectOverviewState = Map (Id ProjectClient) ProjectClient
 
@@ -368,6 +369,26 @@ update = \case
     forLoggedIn' $ \liSt ->
       pure $ liSt & liStUserSettingsShow .~
         not (liSt ^. liStUserSettingsShow)
+
+  ToChangePasswordForm ->
+    forLoggedIn' $ \liSt ->
+      pure $ liSt & liStSubState .~ LiStChangePassword True
+
+  ChangePassword changePwdData ->
+    forLoggedIn' $ \liSt ->
+      ajax' (request api (Proxy :: Proxy Api.AuthChangePassword)
+                         (session $ liSt ^. liStSessionKey)
+                         changePwdData
+            ) >>= \case
+        ChangePwdSuccess -> do
+          showMessage $ Message.SetSuccess "Successfully changed password."
+          -- TODO: not sure what I'm doing here
+          void $ liftIO $ forkIO $
+            alterStore store $ freeFluxDispatch $ SetProjectOverview (liSt ^. liStSessionKey)
+          pure liSt
+        ChangePwdFailure msg -> do
+          showMessage $ Message.SetWarning msg
+          pure $ liSt & liStSubState .~ LiStChangePassword False
 
   -- Project Overview ----------------------------------------------------------
 

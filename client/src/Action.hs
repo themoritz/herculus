@@ -20,8 +20,8 @@ import           React.Flux.Addons.Servant.Auth (AuthClientData,
 import qualified Config
 import           Lib.Api.Rest                   as Api
 import           Lib.Api.WebSocket              (WsDownMessage, WsUpMessage)
-import           Lib.Model.Auth                 (LoginData, SessionKey,
-                                                 SignupData)
+import           Lib.Model.Auth                 (ChangePwdData, LoginData,
+                                                 SessionKey, SignupData)
 import           Lib.Model.Cell                 (Value)
 import           Lib.Model.Column
 import           Lib.Model.Project              (ProjectClient)
@@ -57,6 +57,8 @@ data Action
   | Login LoginData
   | Logout
   | ToggleUserSettingsDialog
+  | ToChangePasswordForm
+  | ChangePassword ChangePwdData
 
   | SetProjectOverview SessionKey
   -- Project overview

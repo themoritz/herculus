@@ -1,14 +1,6 @@
 @import "../modules/dimensions";
 @import "../modules/colors";
 
-.overview {
-  position: absolute;
-  left: 0px;
-  top: $menubar-height;
-  right: 0px;
-  bottom: $footer-height;
-}
-
 .projects {
   margin: auto;
   width: 90%;

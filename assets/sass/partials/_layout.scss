@@ -186,6 +186,16 @@
   }
 }
 
+// div for page content like table grid, auth dialogs
+
+.content-body {
+  position: absolute;
+  left: 0px;
+  top: $menubar-height;
+  right: 0px;
+  bottom: $footer-height;
+}
+
 .message {
   position: absolute;
   top: $menubar-height + 10px;

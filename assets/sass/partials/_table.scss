@@ -1,13 +1,7 @@
 @import "../modules/colors";
 @import "../modules/dimensions";
 
-.tableGrid {
-  position: absolute;
-  left: 0px;
-  top: $menubar-height;
-  right: 0px;
-  bottom: $footer-height;
-
+.content-body {
   .cell {
     border-right: 1px solid $medium-gray;
     border-bottom: 1px solid $medium-gray;

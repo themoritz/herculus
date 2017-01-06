@@ -17,7 +17,9 @@ import           Servant.API.Experimental.Auth (AuthProtect)
 
 import           Lib.Api.Rest.Report
 import           Lib.Model
-import           Lib.Model.Auth                (GetUserInfoResponse, LoginData,
+import           Lib.Model.Auth                (ChangePwdData,
+                                                ChangePwdResponse,
+                                                GetUserInfoResponse, LoginData,
                                                 LoginResponse, SessionKey,
                                                 SignupData, SignupResponse,
                                                 UserInfo)
@@ -33,6 +35,7 @@ type Routes =
  :<|> AuthLogout
  :<|> AuthSignup
  :<|> AuthGetUserInfo -- given session key, retrieve user info
+ :<|> AuthChangePassword
 
  :<|> ProjectCreate
  :<|> ProjectList
@@ -81,6 +84,7 @@ type AuthLogin          =                   "auth"      :> "login"          :> R
 type AuthLogout         = SessionProtect :> "auth"      :> "logout"                                       :> Get '[JSON] ()
 type AuthSignup         =                   "auth"      :> "signup"         :> ReqBody '[JSON] SignupData :> Post '[JSON] SignupResponse
 type AuthGetUserInfo    =                   "auth"      :> "userInfo"       :> ReqBody '[JSON] SessionKey :> Post '[JSON] GetUserInfoResponse
+type AuthChangePassword = SessionProtect :> "auth"      :> "changePassword" :> ReqBody '[JSON] ChangePwdData :> Post '[JSON] ChangePwdResponse
 
 type ProjectCreate      = SessionProtect :> "project"   :> "create"         :> ReqBody '[JSON] Text                                           :> Post '[JSON] (Entity ProjectClient)
 type ProjectList        = SessionProtect :> "project"   :> "list"                                                                             :> Get '[JSON] [Entity ProjectClient]

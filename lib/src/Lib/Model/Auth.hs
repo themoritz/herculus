@@ -11,6 +11,8 @@ module Lib.Model.Auth
   , SignupData (..)
   , SignupResponse (..)
   , GetUserInfoResponse (..)
+  , ChangePwdData (..)
+  , ChangePwdResponse (..)
   , mkPwHash
   , SessionKey
   , Session (..)
@@ -172,3 +174,15 @@ instance FromDocument Session where
     <$> (fromObjectId <$> Bson.lookup "userId" doc)
     <*> Bson.lookup "sessionKey" doc
     <*> Bson.lookup "sessionExpDate" doc
+
+-- change password
+
+data ChangePwdData = ChangePwdData
+  { cpdOldPassword :: Text
+  , cpdNewPassword :: Text
+  } deriving (Generic, FromJSON, ToJSON, NFData)
+
+data ChangePwdResponse
+  = ChangePwdSuccess
+  | ChangePwdFailure Text
+  deriving (Generic, FromJSON, ToJSON, NFData)
