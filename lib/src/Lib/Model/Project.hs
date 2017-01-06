@@ -27,7 +27,7 @@ import           Lib.Types              (Id, fromObjectId, toObjectId)
 data ProjectClient = ProjectClient
   { _projectClientName  :: Text
   , _projectClientOwner :: Id User
-  } deriving (Generic, NFData)
+  } deriving (Generic, NFData, Show)
 
 projectClientName :: Lens' ProjectClient Text
 projectClientName = lens _projectClientName (\s a -> s { _projectClientName = a })

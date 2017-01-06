@@ -55,7 +55,7 @@ import           Lib.Util.Base64        (Base64, Base64Url, toBase64Unsafe,
 data LoginData = LoginData
   { ldUserName :: Text
   , ldPassword :: Text
-  } deriving (Generic, FromJSON, ToJSON, NFData)
+  } deriving (Generic, FromJSON, ToJSON, NFData, Show)
 
 type SessionKey = Base64Url
 
@@ -68,7 +68,7 @@ data SignupData = SignupData
   { suUserName  :: Text
   , suPassword  :: Text
   , suIntention :: Text
-  } deriving (Generic, FromJSON, ToJSON, NFData)
+  } deriving (Generic, FromJSON, ToJSON, NFData, Show)
 
 data SignupResponse
   = SignupSuccess UserInfo
@@ -93,7 +93,7 @@ data User = User
   { _userName      :: Text
   , _userPwHash    :: PwHash
   , _userIntention :: Text
-  } deriving (Generic, NFData)
+  } deriving (Generic, NFData, Show)
 
 userName :: Lens' User Text
 userName = lens _userName (\s a -> s { _userName = a })
@@ -131,7 +131,7 @@ data UserInfo = UserInfo
   { _uiUserId     :: Id User
   , _uiUserName   :: Text
   , _uiSessionKey :: SessionKey
-  } deriving (Generic, FromJSON, ToJSON, NFData)
+  } deriving (Generic, FromJSON, ToJSON, NFData, Show)
 
 uiUserId :: Lens' UserInfo (Id User)
 uiUserId = lens _uiUserId (\s a -> s { _uiUserId = a })
@@ -148,7 +148,7 @@ data Session = Session
   { _sessionUserId  :: Id User
   , _sessionKey     :: SessionKey
   , _sessionExpDate :: Time
-  } deriving (Generic, NFData)
+  } deriving (Generic, NFData, Show)
 
 sessionUserId :: Lens' Session (Id User)
 sessionUserId = lens _sessionUserId (\s a -> s { _sessionUserId = a })
@@ -180,7 +180,7 @@ instance FromDocument Session where
 data ChangePwdData = ChangePwdData
   { cpdOldPassword :: Text
   , cpdNewPassword :: Text
-  } deriving (Generic, FromJSON, ToJSON, NFData)
+  } deriving (Generic, FromJSON, ToJSON, NFData, Show)
 
 data ChangePwdResponse
   = ChangePwdSuccess

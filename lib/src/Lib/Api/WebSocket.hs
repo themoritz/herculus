@@ -29,7 +29,7 @@ data WsDownMessage
                       (Diff Column)
                       (Diff Row)
                       (Diff Table)
-  deriving (Generic, NFData)
+  deriving (Generic, NFData, Show)
 
 instance ToJSON WsDownMessage
 instance FromJSON WsDownMessage

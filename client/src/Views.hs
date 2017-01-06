@@ -24,15 +24,14 @@ import           Lib.Model.Table
 import           Lib.Types
 
 import           Action                (Action (..))
-import           Store                 (LoggedInState, LoggedInSubState (..),
+import qualified Project
+import           Store                 (LoggedInState (..),
+                                        LoggedInSubState (..),
                                         LoggedOutState (..), SessionState (..),
                                         State, dispatch, liStSessionKey,
                                         liStSubState, liStUserInfo,
-                                        liStUserSettingsShow, stateCells,
-                                        stateColumns, stateMessage,
-                                        stateNewColShow, stateProject,
-                                        stateProjectId, stateRows, stateSession,
-                                        stateTableId, stateTables, store)
+                                        liStUserSettingsShow, stateMessage,
+                                        stateSession, store)
 import           Views.Auth            (changePassword_, login_, signup_)
 import           Views.Combinators     (clspan_, inputNew_, menuItem_)
 import           Views.Common          (keyENTER, keyESC)
@@ -55,25 +54,25 @@ app = defineControllerView "app" store $ \st () ->
           case liSt ^. liStSubState of
             LiStProjectOverview ps -> projectsOverview_ ps
             LiStProjectDetail pdSt ->
-              if null $ pdSt ^. stateTables
+              if null $ pdSt ^. Project.stateTables
                 then mempty
                 else projectDetailView_ pdSt $ liSt ^. liStSessionKey
             LiStChangePassword valid -> changePassword_ valid
       appFooter_ st
   where
     projectDetailView_ pdSt sKey =
-      let cols = pdSt ^. stateColumns
-          recs = pdSt ^. stateRows
+      let cols = pdSt ^. Project.stateColumns
+          recs = pdSt ^. Project.stateRows
           -- TODO: put tables deeper into view state hierarchy under projectId
           tableGridProps = TableGridProps
-            { _cells            = pdSt ^. stateCells
+            { _cells            = pdSt ^. Project.stateCells
             , _colByIndex       = IntMap.fromList $ zip [0..] (Map.toList cols)
             , _recByIndex       = IntMap.fromList $ zip [0..] (Map.toList recs)
-            , _tableId          = pdSt ^. stateTableId
-            , _projectId        = pdSt ^. stateProjectId
-            , _showNewColDialog = pdSt ^. stateNewColShow
+            , _tableId          = pdSt ^. Project.stateTableId
+            , _projectId        = pdSt ^. Project.stateProjectId
+            , _showNewColDialog = pdSt ^. Project.stateNewColShow
             , _sKey             = sKey
-            , _tables           = (^. tableName) <$> (pdSt ^. stateTables)
+            , _tables           = (^. tableName) <$> (pdSt ^. Project.stateTables)
             }
       in  tableGrid_ tableGridProps
 
@@ -95,8 +94,8 @@ appHeader = defineView "header" $ \st ->
         StateLoggedIn liSt ->
           case liSt ^. liStSubState of
             LiStProjectDetail pdSt -> do
-              tables_ (pdSt ^. stateTables) (pdSt ^. stateTableId) (pdSt ^. stateProjectId)
-              projectNameComp_ (pdSt ^. stateProjectId) $ pdSt ^. stateProject
+              tables_ (pdSt ^. Project.stateTables) (pdSt ^. Project.stateTableId)
+              projectNameComp_ (pdSt ^. Project.stateProjectId) $ pdSt ^. Project.stateProject
               cldiv_ "navigation" $ do
                 btnUserSettings_ liSt
                 btnProjectOverView_ liSt
@@ -185,7 +184,7 @@ projectNameComp = defineStatefulView "project name" initalProjectName $
   where
     -- saveHandler :: TileState -> ([SomeStoreAction], Maybe TileState)
     saveHandler st@ProjectNameState{..} =
-      (dispatch $ ProjectSetName pnsName, Just st { pnsEditable = False })
+      (dispatch $ ProjectAction $ Project.SetName pnsName, Just st { pnsEditable = False })
 
     inputKeyDownHandler _ evt st@ProjectNameState{..}
       | keyENTER evt && not (Text.null pnsName) = saveHandler st
@@ -227,15 +226,15 @@ appFooter = defineView "footer" $ \_ ->
 
 --
 
-tables_ :: Map (Id Table) Table -> Maybe (Id Table) -> Id ProjectClient -> ReactElementM eh ()
-tables_ !ts !mTbl !prj = view tables (ts, mTbl, prj) mempty
+tables_ :: Map (Id Table) Table -> Maybe (Id Table) -> ReactElementM eh ()
+tables_ !ts !mTbl = view tables (ts, mTbl) mempty
 
-tables :: ReactView (Map (Id Table) Table, Maybe (Id Table), Id ProjectClient)
-tables = defineView "tables" $ \(ts, mTbl, projId) ->
+tables :: ReactView (Map (Id Table) Table, Maybe (Id Table))
+tables = defineView "tables" $ \(ts, mTbl) ->
   cldiv_ "tables" $ do
     ul_ $ for_ (Map.toList ts) $
       \(tableId, table') -> table_' tableId table' (Just tableId == mTbl)
-    inputNew_ "Add table..." (dispatch . TablesCreate projId)
+    inputNew_ "Add table..." (dispatch . ProjectAction . Project.CreateTable)
 
 --
 
@@ -254,7 +253,7 @@ initialTableViewState = TableViewState False "" False
 
 table :: ReactView (Id Table, Table, Bool)
 table = defineStatefulView "table" initialTableViewState $ \state (tableId, table', selected) ->
-  let saveHandler st = (dispatch $ TableSetName tableId (tName st), Just st { tEditable = False })
+  let saveHandler st = (dispatch $ ProjectAction $ Project.TableSetName tableId (tName st), Just st { tEditable = False })
       inputKeyDownHandler _ evt st
         | keyENTER evt && not (Text.null $ tName st) = saveHandler st
         | keyESC evt = ([] , Just st { tEditable = False })
@@ -263,7 +262,7 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
              [ ("active", selected)
              , ("link", True)
              ]
-         , onClick $ \_ _ _ -> (dispatch $ TablesLoadTable tableId, Nothing)
+         , onClick $ \_ _ _ -> (dispatch $ ProjectAction $ Project.LoadTable tableId, Nothing)
          ] $
      if tEditable state
      then div_ $ input_
@@ -283,5 +282,5 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
 
        button_
          [ "className" $= "pure on-dark"
-         , onClick $ \ev _ _ -> (stopPropagation ev : dispatch (TableDelete tableId), Nothing)
+         , onClick $ \ev _ _ -> (stopPropagation ev : dispatch (ProjectAction $ Project.TableDelete tableId), Nothing)
          ] $ faIcon_ "times"

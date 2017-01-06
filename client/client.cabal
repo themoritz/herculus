@@ -15,8 +15,10 @@ executable client
   other-modules:       Action
                      , Action.Message
                      , Config
+                     , Project
                      , React.Flux.Addons.Free
                      , Store
+                     , Store.Types
                      , Store.Message
                      , Store.Session
                      , Views

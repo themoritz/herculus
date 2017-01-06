@@ -29,7 +29,7 @@ import           React.Flux.Addons.Servant
 
 data FluxF s next
   = ModifyState (s -> (next, s))
-  | Halt
+  | Halt String
   | forall a. LiftIO (IO a) (a -> next)
   | forall a. NFData a => Ajax (HandleResponse a -> IO ())
                                (Either (Int, String) a -> next)
@@ -39,7 +39,7 @@ deriving instance Functor (FluxF s)
 -- TODO: Is this correct?
 instance NFData (FluxF s next) where
   rnf (ModifyState f) = f `seq` ()
-  rnf Halt            =  ()
+  rnf (Halt s)        = s `seq` ()
   rnf (LiftIO m f)    = m `seq` f `seq` ()
   rnf (Ajax go f)     = go `seq` f `seq` ()
 
@@ -67,8 +67,8 @@ instance MonadState s (FreeFlux s) where
 instance MonadIO (FreeFlux s) where
   liftIO m = liftF $ LiftIO m id
 
-halt :: FreeFlux s a
-halt = liftF Halt
+halt :: String -> FreeFlux s a
+halt msg = liftF (Halt msg)
 
 ajax :: NFData a => (HandleResponse a -> IO ())
                  -> FreeFlux s (Either (Int, String) a)
@@ -111,7 +111,7 @@ runFreeFlux store st m' = execStateT (interpret m') st
         put new
         interpret next
 
-      Free Halt -> pure ()
+      Free (Halt msg) -> liftIO $ putStrLn msg
 
       Free (LiftIO action next) -> do
         a <- liftIO action

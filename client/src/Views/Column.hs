@@ -29,6 +29,7 @@ import           Lib.Model.Table
 import           Lib.Types
 
 import           Action                    (Action (..))
+import qualified Project
 import           Store                     (dispatch, store)
 import           Views.Combinators
 import           Views.Common              (EditBoxProps (..), editBox_)
@@ -124,7 +125,7 @@ column = defineView "column" $ \(projectId, sKey, tables, c@(Entity i col)) -> c
       , editBoxClassName   = "columnName"
       , editBoxShow        = id
       , editBoxValidator   = Just
-      , editBoxOnSave      = dispatchColumnAction . TableRenameColumn i
+      , editBoxOnSave      = dispatchColumnAction . ProjectAction . Project.TableRenameColumn i
       }
     columnInfo_ projectId sKey tables c
   columnConfig_ projectId sKey tables c
@@ -222,9 +223,9 @@ reportColConf = defineControllerView "report column config" Dialog.store $
           , Dialog.UnsetTmpReportFormat i
           , Dialog.UnsetTmpReportTemplate i
           ]
-        deleteActions = dispatch $ TableDeleteColumn i
+        deleteActions = dispatch $ ProjectAction $ Project.TableDeleteColumn i
         saveActions   =
-          mkColumnAction (TableUpdateReportCol i template format lang) :
+          mkColumnAction (ProjectAction $ Project.TableUpdateReportCol i template format lang) :
             map Dialog.mkAction
               [ Dialog.SetVisibility i False
               , Dialog.UnsetTmpReportLang i
@@ -345,9 +346,9 @@ dataColConf = defineControllerView "data column configuration" Dialog.store $
             ]
           -- TODO: figure out what changed before initiating ajax
           -- in the Nothing case: nothing has changed
-          deleteActions = dispatch $ TableDeleteColumn i
+          deleteActions = dispatch $ ProjectAction $ Project.TableDeleteColumn i
           saveActions =
-            mkColumnAction (TableUpdateDataCol i dt isDerived formula) :
+            mkColumnAction (ProjectAction $ Project.TableUpdateDataCol i dt isDerived formula) :
               map Dialog.mkAction
                 [ Dialog.SetVisibility i False
                 , Dialog.UnsetTmpDataType i

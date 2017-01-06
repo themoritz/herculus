@@ -29,7 +29,8 @@ import           Lib.Model.Row
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Action            (Action (CellSetValue))
+import           Action            (Action (ProjectAction))
+import           Project
 import           Store
 import           Views.Combinators
 import           Views.Common
@@ -77,7 +78,7 @@ dataCell = defineControllerView "cell" cellStore $ \(CellState m) DataCellProps{
                           inpType
                           datType
                           val
-                          (dispatch . CellSetValue dataCellColId dataCellRowId)
+                          (dispatch . ProjectAction . CellSetValue dataCellColId dataCellRowId)
       in
       case needsEx of
         True -> cldiv_ "compactWrapper" $ do
@@ -90,7 +91,7 @@ dataCell = defineControllerView "cell" cellStore $ \(CellState m) DataCellProps{
                      inpType
                      datType
                      val
-                     (dispatch . CellSetValue dataCellColId dataCellRowId)
+                     (dispatch . ProjectAction . CellSetValue dataCellColId dataCellRowId)
         False -> inline
 
 needsExpand :: (DataType, IsDerived) -> Bool

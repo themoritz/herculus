@@ -14,4 +14,4 @@ data Action
   | SetWarning Text
   | SetError Text
   | Unset
-  deriving (NFData, Generic)
+  deriving (NFData, Generic, Show)

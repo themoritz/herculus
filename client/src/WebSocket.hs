@@ -34,6 +34,9 @@ import           React.Flux.Addons.Free
 
 data JSWebSocket = JSWebSocket { unWebSocket :: WebSocket }
 
+instance Show JSWebSocket where
+  show _ = "WebSocket"
+
 jsonWebSocketNew :: FromJSON a => Text
                                -> (a -> IO [SomeStoreAction])
                                -> FreeFlux s JSWebSocket

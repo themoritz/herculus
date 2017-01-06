@@ -23,7 +23,7 @@ import           Lib.Types
 data Table = Table
   { _tableProjectId :: Id Project
   , _tableName      :: Text
-  } deriving (Generic, NFData)
+  } deriving (Generic, NFData, Show)
 
 tableProjectId :: Lens' Table (Id Project)
 tableProjectId = lens _tableProjectId (\s a -> s { _tableProjectId = a })

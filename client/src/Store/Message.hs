@@ -16,6 +16,7 @@ data Type
   | Success
   | Warning
   | Error
+  deriving (Show)
 
 -- in future we maybe want a list of messages
 -- instead of one message at a time
@@ -25,7 +26,7 @@ type State = Maybe Message
 data Message = Message
   { _stContent :: Text
   , _stType    :: Type
-  }
+  } deriving Show
 
 makeLenses ''Message
 

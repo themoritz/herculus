@@ -167,12 +167,9 @@ data ChangeOp
   = Create
   | Update
   | Delete
-  deriving (Eq, Generic)
+  deriving (Eq, Generic, Show)
 
-instance NFData ChangeOp where
-  rnf Create = ()
-  rnf Update = ()
-  rnf Delete = ()
+instance NFData ChangeOp
 
 instance ToJSON ChangeOp
 instance FromJSON ChangeOp
