@@ -137,8 +137,8 @@ setProjectOverview sKey = do
 performLogin :: UserInfo -> DSL ()
 performLogin userInfo@(UserInfo _ _ sKey) = do
   liftIO $ persistSession sKey
-  setProjectOverview sKey
   stateSession .= StateLoggedIn (mkLoggedInState sKey userInfo)
+  setProjectOverview sKey
 
 showMessage :: Message.Action -> DSL ()
 showMessage a = stateMessage .= Message.runAction a

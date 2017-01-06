@@ -1,0 +1,8 @@
+-.stack-work
+-/node_modules
+-dist
+-result
+-*.js_o
+-*.js_hi
+-*.js_dyn_o
+-*.js_dyn_hi
