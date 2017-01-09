@@ -171,18 +171,14 @@ eval token = \case
   CreateProject name -> do
     Entity i p <- apiCall $ request api (Proxy :: Proxy Api.ProjectCreate)
                                       token name
-    stateSubState .= ProjectDetail (Project.mkState i p)
+    stateSubState .= ProjectDetail
+      (Project.mkState i p [] [] [] [])
 
   ToProject i -> do
-    (p, ts) <- apiCall $ request api (Proxy :: Proxy Api.ProjectLoad)
-               token i
-    let tablesMap = Map.fromList $ map entityToTuple ts
+    (p, tables, columns, rows, cells) <-
+      apiCall $ request api (Proxy :: Proxy Api.ProjectLoad) token i
     stateSubState .= ProjectDetail
-      (Project.mkState i p & Project.stateTables .~ tablesMap)
-    -- Load first table if exists
-    case ts of
-      []               -> pure ()
-      Entity tId _ : _ -> eval token $ ProjectAction $ Project.LoadTable tId
+      (Project.mkState i p tables columns rows cells)
 
   DeleteProject projectId -> do
     apiCall $ request api (Proxy :: Proxy Api.ProjectDelete) token projectId

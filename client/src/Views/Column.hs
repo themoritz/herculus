@@ -20,6 +20,7 @@ import           Text.Read                 (readMaybe)
 
 import           React.Flux
 
+import           Lib.Api.Rest              (Command (..))
 import           Lib.Model
 import           Lib.Model.Auth            (SessionKey)
 import           Lib.Model.Column
@@ -27,8 +28,7 @@ import           Lib.Model.Project         (ProjectClient)
 import           Lib.Model.Table
 import           Lib.Types
 
-import qualified Project
-import           Store                     (dispatchProject)
+import           Store                     (dispatchProjectCommand)
 import           Views.Combinators
 import           Views.Common              (EditBoxProps (..), editBox_)
 import           Views.Foreign
@@ -114,7 +114,7 @@ column = defineView "column" $ \(projectId, sKey, tables, c@(Entity i col)) -> c
       , editBoxClassName   = "columnName"
       , editBoxShow        = id
       , editBoxValidator   = Just
-      , editBoxOnSave      = dispatchProject . Project.TableRenameColumn i
+      , editBoxOnSave      = dispatchProjectCommand . CmdColumnSetName i
       }
     columnInfo_ projectId sKey tables c
   columnConfig_ projectId sKey tables c
@@ -212,9 +212,9 @@ reportColConf = defineControllerView "report column config" Dialog.store $
           , Dialog.UnsetTmpReportFormat i
           , Dialog.UnsetTmpReportTemplate i
           ]
-        deleteActions = dispatchProject $ Project.TableDeleteColumn i
+        deleteActions = dispatchProjectCommand $ CmdColumnDelete i
         saveActions   =
-          dispatchProject (Project.TableUpdateReportCol i template format lang) <>
+          dispatchProjectCommand (CmdReportColUpdate i template format lang) <>
             map Dialog.mkAction
               [ Dialog.SetVisibility i False
               , Dialog.UnsetTmpReportLang i
@@ -335,9 +335,9 @@ dataColConf = defineControllerView "data column configuration" Dialog.store $
             ]
           -- TODO: figure out what changed before initiating ajax
           -- in the Nothing case: nothing has changed
-          deleteActions = dispatchProject $ Project.TableDeleteColumn i
+          deleteActions = dispatchProjectCommand $ CmdColumnDelete i
           saveActions =
-            dispatchProject (Project.TableUpdateDataCol i dt isDerived formula) <>
+            dispatchProjectCommand (CmdDataColUpdate i dt isDerived formula) <>
               map Dialog.mkAction
                 [ Dialog.SetVisibility i False
                 , Dialog.UnsetTmpDataType i

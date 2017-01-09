@@ -13,8 +13,8 @@ import           Control.Monad.Except
 import           Data.Foldable                (for_)
 import qualified Data.Map                     as Map
 import           Data.Maybe                   (mapMaybe)
-import           Data.Text                    (Text)
 
+import           Lib.Api.Rest                 (Command (..))
 import           Lib.Api.WebSocket
 import           Lib.Model
 import           Lib.Model.Cell
@@ -35,50 +35,12 @@ import           Monads
 
 --------------------------------------------------------------------------------
 
--- | All the critical commands that should be atomic, undoable, replayable etc.
--- within a project.
-data Command
-  = CmdTableCreate (Id Project) Text
-  | CmdTableSetName (Id Table) Text
-  | CmdTableDelete (Id Table)
-  | CmdDataColCreate (Id Table)
-  | CmdDataColUpdate (Id Column) DataType IsDerived Text
-  | CmdReportColCreate (Id Table)
-  | CmdReportColUpdate (Id Column) Text ReportFormat (Maybe ReportLanguage)
-  | CmdColumnSetName (Id Column) Text
-  | CmdColumnDelete (Id Column)
-  | CmdRowCreate (Id Table)
-  | CmdRowDelete (Id Row)
-  | CmdCellSet (Id Column) (Id Row) Value
-
-projectOfCommand :: MonadHexl m => Command -> m (Id Project)
-projectOfCommand = \case
-    CmdTableCreate p _         -> pure p
-    CmdTableSetName t _        -> ofTable t
-    CmdTableDelete t           -> ofTable t
-    CmdDataColCreate t         -> ofTable t
-    CmdDataColUpdate c _ _ _   -> ofColumn c
-    CmdReportColCreate t       -> ofTable t
-    CmdReportColUpdate c _ _ _ -> ofColumn c
-    CmdColumnSetName c _       -> ofColumn c
-    CmdColumnDelete c          -> ofColumn c
-    CmdRowCreate t             -> ofTable t
-    CmdRowDelete r             -> ofRow r
-    CmdCellSet c _ _           -> ofColumn c
-  where
-    ofTable t = _tableProjectId <$> getById' t
-    ofColumn c = _columnTableId <$> getById' c >>= ofTable
-    ofRow r = _rowTableId <$> getById' r >>= ofTable
-
---------------------------------------------------------------------------------
-
-runCommand :: MonadHexl m => Command -> m ()
-runCommand cmd = do
-  projectId <- projectOfCommand cmd
+runCommand :: MonadHexl m => Id Project -> Command -> m ()
+runCommand projectId cmd = do
   graph <- _projectDependencyGraph <$> getById' projectId
   -- Run command in engine, compile, and propagate
   (_ , state) <- runEngineT graph $ do
-    executeCommand cmd
+    executeCommand projectId cmd
     getCompileTargets >>= mapM_ compileColumn
     propagate
   -- Commit changes
@@ -114,10 +76,10 @@ commit m = do
   mapM_ delete $ mapMaybe filterDeletes changes
 
 -- | Core of the engine logic
-executeCommand :: MonadEngine m => Command -> m ()
-executeCommand = \case
+executeCommand :: MonadEngine m => Id Project -> Command -> m ()
+executeCommand projectId = \case
 
-  CmdTableCreate projectId name ->
+  CmdTableCreate name ->
     void $ createTable $ Table projectId name
 
   CmdTableSetName tableId name -> do
@@ -132,7 +94,7 @@ executeCommand = \case
   CmdTableDelete tableId -> do
     deleteTable tableId
     columns <- getTableColumns tableId
-    mapM_ (executeCommand . CmdColumnDelete . entityId) columns
+    mapM_ (executeCommand projectId . CmdColumnDelete . entityId) columns
     graphModify $ purgeTable tableId
     dependantCols <- graphGets $ getTableDependantsOnly tableId $ \case
       TblDepColumnRef -> False

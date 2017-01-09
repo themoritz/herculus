@@ -23,7 +23,7 @@ import           Lib.Types
 data Entity a = Entity
   { entityId  :: Id a
   , entityVal :: a
-  } deriving (Typeable, Generic)
+  } deriving (Typeable, Generic, Show)
 
 instance ClientModel s c => ClientModel (Entity s) (Entity c) where
   toClient (Entity i s)   = Entity (toClientId i) (toClient s)

@@ -98,6 +98,9 @@ dispatchLoggedIn = dispatch . LoggedInAction
 dispatchProject :: Project.Action -> [SomeStoreAction]
 dispatchProject = dispatchLoggedIn . LoggedIn.ProjectAction
 
+dispatchProjectCommand :: Api.Command -> [SomeStoreAction]
+dispatchProjectCommand = dispatchProject . Project.RunCommand
+
 type DSL = FreeFlux State
 
 instance MonadStore DSL where

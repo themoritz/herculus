@@ -49,8 +49,7 @@ import           Lib.Types
 
 import           Auth                           (mkSession)
 import           Auth.Permission                (permissionColumn,
-                                                 permissionProject,
-                                                 permissionRow, permissionTable)
+                                                 permissionProject)
 import           Engine
 import           Engine.Monad
 import           Engine.Util
@@ -69,30 +68,8 @@ handle =
   :<|> handleProjectSetName
   :<|> handleProjectDelete
   :<|> handleProjectLoad
+  :<|> handleProjectRunCommand
 
-  :<|> handleTableCreate
-  :<|> handleTableData
-  :<|> handleTableGetWhole
-  :<|> handleTableSetName
-  :<|> handleTableDelete
-
-  :<|> handleColumnDelete
-  :<|> handleColumnList
-  :<|> handleColumnSetName
-
-  :<|> handleDataColCreate
-  :<|> handleDataColUpdate
-
-  :<|> handleReportColCreate
-  :<|> handleReportColUpdate
-
-  :<|> handleRowCreate
-  :<|> handleRowDelete
-  :<|> handleRowData
-  :<|> handleRowList
-  :<|> handleRowListWithData
-
-  :<|> handleCellSet
   :<|> handleCellGetReportPDF
   :<|> handleCellGetReportHTML
   :<|> handleCellGetReportPlain
@@ -185,137 +162,56 @@ handleProjectDelete :: MonadHexl m => SessionData -> Id ProjectClient -> m ()
 handleProjectDelete sessionData@(UserInfo userId _ _) projectId = do
   let i = fromClientId projectId
   permissionProject userId i
-  tables <- listByQuery [ "projectId" =: toObjectId i ]
-  traverse_ (handleTableDelete sessionData . entityId) tables
   delete i
+  tables <- listByQuery [ "projectId" =: toObjectId i ]
+  traverse_ (handleProjectRunCommand sessionData projectId .
+             CmdTableDelete .
+             entityId) tables
 
-handleProjectLoad :: MonadHexl m => SessionData -> Id ProjectClient -> m (ProjectClient, [Entity Table])
+handleProjectLoad :: MonadHexl m => SessionData -> Id ProjectClient
+                  -> m ( ProjectClient
+                       , [Entity Table]
+                       , [Entity Column]
+                       , [Entity Row]
+                       , [Entity Cell] )
 handleProjectLoad (UserInfo userId _ _) projectId = do
   let i = fromClientId projectId
   permissionProject userId i
-  tables <- listByQuery [ "projectId" =: toObjectId i ]
   project <- getById' i
-  pure (toClient project, tables)
+  tables <- listByQuery [ "projectId" =: toObjectId i ]
+  dat <- for tables $ \(Entity tableId _) -> do
+    columns <- listByQuery [ "tableId" =: toObjectId tableId ]
+    rows <- listByQuery [ "tableId" =: toObjectId tableId ]
+    cells <- listByQuery [ "tableId" =: toObjectId tableId ]
+    pure (columns, rows, cells)
+  let (columns, rows, cells) = mconcat dat
+  pure (toClient project, tables, columns, rows, cells)
 
---------------------------------------------------------------------------------
-
-handleTableCreate :: MonadHexl m => SessionData -> Id ProjectClient -> Text -> m ()
-handleTableCreate (UserInfo userId _ _) projectId name = do
+handleProjectRunCommand :: MonadHexl m => SessionData -> Id ProjectClient -> Command -> m ()
+handleProjectRunCommand (UserInfo userId _ _) projectId cmd = do
   let i = fromClientId projectId
   permissionProject userId i
-  runCommand $ CmdTableCreate i name
-
-handleTableData :: MonadHexl m => SessionData -> Id Table -> m [(Id Column, Id Row, CellContent)]
-handleTableData (UserInfo userId _ _) tblId = do
-  permissionTable userId tblId
-  cells <- listByQuery [ "tableId" =: toObjectId tblId ]
-  let go (Cell v _ c r) = (c, r, v)
-  pure $ map (go . entityVal) cells
-
-handleTableGetWhole :: MonadHexl m
-                    => SessionData
-                    -> Id Table
-                    -> m ([Entity Column], [Entity Row], [(Id Column, Id Row, CellContent)])
-handleTableGetWhole sessionData@(UserInfo userId _ _) tblId = do
-  permissionTable userId tblId
-  (,,) <$> handleColumnList sessionData tblId
-       <*> handleRowList sessionData tblId
-       <*> handleTableData sessionData tblId
-
-handleTableSetName :: MonadHexl m => SessionData -> Id Table -> Text -> m ()
-handleTableSetName (UserInfo userId _ _) tableId name = do
-  permissionTable userId tableId
-  runCommand $ CmdTableSetName tableId name
-
-handleTableDelete :: MonadHexl m => SessionData -> Id Table -> m ()
-handleTableDelete (UserInfo userId _ _) tableId = do
-    permissionTable userId tableId
-    runCommand $ CmdTableDelete tableId
-
---------------------------------------------------------------------------------
-
-handleColumnDelete :: MonadHexl m => SessionData -> Id Column -> m ()
-handleColumnDelete (UserInfo userId _ _) colId = do
-  permissionColumn userId colId
-  runCommand $ CmdColumnDelete colId
-
-handleColumnList :: MonadHexl m => SessionData -> Id Table -> m [Entity Column]
-handleColumnList (UserInfo userId _ _) tblId = do
-  permissionTable userId tblId
-  listByQuery [ "tableId" =: toObjectId tblId ]
-
-handleColumnSetName :: MonadHexl m => SessionData -> Id Column -> Text -> m ()
-handleColumnSetName (UserInfo userId _ _) columnId name = do
-  permissionColumn userId columnId
-  runCommand $ CmdColumnSetName columnId name
-
---
-
-handleDataColCreate :: MonadHexl m => SessionData -> Id Table -> m ()
-handleDataColCreate (UserInfo userId _ _) tableId = do
-  permissionTable userId tableId
-  runCommand $ CmdDataColCreate tableId
-
-handleDataColUpdate :: MonadHexl m => SessionData -> Id Column -> (DataType, IsDerived, Text) -> m ()
-handleDataColUpdate (UserInfo userId _ _) columnId (typ, derived, code) = do
-  permissionColumn userId columnId
-  runCommand $ CmdDataColUpdate columnId typ derived code
-
-handleReportColCreate :: MonadHexl m => SessionData -> Id Table -> m ()
-handleReportColCreate (UserInfo userId _ _) tableId = do
-  permissionTable userId tableId
-  runCommand $ CmdReportColCreate tableId
-
-handleReportColUpdate :: MonadHexl m => SessionData
-                      -> Id Column -> (Text, ReportFormat, Maybe ReportLanguage)
-                      -> m ()
-handleReportColUpdate (UserInfo userId _ _) columnId (template, format, language) = do
-  permissionColumn userId columnId
-  runCommand $ CmdReportColUpdate columnId template format language
-
---
-
-handleRowCreate :: MonadHexl m => SessionData -> Id Table -> m ()
-handleRowCreate (UserInfo userId _ _) tableId = do
-  permissionTable userId tableId
-  runCommand $ CmdRowCreate tableId
-
-handleRowDelete :: MonadHexl m => SessionData -> Id Row -> m ()
-handleRowDelete (UserInfo userId _ _) rowId = do
-  permissionRow userId rowId
-  runCommand $ CmdRowDelete rowId
-
--- | Get all the data of a row
-handleRowData :: MonadHexl m => SessionData
-              -> Id Row -> m [(Entity Column, CellContent)]
-handleRowData (UserInfo userId _ _) recId = do
-  permissionRow userId recId
-  cells <- listByQuery
-    [ "rowId" =: toObjectId recId ]
-  for cells $ \(Entity _ cell) -> do
-    let i = cell ^. cellColumnId
-    col <- getById' i
-    pure (Entity i col, cell ^. cellContent)
-
-handleRowList :: MonadHexl m => SessionData -> Id Table -> m [Entity Row]
-handleRowList (UserInfo userId _ _) tblId = do
-  permissionTable userId tblId
-  listByQuery [ "tableId" =: toObjectId tblId ]
-
-handleRowListWithData :: MonadHexl m => SessionData
-                      -> Id Table -> m [(Id Row, [(Entity Column, CellContent)])]
-handleRowListWithData sessionData@(UserInfo userId _ _) tblId = do
-  permissionTable userId tblId
-  recs <- listByQuery [ "tableId" =: toObjectId tblId ]
-  for recs $ \r -> (entityId r,) <$> handleRowData sessionData (entityId r)
-
---------------------------------------------------------------------------------
-
-handleCellSet :: MonadHexl m => SessionData
-              -> Id Column -> Id Row -> Value -> m ()
-handleCellSet (UserInfo userId _ _) columnId rowId value = do
-  permissionColumn userId columnId
-  runCommand $ CmdCellSet columnId rowId value
+  -- Check that project id implied by the command matches `i`.
+  let ofTable t = getById' t >>= \table -> if _tableProjectId table == i
+        then pure ()
+        else throwError $ ErrBug $ "Given project id does not match project id "
+                                <> "implied by the command."
+      ofColumn c = _columnTableId <$> getById' c >>= ofTable
+      ofRow r = _rowTableId <$> getById' r >>= ofTable
+  case cmd of
+    CmdTableCreate _           -> pure ()
+    CmdTableSetName t _        -> ofTable t
+    CmdTableDelete t           -> ofTable t
+    CmdDataColCreate t         -> ofTable t
+    CmdDataColUpdate c _ _ _   -> ofColumn c
+    CmdReportColCreate t       -> ofTable t
+    CmdReportColUpdate c _ _ _ -> ofColumn c
+    CmdColumnSetName c _       -> ofColumn c
+    CmdColumnDelete c          -> ofColumn c
+    CmdRowCreate t             -> ofTable t
+    CmdRowDelete r             -> ofRow r
+    CmdCellSet c _ _           -> ofColumn c
+  runCommand i cmd
 
 --------------------------------------------------------------------------------
 

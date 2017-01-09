@@ -1,14 +1,21 @@
-{-# LANGUAGE DataKinds     #-}
-{-# LANGUAGE TypeFamilies  #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE TypeOperators     #-}
 
 module Lib.Api.Rest where
 
+import           Control.DeepSeq               (NFData)
+
+import           Data.Aeson                    (FromJSON, ToJSON)
 import qualified Data.ByteString               as BS
 import qualified Data.ByteString.Lazy          as LBS
 import           Data.CaseInsensitive          (original)
 import           Data.Text
 import qualified Data.Text.Encoding            as Text
+
+import           GHC.Generics
 import           Network.HTTP.Types.Header     (HeaderName)
 import           Servant.API                   ((:<|>), (:>), Capture, Delete,
                                                 Get, JSON, PlainText, Post,
@@ -42,28 +49,8 @@ type Routes =
  :<|> ProjectSetName
  :<|> ProjectDelete
  :<|> ProjectLoad
+ :<|> ProjectRunCommand
 
- :<|> TableCreate
- :<|> TableData
- :<|> TableGetWhole
- :<|> TableSetName
- :<|> TableDelete
-
- :<|> ColumnDelete
- :<|> ColumnList
- :<|> ColumnSetName
- :<|> DataColCreate
- :<|> DataColUpdate
- :<|> ReportColCreate
- :<|> ReportColUpdate
-
- :<|> RowCreate
- :<|> RowDelete
- :<|> RowData
- :<|> RowList
- :<|> RowListWithData
-
- :<|> CellSet
  :<|> CellGetReportPDF
  :<|> CellGetReportHTML
  :<|> CellGetReportPlain
@@ -80,39 +67,41 @@ sessionParamStr = Text.decodeUtf8 sessionParamBStr
 sessionParamBStr :: BS.ByteString
 sessionParamBStr = original sessionParam
 
+-- | All the critical commands that should be atomic, undoable, replayable etc.
+-- within a project.
+data Command
+  = CmdTableCreate Text
+  | CmdTableSetName (Id Table) Text
+  | CmdTableDelete (Id Table)
+  | CmdDataColCreate (Id Table)
+  | CmdDataColUpdate (Id Column) DataType IsDerived Text
+  | CmdReportColCreate (Id Table)
+  | CmdReportColUpdate (Id Column) Text ReportFormat (Maybe ReportLanguage)
+  | CmdColumnSetName (Id Column) Text
+  | CmdColumnDelete (Id Column)
+  | CmdRowCreate (Id Table)
+  | CmdRowDelete (Id Row)
+  | CmdCellSet (Id Column) (Id Row) Value
+  deriving (Generic, Show)
+
+instance NFData Command
+
+instance ToJSON Command
+instance FromJSON Command
+
 type AuthLogin          =                   "auth"      :> "login"          :> ReqBody '[JSON] LoginData  :> Post '[JSON] LoginResponse
 type AuthLogout         = SessionProtect :> "auth"      :> "logout"                                       :> Get '[JSON] ()
 type AuthSignup         =                   "auth"      :> "signup"         :> ReqBody '[JSON] SignupData :> Post '[JSON] SignupResponse
 type AuthGetUserInfo    =                   "auth"      :> "userInfo"       :> ReqBody '[JSON] SessionKey :> Post '[JSON] GetUserInfoResponse
 type AuthChangePassword = SessionProtect :> "auth"      :> "changePassword" :> ReqBody '[JSON] ChangePwdData :> Post '[JSON] ChangePwdResponse
 
-type ProjectCreate      = SessionProtect :> "project"   :> "create"         :> ReqBody '[JSON] Text                                           :> Post '[JSON] (Entity ProjectClient)
-type ProjectList        = SessionProtect :> "project"   :> "list"                                                                             :> Get '[JSON] [Entity ProjectClient]
-type ProjectSetName     = SessionProtect :> "project"   :> "setName"        :> Capture "projectId" (Id ProjectClient) :> ReqBody '[JSON] Text :> Post '[JSON] ()
-type ProjectDelete      = SessionProtect :> "project"   :> "delete"         :> Capture "projectId" (Id ProjectClient)                         :> Delete '[JSON] ()
-type ProjectLoad        = SessionProtect :> "table"     :> "list"           :> Capture "projectId" (Id ProjectClient)                         :> Get '[JSON] (ProjectClient, [Entity Table])
+type ProjectCreate      = SessionProtect :> "project"   :> "create"         :> ReqBody '[JSON] Text                                              :> Post '[JSON] (Entity ProjectClient)
+type ProjectList        = SessionProtect :> "project"   :> "list"                                                                                :> Get '[JSON] [Entity ProjectClient]
+type ProjectSetName     = SessionProtect :> "project"   :> "setName"        :> Capture "projectId" (Id ProjectClient) :> ReqBody '[JSON] Text    :> Post '[JSON] ()
+type ProjectDelete      = SessionProtect :> "project"   :> "delete"         :> Capture "projectId" (Id ProjectClient)                            :> Delete '[JSON] ()
+type ProjectLoad        = SessionProtect :> "project"   :> "load"           :> Capture "projectId" (Id ProjectClient)                            :> Get '[JSON] (ProjectClient, [Entity Table], [Entity Column], [Entity Row], [Entity Cell])
+type ProjectRunCommand  = SessionProtect :> "project"   :> "runCommand"     :> Capture "projectId" (Id ProjectClient) :> ReqBody '[JSON] Command :> Post '[JSON] ()
 
-type TableCreate        = SessionProtect :> "table"     :> "create"         :> Capture "projectId" (Id ProjectClient) :> ReqBody '[JSON] Text :> Post '[JSON] ()
-type TableData          = SessionProtect :> "table"     :> "data"           :> Capture "tableId" (Id Table)                         :> Get '[JSON] [(Id Column, Id Row, CellContent)]
-type TableGetWhole      = SessionProtect :> "table"     :> "getWhole"       :> Capture "tableId" (Id Table)                         :> Get '[JSON] ([Entity Column], [Entity Row], [(Id Column, Id Row, CellContent)])
-type TableSetName       = SessionProtect :> "table"     :> "setName"        :> Capture "tableId" (Id Table) :> ReqBody '[JSON] Text :> Post '[JSON] ()
-type TableDelete        = SessionProtect :> "table"     :> "delete"         :> Capture "tableId" (Id Table)                         :> Delete '[JSON] ()
-
-type ColumnDelete       = SessionProtect :> "column"    :> "delete"         :> Capture "columnId" (Id Column)                                                               :> Get '[JSON] ()
-type ColumnList         = SessionProtect :> "column"    :> "list"           :> Capture "tableId" (Id Table)                                                                 :> Get '[JSON] [Entity Column]
-type ColumnSetName      = SessionProtect :> "column"    :> "setName"        :> Capture "columnId" (Id Column) :> ReqBody '[JSON] Text                                       :> Post '[JSON] ()
-type DataColCreate      = SessionProtect :> "dataCol"   :> "create"         :> ReqBody '[JSON] (Id Table)                                                                   :> Post '[JSON] ()
-type DataColUpdate      = SessionProtect :> "dataCol"   :> "update"         :> Capture "columnId" (Id Column) :> ReqBody '[JSON] (DataType, IsDerived, Text)                :> Post '[JSON] ()
-type ReportColCreate    = SessionProtect :> "reportCol" :> "create"         :> ReqBody '[JSON] (Id Table)                                                                   :> Post '[JSON] ()
-type ReportColUpdate    = SessionProtect :> "reportCol" :> "update"         :> Capture "columnId" (Id Column) :> ReqBody '[JSON] (Text, ReportFormat, Maybe ReportLanguage) :> Post '[JSON] ()
-
-type RowCreate          = SessionProtect :> "row"       :> "create"         :> ReqBody '[JSON] (Id Table)   :> Post '[JSON] ()
-type RowDelete          = SessionProtect :> "row"       :> "delete"         :> Capture "rowId" (Id Row)     :> Get '[JSON] ()
-type RowData            = SessionProtect :> "row"       :> "data"           :> Capture "rowId" (Id Row)     :> Get '[JSON] [(Entity Column, CellContent)]
-type RowList            = SessionProtect :> "row"       :> "list"           :> Capture "tableId" (Id Table) :> Get '[JSON] [Entity Row]
-type RowListWithData    = SessionProtect :> "row"       :> "listWithData"   :> Capture "tableId" (Id Table) :> Get '[JSON] [(Id Row, [(Entity Column, CellContent)])]
-
-type CellSet            = SessionProtect :> "cell"      :> "set"            :> Capture "columnId" (Id Column) :> Capture "rowId" (Id Row) :> ReqBody '[JSON] Value              :> Post '[JSON] ()
 type CellGetReportPDF   = SessionProtect :> "cell"      :> "getReportPDF"   :> QueryParam "sessionKey" SessionKey :> Capture "columnId" (Id Column) :> Capture "rowId" (Id Row) :> Get '[PDF] LBS.ByteString
 type CellGetReportHTML  = SessionProtect :> "cell"      :> "getReportHTML"  :> QueryParam "sessionKey" SessionKey :> Capture "columnId" (Id Column) :> Capture "rowId" (Id Row) :> Get '[HTML] Text
 type CellGetReportPlain = SessionProtect :> "cell"      :> "getReportPlain" :> QueryParam "sessionKey" SessionKey :> Capture "columnId" (Id Column) :> Capture "rowId" (Id Row) :> Get '[PlainText] Text

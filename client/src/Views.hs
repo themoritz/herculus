@@ -18,6 +18,7 @@ import           GHC.Generics          (Generic)
 import           React.Flux
 import           React.Flux.Internal   (toJSString)
 
+import           Lib.Api.Rest          (Command (..))
 import           Lib.Model.Auth        (uiUserName)
 import           Lib.Model.Project
 import           Lib.Model.Table
@@ -28,8 +29,8 @@ import qualified Project
 import           Store                 (Action (MessageAction),
                                         LoggedOutState (..), SessionState (..),
                                         State, dispatch, dispatchLoggedIn,
-                                        dispatchProject, stateMessage,
-                                        stateSession, store)
+                                        dispatchProject, dispatchProjectCommand,
+                                        stateMessage, stateSession, store)
 import           Views.Auth            (changePassword_, login_, signup_)
 import           Views.Combinators     (clspan_, inputNew_, menuItem_)
 import           Views.Common          (keyENTER, keyESC)
@@ -59,20 +60,23 @@ app = defineControllerView "app" store $ \st () ->
       appFooter_ st
   where
     projectDetailView_ pdSt sKey =
-      let cols = pdSt ^. Project.stateColumns
-          recs = pdSt ^. Project.stateRows
-          -- TODO: put tables deeper into view state hierarchy under projectId
-          tableGridProps = TableGridProps
-            { _cells            = pdSt ^. Project.stateCells
-            , _colByIndex       = IntMap.fromList $ zip [0..] (Map.toList cols)
-            , _recByIndex       = IntMap.fromList $ zip [0..] (Map.toList recs)
-            , _tableId          = pdSt ^. Project.stateTableId
-            , _projectId        = pdSt ^. Project.stateProjectId
-            , _showNewColDialog = pdSt ^. Project.stateNewColShow
-            , _sKey             = sKey
-            , _tables           = (^. tableName) <$> (pdSt ^. Project.stateTables)
-            }
-      in  tableGrid_ tableGridProps
+      let tableGridProps = do
+            tableId <- pdSt ^. Project.stateCurrentTable
+            tableDesc <- pdSt ^. Project.stateTables . at tableId
+            let cols = Map.toList (tableDesc ^. Project.descColumns)
+                rows = Map.toList (tableDesc ^. Project.descRows)
+            -- TODO: put tables deeper into view state hierarchy under projectId
+            pure TableGridProps
+              { _cells            = pdSt ^. Project.stateCells
+              , _colByIndex       = IntMap.fromList $ zip [0..] cols
+              , _rowByIndex       = IntMap.fromList $ zip [0..] rows
+              , _tableId          = tableId
+              , _projectId        = pdSt ^. Project.stateProjectId
+              , _showNewColDialog = pdSt ^. Project.stateNewColShow
+              , _sKey             = sKey
+              , _tables           = (^. Project.descTable . tableName) <$> (pdSt ^. Project.stateTables)
+              }
+      in  for_ tableGridProps tableGrid_
 
 -- header
 
@@ -92,7 +96,8 @@ appHeader = defineView "header" $ \st ->
         StateLoggedIn liSt ->
           case liSt ^. LoggedIn.stateSubState of
             LoggedIn.ProjectDetail pdSt -> do
-              tables_ (pdSt ^. Project.stateTables) (pdSt ^. Project.stateTableId)
+              tables_ (fmap (^. Project.descTable) (pdSt ^. Project.stateTables))
+                      (pdSt ^. Project.stateCurrentTable)
               projectNameComp_ (pdSt ^. Project.stateProjectId) $ pdSt ^. Project.stateProject
               cldiv_ "navigation" $ do
                 btnUserSettings_ liSt
@@ -232,7 +237,7 @@ tables = defineView "tables" $ \(ts, mTbl) ->
   cldiv_ "tables" $ do
     ul_ $ for_ (Map.toList ts) $
       \(tableId, table') -> table_' tableId table' (Just tableId == mTbl)
-    inputNew_ "Add table..." (dispatchProject . Project.CreateTable)
+    inputNew_ "Add table..." (dispatchProjectCommand . CmdTableCreate)
 
 --
 
@@ -251,7 +256,7 @@ initialTableViewState = TableViewState False "" False
 
 table :: ReactView (Id Table, Table, Bool)
 table = defineStatefulView "table" initialTableViewState $ \state (tableId, table', selected) ->
-  let saveHandler st = (dispatchProject $ Project.TableSetName tableId (tName st), Just st { tEditable = False })
+  let saveHandler st = (dispatchProjectCommand $ CmdTableSetName tableId (tName st), Just st { tEditable = False })
       inputKeyDownHandler _ evt st
         | keyENTER evt && not (Text.null $ tName st) = saveHandler st
         | keyESC evt = ([] , Just st { tEditable = False })
@@ -260,7 +265,7 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
              [ ("active", selected)
              , ("link", True)
              ]
-         , onClick $ \_ _ _ -> (dispatchProject $ Project.LoadTable tableId, Nothing)
+         , onClick $ \_ _ _ -> (dispatchProject $ Project.OpenTable tableId, Nothing)
          ] $
      if tEditable state
      then div_ $ input_
@@ -280,5 +285,5 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
 
        button_
          [ "className" $= "pure on-dark"
-         , onClick $ \ev _ _ -> (stopPropagation ev : dispatchProject (Project.TableDelete tableId), Nothing)
+         , onClick $ \ev _ _ -> (stopPropagation ev : dispatchProjectCommand (CmdTableDelete tableId), Nothing)
          ] $ faIcon_ "times"

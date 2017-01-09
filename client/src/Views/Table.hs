@@ -13,6 +13,7 @@ import           Data.Monoid        ((<>))
 
 import           React.Flux
 
+import           Lib.Api.Rest       (Command (..))
 import           Lib.Model
 import           Lib.Model.Auth     (SessionKey)
 import           Lib.Model.Cell     (CellContent)
@@ -23,7 +24,7 @@ import           Lib.Model.Table
 import           Lib.Types
 
 import qualified Project
-import           Store              (dispatchProject)
+import           Store              (dispatchProject, dispatchProjectCommand)
 import           Views.Cell
 import           Views.Column
 import           Views.Combinators
@@ -34,8 +35,8 @@ import           Views.Row
 data TableGridProps = TableGridProps
   { _cells            :: Map Project.Coords CellContent
   , _colByIndex       :: IntMap (Id Column, Column)
-  , _recByIndex       :: IntMap (Id Row, Row)
-  , _tableId          :: Maybe (Id Table)
+  , _rowByIndex       :: IntMap (Id Row, Row)
+  , _tableId          :: Id Table
   , _projectId        :: Id ProjectClient
   , _showNewColDialog :: Bool
   , _sKey             :: SessionKey
@@ -50,10 +51,10 @@ tableGrid_ !props = view tableGrid props mempty
 tableGrid :: ReactView TableGridProps
 tableGrid = defineView "tableGrid" $ \props -> do
   let numCols = IntMap.size $ props ^. colByIndex
-      numRecs = IntMap.size $ props ^. recByIndex
+      numRecs = IntMap.size $ props ^. rowByIndex
 
       getRow y =
-        let Just r = IntMap.lookup y $ props ^. recByIndex
+        let Just r = IntMap.lookup y $ props ^. rowByIndex
         in  uncurry Entity r
 
       getColumn x =
@@ -66,11 +67,11 @@ tableGrid = defineView "tableGrid" $ \props -> do
           Nothing -> mempty
           Just (c, col) -> case col ^. columnKind of
             ColumnReport rep ->
-              case  IntMap.lookup y $ props ^. recByIndex of
+              case  IntMap.lookup y $ props ^. rowByIndex of
                 Just (r, _) -> reportCell_ $ ReportCellProps (props ^. sKey) c r rep
                 Nothing     -> mempty
             ColumnData   dat -> do
-              let mRC = do (r, _)  <- IntMap.lookup y $ props ^. recByIndex
+              let mRC = do (r, _)  <- IntMap.lookup y $ props ^. rowByIndex
                            content <- Map.lookup (Project.Coords c r) $ props ^. cells
                            pure (r, content)
               case mRC of
@@ -80,16 +81,16 @@ tableGrid = defineView "tableGrid" $ \props -> do
       renderer (GridRenderArgs x y _)
         | x == 0 && y == 0 = cldiv_ "origin" mempty
         | x == 0 && y == (numRecs + 1) = cldiv_ "record-new" $
-            faButton_ "plus-circle" $ dispatchProject Project.TableAddRow
+            faButton_ "plus-circle" $ dispatchProjectCommand $ CmdRowCreate (props ^. tableId)
         | x == 0 && 0 < y && y <= numRecs = cldiv_ "record" $
             row_ $ getRow (y - 1)
         | y == 0 && x == (numCols + 1) = cldiv_ "column-new" $ do
             faButton_ "plus-circle" $ dispatchProject Project.TableToggleNewColumnDialog
             when (props ^. showNewColDialog) $ cldiv_ "small-menu" $ do
               menuItem_ "columns" "New data column" $
-                dispatchProject Project.TableCreateDataCol
+                dispatchProjectCommand $ CmdDataColCreate (props ^. tableId)
               menuItem_ "file-text" "New report column" $
-                dispatchProject Project.TableCreateReportCol
+                dispatchProjectCommand $ CmdReportColCreate (props ^. tableId)
         | y == 0 && 0 < x && x <= numCols =
             column_ (props ^. projectId) (props ^. sKey) (props ^. tables) (getColumn (x - 1))
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $

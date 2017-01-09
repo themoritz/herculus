@@ -23,6 +23,7 @@ import           Text.Read         (readMaybe)
 
 import           React.Flux
 
+import           Lib.Api.Rest      (Command (CmdCellSet))
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Row
@@ -31,7 +32,7 @@ import           Lib.Types
 
 import qualified LoggedIn
 import qualified Project
-import           Store             (dispatchProject, stateSession, store,
+import           Store             (dispatchProjectCommand, stateSession, store,
                                     _StateLoggedIn)
 import           Views.Combinators
 import           Views.Common
@@ -79,7 +80,7 @@ dataCell = defineControllerView "cell" cellStore $ \(CellState m) DataCellProps{
                           inpType
                           datType
                           val
-                          (dispatchProject . Project.CellSetValue dataCellColId dataCellRowId)
+                          (dispatchProjectCommand . CmdCellSet dataCellColId dataCellRowId)
       in
       case needsEx of
         True -> cldiv_ "compactWrapper" $ do
@@ -92,7 +93,7 @@ dataCell = defineControllerView "cell" cellStore $ \(CellState m) DataCellProps{
                      inpType
                      datType
                      val
-                     (dispatchProject . Project.CellSetValue dataCellColId dataCellRowId)
+                     (dispatchProjectCommand . CmdCellSet dataCellColId dataCellRowId)
         False -> inline
 
 needsExpand :: (DataType, IsDerived) -> Bool
@@ -238,7 +239,7 @@ cellRowRef = defineControllerView "cellRowRef" store $
   \st (mode, inpType, mr, t, cb) -> cldiv_ "rowref" $ do
     let rows = st ^. stateSession . _StateLoggedIn
                    . LoggedIn.stateSubState . LoggedIn._ProjectDetail
-                   . Project.stateCacheRows . at t . non Map.empty
+                   . Project.stateRowCache . at t . non Map.empty
         showPairs = intercalate ", " .
                     map (\(c, v) -> (c ^. columnName) <> ": " <> (pack . show) v) .
                     Map.elems
