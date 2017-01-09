@@ -116,17 +116,19 @@ instance HasProjectState m => MonadState State (DSL m) where
 
 instance MonadStore m => MonadStore (DSL m) where
   apiCall = DSL . apiCall
+  showMessage = DSL . showMessage
+  haltMessage = DSL . haltMessage
 
 run :: (MonadStore m, HasProjectState m)
     => AuthenticateReq Api.SessionProtect -> Action -> m ()
-run token action = runDSL (evalProject token action)
+run token action = runDSL (eval token action)
 
 --------------------------------------------------------------------------------
 
-evalProject :: (MonadStore m, HasProjectState m)
-            => AuthenticateReq Api.SessionProtect
-            -> Action -> DSL m ()
-evalProject token = \case
+eval :: (MonadStore m, HasProjectState m)
+     => AuthenticateReq Api.SessionProtect
+     -> Action -> DSL m ()
+eval token = \case
 
   ApplyDiff cellDiff columnDiff rowDiff tableDiff -> do
     mTableId <- use stateTableId
@@ -177,7 +179,7 @@ evalProject token = \case
         case mNextTableId of
           Nothing -> pure ()
           Just (nextTableId, _) ->
-            evalProject token $ LoadTable nextTableId
+            eval token $ LoadTable nextTableId
 
   SetName name -> do
     projectId <- use stateProjectId

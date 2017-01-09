@@ -19,7 +19,6 @@ import           GHC.Generics              (Generic)
 import           Text.Read                 (readMaybe)
 
 import           React.Flux
-import           React.Flux.Addons.Free
 
 import           Lib.Model
 import           Lib.Model.Auth            (SessionKey)
@@ -28,23 +27,13 @@ import           Lib.Model.Project         (ProjectClient)
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Action                    (Action (..))
 import qualified Project
-import           Store                     (dispatch, store)
+import           Store                     (dispatchProject)
 import           Views.Combinators
 import           Views.Common              (EditBoxProps (..), editBox_)
 import           Views.Foreign
 
 import qualified Views.Column.ConfigDialog as Dialog
-
---
-
--- | column action, concerns the column given by the id of the main store
-mkColumnAction :: Action -> SomeStoreAction
-mkColumnAction = SomeStoreAction store . freeFluxDispatch
-
-dispatchColumnAction :: Action -> [SomeStoreAction]
-dispatchColumnAction a = [mkColumnAction a]
 
 type TableNames        = Map (Id Table) Text
 type SelBranchCallback = DataType -> [SomeStoreAction]
@@ -125,7 +114,7 @@ column = defineView "column" $ \(projectId, sKey, tables, c@(Entity i col)) -> c
       , editBoxClassName   = "columnName"
       , editBoxShow        = id
       , editBoxValidator   = Just
-      , editBoxOnSave      = dispatchColumnAction . ProjectAction . Project.TableRenameColumn i
+      , editBoxOnSave      = dispatchProject . Project.TableRenameColumn i
       }
     columnInfo_ projectId sKey tables c
   columnConfig_ projectId sKey tables c
@@ -223,9 +212,9 @@ reportColConf = defineControllerView "report column config" Dialog.store $
           , Dialog.UnsetTmpReportFormat i
           , Dialog.UnsetTmpReportTemplate i
           ]
-        deleteActions = dispatch $ ProjectAction $ Project.TableDeleteColumn i
+        deleteActions = dispatchProject $ Project.TableDeleteColumn i
         saveActions   =
-          mkColumnAction (ProjectAction $ Project.TableUpdateReportCol i template format lang) :
+          dispatchProject (Project.TableUpdateReportCol i template format lang) <>
             map Dialog.mkAction
               [ Dialog.SetVisibility i False
               , Dialog.UnsetTmpReportLang i
@@ -346,9 +335,9 @@ dataColConf = defineControllerView "data column configuration" Dialog.store $
             ]
           -- TODO: figure out what changed before initiating ajax
           -- in the Nothing case: nothing has changed
-          deleteActions = dispatch $ ProjectAction $ Project.TableDeleteColumn i
+          deleteActions = dispatchProject $ Project.TableDeleteColumn i
           saveActions =
-            mkColumnAction (ProjectAction $ Project.TableUpdateDataCol i dt isDerived formula) :
+            dispatchProject (Project.TableUpdateDataCol i dt isDerived formula) <>
               map Dialog.mkAction
                 [ Dialog.SetVisibility i False
                 , Dialog.UnsetTmpDataType i

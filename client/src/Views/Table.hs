@@ -22,9 +22,8 @@ import           Lib.Model.Row      (Row)
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Action             (Action (ProjectAction))
 import qualified Project
-import           Store              (dispatch)
+import           Store              (dispatchProject)
 import           Views.Cell
 import           Views.Column
 import           Views.Combinators
@@ -81,16 +80,16 @@ tableGrid = defineView "tableGrid" $ \props -> do
       renderer (GridRenderArgs x y _)
         | x == 0 && y == 0 = cldiv_ "origin" mempty
         | x == 0 && y == (numRecs + 1) = cldiv_ "record-new" $
-            faButton_ "plus-circle" $ dispatch $ ProjectAction Project.TableAddRow
+            faButton_ "plus-circle" $ dispatchProject Project.TableAddRow
         | x == 0 && 0 < y && y <= numRecs = cldiv_ "record" $
             row_ $ getRow (y - 1)
         | y == 0 && x == (numCols + 1) = cldiv_ "column-new" $ do
-            faButton_ "plus-circle" $ dispatch $ ProjectAction Project.TableToggleNewColumnDialog
+            faButton_ "plus-circle" $ dispatchProject Project.TableToggleNewColumnDialog
             when (props ^. showNewColDialog) $ cldiv_ "small-menu" $ do
               menuItem_ "columns" "New data column" $
-                dispatch $ ProjectAction Project.TableCreateDataCol
+                dispatchProject Project.TableCreateDataCol
               menuItem_ "file-text" "New report column" $
-                dispatch $ ProjectAction Project.TableCreateReportCol
+                dispatchProject Project.TableCreateReportCol
         | y == 0 && 0 < x && x <= numCols =
             column_ (props ^. projectId) (props ^. sKey) (props ^. tables) (getColumn (x - 1))
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $

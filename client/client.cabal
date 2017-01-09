@@ -12,9 +12,9 @@ cabal-version:       >=1.10
 
 executable client
   main-is:             Main.hs
-  other-modules:       Action
-                     , Action.Message
+  other-modules:       Action.Message
                      , Config
+                     , LoggedIn
                      , Project
                      , React.Flux.Addons.Free
                      , Store

@@ -15,10 +15,11 @@ import           React.Flux      (ReactElementM, ReactView, button_, classNames,
                                   table_, target, tbody_, td_, textarea_, tr_,
                                   view, ($=), (&=))
 
-import           Action          (Action (ChangePassword, Login, Signup, ToLoginForm, ToSignupForm))
 import           Lib.Model.Auth  (ChangePwdData (..), LoginData (..),
                                   SignupData (..))
-import           Store           (dispatch)
+import qualified LoggedIn
+import           Store           (Action (Login, Signup, ToLoginForm, ToSignupForm),
+                                  dispatch, dispatchLoggedIn)
 import           Views.Common    (keyENTER)
 
 
@@ -292,7 +293,7 @@ changePassword =
         pwdConfirmValid = cpsPassword == cpsPasswordConfirm
         formValid = pwdValid && pwdConfirmValid
         ajaxSubmit st@ChangePasswordState{..} = if formValid
-          then (dispatch $ ChangePassword $ ChangePwdData cpsOldPassword cpsPassword,
+          then (dispatchLoggedIn $ LoggedIn.ChangePassword $ ChangePwdData cpsOldPassword cpsPassword,
                 Just $ st { cpsShowErrors = True})
           else ([], Just $ st { cpsShowErrors = True})
         keyDownHandler _ evt st | keyENTER evt = ajaxSubmit st

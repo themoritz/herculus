@@ -9,10 +9,10 @@ import           React.Flux          (ReactElementM, ReactView, classNames,
                                       onClick, p_, span_, view, viewWithSKey)
 import           React.Flux.Internal (toJSString)
 
-import           Action              (Action (ProjectsCreate, ProjectsLoadProject))
 import           Lib.Model.Project   (ProjectClient, projectClientName)
 import           Lib.Types           (Id)
-import           Store               (dispatch)
+import           LoggedIn            (Action (CreateProject, ToProject))
+import           Store               (dispatchLoggedIn)
 import           Views.Combinators   (inputNew_)
 
 projectsOverview_ :: Map (Id ProjectClient) ProjectClient -> ReactElementM eh ()
@@ -27,7 +27,7 @@ projectsOverview = defineView "projects" $ \ps -> cldiv_ "projects" $ do
                  ]
     ] $ p_ $ do
       "Create new ..."
-      inputNew_ "Project name" (dispatch . ProjectsCreate)
+      inputNew_ "Project name" (dispatchLoggedIn . CreateProject)
   for_ (Map.toList ps) $ uncurry projectTile_
 
 projectTile_ :: Id ProjectClient -> ProjectClient -> ReactElementM eh ()
@@ -37,5 +37,5 @@ projectTile :: ReactView (Id ProjectClient, ProjectClient)
 projectTile = defineView "project" $
     \(projectId, project) -> div_
       [ classNames [ ("tile", True) ]
-      , onClick $ \_ _ -> dispatch $ ProjectsLoadProject projectId
+      , onClick $ \_ _ -> dispatchLoggedIn $ ToProject projectId
       ] $ span_ $ elemText $ project ^. projectClientName

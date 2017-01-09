@@ -23,14 +23,12 @@ import           Lib.Model.Project
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Action                (Action (..))
+import qualified LoggedIn
 import qualified Project
-import           Store                 (LoggedInState (..),
-                                        LoggedInSubState (..),
+import           Store                 (Action (MessageAction),
                                         LoggedOutState (..), SessionState (..),
-                                        State, dispatch, liStSessionKey,
-                                        liStSubState, liStUserInfo,
-                                        liStUserSettingsShow, stateMessage,
+                                        State, dispatch, dispatchLoggedIn,
+                                        dispatchProject, stateMessage,
                                         stateSession, store)
 import           Views.Auth            (changePassword_, login_, signup_)
 import           Views.Combinators     (clspan_, inputNew_, menuItem_)
@@ -51,13 +49,13 @@ app = defineControllerView "app" store $ \st () ->
         StateLoggedOut LoggedOutSignupForm -> signup_
         StateLoggedOut LoggedOutUninitialized -> cldiv_ "form" "Failed to load. Please reload."
         StateLoggedIn liSt ->
-          case liSt ^. liStSubState of
-            LiStProjectOverview ps -> projectsOverview_ ps
-            LiStProjectDetail pdSt ->
+          case liSt ^. LoggedIn.stateSubState of
+            LoggedIn.ProjectOverview ps -> projectsOverview_ ps
+            LoggedIn.ProjectDetail pdSt ->
               if null $ pdSt ^. Project.stateTables
                 then mempty
-                else projectDetailView_ pdSt $ liSt ^. liStSessionKey
-            LiStChangePassword valid -> changePassword_ valid
+                else projectDetailView_ pdSt $ liSt ^. LoggedIn.stateSessionKey
+            LoggedIn.ChangePasswordForm valid -> changePassword_ valid
       appFooter_ st
   where
     projectDetailView_ pdSt sKey =
@@ -92,42 +90,42 @@ appHeader = defineView "header" $ \st ->
         cldiv_ "text" "Herculus"
       case st ^. stateSession of
         StateLoggedIn liSt ->
-          case liSt ^. liStSubState of
-            LiStProjectDetail pdSt -> do
+          case liSt ^. LoggedIn.stateSubState of
+            LoggedIn.ProjectDetail pdSt -> do
               tables_ (pdSt ^. Project.stateTables) (pdSt ^. Project.stateTableId)
               projectNameComp_ (pdSt ^. Project.stateProjectId) $ pdSt ^. Project.stateProject
               cldiv_ "navigation" $ do
                 btnUserSettings_ liSt
-                btnProjectOverView_ liSt
-            LiStChangePassword _ ->
+                btnProjectOverView_
+            LoggedIn.ChangePasswordForm _ ->
               cldiv_ "navigation" $ do
                 btnUserSettings_ liSt
-                btnProjectOverView_ liSt
+                btnProjectOverView_
             _  ->
               cldiv_ "navigation" $ btnUserSettings_ liSt
         StateLoggedOut _  -> pure ()
   where
-    btnUserSettings_ :: LoggedInState -> ReactElementM ViewEventHandler ()
+    btnUserSettings_ :: LoggedIn.State -> ReactElementM ViewEventHandler ()
     btnUserSettings_ liSt = cldiv_ "user-settings" $ do
         button_
-          [ onClick $ \_ _ -> dispatch ToggleUserSettingsDialog
+          [ onClick $ \_ _ -> dispatchLoggedIn LoggedIn.ToggleUserSettingsDialog
           ] $ faIcon_ "cog"
-        when (liSt ^. liStUserSettingsShow) $ cldiv_ "small-menu" $ do
+        when (liSt ^. LoggedIn.stateUserSettingsShow) $ cldiv_ "small-menu" $ do
           menuItem_ "power-off"
                     (elemText $ "Log out (" <> shortName <> ")")
-                    (dispatch Logout)
-          menuItem_ "pencil" "Change password" $ dispatch ToChangePasswordForm
+                    (dispatchLoggedIn LoggedIn.Logout)
+          menuItem_ "pencil" "Change password" $ dispatchLoggedIn LoggedIn.ToChangePasswordForm
       where
         shortName =
           if Text.length userName > 12
           then Text.take 9 userName <> "..."
           else userName
-        userName = liSt ^. liStUserInfo . uiUserName
+        userName = liSt ^. LoggedIn.stateUserInfo . uiUserName
 
-    btnProjectOverView_ :: LoggedInState -> ReactElementM ViewEventHandler ()
-    btnProjectOverView_ liSt = button_
+    btnProjectOverView_ :: ReactElementM ViewEventHandler ()
+    btnProjectOverView_ = button_
       [ onClick $ \_ _ ->
-          dispatch $ SetProjectOverview (liSt ^. liStSessionKey)
+          dispatchLoggedIn $ LoggedIn.ToProjectOverview
       ] $ do
         faIcon_ "th-large"
         " Projects"
@@ -179,12 +177,12 @@ projectNameComp = defineStatefulView "project name" initalProjectName $
                          ]
             , onClick $ \ev _ _ ->
               (stopPropagation ev :
-                 dispatch (ProjectDelete projectId), Nothing)
+                 dispatchLoggedIn (LoggedIn.DeleteProject projectId), Nothing)
             ] $ faIcon_ "times"
   where
     -- saveHandler :: TileState -> ([SomeStoreAction], Maybe TileState)
     saveHandler st@ProjectNameState{..} =
-      (dispatch $ ProjectAction $ Project.SetName pnsName, Just st { pnsEditable = False })
+      (dispatchProject $ Project.SetName pnsName, Just st { pnsEditable = False })
 
     inputKeyDownHandler _ evt st@ProjectNameState{..}
       | keyENTER evt && not (Text.null pnsName) = saveHandler st
@@ -234,7 +232,7 @@ tables = defineView "tables" $ \(ts, mTbl) ->
   cldiv_ "tables" $ do
     ul_ $ for_ (Map.toList ts) $
       \(tableId, table') -> table_' tableId table' (Just tableId == mTbl)
-    inputNew_ "Add table..." (dispatch . ProjectAction . Project.CreateTable)
+    inputNew_ "Add table..." (dispatchProject . Project.CreateTable)
 
 --
 
@@ -253,7 +251,7 @@ initialTableViewState = TableViewState False "" False
 
 table :: ReactView (Id Table, Table, Bool)
 table = defineStatefulView "table" initialTableViewState $ \state (tableId, table', selected) ->
-  let saveHandler st = (dispatch $ ProjectAction $ Project.TableSetName tableId (tName st), Just st { tEditable = False })
+  let saveHandler st = (dispatchProject $ Project.TableSetName tableId (tName st), Just st { tEditable = False })
       inputKeyDownHandler _ evt st
         | keyENTER evt && not (Text.null $ tName st) = saveHandler st
         | keyESC evt = ([] , Just st { tEditable = False })
@@ -262,7 +260,7 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
              [ ("active", selected)
              , ("link", True)
              ]
-         , onClick $ \_ _ _ -> (dispatch $ ProjectAction $ Project.LoadTable tableId, Nothing)
+         , onClick $ \_ _ _ -> (dispatchProject $ Project.LoadTable tableId, Nothing)
          ] $
      if tEditable state
      then div_ $ input_
@@ -282,5 +280,5 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
 
        button_
          [ "className" $= "pure on-dark"
-         , onClick $ \ev _ _ -> (stopPropagation ev : dispatch (ProjectAction $ Project.TableDelete tableId), Nothing)
+         , onClick $ \ev _ _ -> (stopPropagation ev : dispatchProject (Project.TableDelete tableId), Nothing)
          ] $ faIcon_ "times"

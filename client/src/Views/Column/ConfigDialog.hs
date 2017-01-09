@@ -17,7 +17,6 @@ import           React.Flux                (ReactStore, SomeStoreAction (..),
                                             StoreData (..), mkStore)
 import           React.Flux.Addons.Servant (HandleResponse)
 
-import qualified Action                    as MainAction
 import           Lib.Model.Column          (Column, DataType, IsDerived,
                                             ReportFormat, ReportLanguage)
 import           Lib.Types                 (Id)
@@ -70,10 +69,10 @@ dispatch a = [mkAction a]
 
 mkCallback :: (a -> [DialogAction]) -> HandleResponse a
 mkCallback cbSuccess = pure . \case
-  Left (401, e) -> MainStore.dispatch $ MainAction.MessageAction $ Message.SetWarning $
+  Left (401, e) -> MainStore.dispatch $ MainStore.MessageAction $ Message.SetWarning $
                     "Unauthorized. Are you logged in?" <>
                     " (401) " <> Text.pack e
-  Left (n, e)   -> MainStore.dispatch $ MainAction.MessageAction $ Message.SetError $
+  Left (n, e)   -> MainStore.dispatch $ MainStore.MessageAction $ Message.SetError $
                     " (" <> (Text.pack . show) n <> ") " <> Text.pack e
   Right x       -> mkAction <$> cbSuccess x
 
