@@ -143,7 +143,8 @@ instance HasProjectState m => MonadState State (DSL m) where
   state = DSL . projectState
 
 instance MonadStore m => MonadStore (DSL m) where
-  apiCall = DSL . apiCall
+  apiCall     = DSL . apiCall
+  sendWS      = DSL . sendWS
   showMessage = DSL . showMessage
   haltMessage = DSL . haltMessage
 

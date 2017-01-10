@@ -16,6 +16,7 @@ module Monads
   , MonadHexl (..)
   , HexlEnv (..)
   , HexlT
+  , atomicallyConnectionMgr
   , runHexl
   ) where
 
@@ -25,15 +26,19 @@ import           Control.Lens.Prism          (_Left)
 import           Control.Monad.Except
 import           Control.Monad.Logger
 import           Control.Monad.Reader
+import           Control.Monad.State
 import           Control.Monad.Trans.Control
 
 import           Data.Aeson
 import qualified Data.ByteString.Char8       as B8
 import qualified Data.ByteString.Lazy        as BL
+import           Data.Foldable               (for_)
+import           Data.Maybe                  (catMaybes)
 import           Data.Monoid
 import           Data.Proxy
 import           Data.Text                   (Text, pack)
 import           Data.Time.Clock             as Clock (getCurrentTime)
+import           Data.Traversable            (for)
 
 import           Database.MongoDB            ((=:))
 import qualified Database.MongoDB            as Mongo
@@ -85,7 +90,8 @@ class (Monad m, MonadLogger m, MonadError AppError m) => MonadDB m where
 -- Hexl layer: Business logic
 
 class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m where
-  sendWS :: WsDownMessage -> m ()
+  sendWS :: [ConnectionId] -> WsDownMessage -> m ()
+  withConnectionMgr :: State ConnectionManager a -> m a
 
   -- Pandoc stuff
   getDefaultTemplate :: String -> m (Either String String)
@@ -216,17 +222,24 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
 --
 
 instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
-  sendWS msg = do
-    connectionsRef <- asks envConnections
-    connections <- allConnections <$> liftIO (atomically $ readTVar connectionsRef)
-    forM_ connections $ \connection ->
-      liftIO $ sendTextData connection $ encode msg
+  sendWS connectionIds msg = do
+    mgr <- asks envConnections
+    liftIO $ do
+      connections <- fmap catMaybes $ atomicallyConnectionMgr mgr $
+        for connectionIds getConnection
+      for_ connections $ \connection ->
+        sendTextData connection $ encode msg
+
+  withConnectionMgr action = do
+    ref <- asks envConnections
+    liftIO $ atomicallyConnectionMgr ref action
 
   --
 
   getDefaultTemplate writer =
     over _Left show <$>
       liftIO (Pandoc.getDefaultTemplate Nothing writer)
+
 
   runLatex options source =
     liftIO $ Latex.makePDF options "pdflatex" source
@@ -235,6 +248,15 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
     liftIO $ Pandoc.makePDF "pdflatex" Pandoc.writeLaTeX options pandoc
 
 --
+
+atomicallyConnectionMgr :: TVar ConnectionManager
+                        -> State ConnectionManager a
+                        -> IO a
+atomicallyConnectionMgr ref action = atomically $ do
+  manager <- readTVar ref
+  let (a, manager') = runState action manager
+  writeTVar ref manager'
+  pure a
 
 runHexl :: HexlEnv -> HexlT m a -> m (Either AppError a)
 runHexl env action = runReaderT (runExceptT (unHexlT action)) env

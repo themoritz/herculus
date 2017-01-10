@@ -17,15 +17,21 @@ import           Lib.Types            (Id, toObjectId)
 import           Monads               (AppError (ErrForbidden), MonadHexl,
                                        getById', getOneByQuery)
 
-permissionProject :: MonadHexl m => Id User -> Id Project -> m ()
-permissionProject userId projectId = do
+permissionProject' :: MonadHexl m => Id User -> Id Project -> m Bool
+permissionProject' userId projectId = do
   let query =
         [ "owner" =: toObjectId userId
         , "_id"   =: toObjectId projectId
         ]
   getOneByQuery query >>= \case
-    Left _ -> throwError $ ErrForbidden "You don't have access to this project."
-    Right (_ :: Entity Project) -> pure ()
+    Left _ -> pure False
+    Right (_ :: Entity Project) -> pure True
+
+permissionProject :: MonadHexl m => Id User -> Id Project -> m ()
+permissionProject userId projectId =
+  permissionProject' userId projectId >>= \case
+    False -> throwError $ ErrForbidden "You don't have access to this project."
+    True -> pure ()
 
 permissionTable :: MonadHexl m => Id User -> Id Table -> m ()
 permissionTable userId tableId = do

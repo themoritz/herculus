@@ -115,6 +115,8 @@ instance MonadStore DSL where
       halt msg
     Right x -> pure x
 
+  sendWS = eval . GlobalSendWebSocket
+
   showMessage a = stateMessage .= Message.runAction a
 
   haltMessage msg = do
@@ -148,10 +150,7 @@ eval = \case
             apiCall (request api (Proxy :: Proxy Api.AuthGetUserInfo)
                                  sessionKey
                     ) >>= \case
-              GetUserInfoSuccess userInfo -> do
-                stateSession .= StateLoggedIn
-                  (LoggedIn.mkState sessionKey userInfo)
-                eval $ LoggedInAction LoggedIn.ToProjectOverview
+              GetUserInfoSuccess userInfo -> performLogin userInfo
               GetUserInfoFailed _ -> do
                 liftIO clearSession
                 stateSession .= StateLoggedOut LoggedOutLoginForm
@@ -163,9 +162,24 @@ eval = \case
       StateLoggedOut _ -> pure ()
 
   ApplyWebSocketMsg msg -> case msg of
-    WsDownProjectDiff cellDiff columnDiff rowDiff tableDiff ->
-      eval $ LoggedInAction $ LoggedIn.ProjectAction $
-        Project.ApplyDiff cellDiff columnDiff rowDiff tableDiff
+
+    WsDownAuthResponse response -> case response of
+      GetUserInfoFailed err -> showMessage $ Message.SetWarning $
+        "WebSocket authentication failed: " <> err
+      _ -> pure ()
+
+    WsDownSubscribeError err -> showMessage $ Message.SetWarning $
+      "Subscribing to project failed: " <> err
+
+    WsDownProjectDiff projectId cellDiff columnDiff rowDiff tableDiff -> do
+      st <- use stateSession
+      if st ^? _StateLoggedIn
+             . LoggedIn.stateSubState . LoggedIn._ProjectDetail
+             . Project.stateProjectId == Just projectId
+        then eval $ LoggedInAction $ LoggedIn.ProjectAction $
+               Project.ApplyDiff cellDiff columnDiff rowDiff tableDiff
+        else showMessage $ Message.SetWarning
+               "Received projectDiff while not viewing that project."
 
   GlobalSendWebSocket msg -> do
     mWS <- use stateWebSocket
@@ -219,4 +233,5 @@ performLogin :: UserInfo -> DSL ()
 performLogin userInfo@(UserInfo _ _ sKey) = do
   liftIO $ persistSession sKey
   stateSession .= StateLoggedIn (LoggedIn.mkState sKey userInfo)
+  sendWS $ WsUpAuthenticate sKey
   eval $ LoggedInAction LoggedIn.ToProjectOverview

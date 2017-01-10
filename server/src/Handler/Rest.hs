@@ -118,7 +118,7 @@ handleAuthSignup (SignupData uName pwd intention) =
         LoginSuccess userInfo -> pure $ SignupSuccess userInfo
         LoginFailed  msg      -> throwError $ ErrBug $ "signed up, but login failed: " <> msg
 
-handleAuthGetUserInfo :: (MonadIO m, MonadHexl m) => SessionKey -> m GetUserInfoResponse
+handleAuthGetUserInfo :: MonadHexl m => SessionKey -> m GetUserInfoResponse
 handleAuthGetUserInfo sKey = do
   eUser <- runExceptT $ do
     Entity _ session <- ExceptT $ getOneByQuery [ "sessionKey" =: sKey ]

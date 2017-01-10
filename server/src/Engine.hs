@@ -27,6 +27,7 @@ import           Lib.Model.Row
 import           Lib.Model.Table
 import           Lib.Types
 
+import           ConnectionManager            (getConnectionsToProject)
 import           Engine.Compile
 import           Engine.Monad
 import           Engine.Propagate
@@ -51,10 +52,13 @@ runCommand projectId cmd = do
   commit _storeTables
   update projectId (projectDependencyGraph .~ (state ^. engineGraph))
   -- Send changes to clients
-  sendWS $ WsDownProjectDiff (filterChanges _storeCells)
-                             (filterChanges _storeColumns)
-                             (filterChanges _storeRows)
-                             (filterChanges _storeTables)
+  connections <- withConnectionMgr $ getConnectionsToProject projectId
+  sendWS connections $ WsDownProjectDiff
+    (toClientId projectId)
+    (filterChanges _storeCells)
+    (filterChanges _storeColumns)
+    (filterChanges _storeRows)
+    (filterChanges _storeTables)
 
 filterChanges :: StoreMap a -> [(Id a, ChangeOp, a)]
 filterChanges = mapMaybe f . Map.toList

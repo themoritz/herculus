@@ -16,6 +16,7 @@ import           React.Flux.Addons.Servant.Auth (AuthClientData,
                                                  mkAuthenticateReq)
 
 import           Lib.Api.Rest                   as Api
+import           Lib.Api.WebSocket              as Api
 import           Lib.Model.Auth                 (SessionKey)
 import           Lib.Util.Base64                (unBase64Url)
 
@@ -33,6 +34,7 @@ session key = mkAuthenticateReq key mkAuthHeader
 
 class Monad m => MonadStore m where
   apiCall :: NFData a => (HandleResponse a -> IO ()) -> m a
+  sendWS :: Api.WsUpMessage -> m ()
   showMessage :: Message.Action -> m ()
   haltMessage :: Text -> m a
 

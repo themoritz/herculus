@@ -24,6 +24,7 @@ import           React.Flux.Addons.Servant      (request)
 import           React.Flux.Addons.Servant.Auth (AuthenticateReq)
 
 import           Lib.Api.Rest                   as Api
+import           Lib.Api.WebSocket              as Api
 import           Lib.Model
 import           Lib.Model.Auth                 (ChangePwdData (..),
                                                  ChangePwdResponse (..),
@@ -109,7 +110,8 @@ instance MonadTrans DSL where
   lift = DSL . lift
 
 instance MonadStore m => MonadStore (DSL m) where
-  apiCall = lift . apiCall
+  apiCall     = lift . apiCall
+  sendWS      = lift . sendWS
   showMessage = lift . showMessage
   haltMessage = lift . haltMessage
 
@@ -142,14 +144,16 @@ eval token = \case
   Logout -> do
     apiCall $ request api (Proxy :: Proxy Api.AuthLogout) token
     showMessage $ Message.SetSuccess "Successfully logged out."
+    sendWS Api.WsUpLogout
     go <- asks toLoginForm
     lift go
 
   ToggleUserSettingsDialog ->
     stateUserSettingsShow %= not
 
-  ToChangePasswordForm ->
+  ToChangePasswordForm -> do
     stateSubState .= ChangePasswordForm True
+    sendWS Api.WsUpUnsubscribe
 
   ChangePassword changePwdData ->
     apiCall (request api (Proxy :: Proxy Api.AuthChangePassword)
@@ -166,17 +170,20 @@ eval token = \case
 
   ToProjectOverview -> do
     ps <- apiCall $ request api (Proxy :: Proxy Api.ProjectList) token
+    sendWS Api.WsUpUnsubscribe
     stateSubState .= ProjectOverview (Map.fromList $ map entityToTuple ps)
 
   CreateProject name -> do
     Entity i p <- apiCall $ request api (Proxy :: Proxy Api.ProjectCreate)
                                       token name
+    sendWS $ Api.WsUpSubscribe i
     stateSubState .= ProjectDetail
       (Project.mkState i p [] [] [] [])
 
   ToProject i -> do
     (p, tables, columns, rows, cells) <-
       apiCall $ request api (Proxy :: Proxy Api.ProjectLoad) token i
+    sendWS $ Api.WsUpSubscribe i
     stateSubState .= ProjectDetail
       (Project.mkState i p tables columns rows cells)
 

@@ -9,6 +9,7 @@ module Main where
 import           Control.Concurrent.STM
 import           Control.Exception              (finally)
 import           Control.Monad.Except
+
 import           Data.Aeson
 import           Data.Monoid                    ((<>))
 import           Data.Proxy
@@ -56,20 +57,17 @@ wsApp env pending =
     handleRequest = do
       connection <- acceptRequest pending
       let connections = envConnections env
-      connectionId <- atomically $ do
-        mgr <- readTVar connections
-        let (i, mgr') = addConnection connection mgr
-        writeTVar connections mgr'
-        pure i
+      connectionId <- atomicallyConnectionMgr connections $
+        addConnection connection
       -- To keep connection alive in some browsers
       forkPingThread connection 30
-      let disconnect = atomically $ modifyTVar connections $
+      let disconnect = atomicallyConnectionMgr connections $
             removeConnection connectionId
       flip finally disconnect $ forever $
-            eitherDecode <$> receiveData connection >>= \case
-              Left msg -> putStrLn msg
-              Right wsUp -> runHexl env (handleClientMessage wsUp)
-                >>= either print pure
+        eitherDecode <$> receiveData connection >>= \case
+          Left msg -> putStrLn msg
+          Right wsUp -> runHexl env (handleClientMessage connectionId wsUp)
+            >>= either print pure
 
 -- middleware
 handlerContext :: HexlEnv -> Context (AuthMiddleware ': '[])
@@ -91,7 +89,7 @@ main = do
     Mongo.ensureIndex $ Mongo.index collCell   [ "columnId" =: asc ]
     Mongo.ensureIndex $ Mongo.index collCell   [ "rowId" =: asc ]
   --
-  connections <- atomically $ newTVar newConnectionManager
+  connections <- atomically $ newTVar mkConnectionManager
   let env = HexlEnv pipe optMongoCollection connections
       webSocketApp = wsApp env
       restApp = serveWithContext routes (handlerContext env) $ rest env optAssetDir

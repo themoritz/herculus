@@ -78,7 +78,7 @@ data SignupResponse
 data GetUserInfoResponse
   = GetUserInfoSuccess UserInfo
   | GetUserInfoFailed Text
-  deriving (Generic, FromJSON, ToJSON, NFData)
+  deriving (Generic, FromJSON, ToJSON, NFData, Show)
 
 mkPwHash :: MonadIO m => Text -> m PwHash
 mkPwHash txt = liftIO $ toBase64Unsafe <$> makePassword (Text.encodeUtf8 txt) 17
