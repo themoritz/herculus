@@ -9,6 +9,7 @@ module Engine.Monad where
 
 import           Control.Lens                 hiding (op)
 import           Control.Monad.Except
+import           Control.Monad.Reader
 import           Control.Monad.State
 
 import           Data.Foldable                (find, foldl', for_)
@@ -28,6 +29,7 @@ import           Lib.Model.Class
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
 import           Lib.Model.Dependencies.Types
+import           Lib.Model.Project            (Project)
 import           Lib.Model.Row
 import           Lib.Model.Table
 import           Lib.Types
@@ -88,6 +90,8 @@ newEngineState graph =
 --------------------------------------------------------------------------------
 
 class MonadError AppError m => MonadEngine m where
+  askProjectId :: m (Id Project)
+
   -- Operations on dependency graph
 
   graphGets   :: (DependencyGraph -> a) -> m a
@@ -147,26 +151,30 @@ class MonadError AppError m => MonadEngine m where
 
 -- | MonadHexl interpreter of MonadEngine
 newtype EngineT m a = EngineT
-  { unEngineT :: StateT EngineState m a
+  { unEngineT :: ReaderT (Id Project) (StateT EngineState m) a
   } deriving ( Functor
              , Applicative
              , Monad
              , MonadState EngineState
+             , MonadReader (Id Project)
              )
 
-runEngineT :: DependencyGraph -> EngineT m a -> m (a, EngineState)
-runEngineT graph action = runStateT (unEngineT action) (newEngineState graph)
+runEngineT :: Id Project -> DependencyGraph -> EngineT m a -> m (a, EngineState)
+runEngineT projectId graph action =
+  runStateT (runReaderT (unEngineT action) projectId) (newEngineState graph)
 
 --------------------------------------------------------------------------------
 
 instance MonadTrans EngineT where
-  lift = EngineT . lift
+  lift = EngineT . lift . lift
 
 instance MonadError AppError m => MonadError AppError (EngineT m) where
   throwError = lift . throwError
   catchError a h = EngineT $ unEngineT a `catchError` (unEngineT . h)
 
 instance MonadHexl m => MonadEngine (EngineT m) where
+
+  askProjectId = ask
 
   graphGets f = f <$> use engineGraph
 
@@ -324,9 +332,12 @@ instance MonadHexl m => MonadEngine (EngineT m) where
           CellError _ -> pure Nothing
           CellValue v -> pure $ Just v
 
-  getTableByName name = storeGetByQuery storeTables
-    [ "name" =: name ]
-    (\table -> table ^. tableName == unRef name)
+  getTableByName name = do
+    i <- askProjectId
+    storeGetByQuery storeTables
+      [ "name" =: name, "projectId" =: toObjectId i ]
+      (\table -> table ^. tableName == unRef name
+              && table ^. tableProjectId == i)
 
   getColumnOfTableByName tableId name = storeGetByQuery storeColumns
     [ "name" =: name

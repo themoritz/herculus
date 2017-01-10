@@ -310,15 +310,17 @@ getPandocReader lang format = case lang of
 evalReport :: MonadHexl m => Id Column -> Id Row -> m (ReportCol, Text)
 evalReport columnId rowId = do
   col <- getById' columnId
+  projectId <- (^. tableProjectId) <$> getById' (col ^. columnTableId)
   withReportCol col $ \repCol -> case repCol ^. reportColCompiledTemplate of
-    CompileResultOk ttpl -> fmap fst $ runEngineT emptyDependencyGraph $ do
-      let env = EvalEnv
-                  { envGetCellValue = flip getCellValue rowId
-                  , envGetColumnValues = getColumnValues
-                  , envGetTableRows = fmap (map entityId) . getTableRows
-                  , envGetRowField = getRowField
-                  }
-      runEvalTemplate env ttpl >>= \case
-        Left e -> pure (repCol, e)
-        Right res -> pure (repCol, res)
+    CompileResultOk ttpl ->
+      fmap fst $ runEngineT projectId emptyDependencyGraph $ do
+        let env = EvalEnv
+                    { envGetCellValue = flip getCellValue rowId
+                    , envGetColumnValues = getColumnValues
+                    , envGetTableRows = fmap (map entityId) . getTableRows
+                    , envGetRowField = getRowField
+                    }
+        runEvalTemplate env ttpl >>= \case
+          Left e -> pure (repCol, e)
+          Right res -> pure (repCol, res)
     _ -> throwError $ ErrBug "Getting report for non compiled template."

@@ -39,8 +39,8 @@ runCommand :: MonadHexl m => Id Project -> Command -> m ()
 runCommand projectId cmd = do
   graph <- _projectDependencyGraph <$> getById' projectId
   -- Run command in engine, compile, and propagate
-  (_ , state) <- runEngineT graph $ do
-    executeCommand projectId cmd
+  (_ , state) <- runEngineT projectId graph $ do
+    executeCommand cmd
     getCompileTargets >>= mapM_ compileColumn
     propagate
   -- Commit changes
@@ -76,13 +76,19 @@ commit m = do
   mapM_ delete $ mapMaybe filterDeletes changes
 
 -- | Core of the engine logic
-executeCommand :: MonadEngine m => Id Project -> Command -> m ()
-executeCommand projectId = \case
+executeCommand :: MonadEngine m => Command -> m ()
+executeCommand = \case
 
-  CmdTableCreate name ->
-    void $ createTable $ Table projectId name
+  CmdTableCreate name -> do
+    i <- askProjectId
+    getTableByName (Ref name) >>= \case
+      Just _ -> throwError $ ErrUser "A table with that name already exists."
+      Nothing -> void $ createTable $ Table i name
 
   CmdTableSetName tableId name -> do
+    getTableByName (Ref name) >>= \case
+      Just _ -> throwError $ ErrUser "A table with that name already exists."
+      Nothing -> pure ()
     modifyTable tableId $ tableName .~ name
     -- Recompile every column that mentions this table in a formula
     dependantCols <- graphGets $ getTableDependantsOnly tableId $ \case
@@ -94,7 +100,7 @@ executeCommand projectId = \case
   CmdTableDelete tableId -> do
     deleteTable tableId
     columns <- getTableColumns tableId
-    mapM_ (executeCommand projectId . CmdColumnDelete . entityId) columns
+    mapM_ (executeCommand . CmdColumnDelete . entityId) columns
     graphModify $ purgeTable tableId
     dependantCols <- graphGets $ getTableDependantsOnly tableId $ \case
       TblDepColumnRef -> False
@@ -159,8 +165,11 @@ executeCommand projectId = \case
     scheduleCompileColumn columnId
 
   CmdColumnSetName columnId name -> do
-    modifyColumn columnId $ columnName .~ name
     column <- getColumn columnId
+    getColumnOfTableByName (column ^. columnTableId) (Ref name) >>= \case
+      Just _ -> throwError $ ErrUser "A column with that name already exists."
+      Nothing -> pure ()
+    modifyColumn columnId $ columnName .~ name
     scheduleCompileColumnDependants (columnId, column ^. columnTableId)
 
   CmdColumnDelete columnId -> do
