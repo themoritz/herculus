@@ -206,32 +206,41 @@ eval token = \case
       case op of
         Create -> do
           tablesLens .= Just row
-          rowCacheLens .= Just row
-          -- TODO:
-          -- columns <- use (stateTables . at tablesId . _Just . descColumns)
-          -- for columns $ \(Entity columnId column) ->
-          --   use (stateCells . at (Coords columnId rowId)) >>= \case
-          --     Nothing -> pure ()
-          --     Just content ->
-          --       rowCacheLens . non Map.empty . at columnId .= Just (column, content)
+          columns <- use (stateTables . at tableId . _Just . descColumns)
+          for_ (Map.toList columns) $ \(columnId, column) ->
+            use (stateCells . at (Coords columnId rowId)) >>= \case
+              Nothing -> pure ()
+              Just content ->
+                rowCacheLens . non Map.empty . at columnId .=
+                  Just (column, content)
         Update -> tablesLens .= Just row
         Delete -> do
           tablesLens .= Nothing
           rowCacheLens .= Nothing
-      pure ()
     -- Columns
     for_ columnDiff $ \(columnId, op, column) -> do
       let tableId = column ^. columnTableId
           tablesLens = stateTables . at tableId . _Just
                                    . descColumns . at columnId
+          rowCacheLens r = stateRowCache . at tableId . non Map.empty
+                                         . at r . non Map.empty . at columnId
+      rows <- use (stateTables . at tableId . _Just . descRows)
       case op of
         Create -> do
           tablesLens .= Just column
+          for_ (Map.keys rows) $ \rowId ->
+            use (stateCells . at (Coords columnId rowId)) >>= \case
+              Nothing -> pure ()
+              Just content ->
+                rowCacheLens rowId .= Just (column, content)
         Update -> do
           tablesLens .= Just column
+          for_ (Map.keys rows) $ \rowId ->
+            rowCacheLens rowId . _Just . _1 .= column
         Delete -> do
           tablesLens .= Nothing
-        -- TODO: update row cache in each case
+          for_ (Map.keys rows) $ \rowId ->
+            rowCacheLens rowId .= Nothing
 
   SetName name -> do
     projectId <- use stateProjectId
