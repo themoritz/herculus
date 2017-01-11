@@ -23,7 +23,7 @@ import           Data.Text                    (Text, unpack)
 import           GHC.Generics
 
 import qualified Data.UnionFind.IntMap        as UF
-import {-# SOURCE #-}           Lib.Model.Column
+import {-# SOURCE #-} Lib.Model.Column
 import           Lib.Model.Dependencies.Types
 import           Lib.Model.Table
 import           Lib.Types
@@ -49,7 +49,7 @@ data Predicate a = IsIn ClassName a
   deriving (Eq, Ord)
 
 data Point = Point (UF.Point (MonoType Point))
-data Type = Type (MonoType Type)
+data Type = Type { unType :: MonoType Type }
   deriving (Eq, Ord)
 
 data MonoType a

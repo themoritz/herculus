@@ -77,6 +77,40 @@ prelude = Map.fromList
     , RPrelude $ \_ (RValue (VNumber a)) -> pure $ RPrelude $ \_ (RValue (VNumber b)) ->
         pure $ RValue $ VNumber $ a - b
     )
+  -- Class Functor
+  , classFunction "map"
+  , ( "$FunctorList"
+    , RInstanceDict $ Map.fromList
+      [ ( "map"
+        , RPrelude $ \env arg -> pure $ RPrelude $ \_ (RValue (VList xs)) -> do
+            let f x = case arg of
+                  RClosure name body cl -> do
+                    RValue v <- eval (Map.insert name (RValue x) cl) body
+                    pure v
+                  RPrelude f' -> do
+                    RValue v <- f' env (RValue x)
+                    pure v
+                  _ -> throwError "Prelude `map`: pattern match failure. Please report this as a bug!"
+            RValue . VList <$> traverse f xs
+        )
+      ]
+    )
+  , ( "$FunctorMaybe"
+    , RInstanceDict $ Map.fromList
+      [ ( "map"
+        , RPrelude $ \env arg -> pure $ RPrelude $ \_ (RValue (VMaybe may)) -> do
+            let f x = case arg of
+                  RClosure name body cl -> do
+                    RValue v <- eval (Map.insert name (RValue x) cl) body
+                    pure v
+                  RPrelude f' -> do
+                    RValue v <- f' env (RValue x)
+                    pure v
+                  _ -> throwError "Prelude `map`: pattern match failure. Please report this as a bug!"
+            RValue . VMaybe <$> traverse f may
+        )
+      ]
+    )
   -- Class show
   , classFunction "show"
   , ( "$ShowNumber"
@@ -179,18 +213,6 @@ prelude = Map.fromList
   , ( "formatTime"
     , RPrelude $ \_ (RValue (VString f)) -> pure $ RPrelude $ \_ (RValue (VTime t)) ->
         pure $ RValue $ VString $ formatTime f t
-    )
-  , ( "map"
-    , RPrelude $ \env arg -> pure $ RPrelude $ \_ (RValue (VList xs)) -> do
-        let f x = case arg of
-              RClosure name body cl -> do
-                RValue v <- eval (Map.insert name (RValue x) cl) body
-                pure v
-              RPrelude f' -> do
-                RValue v <- f' env (RValue x)
-                pure v
-              _ -> throwError "Prelude `map`: pattern match failure. Please report this as a bug!"
-        RValue . VList <$> traverse f xs
     )
   , ( "filter"
     , RPrelude $ \env arg -> pure $ RPrelude $ \_ (RValue (VList xs)) -> do

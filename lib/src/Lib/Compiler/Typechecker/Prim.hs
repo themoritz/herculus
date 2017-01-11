@@ -50,8 +50,8 @@ tyBool = mkMonoTypeConst "Bool" nullaryType
 tyArr :: Type -> Type -> Type
 tyArr a b = Type (TyApp (Type (TyApp (Type tyFun) a)) b)
 
-tyApp :: MonoType Type -> Type -> Type
-tyApp f arg = Type $ TyApp (Type f) arg
+tyApp :: Type -> Type -> Type
+tyApp f arg = Type $ TyApp f arg
 
 arr :: MonadState InferState m => Point -> Point -> m Point
 arr a b = do
@@ -90,7 +90,13 @@ loadPrelude = do
 
 primPreludeDicts :: [(Predicate Type, Name)]
 primPreludeDicts =
-  [ ( IsIn (ClassName "Show") $ Type tyNumber
+  [ ( IsIn (ClassName "Functor") $ Type tyList
+    , "$FunctorList"
+    )
+  , ( IsIn (ClassName "Functor") $ Type tyMaybe
+    , "$FunctorMaybe"
+    )
+  , ( IsIn (ClassName "Show") $ Type tyNumber
     , "$ShowNumber"
     )
   , ( IsIn (ClassName "Show") $ Type tyBool
@@ -124,7 +130,7 @@ primPrelude =
     )
   , ( "length"
     , ForAll [typeVar 1] [] $
-        tyApp tyList (tyVar 1) `tyArr` Type tyNumber
+        tyApp (Type tyList) (tyVar 1) `tyArr` Type tyNumber
     )
   , ( "not"
     , ForAll [] [] $
@@ -179,16 +185,16 @@ primPrelude =
         Type tyString `tyArr` (Type tyTime `tyArr` Type tyString)
     )
   , ( "map"
-    , ForAll [typeVar 1, typeVar 2] [] $
-        (tyVar 1 `tyArr` tyVar 2) `tyArr` (tyApp tyList (tyVar 1) `tyArr` tyApp tyList (tyVar 2))
+    , ForAll [typeVar 1, typeVar 2, typeVar 3] [IsIn (ClassName "Functor") (tyVar 3)] $
+        (tyVar 1 `tyArr` tyVar 2) `tyArr` (tyApp (tyVar 3) (tyVar 1) `tyArr` tyApp (tyVar 3) (tyVar 2))
     )
   , ( "filter"
     , ForAll [typeVar 1] [] $
-        (tyVar 1 `tyArr` Type tyBool) `tyArr` (tyApp tyList (tyVar 1) `tyArr` tyApp tyList (tyVar 1))
+        (tyVar 1 `tyArr` Type tyBool) `tyArr` (tyApp (Type tyList) (tyVar 1) `tyArr` tyApp (Type tyList) (tyVar 1))
     )
   , ( "find"
     , ForAll [typeVar 1] [] $
-        (tyVar 1 `tyArr` Type tyBool) `tyArr` (tyApp tyList (tyVar 1) `tyArr` tyApp tyMaybe (tyVar 1))
+        (tyVar 1 `tyArr` Type tyBool) `tyArr` (tyApp (Type tyList) (tyVar 1) `tyArr` tyApp (Type tyMaybe) (tyVar 1))
     )
   , ( "&&"
     , ForAll [] [] $
@@ -200,10 +206,10 @@ primPrelude =
     )
   , ( "fromMaybe"
     , ForAll [typeVar 1] [] $
-        tyVar 1 `tyArr` (tyApp tyMaybe (tyVar 1) `tyArr` tyVar 1)
+        tyVar 1 `tyArr` (tyApp (Type tyMaybe) (tyVar 1) `tyArr` tyVar 1)
     )
   , ( "maybe"
     , ForAll [typeVar 1, typeVar 2] [] $
-        tyVar 2 `tyArr` ((tyVar 1 `tyArr` tyVar 2) `tyArr` (tyApp tyMaybe (tyVar 1) `tyArr` tyVar 2))
+        tyVar 2 `tyArr` ((tyVar 1 `tyArr` tyVar 2) `tyArr` (tyApp (Type tyMaybe) (tyVar 1) `tyArr` tyVar 2))
     )
   ]

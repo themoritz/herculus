@@ -13,7 +13,7 @@ For a list of included functions, see [Prelude](##PreludeFunctions).
 ### Defining Functions and Variables
 
 ```idris
-let a = 1 + 2
+let a = 1 + 2;
 let f x = x + 1;
 ```
 
@@ -148,6 +148,23 @@ class Ord a where
 * `Ord Number`
 * `Ord Time`
 
+### Functor
+
+``` idris
+class Functor f where
+```
+
+#### Members
+
+* `map : forall a b. (a -> b) -> f a -> f b`
+
+  Apply a function to every element in the container `f` (e.g., a list), and return the result.
+
+#### Instances
+
+* `Functor List`
+* `Functor Maybe`
+
 ### formatNumber
 
 ```idris
@@ -163,14 +180,6 @@ formatTime : String -> Time -> String
 ```
 
 `formatTime s t` formats time `t` according to the format string `s`. For a list of formatting characters see [here](https://hackage.haskell.org/package/time-1.6.0.1/docs/Data-Time-Format.html#v:formatTime).
-
-### map
-
-```idris
-map : forall a b. (a -> b) -> List a -> List b
-```
-
-Apply a function to every element in a list, and return the resulting list.
 
 ### filter
 
@@ -199,4 +208,3 @@ fromMaybe : forall a. a -> Maybe a -> a
 ``` idris
 maybe : forall a b. b -> (a -> b) -> Maybe a -> b
 ```
-
