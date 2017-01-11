@@ -36,9 +36,9 @@ import           Data.These
 
 import           GHC.Generics
 
-import {-# SOURCE #-}           Lib.Model.Column
+import {-# SOURCE #-} Lib.Model.Column
 import           Lib.Model.Dependencies.Types
-import {-# SOURCE #-}           Lib.Model.Table
+import {-# SOURCE #-} Lib.Model.Table
 import           Lib.Types
 
 --------------------------------------------------------------------------------
@@ -77,19 +77,24 @@ getAllColumnDependants :: (Id Column, Id Table)
 getAllColumnDependants (c, t) graph =
     Map.toList $ alignWith alignDeps direct indirect
   where
-    direct   = fromMaybe nil (graph ^? columnDependants . at c . _Just . _2)
-    indirect = fromMaybe nil (graph ^. tableDependants . at t)
+    direct   = fromMaybe nil
+                 (graph ^? columnDependants . at c . _Just . _2)
+    -- Only rowRef dependants of tables are counted here since the column ref
+    -- dependency is only used to track columns that reference that table.
+    indirect = maybe nil (Map.filter (== TblDepRowRef))
+                 (graph ^. tableDependants . at t)
+    alignDeps :: These ColumnDependency TableDependency -> AddTargetMode
+    alignDeps (This ColDepRef) = AddOne
+    alignDeps _                = AddAll
 
-getAllColumnDependants' :: Id Column -> DependencyGraph -> [(Id Column, AddTargetMode)]
-getAllColumnDependants' c graph = Map.toList $ case graph ^. columnDependants . at c of
-  Nothing -> Map.empty
-  Just (t, direct) ->
-    let indirect = fromMaybe nil (graph ^. tableDependants . at t)
-    in alignWith alignDeps direct indirect
-
-alignDeps :: These ColumnDependency TableDependency -> AddTargetMode
-alignDeps (This ColDepRef) = AddOne
-alignDeps _                = AddAll
+-- | Version of 'getAllColumnDependants' which returns an empty list if the
+-- given column is not part of the graph. Used for cycle detection.
+getAllColumnDependants' :: Id Column -> DependencyGraph
+                        -> [(Id Column, AddTargetMode)]
+getAllColumnDependants' c graph =
+  case graph ^. columnDependants . at c of
+    Nothing     -> []
+    Just (t, _) -> getAllColumnDependants (c, t) graph
 
 --------------------------------------------------------------------------------
 
@@ -177,11 +182,12 @@ setCodeDependencies getTableId c codeDeps graph = do
       Left (dep, typ) -> do
         mNode <- use (columnDependants . at dep)
         let addEdge tblId =
-              columnDependants . at dep . non (tblId, Map.empty) . _2 . at c .= Just typ
+              columnDependants . at dep . non (tblId, Map.empty) . _2
+                               . at c .= Just typ
         case mNode of
           Just (tblId, _) -> addEdge tblId
           Nothing         -> lift (getTableId dep) >>= addEdge
-      Right (dep, typ) -> do
+      Right (dep, typ) ->
         tableDependants . at dep . non Map.empty . at c .= Just typ
 
   case getDependantsTopological [c] graph' of
@@ -198,11 +204,14 @@ getDependantsTopological roots graph =
   where
     topSort :: Id Column -> MaybeT (State (Map (Id Column) Bool)) ColumnOrder
     topSort x = gets (Map.lookup x) >>= \case
+      -- Currently working on
       Just False -> empty -- Found circle
+      -- Done working on
       Just True -> pure []
+      -- Not yet visited
       Nothing -> do
         modify $ Map.insert x False
-        childOrders <- mapM topSort (map fst $ getAllColumnDependants' x graph')
+        childOrders <- mapM (topSort . fst) (getAllColumnDependants' x graph')
         modify $ Map.insert x True
         pure $ (x, getAllColumnDependants' x graph') : join (reverse childOrders)
 
