@@ -68,9 +68,8 @@ dataCell_ !props = view dataCell props mempty
 dataCell :: ReactView DataCellProps
 dataCell = defineControllerView "cell" cellStore $ \(CellState m) DataCellProps{..} ->
   case dataCellContent of
-    CellError _ ->
-      clspan_ "error" "Error" -- TODO: what to do with the error message here?
-                              --       putting it in every row seems unnecessary
+    CellError msg ->
+      span_ [ "title" &= msg, "className" $= "error" ] "Error"
     CellValue val ->
       let open = fromMaybe False $ Map.lookup (dataCellColId, dataCellRowId) m
           inpType = dataCellColData ^. dataColIsDerived

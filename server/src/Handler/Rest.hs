@@ -162,11 +162,11 @@ handleProjectDelete :: MonadHexl m => SessionData -> Id ProjectClient -> m ()
 handleProjectDelete sessionData@(UserInfo userId _ _) projectId = do
   let i = fromClientId projectId
   permissionProject userId i
-  delete i
   tables <- listByQuery [ "projectId" =: toObjectId i ]
   traverse_ (handleProjectRunCommand sessionData projectId .
              CmdTableDelete .
              entityId) tables
+  delete i
 
 handleProjectLoad :: MonadHexl m => SessionData -> Id ProjectClient
                   -> m ( ProjectClient
