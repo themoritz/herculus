@@ -38,7 +38,9 @@ expr :: Parser PExpr
 expr = buildExpressionParser table terms
   where
     table =
-      [ [ binary "*" ]
+      [ [ binary "*"
+        , binary "/"
+        ]
       , [ binary "+"
         , binary "-"
         ]
@@ -119,7 +121,7 @@ lit = PLit <$> (stringLit <|> numberLit <|> boolLit)
       pref <- many $ oneOf "+-"
       raw <- many $ oneOf "0123456789."
       case readMaybe (pref <> raw) of
-        Nothing -> fail "expected number"
+        Nothing  -> fail "expected number"
         Just dec -> pure $ LNumber $ Number dec
     boolLit =
           try (P.reserved lexer "True"  $> LBool True)
@@ -148,4 +150,4 @@ parseExpr :: Text -> Either Text PExpr
 parseExpr e =
   case parse (P.whiteSpace lexer *> expr <* eof) "" $ unpack e of
     Left msg -> Left $ pack $ show msg
-    Right x -> Right x
+    Right x  -> Right x

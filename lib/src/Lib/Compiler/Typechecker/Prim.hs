@@ -132,6 +132,10 @@ primPrelude =
     , ForAll [typeVar 1] [] $
         tyApp (Type tyList) (tyVar 1) `tyArr` Type tyNumber
     )
+  , ( "const"
+    , ForAll [typeVar 1, typeVar 2] [] $
+        tyVar 1 `tyArr` (tyVar 2 `tyArr` tyVar 1)
+    )
   , ( "not"
     , ForAll [] [] $
         Type tyBool `tyArr` Type tyBool
@@ -145,6 +149,10 @@ primPrelude =
         Type tyNumber `tyArr` (Type tyNumber `tyArr` Type tyNumber)
     )
   , ( "-"
+    , ForAll [] [] $
+        Type tyNumber `tyArr` (Type tyNumber `tyArr` Type tyNumber)
+    )
+  , ( "/"
     , ForAll [] [] $
         Type tyNumber `tyArr` (Type tyNumber `tyArr` Type tyNumber)
     )

@@ -62,6 +62,9 @@ prelude = Map.fromList
   , ( "length"
     , RPrelude $ \_ (RValue (VList xs)) -> pure $ RValue $ VNumber $ fromIntegral $ length xs
     )
+  , ( "const"
+    , RPrelude $ \_ a -> pure $ RPrelude $ \_ _ -> pure a
+    )
   , ( "not"
     , RPrelude $ \_ (RValue (VBool b)) -> pure $ RValue $ VBool $ not b
     )
@@ -76,6 +79,12 @@ prelude = Map.fromList
   , ( "-"
     , RPrelude $ \_ (RValue (VNumber a)) -> pure $ RPrelude $ \_ (RValue (VNumber b)) ->
         pure $ RValue $ VNumber $ a - b
+    )
+  , ( "/"
+    , RPrelude $ \_ (RValue (VNumber a)) -> pure $ RPrelude $ \_ (RValue (VNumber b)) ->
+        if b == 0
+          then throwError "Division by zero"
+          else pure $ RValue $ VNumber $ a / b
     )
   -- Class Functor
   , classFunction "map"

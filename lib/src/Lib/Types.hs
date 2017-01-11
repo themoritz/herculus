@@ -100,7 +100,7 @@ instance FromJSON (Ref a)
 --
 
 newtype Number = Number Decimal
-  deriving (Num, Eq, Ord, NFData)
+  deriving (Num, Fractional, Eq, Ord, NFData)
 
 instance Show Number where
   show (Number x) = show x

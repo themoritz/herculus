@@ -4,7 +4,7 @@
 
 ### Basic Arithmetic
 
-* `+, -, *`
+* `+, -, *, /`
 
 ### Using Functions
 
@@ -76,6 +76,14 @@ length : forall a. List a -> Number
 ```
 
 Get the length of a list.
+
+### const
+
+```idris
+const : forall a b. a -> b -> a
+```
+
+The function `const a` always returns `a`.
 
 ### not
 
