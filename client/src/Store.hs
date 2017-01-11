@@ -183,8 +183,23 @@ eval = \case
         else showMessage $ Message.SetWarning
                "Received projectDiff while not viewing that project."
 
-  WebSocketOpened ->
+  WebSocketOpened -> do
     showMessage Message.Unset
+    -- We need to authenticate the new websocket connection
+    st <- use stateSession
+    case st of
+      StateLoggedIn liSt -> do
+        sendWS $ WsUpAuthenticate (liSt ^. LoggedIn.stateSessionKey)
+        -- If the user has a project opened, we reload it to catch up with
+        -- potential changes that happened during the time the websocket
+        -- connection was lost.
+        case liSt ^. LoggedIn.stateSubState of
+          LoggedIn.ProjectDetail pdSt -> do
+            let projectId = pdSt ^. Project.stateProjectId
+            sendWS $ WsUpSubscribe projectId
+            eval $ LoggedInAction $ LoggedIn.ToProject projectId
+          _ -> pure ()
+      _ -> pure ()
 
   WebSocketClosed ->
     showMessage $ Message.SetWarning
