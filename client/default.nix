@@ -2,20 +2,10 @@
 
 let
 
-  ghcjsDedupe = pkgs.haskell.compiler.ghcjsHEAD.overrideDerivation (super: {
-    version = "0.2.0-dedupe";
-    src = pkgs.fetchFromGitHub {
-      owner = "ghcjs";
-      repo = "ghcjs";
-      rev = "ad0043155a48dbf2f37fe786cca39acc89b96ff7";
-      sha256 = "16m5zgjy6kcxjnhrhszy5vg7zj4hjz43jsprpjr1y9wrmp6xcx2j";
-    };
-  });
-
   haskellPackages = pkgs.haskell.packages.${compiler};
   myPackages = pkgs.recurseIntoAttrs (
     haskellPackages.override {
-      ghc = ghcjsDedupe;
+      ghc = import ./nix-ghcjs { inherit pkgs; };
       overrides = self: super: {
         herculus-lib = self.callPackage (import ../lib/herculus-lib.nix) {};
         react-flux = self.callPackage (import ./nix-haskellPackages-fixes/react-flux.nix) {};
