@@ -198,4 +198,12 @@ primPrelude =
     , ForAll [] [] $
         Type tyBool `tyArr` (Type tyBool `tyArr` Type tyBool)
     )
+  , ( "fromMaybe"
+    , ForAll [typeVar 1] [] $
+        tyVar 1 `tyArr` (tyApp tyMaybe (tyVar 1) `tyArr` tyVar 1)
+    )
+  , ( "maybe"
+    , ForAll [typeVar 1, typeVar 2] [] $
+        tyVar 2 `tyArr` ((tyVar 1 `tyArr` tyVar 2) `tyArr` (tyApp tyMaybe (tyVar 1) `tyArr` tyVar 2))
+    )
   ]

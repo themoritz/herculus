@@ -187,3 +187,16 @@ find : forall a. (a -> Bool) -> List a -> Maybe a
 ```
 
 Find the first element in a list that matches the given predicate, or return `Nothing`.
+
+### fromMaybe
+
+``` idris
+fromMaybe : forall a. a -> Maybe a -> a
+```
+
+### maybe
+
+``` idris
+maybe : forall a b. b -> (a -> b) -> Maybe a -> b
+```
+

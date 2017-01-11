@@ -9,6 +9,7 @@ import           Control.Monad.State
 
 import           Data.Map                       (Map)
 import qualified Data.Map                       as Map
+import           Data.Maybe                     (fromMaybe)
 import           Data.Monoid                    ((<>))
 import           Data.Text                      (Text, pack)
 import           Data.Traversable
@@ -51,6 +52,7 @@ inTermsOfEqOrd f =
 
 -- Prelude
 
+-- Idea: Use Higher Order Abstract Syntax (HOAS, see Phil Freeman talk) here?
 prelude :: Monad m => Map Name (Result m)
 prelude = Map.fromList
   [ ( "sum"
@@ -217,6 +219,24 @@ prelude = Map.fromList
               b <- p' x
               if b then pure (Just x) else findM p' xs'
         RValue . VMaybe <$> findM p xs
+    )
+  , ( "fromMaybe"
+    , RPrelude $ \_ (RValue def) -> pure $ RPrelude $ \_ (RValue (VMaybe may)) ->
+        pure $ RValue $ fromMaybe def may
+    )
+  , ( "maybe"
+    , RPrelude $ \_ (RValue b) -> pure $ RPrelude $ \env farg -> pure $ RPrelude $ \_ (RValue (VMaybe may)) -> do
+        let f a' = case farg of
+              RClosure name body cl -> do
+                RValue b' <- eval (Map.insert name (RValue a') cl) body
+                pure b'
+              RPrelude f' -> do
+                RValue b' <- f' env (RValue a')
+                pure b'
+              _ -> throwError "Prelude `maybe`: pattern match failure. Please report this as a bug!"
+        case may of
+          Nothing -> pure $ RValue b
+          Just a  -> RValue <$> f a
     )
   ]
 
