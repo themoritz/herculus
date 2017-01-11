@@ -66,15 +66,17 @@ makePrisms ''SessionState
 
 data Action
   -- Global
-  = MessageAction Message.Action
-  | GlobalInit Text -- WebSocket URL
-  | ApplyWebSocketMsg WsDownMessage
-  | GlobalSendWebSocket WsUpMessage
+  = Init Text -- WebSocket URL
+  | WebSocketApplyMsg WsDownMessage
+  | WebSocketOpened
+  | WebSocketClosed
+  | WebSocketSend WsUpMessage
   -- Session
   | ToSignupForm
   | ToLoginForm
   | Signup SignupData
   | Login LoginData
+  | MessageAction Message.Action
   | LoggedInAction LoggedIn.Action
   deriving (Generic, Show)
 
@@ -115,7 +117,7 @@ instance MonadStore DSL where
       halt msg
     Right x -> pure x
 
-  sendWS = eval . GlobalSendWebSocket
+  sendWS = eval . WebSocketSend
 
   showMessage a = stateMessage .= Message.runAction a
 
@@ -132,11 +134,11 @@ instance StoreData State where
 eval :: Action -> DSL ()
 eval = \case
 
-  MessageAction a ->
-    stateMessage .= Message.runAction a
-
-  GlobalInit wsUrl -> do
-    ws <- jsonWebSocketNew wsUrl $ pure . dispatch . ApplyWebSocketMsg
+  Init wsUrl -> do
+    ws <- liftIO $ jsonWebSocketNew wsUrl
+      (pure . dispatch . WebSocketApplyMsg)
+      (pure . dispatch $ WebSocketOpened)
+      (pure . dispatch $ WebSocketClosed)
     stateWebSocket .= Just ws
 
     use stateSession >>= \case
@@ -161,7 +163,7 @@ eval = \case
 
       StateLoggedOut _ -> pure ()
 
-  ApplyWebSocketMsg msg -> case msg of
+  WebSocketApplyMsg msg -> case msg of
 
     WsDownAuthResponse response -> case response of
       GetUserInfoFailed err -> showMessage $ Message.SetWarning $
@@ -181,9 +183,16 @@ eval = \case
         else showMessage $ Message.SetWarning
                "Received projectDiff while not viewing that project."
 
-  GlobalSendWebSocket msg -> do
+  WebSocketOpened ->
+    showMessage Message.Unset
+
+  WebSocketClosed ->
+    showMessage $ Message.SetWarning
+      "WebSocket connection lost. Trying to reconnect..."
+
+  WebSocketSend msg -> do
     mWS <- use stateWebSocket
-    for_ mWS $ jsonWebSocketSend msg
+    liftIO $ for_ mWS $ jsonWebSocketSend msg
 
   -- Session -------------------------------------------------------------------
 
@@ -210,6 +219,9 @@ eval = \case
         showMessage $ Message.SetSuccess "Successfully logged in."
       LoginFailed txt ->
         showMessage $ Message.SetWarning txt
+
+  MessageAction a ->
+    stateMessage .= Message.runAction a
 
   LoggedInAction action -> LoggedIn.run env action
     where

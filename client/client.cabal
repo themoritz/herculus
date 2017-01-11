@@ -56,6 +56,7 @@ executable client
                      , react-flux
                      , react-flux-servant
                      , servant
+                     , stm
                      , text
                      , transformers
   hs-source-dirs:      src
