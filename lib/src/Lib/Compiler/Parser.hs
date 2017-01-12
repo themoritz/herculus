@@ -31,28 +31,33 @@ lexer = P.makeTokenParser emptyDef
   , P.identLetter = alphaNum <|> oneOf "_"
   }
 
-binary :: String -> Operator String () Identity PExpr
-binary name = Infix (P.reservedOp lexer name *> pure (\l r -> PApp (PApp (PVar $ pack name) l) r)) AssocLeft
+binary :: String -> Assoc -> Operator String () Identity PExpr
+binary name assoc =
+  Infix (P.reservedOp lexer name *> pure (\l r -> PApp (PApp (PVar $ pack name) l) r)) assoc
 
 expr :: Parser PExpr
 expr = buildExpressionParser table terms
   where
     table =
-      [ [ binary "*"
-        , binary "/"
-        ]
-      , [ binary "+"
-        , binary "-"
-        ]
-      , [ binary "<="
-        , binary ">="
-        , binary "<"
-        , binary ">"
-        , binary "=="
-        , binary "!="
-        ]
-      , [ binary "&&" ]
-      , [ binary "||" ]
+      [ [ binary "*" AssocLeft
+        , binary "/" AssocLeft
+        ] -- 7
+      , [ binary "+" AssocLeft
+        , binary "-" AssocLeft
+        ] -- 6
+      , [ binary "<>" AssocRight
+        ] -- 5
+      , [ binary "<=" AssocLeft
+        , binary ">=" AssocLeft
+        , binary "<" AssocLeft
+        , binary ">" AssocLeft
+        , binary "==" AssocNone
+        , binary "/=" AssocNone
+        ] -- 4
+      , [ binary "&&" AssocRight
+        ] -- 3
+      , [ binary "||" AssocRight
+        ] -- 2
       ]
     terms =
           try ifThenElse

@@ -120,6 +120,24 @@ prelude = Map.fromList
         )
       ]
     )
+  -- Class Semigroup
+  , classFunction "<>"
+  , ( "$SemigroupString"
+    , RInstanceDict $ Map.fromList
+      [ ( "<>"
+        , RPrelude $ \_ (RValue (VString a)) -> pure $ RPrelude $ \_ (RValue (VString b)) ->
+            pure $ RValue (VString (a <> b))
+        )
+      ]
+    )
+  , ( "$SemigroupList"
+    , RInstanceDict $ Map.fromList
+      [ ( "<>"
+        , RPrelude $ \_ (RValue (VList a)) -> pure $ RPrelude $ \_ (RValue (VList b)) ->
+            pure $ RValue (VList (a <> b))
+        )
+      ]
+    )
   -- Class show
   , classFunction "show"
   , ( "$ShowNumber"

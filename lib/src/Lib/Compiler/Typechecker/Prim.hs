@@ -96,6 +96,14 @@ primPreludeDicts =
   , ( IsIn (ClassName "Functor") $ Type tyMaybe
     , "$FunctorMaybe"
     )
+  , ( IsIn (ClassName "Semigroup") $ Type tyString
+    , "$SemigroupString"
+    )
+  -- TODO: Does not work atm, since in 'lookupInstanceDict', the types would need
+  -- to be unified...
+  , ( IsIn (ClassName "Semigroup") $ tyApp (Type tyList) (tyVar 1)
+    , "$SemigroupList"
+    )
   , ( IsIn (ClassName "Show") $ Type tyNumber
     , "$ShowNumber"
     )
@@ -155,6 +163,10 @@ primPrelude =
   , ( "/"
     , ForAll [] [] $
         Type tyNumber `tyArr` (Type tyNumber `tyArr` Type tyNumber)
+    )
+  , ( "<>"
+    , ForAll [typeVar 1] [IsIn (ClassName "Semigroup") (tyVar 1)] $
+        tyVar 1 `tyArr` (tyVar 1 `tyArr` tyVar 1)
     )
   , ( "show"
     , ForAll [typeVar 1] [IsIn (ClassName "Show") (tyVar 1)] $
