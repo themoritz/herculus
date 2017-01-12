@@ -354,9 +354,13 @@ class Ord a where
 * `(==) : a -> a -> Bool`
 
   Returns true if both arguments are equal.
+
+  _non-associative, precedence: 4_
 * `(!=) : a -> a -> Bool`
 
   Returns true if both arguments are not equal.
+
+  _non-associative, precedence: 4_
 
 #### Instances
 
@@ -378,15 +382,23 @@ class Ord a where
 * `(<=) : a -> a -> Bool`
 
   Returns true if the first argument is less than or equal to the second.
+
+  _left-associative, precedence: 4_
 * `(>=) : a -> a -> Bool`
 
   Returns true if the first argument is more than or equal to the second.
+
+  _left-associative, precedence: 4_
 * `(<) : a -> a -> Bool`
 
   Returns true if the first argument is less than the second.
+
+  _left-associative, precedence: 4_
 * `(>) : a -> a -> Bool`
 
   Returns true if the first argument is more than the second.
+
+  _left-associative, precedence: 4_
 
 #### Instances
 
@@ -407,6 +419,8 @@ class Semigroup a where
 
   Appends two values of `a` to get a new value of `a`. Example: `"Hello " <>
   name`.
+
+  _right-associative, precedence: 5_
 
 #### Instances
 
