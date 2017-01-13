@@ -250,6 +250,32 @@ some expression, use:
 
 Here, `condition` can be any expression which has a type `Bool`.
 
+<!---
+Ideas for more template features:
+
+<h1>Posts</h1> }}
+
+{{#decl let f = \i -> i * 2;}}
+
+{%for r in filter p #Posts%}
+  <h2>{{ r.Title }}</h2>
+  {%case r.Prop%}
+  {%of True%}
+      True {{ show $A }}
+  {%of False%}
+      False
+  {%case%}
+{%for%}
+
+{{#define template a}}
+  {{#for r in a}}
+    {{#instantiate template this.b}}
+  {{/for}}
+{{/define}}
+
+{{#instantiate template "Moritz"}}
+-->
+
 ## Included Functions
 
 Herculus ships with a number of functions that are ready to use. For every
