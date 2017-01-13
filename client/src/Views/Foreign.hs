@@ -93,6 +93,13 @@ datePicker_ !props =
     , classNames $ datePickerClassNames props
     ] mempty
 
+onClickOutside_ :: CallbackFunction eh func
+                => func -> ReactElementM eh a -> ReactElementM eh a
+onClickOutside_ !f =
+  foreign_ "OnClickOutside"
+    [ callback "onClickOutside" f
+    ]
+
 -- own: OnLoad
 
 -- | Careful: Issuing `alterStore` inside the callback might trigger an

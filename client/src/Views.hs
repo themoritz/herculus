@@ -1,6 +1,7 @@
-{-# LANGUAGE DeriveAnyClass   #-}
-{-# LANGUAGE DeriveGeneric    #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveAnyClass      #-}
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Views where
 
@@ -34,6 +35,7 @@ import           Store                 (Action (MessageAction),
 import           Views.Auth            (changePassword_, login_, signup_)
 import           Views.Combinators     (clspan_, inputNew_, menuItem_)
 import           Views.Common          (keyENTER, keyESC)
+import           Views.Foreign         (onClickOutside_)
 import           Views.ProjectOverview (projectsOverview_)
 import           Views.Table           (TableGridProps (..), tableGrid_)
 
@@ -113,14 +115,18 @@ appHeader = defineView "header" $ \st ->
     btnUserSettings_ :: LoggedIn.State -> ReactElementM ViewEventHandler ()
     btnUserSettings_ liSt = cldiv_ "user-settings" $ do
         button_
-          [ onClick $ \_ _ -> dispatchLoggedIn LoggedIn.ToggleUserSettingsDialog
+          [ onClick $ \_ _ -> if isOpen then [] else toggle
           ] $ faIcon_ "cog"
-        when (liSt ^. LoggedIn.stateUserSettingsShow) $ cldiv_ "small-menu" $ do
-          menuItem_ "power-off"
-                    (elemText $ "Log out (" <> shortName <> ")")
-                    (dispatchLoggedIn LoggedIn.Logout)
-          menuItem_ "pencil" "Change password" $ dispatchLoggedIn LoggedIn.ToChangePasswordForm
+        when isOpen $ onClickOutside_ (\(_ :: Text) -> toggle) $
+          cldiv_ "small-menu" $ do
+            menuItem_ "power-off"
+                      (elemText $ "Log out (" <> shortName <> ")")
+                      (toggle <> dispatchLoggedIn LoggedIn.Logout)
+            menuItem_ "pencil" "Change password"
+                      (toggle <> dispatchLoggedIn LoggedIn.ToChangePasswordForm)
       where
+        isOpen = liSt ^. LoggedIn.stateUserSettingsShow
+        toggle = dispatchLoggedIn LoggedIn.ToggleUserSettingsDialog
         shortName =
           if Text.length userName > 12
           then Text.take 9 userName <> "..."
@@ -130,7 +136,7 @@ appHeader = defineView "header" $ \st ->
     btnProjectOverView_ :: ReactElementM ViewEventHandler ()
     btnProjectOverView_ = button_
       [ onClick $ \_ _ ->
-          dispatchLoggedIn $ LoggedIn.ToProjectOverview
+          dispatchLoggedIn LoggedIn.ToProjectOverview
       ] $ do
         faIcon_ "th-large"
         " Projects"

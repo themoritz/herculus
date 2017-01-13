@@ -1,4 +1,5 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell     #-}
 
 module Views.Table where
 
@@ -85,12 +86,15 @@ tableGrid = defineView "tableGrid" $ \props -> do
         | x == 0 && 0 < y && y <= numRecs = cldiv_ "record" $
             row_ $ getRow (y - 1)
         | y == 0 && x == (numCols + 1) = cldiv_ "column-new" $ do
-            faButton_ "plus-circle" $ dispatchProject Project.TableToggleNewColumnDialog
-            when (props ^. showNewColDialog) $ cldiv_ "small-menu" $ do
-              menuItem_ "columns" "New data column" $
-                dispatchProjectCommand $ CmdDataColCreate (props ^. tableId)
-              menuItem_ "file-text" "New report column" $
-                dispatchProjectCommand $ CmdReportColCreate (props ^. tableId)
+            let isOpen = props ^. showNewColDialog
+                toggle = dispatchProject Project.TableToggleNewColumnDialog
+            faButton_ "plus-circle" (if isOpen then [] else toggle)
+            when isOpen $ onClickOutside_ (\(_ :: String) -> toggle) $
+              cldiv_ "small-menu" $ do
+                menuItem_ "columns" "New data column" $
+                  toggle <> dispatchProjectCommand (CmdDataColCreate (props ^. tableId))
+                menuItem_ "file-text" "New report column" $
+                  toggle <> dispatchProjectCommand (CmdReportColCreate (props ^. tableId))
         | y == 0 && 0 < x && x <= numCols =
             column_ (props ^. projectId) (props ^. sKey) (props ^. tables) (getColumn (x - 1))
         | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $

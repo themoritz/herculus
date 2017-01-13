@@ -23,9 +23,10 @@ require('codemirror/mode/htmlmixed/htmlmixed')
 global.Codemirror = Codemirror
 
 // Own components
-global.OnDidMount = require('./assets/components/OnDidMount.js')
-global.Grid = require('./assets/components/Grid.js')
-global.DatePicker = require('./assets/components/DatePicker.js')
+global.OnDidMount     = require('./assets/components/OnDidMount.js')
+global.OnClickOutside = require('./assets/components/OnClickOutside.js')
+global.Grid           = require('./assets/components/Grid.js')
+global.DatePicker     = require('./assets/components/DatePicker.js')
 
 // font-awesome
 require('font-awesome-webpack!./font-awesome.config.js')
