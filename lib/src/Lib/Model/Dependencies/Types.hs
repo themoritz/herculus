@@ -11,21 +11,28 @@ import qualified Data.Set         as Set
 
 import           GHC.Generics
 
-import {-# SOURCE #-}           Lib.Model.Column
-import {-# SOURCE #-}           Lib.Model.Table
+import {-# SOURCE #-} Lib.Model.Column
+import {-# SOURCE #-} Lib.Model.Table
 import           Lib.Types
 
+-- | A dependency that goes from column to column.
 data ColumnDependency
   = ColDepRef
+  -- ^ If `$A` is written into column C, we have this from A -> C.
   | ColDepWholeRef
+  -- ^ If `#T.A` is written into column C, we have this from A -> C.
   deriving (Generic, Eq, Ord, Show)
 
 instance Serialize ColumnDependency
 
+-- | A dependency that goes from table to column.
 data TableDependency
   = TblDepColumnRef
+  -- ^ If `#T.A` is written into column C, we have this from T -> C.
   | TblDepTableRef
+  -- ^ If `#T` is written into column C, we have this from T -> C.
   | TblDepRowRef
+  -- ^ If column C is of type `Row T`, we have this from T -> C.
   deriving (Generic, Eq, Ord, Show)
 
 instance Serialize TableDependency

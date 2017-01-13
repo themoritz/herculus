@@ -79,10 +79,15 @@ getAllColumnDependants (c, t) graph =
   where
     direct   = fromMaybe nil
                  (graph ^? columnDependants . at c . _Just . _2)
-    -- Only rowRef dependants of tables are counted here since the column ref
-    -- dependency is only used to track columns that reference that table.
-    indirect = maybe nil (Map.filter (== TblDepRowRef))
+    indirect = maybe nil (Map.filter follow)
                  (graph ^. tableDependants . at t)
+    follow = \case
+      TblDepColumnRef -> False
+      -- The ColumnRef dependency is only used to track columns that reference
+      -- that table, but a column referencing that table is not dependant during
+      -- propagation.
+      TblDepTableRef  -> True
+      TblDepRowRef    -> True
     alignDeps :: These ColumnDependency TableDependency -> AddTargetMode
     alignDeps (This ColDepRef) = AddOne
     alignDeps _                = AddAll
