@@ -1,0 +1,21 @@
+body {
+  font-family: "Open Sans";
+}
+a {
+  color: #6697ad;
+}
+a:hover {
+  color: #6697ad;
+}
+li.active {
+  background-color: #F9F9F9;
+}
+.nav > li {
+  line-height: 1.3;
+}
+img {
+  max-width: 100%;
+}
+.navbar-default {
+  border-bottom: 8px solid #7AA240;
+}

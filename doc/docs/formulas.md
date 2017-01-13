@@ -1,4 +1,4 @@
-# Herculus Formula Manual
+# Formulas
 
 This manual explains the _Hexl language_ that you use in Herculus to express
 formulas.  A _formula_ describes how the values of the cells in a column are
@@ -12,7 +12,7 @@ expressions. The formula above consists of two sub-expressions, `$Quantity` and
 to a _value_, which is then used to evaluate the larger expression.
 
 The Hexl language can also be used inside
-of [report templates](#ReportTemplates).  Any expression that can appear in the
+of [report templates](#report-templates).  Any expression that can appear in the
 formula of a column can also appear in the control blocks of a template, for
 example in an if-then-else block:
 
@@ -64,7 +64,7 @@ For example, to subtract `a` from `b` you would simply write `b - a`.
 Every one of these operators takes two `Number` values as inputs, and returns a
 new `Number`.  We express this fact as follows:
 
-``` idris
+``` haskell
 (+) : Number -> Number -> Number
 ```
 
@@ -75,7 +75,7 @@ We call this the _signature_ of the operator `+`.
 Hexl has an if-then-else expression to determine which one of two
 sub-expressions is used given a value of type `Bool`:
 
-``` idris
+``` haskell
 if condition then trueBranch else falseBranch
 ```
 
@@ -88,7 +88,7 @@ expression will also be of this type.
 For example, the following is a valid if-then-else expression when `x` is a
 `Number`:
 
-``` idris
+``` haskell
 if x > 0 then x - 1 else x
 ```
 
@@ -104,25 +104,26 @@ example, f `x` is a boolean value, we write `not x` to negate it.
 If a function takes more than one argument, the arguments are just listed one
 after another:
 
-``` idris
+``` haskell
 formatNumber "%.2f" 2
 ```
 
 If you want an argument to be a more complicated sub-expression, just put
 parentheses around it:
 
-``` idris
+``` haskell
 formatNumber "%.2f" (1 / 7)
 ```
 
-For a list of functions that are included, see [Prelude](#PreludeFunctions).
+For a list of functions that are included,
+see [Included Functions](#included-functions).
 
 ### Defining Your Own Variables and Functions
 
 New variables can be introduced using a _let_ expression, followed by another
 expression:
 
-```idris
+```haskell
 let x = 1 / 7;
 let y = x * x;
 if y > 0.5 then "Foo" else "Bar"
@@ -131,7 +132,7 @@ if y > 0.5 then "Foo" else "Bar"
 Own functions can also be defined using let expressions, by introducing the
 arguments between the function name and the `=`:
 
-``` idris
+``` haskell
 let square x = x * x;
 square (13 - 4)
 ```
@@ -146,7 +147,7 @@ when it is greater than `0`.
 This is often useful when using other functions that take a function as an
 argument, such as [`filter`](#filter):
 
-``` idris
+``` haskell
 filter (\s -> s.Quantity >= 10) #Sales
 ```
 
@@ -271,7 +272,7 @@ operators, but also `||` or `<>`.
 
 ### sum
 
-```idris
+```haskell
 sum : List Number -> Number
 ```
 
@@ -279,7 +280,7 @@ Calculates the sum over a list of numbers.
 
 ### length
 
-```idris
+```haskell
 length : forall a. List a -> Number
 ```
 
@@ -287,7 +288,7 @@ Get the length of a list.
 
 ### const
 
-```idris
+```haskell
 const : forall a b. a -> b -> a
 ```
 
@@ -295,7 +296,7 @@ The function `const a` always returns `a`.
 
 ### not
 
-```idris
+```haskell
 not : Bool -> Bool
 ```
 
@@ -303,7 +304,7 @@ Negate a boolean value.
 
 ### (||)
 
-```idris
+```haskell
 (||) : Bool -> Bool -> Bool
 ```
 
@@ -314,7 +315,7 @@ _right-associative, precedence: 2_
 
 ### (&&)
 
-```idris
+```haskell
 (&&) : Bool -> Bool -> Bool
 ```
 
@@ -326,7 +327,7 @@ _right-associative, precedence: 3_
 
 Class of types that can be converted into a `String`.
 
-```idris
+```haskell
 class Ord a where
 ```
 
@@ -345,7 +346,7 @@ class Ord a where
 
 Class of types where elements can be compared to each other.
 
-```idris
+```haskell
 class Ord a where
 ```
 
@@ -373,7 +374,7 @@ class Ord a where
 
 Class of types that can be ordered.
 
-```idris
+```haskell
 class Ord a where
 ```
 
@@ -409,7 +410,7 @@ class Ord a where
 
 Class of types where elements can be "appended" to one another.
 
-```idris
+```haskell
 class Semigroup a where
 ```
 
@@ -430,7 +431,7 @@ class Semigroup a where
 
 Class of types that represent "containers" which can be mapped over.
 
-``` idris
+``` haskell
 class Functor f where
 ```
 
@@ -448,7 +449,7 @@ class Functor f where
 
 ### formatNumber
 
-```idris
+```haskell
 formatNumber : String -> Number -> String
 ```
 
@@ -456,7 +457,7 @@ A call like `formatNumber s x` formats the number `x` according to the format st
 
 ### formatTime
 
-```idris
+```haskell
 formatTime : String -> Time -> String
 ```
 
@@ -464,13 +465,13 @@ formatTime : String -> Time -> String
 
 ### filter
 
-```idris
+```haskell
 filter : forall a. (a -> Bool) -> List a -> List a
 ```
 
 Filter a list according to the given predicate. For example,
 
-``` idris
+``` haskell
 let predicate x = x.Temperature >= 0 && x.Temperature <= 10;
 filter predicate #Cities
 ```
@@ -480,7 +481,7 @@ temperature is between `0` and `10` degrees.
 
 ### find
 
-```idris
+```haskell
 find : forall a. (a -> Bool) -> List a -> Maybe a
 ```
 
@@ -488,7 +489,7 @@ Find the first element in a list that matches the given predicate, or return `No
 
 ### fromMaybe
 
-``` idris
+``` haskell
 fromMaybe : forall a. a -> Maybe a -> a
 ```
 
@@ -497,7 +498,7 @@ in case of `Nothing`.
 
 ### maybe
 
-``` idris
+``` haskell
 maybe : forall a b. b -> (a -> b) -> Maybe a -> b
 ```
 

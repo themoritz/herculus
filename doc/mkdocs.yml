@@ -1,0 +1,6 @@
+site_name: Herculus
+pages:
+  - Formulas: formulas.md
+theme: cinder
+extra_css:
+  - "css/herculus.css"

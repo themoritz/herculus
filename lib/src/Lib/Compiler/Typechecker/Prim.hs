@@ -99,8 +99,8 @@ primPreludeDicts =
   , ( IsIn (ClassName "Semigroup") $ Type tyString
     , "$SemigroupString"
     )
-  -- TODO: Does not work atm, since in 'lookupInstanceDict', the types would need
-  -- to be unified...
+  -- TODO: Does not work atm, since in 'lookupInstanceDict', the types would
+  -- need to be unified...
   , ( IsIn (ClassName "Semigroup") $ tyApp (Type tyList) (tyVar 1)
     , "$SemigroupList"
     )
