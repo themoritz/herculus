@@ -105,15 +105,20 @@ executeCommand = \case
     deleteTable tableId
     columns <- getTableColumns tableId
     mapM_ (executeCommand . CmdColumnDelete . entityId) columns
-    graphModify $ purgeTable tableId
-    dependantCols <- graphGets $ getTableDependantsOnly tableId $ \case
+    mentioningCols <- graphGets $ getTableDependantsOnly tableId $ \case
+      TblDepColumnRef -> True
+      TblDepTableRef  -> True
+      TblDepRowRef    -> False
+    mapM_ scheduleCompileColumn mentioningCols
+    rowRef'ingCols <- graphGets $ getTableDependantsOnly tableId $ \case
       TblDepColumnRef -> False
       TblDepTableRef  -> False
       TblDepRowRef    -> True
-    for_ dependantCols $ \columnId -> do
+    for_ rowRef'ingCols $ \columnId -> do
       -- TODO: invalidate rowrefs, but currently we have no concept of
       -- an "invalid type", so what to do?
       pure ()
+    graphModify $ purgeTable tableId
 
   CmdDataColCreate tableId ->
     void $ createColumn (emptyDataCol tableId)

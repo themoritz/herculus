@@ -18,8 +18,6 @@ import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 
-import           Debug.Trace                    (traceShowM)
-
 import qualified Data.Map                       as Map
 import           Data.Monoid
 import qualified Data.Set                       as Set
@@ -47,7 +45,6 @@ runInfer env expr =
         e ::: (_, poly) <- infer expr
         t <- pointToType poly
         e' <- replaceTypeClassDicts e
-        debugTExpr e'
         c <- toCoreExpr e'
         pure (c, t)
   in  runExceptT $ evalStateT (runReaderT (unInferT action) env) newInferState
@@ -191,11 +188,6 @@ reduce = go []
 -- | Returns a list of deferred predicates and the generalized polytype
 generalize :: MonadState InferState m => [Predicate Point] -> Point -> m ([Predicate Point], PolyType Point)
 generalize preds pt = do
-    traceShowM ("Generalize:" :: String)
-    forM_ preds $ \(IsIn c p) -> do
-      traceShowM c
-      debugPoint p
-    debugPoint pt
     context <- use inferContext
     reducedPreds <- reduce preds
     contextVars <- ftv context
