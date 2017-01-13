@@ -53,4 +53,8 @@ in
       mkdocs
       mkdocs-cinder
     ];
+    buildPhase = ''
+      mkdocs build
+    '';
+    installPhase = "mkdir $out && cp -r ./site/* $out";
   }

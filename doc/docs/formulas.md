@@ -170,7 +170,7 @@ The type of expression `$Foo` will always be the type of the column "Foo".
 The prefix `#` is used to reference whole tables, represented as a `List` of
 rows. For example, `#Books` returns a value of type `List a`, where `a` is a
 record with one field for every column from the table
-`Books`. See [Records](#Records) for more details on records.
+`Books`. See [Records](#records) for more details on records.
 
 #### A Whole Column
 

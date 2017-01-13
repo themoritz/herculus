@@ -9,6 +9,7 @@
     "webpack-prod": "./build-client.sh --skip-combine && webpack --config webpack.prod.config.js --progress --colors",
     "build-client": "bash ./build-client.sh",
     "build-server": "bash ./build-server.sh",
+    "build-doc": "bash ./build-doc.sh",
     "webpack-dev-nix": "webpack --config webpack.dev.config.js --progress --colors && bash ./build-client-nix.sh && webpack --config webpack.dev.config.js --progress --colors --watch",
     "build-client-nix": "bash ./build-client-nix.sh",
     "build-server-nix": "bash ./build-server-nix.sh",

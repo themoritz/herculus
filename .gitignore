@@ -8,6 +8,7 @@ lib/.stack-work/
 lib/result
 lib/dist
 assets/public/js/
+assets/public/doc/
 assets/public/css/
 assets/public/*.woff*
 assets/public/*.svg

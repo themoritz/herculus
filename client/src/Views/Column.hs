@@ -229,7 +229,11 @@ selReportLanguage_ !i !lang = view selReportLanguage (i, lang) mempty
 selReportLanguage :: ReactView (Id Column, Maybe ReportLanguage)
 selReportLanguage = defineView "select report lang" $ \(i, lang) ->
   clspan_ "select" $ do
-    "Input language"
+    "Input language ("
+    a_ [ "href" $= "/doc/formulas/#report-templates"
+       , "target" $= "_blank"
+       ] "Help"
+    ")"
     select_
       [ "defaultValue" &= show lang
       , onInput $ \evt ->
@@ -467,7 +471,12 @@ checkIsFormula = defineView "checkIsFormula" $ \(i, isDerived) -> do
           let newInpType = if checked then NotDerived else Derived
           in  Dialog.dispatch $ Dialog.SetTmpIsFormula i newInpType
       ]
-    span_ [] "Use formula"
+    span_ [] $ do
+      "Use formula ("
+      a_ [ "href" $= "/doc/formulas/#the-hexl-language"
+         , "target" $= "_blank"
+         ] "Help"
+      ")"
 
 -- input field for formula (i.a.)
 

@@ -1,3 +1,3 @@
 { pkgs ? import <nixpkgs> {} }:
 
-(import ./default.nix { inherit pkgs; })
+import ./default.nix { inherit pkgs; }

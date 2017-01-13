@@ -1,11 +1,37 @@
 body {
   font-family: "Open Sans";
+  color: black;
 }
 a {
-  color: #6697ad;
+  color: #28373c;
+  font-weight: bold;
 }
 a:hover {
-  color: #6697ad;
+  color: #ff1489;
+  text-decoration: none;
+}
+li>a {
+  font-weight: normal;
+}
+code {
+  color: #28373c;
+  background-color: #f5f5f5;
+  border-radius: 2px;
+}
+pre {
+  border-width: 0px;
+  background-color: #f5f5f5;
+  border-radius: 2px;
+  padding: 5px;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+code>.hljs-title {
+  color: #333;
+  font-weight: bold;
+}
+code>.hljs-string {
+  color: #ff1489;
 }
 li.active {
   background-color: #F9F9F9;
@@ -17,5 +43,6 @@ img {
   max-width: 100%;
 }
 .navbar-default {
-  border-bottom: 8px solid #7AA240;
+  background-color: #28373C;
+  border-bottom: 5px solid #ff1489;
 }

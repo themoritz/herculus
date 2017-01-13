@@ -2,6 +2,7 @@
 
 let
   client = import ./client { inherit pkgs; };
+  doc = import ./doc { inherit pkgs; };
 
 in
 
@@ -10,7 +11,7 @@ in
   stdenv.mkDerivation {
     name = "herculus";
     src = ./.;
-    buildInputs = [ client git zopfli nodejs ];
+    buildInputs = [ client git zopfli nodejs doc ];
     buildPhase = ''
       HOME=.
       npm install --no-optional
@@ -21,5 +22,9 @@ in
         GIT_REV=`git rev-parse --short HEAD` \
         node_modules/.bin/webpack --config webpack.prod.config.js --progress --colors
     '';
-    installPhase = "mkdir $out && cp -r ./assets/public/* $out";
+    installPhase = ''
+      mkdir -p $out
+      cp -r ./assets/public/* $out
+      cp -r ${doc}/share/* $out
+    '';
   }
