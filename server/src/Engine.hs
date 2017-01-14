@@ -131,8 +131,8 @@ executeCommand = \case
         %~ (dataColType       .~ dataType)
          . (dataColIsDerived  .~ isDerived)
          . (dataColSourceCode .~ code)
-      -- When the code has changed:
-      when (dataCol ^. dataColSourceCode /= code) $
+      -- Always recompile if the column is derived:
+      when (isDerived == Derived) $
         scheduleCompileColumn columnId
       -- When the dataType has changed:
       when (dataCol ^. dataColType /= dataType) $ do
