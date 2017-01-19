@@ -5,25 +5,26 @@ module Latex
   ( makePDF
   ) where
 
-import           Control.Monad                 (unless, when)
-import qualified Data.ByteString               as BS
-import           Data.ByteString.Lazy          (ByteString)
-import qualified Data.ByteString.Lazy          as B
-import qualified Data.ByteString.Lazy          as BL
-import qualified Data.ByteString.Lazy.Char8    as BC
-import           Data.List                     (isInfixOf)
-import           Data.Monoid                   ((<>))
+import           Control.Monad              (unless, when)
+import qualified Data.ByteString            as BS
+import           Data.ByteString.Lazy       (ByteString)
+import qualified Data.ByteString.Lazy       as B
+import qualified Data.ByteString.Lazy       as BL
+import qualified Data.ByteString.Lazy.Char8 as BC
+import           Data.List                  (isInfixOf)
+import           Data.Monoid                ((<>))
+import qualified Data.Text.IO               as T (writeFile)
+import           NeatInterpolation          (text)
 import           System.Directory
 import           System.Environment
-import           System.Exit                   (ExitCode (..))
+import           System.Exit                (ExitCode (..))
 import           System.FilePath
-import           System.IO                     (stderr, stdout)
-import           Text.InterpolatedString.Perl6 (q)
+import           System.IO                  (stderr, stdout)
 
-import           Text.Pandoc.Options           (WriterOptions (..))
-import           Text.Pandoc.Process           (pipeProcess)
-import           Text.Pandoc.Shared            (withTempDir)
-import qualified Text.Pandoc.UTF8              as UTF8
+import           Text.Pandoc.Options        (WriterOptions (..))
+import           Text.Pandoc.Process        (pipeProcess)
+import           Text.Pandoc.Shared         (withTempDir)
+import qualified Text.Pandoc.UTF8           as UTF8
 
 makePDF :: WriterOptions -> String -> String -> IO (Either ByteString ByteString)
 makePDF opts program source = withTempDir "tex2pdf." $ \tmpdir -> do
@@ -120,7 +121,7 @@ runTeXProgram verbose program args runNumber numRuns tmpDir source = do
 
 -- quasi quoter for multiline strings
 writePletterFile :: FilePath -> IO ()
-writePletterFile tmpDir = writeFile (tmpDir </> "pletter.cls") [q|
+writePletterFile tmpDir = T.writeFile (tmpDir </> "pletter.cls") [text|
 \ProvidesClass{pletter}
 
 \DeclareOption*{\PassOptionsToClass{\CurrentOption}{letter}}

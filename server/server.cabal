@@ -36,13 +36,13 @@ library
                      , entropy
                      , fast-logger
                      , filepath
-                     , interpolatedstring-perl6
                      , lens
                      , herculus-lib
                      , monad-control
                      , monad-logger
                      , mongoDB
                      , mtl
+                     , neat-interpolation
                      , network
                      , optparse-applicative
                      , pandoc
@@ -66,7 +66,6 @@ library
 executable server-exe
   hs-source-dirs:      app
   main-is:             Main.hs
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -Wall
   build-depends:       aeson
                      , base
                      , bytestring
