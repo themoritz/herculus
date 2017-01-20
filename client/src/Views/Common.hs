@@ -33,6 +33,7 @@ data EditBoxProps a = EditBoxProps
 
 data EditBoxState a = EditBoxState
   { _ebsValue       :: Maybe a
+  -- ^ Shadows editBoxValue if isJust
   , _ebsInvalidText :: Maybe Text
   , _ebsIsEditing   :: Bool
   } deriving (Generic, NFData)
@@ -72,9 +73,8 @@ editBox = defineStatefulView "editBox" emptyEditBox $
                                               & ebsInvalidText .~ Nothing)
           , onKeyDown $ \_ evt _ ->
               case (keyCode evt, state ^. ebsValue) of
-                (13, Just a)  -> (editBoxOnSave a, Nothing)
-                (13, Nothing) -> ([],              Just $ state & ebsIsEditing   .~ False
-                                                                & ebsInvalidText .~ Nothing)
+                (13, Just a)  -> (editBoxOnSave a, Just emptyEditBox)
+                (13, Nothing) -> ([],              Just emptyEditBox)
                 _             -> ([],              Nothing)
           -- the keyUp event, unlike keydown, is consistently handled among browsers
           , onKeyUp $ \_ evt _ -> case keyCode evt of
