@@ -5,9 +5,6 @@ var ReactDOM = require('react-dom')
 global.React = React
 global.ReactDOM = ReactDOM
 
-// react-virtualized
-require('react-virtualized/styles.css')
-
 // react-datepicker
 require('react-datepicker/dist/react-datepicker.css');
 
@@ -25,7 +22,6 @@ global.Codemirror = Codemirror
 // Own components
 global.OnDidMount     = require('./assets/components/OnDidMount.js')
 global.OnClickOutside = require('./assets/components/OnClickOutside.js')
-global.Grid           = require('./assets/components/Grid.js')
 global.DatePicker     = require('./assets/components/DatePicker.js')
 
 // font-awesome

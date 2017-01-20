@@ -1,11 +1,16 @@
 @import "../modules/colors";
 
 .Grid {
-  outline: none;
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  right: 0px;
+  bottom: 0px;
+  overflow: scroll;
 }
 
-.Grid__innerScrollContainer {
-  overflow: visible !important;
+.Grid__cell {
+  position: absolute;
 }
 
 .CodeMirror {

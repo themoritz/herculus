@@ -1,31 +1,34 @@
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell     #-}
 
 module Views.Table where
 
-import           Control.Lens       hiding (view)
+import           Control.Lens        hiding (view)
 
-import           Control.Monad      (when)
-import           Data.IntMap.Strict (IntMap)
-import qualified Data.IntMap.Strict as IntMap
-import           Data.Map.Strict    (Map)
-import qualified Data.Map.Strict    as Map
-import           Data.Monoid        ((<>))
+import           Control.Monad       (when)
+import           Data.Foldable       (for_)
+import           Data.IntMap.Strict  (IntMap)
+import qualified Data.IntMap.Strict  as IntMap
+import           Data.Map.Strict     (Map)
+import qualified Data.Map.Strict     as Map
+import           Data.Monoid         ((<>))
 
 import           React.Flux
+import           React.Flux.Internal (toJSString)
 
-import           Lib.Api.Rest       (Command (..))
+import           Lib.Api.Rest        (Command (..))
 import           Lib.Model
-import           Lib.Model.Auth     (SessionKey)
-import           Lib.Model.Cell     (CellContent)
+import           Lib.Model.Auth      (SessionKey)
+import           Lib.Model.Cell      (CellContent)
 import           Lib.Model.Column
-import           Lib.Model.Project  (ProjectClient)
-import           Lib.Model.Row      (Row)
+import           Lib.Model.Project   (ProjectClient)
+import           Lib.Model.Row       (Row)
 import           Lib.Model.Table
 import           Lib.Types
 
 import qualified Project
-import           Store              (dispatchProject, dispatchProjectCommand)
+import           Store               (dispatchProject, dispatchProjectCommand)
 import           Views.Cell
 import           Views.Column
 import           Views.Combinators
@@ -46,65 +49,80 @@ data TableGridProps = TableGridProps
 
 makeLenses ''TableGridProps
 
+posdiv_ :: String -> Int -> Int -> Int -> Int
+        -> ReactElementM eh a -> ReactElementM eh a
+posdiv_ key left top width height = viewWithSKey posdiv (toJSString key) ()
+  where
+    posdiv = defineView "posdiv" $ \() ->
+      div_ [ "className" $= "Grid__cell"
+           , style
+             [ ("left",   toJSString $ show left <> "px")
+             , ("top",    toJSString $ show top <> "px")
+             , ("width",  toJSString $ show width <> "px")
+             , ("height", toJSString $ show height <> "px")
+             ]
+           ] childrenPassedToView
+
 tableGrid_ :: TableGridProps -> ReactElementM eh ()
 tableGrid_ !props = view tableGrid props mempty
 
 tableGrid :: ReactView TableGridProps
 tableGrid = defineView "tableGrid" $ \props -> do
-  let numCols = IntMap.size $ props ^. colByIndex
-      numRecs = IntMap.size $ props ^. rowByIndex
+  let renderCell :: Id Column -> Column -> Id Row -> ReactElementM eh ()
+      renderCell c col r = cldiv_ "cell" $ case col ^. columnKind of
+        ColumnReport rep ->
+          reportCell_ $ ReportCellProps (props ^. sKey) c r rep
+        ColumnData dat ->
+          case Map.lookup (Project.Coords c r) $ props ^. cells of
+            Just content -> dataCell_ $ DataCellProps c r dat content
+            Nothing      -> mempty
 
-      getRow y =
-        let Just r = IntMap.lookup y $ props ^. rowByIndex
-        in  uncurry Entity r
-
-      getColumn x =
-        let Just c = IntMap.lookup x $ props ^. colByIndex
-        in  uncurry Entity c
-
-      renderCell :: Int -> Int -> ReactElementM eh ()
-      renderCell x y =
-        case IntMap.lookup x $ props ^. colByIndex of
-          Nothing -> mempty
-          Just (c, col) -> case col ^. columnKind of
-            ColumnReport rep ->
-              case  IntMap.lookup y $ props ^. rowByIndex of
-                Just (r, _) -> reportCell_ $ ReportCellProps (props ^. sKey) c r rep
-                Nothing     -> mempty
-            ColumnData   dat -> do
-              let mRC = do (r, _)  <- IntMap.lookup y $ props ^. rowByIndex
-                           content <- Map.lookup (Project.Coords c r) $ props ^. cells
-                           pure (r, content)
-              case mRC of
-                Just (r, content) -> dataCell_ $ DataCellProps c r dat content
-                Nothing           -> mempty
-
-      renderer (GridRenderArgs x y _)
-        | x == 0 && y == 0 = cldiv_ "origin" mempty
-        | x == 0 && y == (numRecs + 1) = cldiv_ "record-new" $
-            faButton_ "plus-circle" $ dispatchProjectCommand $ CmdRowCreate (props ^. tableId)
-        | x == 0 && 0 < y && y <= numRecs = cldiv_ "record" $
-            row_ $ getRow (y - 1)
-        | y == 0 && x == (numCols + 1) = cldiv_ "column-new" $ do
-            let isOpen = props ^. showNewColDialog
-                toggle = dispatchProject Project.TableToggleNewColumnDialog
-            faButton_ "plus-circle" (if isOpen then [] else toggle)
-            when isOpen $ onClickOutside_ (\(_ :: String) -> toggle) $
-              cldiv_ "small-menu" $ do
-                menuItem_ "columns" "New data column" $
-                  toggle <> dispatchProjectCommand (CmdDataColCreate (props ^. tableId))
-                menuItem_ "file-text" "New report column" $
-                  toggle <> dispatchProjectCommand (CmdReportColCreate (props ^. tableId))
-        | y == 0 && 0 < x && x <= numCols =
-            column_ (props ^. projectId) (props ^. sKey) (props ^. tables) (getColumn (x - 1))
-        | 0 < x && x <= numCols && 0 < y && y <= numRecs = cldiv_ "cell" $
-            renderCell (x - 1) (y - 1)
-        | otherwise = cldiv_ "empty" mempty
-
-  grid_ GridProps
-        { gridCellRenderer = defineView "cellRenderer" renderer
-        , gridColumnWidths = [37] <> replicate numCols 230 <> [37]
-        , gridColumnCount = numCols + 2
-        , gridRowHeights = [54] <> replicate numRecs 37 <> [37]
-        , gridRowCount = numRecs + 2
-        }
+  cldiv_ "Grid" $ do
+    let headHeight = 54 :: Int
+        cellHeight = 37 :: Int
+        addRowHeight = 37 :: Int
+        delRowWidth = 37 :: Int
+        cellWidth = 230 :: Int
+        addColWidth = 37 :: Int
+    -- Origin
+    posdiv_ "-" 0 0 delRowWidth headHeight $ cldiv_ "origin" mempty
+    -- Delete rows
+    let rows = IntMap.toList (props ^. rowByIndex)
+        cols = IntMap.toList (props ^. colByIndex)
+    for_ rows $ \(y, (rowId, row')) ->
+      posdiv_ (show rowId)
+              (0 :: Int) (y * cellHeight + headHeight)
+              delRowWidth cellHeight $ cldiv_ "record" $
+                row_ (Entity rowId row')
+    -- Columns
+    for_ cols $ \(x, (columnId, column')) -> do
+      -- Head
+      posdiv_ (show columnId)
+              (x * cellWidth + delRowWidth) 0
+              cellWidth headHeight $
+                column_ (props ^. projectId) (props ^. sKey)
+                        (props ^. tables) (Entity columnId column')
+      -- Cells
+      for_ rows $ \(y, (rowId, _)) ->
+        posdiv_ (show columnId <> show rowId)
+                (x * cellWidth + delRowWidth) (y * cellHeight + headHeight)
+                cellWidth cellHeight $ renderCell columnId column' rowId
+    -- Add row
+    posdiv_ "addrow"
+            0 (length rows * cellHeight + headHeight)
+            delRowWidth addRowHeight $ cldiv_ "record-new" $
+              faButton_ "plus-circle" $ dispatchProjectCommand $
+                                        CmdRowCreate (props ^. tableId)
+    -- Add col
+    posdiv_ "addcol"
+           (length cols * cellWidth + delRowWidth) 0
+           addColWidth headHeight $ cldiv_ "column-new" $ do
+             let isOpen = props ^. showNewColDialog
+                 toggle = dispatchProject Project.TableToggleNewColumnDialog
+             faButton_ "plus-circle" (if isOpen then [] else toggle)
+             when isOpen $ onClickOutside_ (\(_ :: String) -> toggle) $
+               cldiv_ "small-menu" $ do
+                 menuItem_ "columns" "New data column" $
+                   toggle <> dispatchProjectCommand (CmdDataColCreate (props ^. tableId))
+                 menuItem_ "file-text" "New report column" $
+                   toggle <> dispatchProjectCommand (CmdReportColCreate (props ^. tableId))
