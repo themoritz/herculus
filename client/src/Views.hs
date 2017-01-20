@@ -167,6 +167,7 @@ projectNameComp = defineStatefulView "project name" initalProjectName $
                 in  ([], Just st { pnsName = value,
                                    pnsNameError = Text.null value})
               , onKeyDown inputKeyDownHandler
+              , onBlur $ \_ _ st -> ([], Just st { pnsEditable = False })
               ]
         else do
           span_ $ elemText $ project ^. projectClientName
@@ -175,6 +176,7 @@ projectNameComp = defineStatefulView "project name" initalProjectName $
             [ classNames [ ("pure"   , True)
                          , ("on-dark", True)
                          ]
+            , "title" $= "Change project name"
             , onClick $ \ev _ st ->
               ([stopPropagation ev],
                Just st { pnsEditable = True
@@ -186,6 +188,7 @@ projectNameComp = defineStatefulView "project name" initalProjectName $
             [ classNames [ ("pure"   , True)
                          , ("on-dark", True)
                          ]
+            , "title" $= "Delete project (careful!)"
             , onClick $ \ev _ _ ->
               (stopPropagation ev :
                  dispatchLoggedIn (LoggedIn.DeleteProject projectId), Nothing)
@@ -274,22 +277,27 @@ table = defineStatefulView "table" initialTableViewState $ \state (tableId, tabl
          , onClick $ \_ _ _ -> (dispatchProject $ Project.OpenTable tableId, Nothing)
          ] $
      if tEditable state
-     then div_ $ input_
+     then input_
             [ "value" &= tName state
+            , "autoFocus" &= True
             , onChange $ \ev st ->
               let value = target ev "value"
               in  ([], Just st { tName = value, tNameError = Text.null value})
             , onKeyDown inputKeyDownHandler
+            , onBlur $ \_ _ st -> ([], Just st { tEditable = False })
             ]
-     else div_ $ do
+     else do
        span_ $ elemText $ table' ^. tableName
 
-       button_
-         [ "className" $= "pure on-dark"
-         , onClick $ \ev _ st -> ([stopPropagation ev], Just st { tEditable = True, tName = table'  ^. tableName })
-         ] $ faIcon_ "pencil"
+       when selected $ do
+         button_
+           [ "className" $= "pure on-dark"
+           , "title" $= "Change table name"
+           , onClick $ \ev _ st -> ([stopPropagation ev], Just st { tEditable = True, tName = table'  ^. tableName })
+           ] $ faIcon_ "pencil"
 
-       button_
-         [ "className" $= "pure on-dark"
-         , onClick $ \ev _ _ -> (stopPropagation ev : dispatchProjectCommand (CmdTableDelete tableId), Nothing)
-         ] $ faIcon_ "times"
+         button_
+           [ "className" $= "pure on-dark"
+           , "title" $= "Delete table (careful!)"
+           , onClick $ \ev _ _ -> (stopPropagation ev : dispatchProjectCommand (CmdTableDelete tableId), Nothing)
+           ] $ faIcon_ "times"

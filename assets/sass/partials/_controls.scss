@@ -114,13 +114,15 @@ a.on-dark {
   width: 170px;
   background-color: white;
   border-radius: 4px;
-  border: 1px solid lightgray;
-  box-shadow: 0px 0px 20px 0px lightgray;
+  border: 1px solid $anthrazit;
+  box-shadow: 0px 0px 30px 0px rgba(0,0,0,0.2);
+  overflow: hidden;
   button.menu-item {
     text-align: left;
     font-size: 12pt;
     font-weight: normal;
     width: 100%;
+    border-radius: 0px;
     box-shadow: none;
     border: none;
     background: none;
@@ -128,8 +130,8 @@ a.on-dark {
     color: $anthrazit;
     padding: 0px;
     display: table;
-    // transition-property: background-color;
-    // transition-duration: 100ms;
+    transition-property: background-color, color;
+    transition-duration: 100ms;
     &:hover {
       color: white;
       background-color: $brand-dark;
