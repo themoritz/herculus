@@ -2,7 +2,7 @@ site_name: Herculus
 pages:
   - Formulas: formulas.md
   - Guides:
-      - Building a Simple App: guides/app.md
+      - Building Your First App: guides/app.md
 theme: cinder
 extra_css:
   - "css/herculus.css"
