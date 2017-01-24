@@ -20,7 +20,7 @@ projectsOverview_ !ps = view projectsOverview ps mempty
 
 projectsOverview :: ReactView (Map (Id ProjectClient) ProjectClient)
 projectsOverview = defineView "projects" $ \ps -> cldiv_ "projects" $ do
-  h1_ "My projects"
+  h1_ "My Projects"
   div_
     [ classNames [ ("tile", True)
                  , ("new" , True)
