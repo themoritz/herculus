@@ -1,0 +1,44 @@
+@import "dimensions";
+@import "colors";
+
+footer {
+  padding-top: 5px;
+  position: fixed;
+  left: 0px;
+  bottom: 0px;
+  right: 0px;
+  height: $footer-height;
+  box-sizing: border-box;
+  &:after {
+    content: "";
+    position: absolute;
+    height: 5px;
+    left: 0px;
+    right: 0px;
+    top: 0px;
+    background: $brand-dark;
+    background: -moz-linear-gradient(left, $brand-dark 0%, $brand-light 100%);
+    background: -webkit-linear-gradient(left, $brand-dark 0%, $brand-light 100%);
+    background: linear-gradient(to right, $brand-dark 0%, $brand-light 100%);
+  }
+  .wrapper {
+    height: 100%;
+    padding: 5px;
+    background-color: $anthrazit;
+    box-sizing: border-box;
+    .links {
+      display: table;
+      margin: auto;
+      div {
+        padding-left: 10px;
+        padding-right: 10px;
+      }
+      .contact {
+        display: table-cell;
+      }
+      .imprint {
+        display: table-cell;
+      }
+    }
+  }
+}

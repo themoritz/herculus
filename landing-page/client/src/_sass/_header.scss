@@ -1,0 +1,38 @@
+@import "dimensions";
+@import "colors";
+
+header {
+  .wrapper {
+    position: relative;
+    background-color: $anthrazit;
+    box-sizing: border-box;
+    padding-bottom: 5px;
+
+    &:after {
+      content: "";
+      position: absolute;
+      height: 5px;
+      left: 0px;
+      right: 0px;
+      bottom: 0px;
+      background: linear-gradient(to right, $brand-dark 0%, $brand-light 100%);
+    }
+
+    .title {
+      padding: 10px;
+      height: $logo-size;
+      .logo {
+        float: left;
+        width: $logo-size;
+        height: $logo-size;
+        margin-right: 10px;
+      }
+      .name {
+        color: white;
+        font-weight: bold;
+        font-size: 26pt;
+        vertical-align: middle;
+      }
+    }
+  }
+}

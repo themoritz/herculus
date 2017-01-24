@@ -1,0 +1,175 @@
+---
+layout: default
+---
+<div style="background-image: url('{{ "/img/cubes.jpg" | prepend: site.cdn }}');" class="cover">
+  <p>
+    <b>Build rock-solid tools</b> in no time<br />
+    and focus on the things that matter.
+  </p>
+  <button id="btnTop">Join the Beta List!</button>
+</div>
+
+<div class="screencasts">
+  {% include screencast.html gif="spreadsheet.final.gif" title="Spreadsheet-like Look & Feel"
+     bullets="
+  <ul>
+    <li>
+      Quickly create tables and columns in a responsive interface
+    </li>
+    <li>
+      Fill the cells with your data or use formulas
+    </li>
+    <li>
+      Have changes to your data propagate automatically
+    </li>
+  </ul>" %}
+
+  {% include screencast.html class="alter" gif="types.final.gif" title="Expressive Column Types"
+     bullets="
+  <ul>
+    <li>
+      Choose the data type you need for each column
+    </li>
+    <li>
+      Use the row type to have cells with records from other tables
+    </li>
+    <li>
+      Use the date picker for date columns or the dropdown menu to select rows.
+    </li>
+    <li>
+      Select and edit more elaborate types like a list of rows of Books, with unlimited flexibility
+    </li>
+  </ul>" %}
+
+  {% include screencast.html gif="formulas.final.gif" title="Powerful Formulas"
+     bullets="
+  <ul>
+    <li>
+      Use formulas as simple as <code>$A * $B</code> or as advanced as <code>sum (map getPrice $Books)</code>
+    </li>
+    <li>
+      Create custom formulas with a few lines of code using the expressive built-in language
+    </li>
+    <li>
+      Have your formulas automatically type-checked to avoid bugs
+    </li>
+  </ul>" %}
+
+  {% include screencast.html class="alter" gif="reports.final.gif" title="Automated Reports"
+     bullets="
+  <ul>
+    <li>
+      Create a PDF-report from your data with a few clicks, or choose any other output format
+    </li>
+    <li>
+      Choose among different formatting languages and fine-tune your custom template in detail
+    </li>
+    <li>
+      Make use of the built-in template language to fill the report with your own data
+    </li>
+  </ul>" %}
+</div>
+
+<div class="subscribe">
+  <div class="text">
+    Subscribe to be among the first users and get notified about product start and new features.
+  </div>
+  <div class="link">
+    <button id="btnBottom">Join the Beta List!</button>
+  </div>
+</div>
+
+<div class="alter contact">
+  <div class="text">
+    Contact us directly to request a demo of the product: <a href="mailto:hi@herculus.io">hi@herculus.io</a>.
+  </div>
+</div>
+
+<div id="subscribe" class="modal-container" style="display: none;">
+  <div class="modal">
+    <div class="content">
+      <div class="titlebar">
+        <span id="btnClose" class="close"><i class="fa fa-close"></i></span>
+      </div>
+      <div class="body">
+        <p>Subscribers get user accounts once we are live and receive our newsletter.</p>
+        <input id="inpEmail" type="email" placeholder="E-Mail" name="email" autofocus width="16">
+        <p>And no worries, we won't spam you!</p>
+      </div>
+      <div class="footer">
+        <div id="message" class="message hidden"></div>
+        <button id="btnSubmit">Submit</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Modal
+var modal = document.getElementById("subscribe")
+var btnTop = document.getElementById("btnTop")
+var btnBottom = document.getElementById("btnBottom")
+var btnClose = document.getElementById("btnClose")
+var btnSubmit = document.getElementById("btnSubmit")
+var inpEmail = document.getElementById("inpEmail")
+var message = document.getElementById("message")
+
+function showSubscribe() {
+  modal.style.display = "block"
+  inpEmail.focus()
+}
+
+function hideSubscribe() {
+  modal.style.display = "none"
+  message.innerHTML = ""
+  message.className = "message hidden"
+  inpEmail.value = ""
+}
+
+function validateEmail(email) {
+  var re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+  return re.test(email);
+}
+
+btnTop.onclick = showSubscribe
+btnBottom.onclick = showSubscribe;
+
+function subscribeSuccess() {
+  inpEmail.value = ""
+  message.innerHTML = "Thank you!"
+  message.className = "message success"
+}
+
+function subscribeError(msg) {
+  message.innerHTML = msg
+  message.className = "message error"
+}
+
+btnSubmit.onclick = function () {
+  var email = inpEmail.value
+  if (validateEmail(email)) {
+    var xhr = new XMLHttpRequest()
+    xhr.open('POST', 'subscriber/add')
+    xhr.setRequestHeader('Content-Type', 'text/plain;charset=UTF-8')
+    xhr.send(inpEmail.value)
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState === 4) { // 4 = done
+        if (xhr.status === 200) {
+          subscribeSuccess()
+        } else {
+          subscribeError(xhr.responseText)
+        }
+      }
+    }
+  } else {
+    subscribeError("Invalid email address!")
+  }
+}
+
+btnClose.onclick = hideSubscribe
+window.onclick = function(event) {
+  if (event.target == modal) {
+    hideSubscribe()
+  }
+}
+</script>

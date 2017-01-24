@@ -1,0 +1,15 @@
+---
+# Only the main Sass file needs front matter (the dashes are enough)
+---
+
+// Import partials from `sass_dir` (defaults to `_sass`)
+@import
+  "colors",
+  "dimensions",
+  "responsive",
+  "layout",
+  "header",
+  "footer",
+  "visual",
+  "subscribe-modal"
+;

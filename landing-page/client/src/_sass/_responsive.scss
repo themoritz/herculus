@@ -1,0 +1,14 @@
+@import "dimensions";
+
+@mixin on-small() {
+  @media only screen and (max-width: $break-small) { @content; }
+}
+
+@mixin on-medium() {
+  @media only screen and (min-width: $break-small + 1px)
+                     and (max-width: $break-large - 1px) { @content; }
+}
+
+@mixin on-large() {
+  @media only screen and (min-width: $break-large) { @content; }
+}

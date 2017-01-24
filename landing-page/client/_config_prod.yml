@@ -1,0 +1,9 @@
+title: Herculus
+email: moritz@herculus.io
+description: Rapid application development with structured spreadsheets!
+baseurl: "" # the subpath of your site, e.g. /blog
+url: "https://www.herculus.io" # the base hostname & protocol for your site
+source: src
+
+# Custom Vars
+cdn: "https://d3mkv3mpuhv075.cloudfront.net"

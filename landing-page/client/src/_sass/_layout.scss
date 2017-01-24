@@ -1,0 +1,99 @@
+@import "dimensions";
+@import "colors";
+@import "responsive";
+
+article.post {
+  padding: 0px 5%;
+  font-size: 14pt;
+}
+
+body {
+  margin: 0px;
+  .page-content {
+    margin-bottom: $footer-height;
+    .cover {
+      @include on-small() {
+        height: $cover-height-sm;
+        padding: 15px 0px;
+        font-size: 15pt;
+      }
+      @include on-medium() {
+        height: $cover-height-md;
+        padding: 50px 0px;
+        font-size: 24pt;
+      }
+      @include on-large() {
+        height: $cover-height-lg;
+        padding: 75px 0px;
+        font-size: 24pt;
+      }
+      box-sizing: border-box;
+      background-size: cover;
+      background-position: center;
+      text-align: center;
+      p {
+        margin: 0px;
+        margin-bottom: 40px;
+        b {
+          color: $brand-light;
+        }
+        color: white;
+      }
+    }
+    .screencasts {
+      .screencast {
+        padding: 50px 0px;
+        text-align: center;
+        .wrapper {
+          @include on-medium() {
+            width: 100%;
+            max-width: $screencast-width;
+          }
+          @include on-large() {
+            width: $screencast-width + $desc-width-lg + $desc-margin-lg;
+          }
+          display: inline-block;
+          &:after {
+            display: table;
+            content: "";
+            clear: both;
+          }
+          .left {
+            @include on-small() {
+              padding: 5px;
+            }
+            @include on-large() {
+              width: $desc-width-lg;
+              margin-right: $desc-margin-lg;
+              float: left;
+            }
+            text-align: left;
+            vertical-align: middle;
+          }
+          .right {
+            @include on-large() {
+              width: $screencast-width;
+              float: left;
+              text-align: center;
+            }
+            vertical-align: middle;
+            img {
+              max-width: 100%;
+            }
+          }
+        }
+      }
+    }
+    .subscribe, .contact {
+      padding: 50px 0;
+      text-align: center;
+      .text {
+        max-width: 500px;
+        margin: auto;
+      }
+      .link {
+        margin-top: 50px;
+      }
+    }
+  }
+}

@@ -1,0 +1,108 @@
+@import "colors";
+@import "responsive";
+
+body, input, button {
+  font-family: "Open Sans", sans-serif;
+  @include on-small() {
+    font-size: 14pt;
+  }
+  @include on-medium() {
+    font-size: 18pt;
+  }
+  @include on-large() {
+    font-size: 18pt;
+  }
+  background-color: $anthrazit-light;
+  color: darken($anthrazit, 10%);
+}
+
+.alter {
+  background-color: white;
+}
+
+.screencast {
+  img {
+    box-shadow: 0px 0px 50px 0px rgba(0, 0, 0, 0.5);
+  }
+}
+
+ul {
+  padding-left: 1.2em;
+  li {
+    text-indent: -0.1em;
+    padding-bottom: 0.5em;
+  }
+}
+
+h3 {
+  margin: 0px;
+}
+
+.links {
+  color: $gray;
+  font-size: 12pt;
+}
+
+a {
+  text-decoration: none;
+  color: $anthrazit;
+  &:hover {
+    color: $brand-dark;
+  }
+}
+
+a.link-type {
+  text-decoration: none;
+  color: $gray;
+}
+a.link-type:hover {
+  color: $brand-light;
+}
+
+button {
+  border: 3px solid $brand-dark;
+  border-radius: 30px;
+  padding: 12px 24px;
+  color: $brand-dark;
+  cursor: pointer;
+  background-color: transparent;
+  font-weight: bold;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.cover button, .cover p {
+  text-shadow: 2px 2px 8px black;
+}
+.cover button:hover {
+  text-shadow: none;
+}
+
+button:hover {
+  color: $anthrazit-light;
+  background-color: $brand-dark;
+}
+
+button:focus {
+  outline: none;
+}
+
+a.light {
+  border: 3px solid $brand-light;
+  color: $brand-light;
+}
+
+a.light:hover {
+  color: $anthrazit;
+}
+
+input {
+  outline-color: $brand-light;
+}
+
+code {
+  white-space: nowrap;
+  background-color: darken($anthrazit-light, 5%);
+  border-radius: 5px;
+  padding: 0px 1px;
+  border: 1px solid lightgray;
+}
