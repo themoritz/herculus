@@ -34,7 +34,8 @@ import           Lib.Model                        (Entity (..))
 import           Lib.Model.Auth                   (Session (..), SessionKey,
                                                    User, UserInfo (UserInfo),
                                                    sessionExpDate,
-                                                   sessionUserId, userName)
+                                                   sessionUserId, userEmail,
+                                                   userName)
 import           Lib.Types                        (Id, Time (Time), addSeconds)
 import           Lib.Util.Base64                  (mkBase64Url, toBase64Url)
 import           Monads                           (AppError (..), HexlEnv,
@@ -68,25 +69,26 @@ prolongSession session = do
   now <- Time <$> liftIO Clock.getCurrentTime
   pure $ session & sessionExpDate .~ addSeconds sessionLength now
 
---
-
 -- handling auth middleware
 
 lookUpSession :: (MonadIO m, MonadDB m)
               => SessionKey -> m (Either Text UserInfo)
 lookUpSession sessionKey =
-    getOneByQuery [ "sessionKey" =: sessionKey]
+    getOneByQuery [ "sessionKey" =: sessionKey ]
         >>= either (pure . Left) getUserId
   where
     getUserId (Entity sessionId session) = do
       now <- getCurrentTime
       if now > session ^. sessionExpDate
-        then delete sessionId $> Left "session expired"
+        then delete sessionId $> Left "Session expired."
         else do session' <- prolongSession session
                 update sessionId (\_ -> session')
                 let userId = session' ^. sessionUserId
                 user <- getById' userId
-                pure $ Right $ UserInfo userId (user ^. userName) sessionKey
+                pure $ Right $ UserInfo userId
+                                        (user ^. userName)
+                                        (user ^. userEmail)
+                                        sessionKey
 
 authHandler :: HexlEnv -> AuthMiddleware
 authHandler env = mkAuthHandler $ hexlToServant env $ \request -> do

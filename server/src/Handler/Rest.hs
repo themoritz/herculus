@@ -26,17 +26,7 @@ import qualified Text.Pandoc.Error              as Pandoc
 import           Lib.Api.Rest
 import           Lib.Compiler.Interpreter.Types
 import           Lib.Model
-import           Lib.Model.Auth                 (ChangePwdData (..),
-                                                 ChangePwdResponse (..),
-                                                 GetUserInfoResponse (..),
-                                                 LoginData (..),
-                                                 LoginResponse (..), Session,
-                                                 SessionKey, SignupData (..),
-                                                 SignupResponse (..), User (..),
-                                                 UserInfo (UserInfo), mkPwHash,
-                                                 sessionKey, sessionUserId,
-                                                 userName, userPwHash,
-                                                 verifyPassword)
+import           Lib.Model.Auth
 import           Lib.Model.Cell
 import           Lib.Model.Class
 import           Lib.Model.Column
@@ -77,24 +67,20 @@ handle =
 -- Auth ------------------------------------------------------------------------
 
 handleAuthLogin :: (MonadIO m, MonadHexl m) => LoginData -> m LoginResponse
-handleAuthLogin (LoginData uName pwd) =
-    checkLogin >>= \case
-      Left  err    -> pure $ LoginFailed err
-      Right userId -> do
-        session <- getSession userId
-        pure $ LoginSuccess $ UserInfo userId uName $ session ^. sessionKey
-  where
-    checkLogin = runExceptT $ do
-      Entity userId user <- getUser
-      checkPassword_ user
-      pure userId
-    getUser = ExceptT $ over _Left (\_ -> "username unknown") <$>
-      getOneByQuery [ "name" =: uName ]
-    checkPassword_ user =
+handleAuthLogin (LoginData email pwd) =
+  getOneByQuery [ "email" =: email ] >>= \case
+    Left _ -> pure failMessage
+    Right (Entity userId user) -> do
       if verifyPassword pwd (user ^. userPwHash)
-        then pure ()
-        else throwError "wrong password"
-
+        then do
+          session <- getSession userId
+          pure $ LoginSuccess $ UserInfo userId
+                                         (user ^. userName)
+                                         (user ^. userEmail)
+                                         (session ^. sessionKey)
+        else pure failMessage
+  where
+    failMessage = LoginFailed "Wrong email or password."
     getSession userId = do
       eSession <- getOneByQuery [ "userId" =: toObjectId userId ]
       for_ eSession $ \(Entity sessionId _) -> delete (sessionId :: Id Session)
@@ -102,21 +88,26 @@ handleAuthLogin (LoginData uName pwd) =
       create session $> session
 
 handleAuthLogout :: MonadHexl m => SessionData -> m ()
-handleAuthLogout (UserInfo userId _ _) =
+handleAuthLogout (UserInfo userId _ _ _) =
   getOneByQuery [ "userId" =: toObjectId userId ] >>= \case
     Left  msg -> throwError $ ErrBug msg
     Right (Entity sessionId _) -> delete (sessionId :: Id Session)
 
 handleAuthSignup :: (MonadIO m, MonadHexl m) => SignupData -> m SignupResponse
-handleAuthSignup (SignupData uName pwd intention) =
-  getOneByQuery [ "name" =: uName ] >>= \case
-    Right (_ :: Entity User) -> pure $ SignupFailed "username already exists"
+handleAuthSignup (SignupData uName email pwd intention) =
+  getOneByQuery [ "email" =: uName ] >>= \case
+    Right (_ :: Entity User) -> pure $
+      SignupFailed "A user with that email address already exists."
     Left _  -> do
-      pwHash <- mkPwHash pwd
-      _ <- create $ User uName pwHash intention
-      handleAuthLogin (LoginData uName pwd) >>= \case
-        LoginSuccess userInfo -> pure $ SignupSuccess userInfo
-        LoginFailed  msg      -> throwError $ ErrBug $ "signed up, but login failed: " <> msg
+      if verifyEmail email
+        then do
+          pwHash <- mkPwHash pwd
+          _ <- create $ User uName email pwHash intention
+          handleAuthLogin (LoginData email pwd) >>= \case
+            LoginSuccess userInfo -> pure $ SignupSuccess userInfo
+            LoginFailed  msg      -> throwError $
+              ErrBug $ "Signed up, but login failed: " <> msg
+        else pure $ SignupFailed "Please enter a valid email address."
 
 handleAuthGetUserInfo :: MonadHexl m => SessionKey -> m GetUserInfoResponse
 handleAuthGetUserInfo sKey = do
@@ -124,14 +115,14 @@ handleAuthGetUserInfo sKey = do
     Entity _ session <- ExceptT $ getOneByQuery [ "sessionKey" =: sKey ]
     let userId = session ^. sessionUserId
     user <- ExceptT $ getById userId
-    pure (userId, user ^. userName)
+    pure $ UserInfo userId (user ^. userName) (user ^. userEmail) sKey
   pure $ case eUser of
-    Left err             -> GetUserInfoFailed err
-    Right (userId, name) -> GetUserInfoSuccess $ UserInfo userId name sKey
+    Left err       -> GetUserInfoFailed err
+    Right userInfo -> GetUserInfoSuccess userInfo
 
 handleAuthChangePwd :: (MonadIO m, MonadHexl m)
                     => SessionData -> ChangePwdData -> m ChangePwdResponse
-handleAuthChangePwd (UserInfo userId _ _) (ChangePwdData oldPwd newPwd) = do
+handleAuthChangePwd (UserInfo userId _ _ _) (ChangePwdData oldPwd newPwd) = do
   user <- getById' userId
   if verifyPassword oldPwd (user ^. userPwHash)
     then do
@@ -143,23 +134,23 @@ handleAuthChangePwd (UserInfo userId _ _) (ChangePwdData oldPwd newPwd) = do
 -- Project ----------------------------------------------------------------------
 
 handleProjectCreate :: MonadHexl m => SessionData -> Text -> m (Entity ProjectClient)
-handleProjectCreate (UserInfo userId _ _) projName = do
+handleProjectCreate (UserInfo userId _ _ _) projName = do
   let project = Project projName userId emptyDependencyGraph
   projectId <- create project
   pure $ toClient $ Entity projectId project
 
 handleProjectList :: MonadHexl m => SessionData -> m [Entity ProjectClient]
-handleProjectList (UserInfo userId _ _) =
+handleProjectList (UserInfo userId _ _ _) =
   map toClient <$> listByQuery [ "owner" =: toObjectId userId ]
 
 handleProjectSetName :: MonadHexl m => SessionData -> Id ProjectClient -> Text -> m ()
-handleProjectSetName (UserInfo userId _ _) projectId name = do
+handleProjectSetName (UserInfo userId _ _ _) projectId name = do
   let i = fromClientId projectId
   permissionProject userId i
   update i $ projectName .~ name
 
 handleProjectDelete :: MonadHexl m => SessionData -> Id ProjectClient -> m ()
-handleProjectDelete sessionData@(UserInfo userId _ _) projectId = do
+handleProjectDelete sessionData@(UserInfo userId _ _ _) projectId = do
   let i = fromClientId projectId
   permissionProject userId i
   tables <- listByQuery [ "projectId" =: toObjectId i ]
@@ -174,7 +165,7 @@ handleProjectLoad :: MonadHexl m => SessionData -> Id ProjectClient
                        , [Entity Column]
                        , [Entity Row]
                        , [Entity Cell] )
-handleProjectLoad (UserInfo userId _ _) projectId = do
+handleProjectLoad (UserInfo userId _ _ _) projectId = do
   let i = fromClientId projectId
   permissionProject userId i
   project <- getById' i
@@ -188,7 +179,7 @@ handleProjectLoad (UserInfo userId _ _) projectId = do
   pure (toClient project, tables, columns, rows, cells)
 
 handleProjectRunCommand :: MonadHexl m => SessionData -> Id ProjectClient -> Command -> m ()
-handleProjectRunCommand (UserInfo userId _ _) projectId cmd = do
+handleProjectRunCommand (UserInfo userId _ _ _) projectId cmd = do
   let i = fromClientId projectId
   permissionProject userId i
   -- Check that project id implied by the command matches `i`.
@@ -218,7 +209,7 @@ handleProjectRunCommand (UserInfo userId _ _) projectId cmd = do
 handleCellGetReportPDF :: MonadHexl m => SessionData
                        -> Maybe SessionKey -> Id Column -> Id Row
                        -> m BL.ByteString
-handleCellGetReportPDF (UserInfo userId _ _) _ columnId rowId = do
+handleCellGetReportPDF (UserInfo userId _ _ _) _ columnId rowId = do
   permissionColumn userId columnId
   (repCol, plain) <- evalReport columnId rowId
   case repCol ^. reportColLanguage of
@@ -260,7 +251,7 @@ handleCellGetReportPDF (UserInfo userId _ _) _ columnId rowId = do
 
 handleCellGetReportHTML :: MonadHexl m => SessionData
                         -> Maybe SessionKey -> Id Column -> Id Row -> m Text
-handleCellGetReportHTML (UserInfo userId _ _) _ columnId rowId = do
+handleCellGetReportHTML (UserInfo userId _ _ _) _ columnId rowId = do
   permissionColumn userId columnId
   col <- getById' columnId
   (repCol, plain) <- evalReport columnId rowId
@@ -287,7 +278,7 @@ handleCellGetReportHTML (UserInfo userId _ _) _ columnId rowId = do
 
 handleCellGetReportPlain :: MonadHexl m => SessionData
                          -> Maybe SessionKey -> Id Column -> Id Row -> m Text
-handleCellGetReportPlain (UserInfo userId _ _) _ columnId rowId = do
+handleCellGetReportPlain (UserInfo userId _ _ _) _ columnId rowId = do
   permissionColumn userId columnId
   snd <$> evalReport columnId rowId
 

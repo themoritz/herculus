@@ -2,7 +2,7 @@
 , bytestring, case-insensitive, cereal, containers, Decimal
 , deepseq, http-api-data, http-media, http-types, lens, mtl, parsec
 , pwstore-fast, scientific, servant, stdenv, text, these, time
-, transformers, union-find, unordered-containers, vector
+, transformers, union-find, unordered-containers, vector, email-validate
 }:
 mkDerivation {
   pname = "herculus-lib";
@@ -13,7 +13,7 @@ mkDerivation {
     case-insensitive cereal containers Decimal deepseq http-api-data
     http-media http-types lens mtl parsec pwstore-fast scientific
     servant text these time transformers union-find unordered-containers
-    vector
+    vector email-validate
   ];
   testHaskellDepends = [ base ];
   homepage = "https://github.com/githubuser/lib#readme";

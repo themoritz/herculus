@@ -55,6 +55,7 @@ library
                      , cereal
                      , containers
                      , deepseq
+                     , email-validate
                      , http-api-data
                      , http-types
                      , http-media

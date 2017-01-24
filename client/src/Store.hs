@@ -257,7 +257,7 @@ eval = \case
         }
 
 performLogin :: UserInfo -> DSL ()
-performLogin userInfo@(UserInfo _ _ sKey) = do
+performLogin userInfo@(UserInfo _ _ _ sKey) = do
   liftIO $ persistSession sKey
   stateSession .= StateLoggedIn (LoggedIn.mkState sKey userInfo)
   sendWS $ WsUpAuthenticate sKey

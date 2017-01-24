@@ -18,7 +18,7 @@ handleClientMessage connection = \case
   WsUpAuthenticate sKey -> do
     response <- handleAuthGetUserInfo sKey
     case response of
-      GetUserInfoSuccess (UserInfo userId _ _) ->
+      GetUserInfoSuccess (UserInfo userId _ _ _) ->
         withConnectionMgr $ Mgr.authUser connection userId
       GetUserInfoFailed _ -> pure ()
     sendWS [connection] $ WsDownAuthResponse response

@@ -10,20 +10,20 @@ import           Data.Text       (Text)
 import qualified Data.Text       as Text
 
 import           React.Flux      (ReactElementM, ReactView, button_, classNames,
-                                  cldiv_, defineStatefulView, h1_, input_,
-                                  label_, onChange, onClick, onKeyDown, p_,
-                                  strong_, table_, target, tbody_, td_,
+                                  cldiv_, defineStatefulView, elemText, h1_,
+                                  input_, label_, onChange, onClick, onKeyDown,
+                                  p_, strong_, table_, target, tbody_, td_,
                                   textarea_, tr_, view, ($=), (&=))
 
-import           Lib.Model.Auth  (ChangePwdData (..), LoginData (..),
-                                  SignupData (..))
+import           Lib.Model.Auth  (ChangePwdData (..), Email (..),
+                                  LoginData (..), SignupData (..))
 import qualified LoggedIn
 import           Store           (Action (Login, Signup, ToLoginForm, ToSignupForm),
                                   dispatch, dispatchLoggedIn)
 import           Views.Common    (keyENTER)
 
 
--- validation helpers
+-- Validation helpers
 
 emptyText :: Text -> Bool
 emptyText = Text.null
@@ -31,41 +31,46 @@ emptyText = Text.null
 validateUserName :: Text -> Bool
 validateUserName = not . emptyText
 
+validateEmail :: Text -> Bool
+validateEmail = not . emptyText
+
 validatePwd :: Text -> Bool
 validatePwd = not . emptyText
 
-
--- views
+-- Views
 
 login_ :: ReactElementM eh ()
 login_ = view login () mempty
 
 data LoginViewState = LoginViewState
-  { inpUserNameValue :: Text
-  , inpPwdValue      :: Text
-  , showLoginErrors  :: Bool
+  { inpEmailValue   :: Text
+  , inpPwdValue     :: Text
+  , showLoginErrors :: Bool
   } deriving (Generic, Show, NFData)
 
 initialLoginViewState :: LoginViewState
-initialLoginViewState = LoginViewState {
-  inpUserNameValue = ""
-  , inpPwdValue = ""
+initialLoginViewState = LoginViewState
+  { inpEmailValue   = ""
+  , inpPwdValue     = ""
   , showLoginErrors = False
-}
+  }
 
 login :: ReactView ()
 login = defineStatefulView "login" initialLoginViewState $ \viewState _ ->
 
-  let inpUserNameError = not . validateUserName $ inpUserNameValue viewState
+  let inpEmailError = not . validateEmail $ inpEmailValue viewState
       inpPwdError = not . validatePwd $ inpPwdValue viewState
-      validFormData = not (inpUserNameError || inpPwdError)
+      validFormData = not (inpEmailError || inpPwdError)
 
       loginHandler viewState' =
         if validFormData then
-          (dispatch $ Login (LoginData (inpUserNameValue viewState') (inpPwdValue viewState'))
-            , Just updatedErrorState)
+          ( dispatch $ Login (LoginData (Email $ inpEmailValue viewState') (inpPwdValue viewState'))
+          , Just updatedErrorState
+          )
         else
-          ([], Just updatedErrorState)
+          ( []
+          , Just updatedErrorState
+          )
         where
           updatedErrorState = viewState' {
              showLoginErrors = True
@@ -80,19 +85,19 @@ login = defineStatefulView "login" initialLoginViewState $ \viewState _ ->
        table_ $ tbody_ $ do
          tr_ $ do
            td_ $ label_
-             [ "htmlFor" $= "username"
+             [ "htmlFor" $= "email"
              ] "E-Mail"
            td_ $ input_
              [ classNames
                  [ ("auth-input", True)
-                 , ("invalid", showLoginErrors viewState && inpUserNameError)
+                 , ("invalid", showLoginErrors viewState && inpEmailError)
                  ]
              , "type" $= "text"
-             , "value" &= inpUserNameValue viewState
+             , "value" &= inpEmailValue viewState
              , "autoFocus" &= True
-             , "name" $= "username"
+             , "name" $= "email"
              , onChange $ \ev viewState' -> ([], Just viewState' {
-                inpUserNameValue = target ev "value"})
+                inpEmailValue = target ev "value"})
              , onKeyDown inputKeyDownHandler
              ]
          tr_ $ do
@@ -133,6 +138,7 @@ signup_ = view signup () mempty
 
 data SignupViewState = SignupViewState
   { signupUserName   :: Text
+  , signupEmail      :: Text
   , signupPwd        :: Text
   , signupPwdConfirm :: Text
   , signupIntention  :: Text
@@ -140,18 +146,20 @@ data SignupViewState = SignupViewState
   } deriving (Generic, Show, NFData)
 
 initialSignupViewState :: SignupViewState
-initialSignupViewState = SignupViewState {
-  signupUserName = ""
-  , signupPwd = ""
+initialSignupViewState = SignupViewState
+  { signupUserName   = ""
+  , signupEmail      = ""
+  , signupPwd        = ""
   , signupPwdConfirm = ""
-  , signupIntention = ""
+  , signupIntention  = ""
   , showSignupErrors = False
-}
+  }
 
 signup :: ReactView ()
 signup = defineStatefulView "signup" initialSignupViewState $ \viewState _ ->
 
   let signupUserNameError = not . validateUserName $ signupUserName viewState
+      signupEmailError = not . validateEmail $ signupEmail viewState
       equalPwdValues = signupPwd viewState == signupPwdConfirm viewState
       signupPwdError = (not . validatePwd $ signupPwd viewState)
         || not equalPwdValues
@@ -159,23 +167,28 @@ signup = defineStatefulView "signup" initialSignupViewState $ \viewState _ ->
         || not equalPwdValues
       signupIntentionError = emptyText $ signupIntention viewState
 
-      validFormData = not (signupUserNameError || signupPwdError ||
-        signupPwdConfirmError || signupIntentionError)
+      validFormData = not $ any id
+        [ signupUserNameError
+        , signupPwdError
+        , signupPwdConfirmError
+        , signupIntentionError
+        ]
 
       signupHandler viewState' =
         if validFormData then
           let signupData = SignupData
-                { suUserName = signupUserName viewState'
-                , suPassword = signupPwd viewState'
+                { suUserName  = signupUserName viewState'
+                , suEmail     = Email (signupEmail viewState')
+                , suPassword  = signupPwd viewState'
                 , suIntention = signupIntention viewState'
                 }
           in (dispatch $ Signup signupData, Just updatedErrorState)
         else
           ([], Just updatedErrorState)
         where
-          updatedErrorState = viewState' {
-            showSignupErrors = True
-          }
+          updatedErrorState = viewState'
+            { showSignupErrors = True
+            }
 
       inputKeyDownHandler _ evt viewState'
        | keyENTER evt = signupHandler viewState'
@@ -188,7 +201,11 @@ signup = defineStatefulView "signup" initialSignupViewState $ \viewState _ ->
            td_ $
              label_
                [ "htmlFor" $= "intention"
-               ] "What are you planning to use Herculus for? Describe a project, idea, use case or that you are just going to play around."
+               ] $ elemText $ Text.unlines
+                 [ "What are you planning to use Herculus for? Describe a"
+                 , "project, idea, use case, or state that you are just going"
+                 , "to play around."
+                 ]
            td_ $
              textarea_
                [ classNames
@@ -204,7 +221,7 @@ signup = defineStatefulView "signup" initialSignupViewState $ \viewState _ ->
          tr_ $ do
            td_ $ label_
              [ "htmlFor" $= "username"
-             ] "E-Mail"
+             ] "Name"
            td_ $ input_
              [ classNames
                  [ ("auth-input", True)
@@ -216,6 +233,23 @@ signup = defineStatefulView "signup" initialSignupViewState $ \viewState _ ->
              , "name" $= "username"
              , onChange $ \ev st -> ([], Just st {
                  signupUserName = target ev "value"})
+             , onKeyDown inputKeyDownHandler
+             ]
+         tr_ $ do
+           td_ $ label_
+             [ "htmlFor" $= "email"
+             ] "Email"
+           td_ $ input_
+             [ classNames
+                 [ ("auth-input", True)
+                 , ("invalid", showSignupErrors viewState && signupEmailError)
+                 ]
+             , "type" $= "text"
+             , "value" &= signupEmail viewState
+             , "autoFocus" &= True
+             , "name" $= "email"
+             , onChange $ \ev st -> ([], Just st {
+                 signupEmail = target ev "value"})
              , onKeyDown inputKeyDownHandler
              ]
          tr_ $ do
@@ -258,7 +292,11 @@ signup = defineStatefulView "signup" initialSignupViewState $ \viewState _ ->
               , onClick $ \_ _ st -> signupHandler st
               ] "Submit"
        cldiv_ "disclaimer" $ do
-         p_ "Please be aware that this a beta version. We are still in the progress of implementing a lot of features. Bugs may occur. Please note that we cannot at the moment guarantee that projects will be carried over to future versions and thus data you enter now potentially gets lost."
+         p_ $ elemText $ Text.unlines
+           [ "Please be aware that this is a beta version."
+           , "We are still in the progress of implementing a lot of features."
+           , "Bugs may occur, and you may lose your data."
+           ]
          p_ $ do
            "Your feedback to "
            strong_ "hi@herculus.io"
@@ -271,7 +309,7 @@ signup = defineStatefulView "signup" initialSignupViewState $ \viewState _ ->
            ] "login"
          "."
 
--- change password
+-- Change password
 
 data ChangePasswordState = ChangePasswordState
   { cpsOldPassword     :: Text
