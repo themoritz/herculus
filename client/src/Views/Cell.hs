@@ -231,6 +231,8 @@ cellRowRef_ :: Mode
 cellRowRef_ !mode !inpType !mr !t !cb =
   view cellRowRef (mode, inpType, mr, t, cb) mempty
 
+-- TODO: Pass in row cache directly, we don't want a controllerview of the
+-- main store here.
 cellRowRef :: ReactView ( Mode, IsDerived, Maybe (Id Row), Id Table
                         , CellCallback (Maybe (Id Row))
                         )

@@ -10,10 +10,10 @@ import           Data.Text       (Text)
 import qualified Data.Text       as Text
 
 import           React.Flux      (ReactElementM, ReactView, button_, classNames,
-                                  cldiv_, defineStatefulView, input_, label_,
-                                  onChange, onClick, onKeyDown, p_, strong_,
-                                  table_, target, tbody_, td_, textarea_, tr_,
-                                  view, ($=), (&=))
+                                  cldiv_, defineStatefulView, h1_, input_,
+                                  label_, onChange, onClick, onKeyDown, p_,
+                                  strong_, table_, target, tbody_, td_,
+                                  textarea_, tr_, view, ($=), (&=))
 
 import           Lib.Model.Auth  (ChangePwdData (..), LoginData (..),
                                   SignupData (..))
@@ -75,56 +75,58 @@ login = defineStatefulView "login" initialLoginViewState $ \viewState _ ->
         | keyENTER evt = loginHandler viewState'
         | otherwise = ([], Nothing)
 
-  in cldiv_ "form" $ table_ $ tbody_ $ do
-       tr_ $ do
-         td_ $ label_
-           [ "htmlFor" $= "username"
-           ] "E-Mail"
-         td_ $ input_
-           [ classNames
-               [ ("auth-input", True)
-               , ("invalid", showLoginErrors viewState && inpUserNameError)
-               ]
-           , "type" $= "text"
-           , "value" &= inpUserNameValue viewState
-           , "autoFocus" &= True
-           , "name" $= "username"
-           , onChange $ \ev viewState' -> ([], Just viewState' {
-              inpUserNameValue = target ev "value"})
-           , onKeyDown inputKeyDownHandler
-           ]
-       tr_ $ do
-         td_ $ label_
-           [ "htmlFor" $= "password"
-           ] "Password"
-         td_ $ input_
-           [ classNames
-               [ ("auth-input", True)
-               , ("invalid", showLoginErrors viewState && inpPwdError)
-               ]
-           , "type" $= "password"
-           , "value" &= inpPwdValue viewState
-           , "name" $= "password"
-           , onChange $ \ev viewState' -> ([], Just viewState' {
-              inpPwdValue = target ev "value"})
-           , onKeyDown inputKeyDownHandler
-           ]
-       tr_ $ td_
-         [ "className" $= "submit"
-         , "colSpan" $= "2"
-         ] $ button_
-           [ classNames [ ("enabled", validFormData)]
-           , onClick $ \_ _ viewState' -> loginHandler viewState'
-           ] "Submit"
-       tr_ $ td_
-         [ "colSpan" $= "2"
-         ] $ do
-           "Not registered yet? "
-           button_
-             [ classNames [ ("pure", True) ]
-             , onClick $ \_ _ _ -> (dispatch ToSignupForm, Nothing)
-             ] "Sign up"
-           "."
+  in cldiv_ "form" $ do
+       h1_ "Login"
+       table_ $ tbody_ $ do
+         tr_ $ do
+           td_ $ label_
+             [ "htmlFor" $= "username"
+             ] "E-Mail"
+           td_ $ input_
+             [ classNames
+                 [ ("auth-input", True)
+                 , ("invalid", showLoginErrors viewState && inpUserNameError)
+                 ]
+             , "type" $= "text"
+             , "value" &= inpUserNameValue viewState
+             , "autoFocus" &= True
+             , "name" $= "username"
+             , onChange $ \ev viewState' -> ([], Just viewState' {
+                inpUserNameValue = target ev "value"})
+             , onKeyDown inputKeyDownHandler
+             ]
+         tr_ $ do
+           td_ $ label_
+             [ "htmlFor" $= "password"
+             ] "Password"
+           td_ $ input_
+             [ classNames
+                 [ ("auth-input", True)
+                 , ("invalid", showLoginErrors viewState && inpPwdError)
+                 ]
+             , "type" $= "password"
+             , "value" &= inpPwdValue viewState
+             , "name" $= "password"
+             , onChange $ \ev viewState' -> ([], Just viewState' {
+                inpPwdValue = target ev "value"})
+             , onKeyDown inputKeyDownHandler
+             ]
+         tr_ $ td_
+           [ "className" $= "submit"
+           , "colSpan" $= "2"
+           ] $ button_
+             [ classNames [ ("enabled", validFormData)]
+             , onClick $ \_ _ viewState' -> loginHandler viewState'
+             ] "Submit"
+         tr_ $ td_
+           [ "colSpan" $= "2"
+           ] $ do
+             "Not registered yet? "
+             button_
+               [ classNames [ ("pure", True) ]
+               , onClick $ \_ _ _ -> (dispatch ToSignupForm, Nothing)
+               ] "Sign up"
+             "."
 
 signup_ :: ReactElementM eh ()
 signup_ = view signup () mempty
@@ -180,6 +182,7 @@ signup = defineStatefulView "signup" initialSignupViewState $ \viewState _ ->
        | otherwise = ([], Nothing)
 
   in cldiv_ "form" $ do
+       h1_ "Signup"
        table_ $ tbody_ $ do
          tr_ $ do
            td_ $
@@ -298,63 +301,64 @@ changePassword =
           else ([], Just $ st { cpsShowErrors = True})
         keyDownHandler _ evt st | keyENTER evt = ajaxSubmit st
                                 | otherwise    = ([], Nothing)
-    cldiv_ "form" $
-       table_ $ tbody_ $ do
-         tr_ $ do
-           td_ $
-             label_
-               [ "htmlFor" $= "old-password"
-               ] "Old password"
-           td_ $ input_
-             [ classNames
-                 [ ("auth-input", True)
-                 , ("invalid", not oldPwdValid)
-                 ]
-             , "type" $= "password"
-             , "value" &= cpsOldPassword
-             , "autoFocus" &= True
-             , "name" $= "old-password"
-             , onChange $ \ev st ->
-                 ([], Just st { cpsOldPassword = target ev "value" })
-             , onKeyDown keyDownHandler
-             ]
-         tr_ $ do
-           td_ $
-             label_
-               [ "htmlFor" $= "password"
-               ] "New password"
-           td_ $ input_
-             [ classNames
-                 [ ("auth-input", True)
-                 , ("invalid", cpsShowErrors && not pwdValid)
-                 ]
-             , "type" $= "password"
-             , "value" &= cpsPassword
-             , "name" $= "password"
-             , onChange $ \ev st ->
-                 ([], Just st { cpsPassword = target ev "value" })
-             , onKeyDown keyDownHandler
-             ]
-         tr_ $ do
-           td_ $ label_
-             [ "htmlFor" $= "passwordConfirm"
-             ] "Confirm new password"
-           td_ $ input_
-             [ classNames
-                 [ ("auth-input", True)
-                 , ("invalid", cpsShowErrors && not pwdConfirmValid)
-                 ]
-             , "type" $= "password"
-             , "value" &= cpsPasswordConfirm
-             , "name" $= "passwordConfirm"
-             , onChange $ \ev st ->
-                 ([], Just st { cpsPasswordConfirm = target ev "value"})
-             , onKeyDown keyDownHandler
-             ]
-         tr_ $ td_
-            [ "className" $= "submit"
-            , "colSpan" $= "2"
-            ] $ button_
-              [ classNames [ ("enabled", formValid)]
-              , onClick $ \_ _ st -> ajaxSubmit st
-              ] "Submit"
+    cldiv_ "form" $ do
+      h1_ "Change Password"
+      table_ $ tbody_ $ do
+        tr_ $ do
+          td_ $
+            label_
+              [ "htmlFor" $= "old-password"
+              ] "Old password"
+          td_ $ input_
+            [ classNames
+                [ ("auth-input", True)
+                , ("invalid", not oldPwdValid)
+                ]
+            , "type" $= "password"
+            , "value" &= cpsOldPassword
+            , "autoFocus" &= True
+            , "name" $= "old-password"
+            , onChange $ \ev st ->
+                ([], Just st { cpsOldPassword = target ev "value" })
+            , onKeyDown keyDownHandler
+            ]
+        tr_ $ do
+          td_ $
+            label_
+              [ "htmlFor" $= "password"
+              ] "New password"
+          td_ $ input_
+            [ classNames
+                [ ("auth-input", True)
+                , ("invalid", cpsShowErrors && not pwdValid)
+                ]
+            , "type" $= "password"
+            , "value" &= cpsPassword
+            , "name" $= "password"
+            , onChange $ \ev st ->
+                ([], Just st { cpsPassword = target ev "value" })
+            , onKeyDown keyDownHandler
+            ]
+        tr_ $ do
+          td_ $ label_
+            [ "htmlFor" $= "passwordConfirm"
+            ] "Confirm new password"
+          td_ $ input_
+            [ classNames
+                [ ("auth-input", True)
+                , ("invalid", cpsShowErrors && not pwdConfirmValid)
+                ]
+            , "type" $= "password"
+            , "value" &= cpsPasswordConfirm
+            , "name" $= "passwordConfirm"
+            , onChange $ \ev st ->
+                ([], Just st { cpsPasswordConfirm = target ev "value"})
+            , onKeyDown keyDownHandler
+            ]
+        tr_ $ td_
+           [ "className" $= "submit"
+           , "colSpan" $= "2"
+           ] $ button_
+             [ classNames [ ("enabled", formValid)]
+             , onClick $ \_ _ st -> ajaxSubmit st
+             ] "Submit"
