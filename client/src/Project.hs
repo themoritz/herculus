@@ -37,7 +37,6 @@ import           Store.Types
 
 --------------------------------------------------------------------------------
 
--- TODO: maybe put tableId and tables one level deeper into project?
 data State = State
   { _stateProjectId    :: Id ProjectClient
   , _stateProject      :: ProjectClient
@@ -168,6 +167,10 @@ eval token = \case
         Create -> do
           tableLens .= Just (mkTableDesc table)
           rowCacheLens .= Just Map.empty
+          -- Go to new table if currently viewing none
+          use stateCurrentTable >>= \case
+            Just _ -> pure ()
+            Nothing -> stateCurrentTable .= Just tableId
         Update -> tableLens . _Just . descTable .= table
         Delete -> do
           tableLens .= Nothing
@@ -177,7 +180,8 @@ eval token = \case
           let mNextTableId = Map.lookupLT tableId tables
                          <|> Map.lookupGT tableId tables
           case mNextTableId of
-            Nothing -> pure ()
+            Nothing ->
+              stateCurrentTable .= Nothing
             Just (nextTableId, _) ->
               stateCurrentTable .= Just nextTableId
     -- Cells
