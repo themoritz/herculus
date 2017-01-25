@@ -249,3 +249,82 @@ expand the cell content:
 
 ### The Printable Bill as a Report
 
+We will create our bills by writing the template for a _Report Column_. First,
+create the _Report Column_ named _Bill_ right next to the _Items_ column:
+
+![Create Report Column](app/create-report-column.png)
+
+We want to write the template in HTML and generate a PDF file as
+output. Therefore, in the column configuration dialog, select HTML as the _Input
+language_ and PDF as the _Output format_:
+
+![Report Formats](app/report-formats.png)
+
+Then, paste the following template into the template editor in the config
+dialog:
+
+``` handlebars
+<h2>Bill To</h2>
+
+<b>{{ $Client.Name }}</b>, {{ $Client.Address }}
+
+<h2>Items</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Hours</th>
+      <th>Rate</th>
+      <th>Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in $Items %}
+    <tr>
+      <td>{{ formatTime "%D" item.Date }}</td>
+      <td>{{ formatNumber "%.2f" item.Hours }}</td>
+      <td>{{ formatNumber "%.2f" $Client.HourlyRate }}</td>
+      <td>{{ formatNumber "%.2f" item.Amount }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+  
+Total amount to pay:
+<b>
+  {{
+    let amounts = map (\i -> i.Amount) $Items;
+    formatNumber "%.2f" (sum amounts)
+  }}
+</b>
+```
+
+The template language is quite staightforward. You can read more about it
+under [Report Templates](../../formulas/#report-templates). Also, you might want
+to learn about [anonymous functions](../../formulas/#anonymous-functions) and
+the [included functions](../../formulas/#included-functions) of which we use
+some here.
+
+After you click _Save_, and given that everything went fine, you should see a
+small button with a PDF symbol in every cell of the report column:
+
+![View Report](app/view-report.png)
+
+Clicking that button will open the report (your bill) in a new window. For
+example, the above template will generate bills like this for the first bill in
+the list.
+
+![Bill PDF](app/bill-pdf.png)
+
+## Conclusion
+
+This concludes the guide of how to build a basic Herculus app. Feel free to
+extend the app in various ways. For example, you could
+
+* add a column of type `Bool` to indicate if the bill has already been paid,
+* add a bill number,
+* calculate the total amount to pay in a separate column in the _Bills_ table,
+  so that you have a good overview over your bills,
+* add a table of activities which describe what you did,
+* or define a table of rates which are independent of your clients.
