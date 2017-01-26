@@ -2,7 +2,7 @@
 
 set -e
 
-JSDIR=assets/public/js
+JSDIR=public/js
 
 mkdir -p $JSDIR
 cd $JSDIR

@@ -22,8 +22,6 @@ txtOption = fmap Text.pack . strOption
 getOptions :: IO Options
 getOptions = execParser $ info (helper <*> options)
   (  fullDesc
-  <> progDesc "Serves the app"
-  <> header   "Server"
   )
 
 options :: Parser Options
@@ -45,7 +43,7 @@ options = Options
   <*> strOption   (  long "asset-directory"
                   <> short 'a'
                   <> metavar "ASSETDIR"
-                  <> value "../assets/public"
+                  <> value "../client/public"
                   <> showDefault
                   <> help "directory to static files and js"
                   )

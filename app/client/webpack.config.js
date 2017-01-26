@@ -4,9 +4,9 @@ var webpack = require('webpack')
 var autoprefixer = require('autoprefixer')
 
 module.exports = {
-  entry: './entry.dev.js',
+  entry: './entry.js',
   output: {
-    path: path.join(__dirname, 'assets/public'),
+    path: path.join(__dirname, 'public'),
     filename: 'js/bundle.js'
   },
   module: {

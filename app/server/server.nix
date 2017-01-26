@@ -1,6 +1,6 @@
 { mkDerivation, aeson, base, base64-bytestring, bytestring
 , containers, directory, either, entropy, fast-logger, filepath
-, interpolatedstring-perl6, lens, herculus-lib, monad-control, monad-logger
+, neat-interpolation, lens, herculus-lib, monad-control, monad-logger
 , mongoDB, mtl, network, optparse-applicative, pandoc, pretty-show
 , servant, servant-server, stdenv, stm, text, time, transformers
 , transformers-base, wai, wai-websockets, warp, websockets
@@ -13,7 +13,7 @@ mkDerivation {
   isExecutable = true;
   libraryHaskellDepends = [
     aeson base base64-bytestring bytestring containers directory
-    entropy fast-logger filepath interpolatedstring-perl6 lens herculus-lib
+    entropy fast-logger filepath neat-interpolation lens herculus-lib
     monad-control monad-logger mongoDB mtl network optparse-applicative
     pandoc pretty-show servant servant-server stm text time
     transformers transformers-base wai websockets

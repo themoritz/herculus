@@ -1,1 +1,2 @@
 .envrc filter=git-crypt diff=git-crypt
+herculus.nixops filter=git-crypt

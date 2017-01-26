@@ -20,15 +20,15 @@ require('codemirror/mode/htmlmixed/htmlmixed')
 global.Codemirror = Codemirror
 
 // Own components
-global.OnDidMount     = require('./assets/components/OnDidMount.js')
-global.OnClickOutside = require('./assets/components/OnClickOutside.js')
-global.DatePicker     = require('./assets/components/DatePicker.js')
+global.OnDidMount     = require('./components/OnDidMount.js')
+global.OnClickOutside = require('./components/OnClickOutside.js')
+global.DatePicker     = require('./components/DatePicker.js')
 
 // font-awesome
 require('font-awesome-webpack!./font-awesome.config.js')
 
 // Styles
-require('./assets/sass/main.scss')
+require('./sass/main.scss')
 
 // Git rev sanity check
 global.hexl$getClientGitRev = function () {

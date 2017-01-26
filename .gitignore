@@ -1,21 +1,16 @@
-client/.stack-work/
-client/result
-client/dist
-server/.stack-work/
-server/result
-server/dist
-lib/.stack-work/
-lib/result
-lib/dist
-assets/public/js/
-assets/public/doc/
-assets/public/css/
-assets/public/*.woff*
-assets/public/*.svg
-assets/public/*.ttf
-assets/public/*.eot
+# General
+TAGS
+.#*
+
+# All stack stuff
+.stack-work/
+
+# All nix results
+result
+
+# All cabal stuff
+dist/
+
+# All node stuff
 node_modules/
 npm-debug.log
-TAGS
-result
-.#*
