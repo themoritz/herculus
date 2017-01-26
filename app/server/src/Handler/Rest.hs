@@ -10,7 +10,7 @@ import           Prelude                        hiding (unlines)
 
 import           Control.Lens
 import           Control.Monad.Except           (ExceptT (ExceptT), runExceptT)
-import           Control.Monad.IO.Class         (MonadIO)
+import           Control.Monad.IO.Class         (MonadIO, liftIO)
 import qualified Data.ByteString.Lazy           as BL
 import qualified Data.ByteString.Lazy.Char8     as BL8
 import           Data.Foldable                  (for_, traverse_)
@@ -102,7 +102,8 @@ handleAuthSignup (SignupData uName email pwd intention) =
       if verifyEmail email
         then do
           pwHash <- mkPwHash pwd
-          _ <- create $ User uName email pwHash intention
+          Time signupDate <- getCurrentTime
+          _ <- create $ User uName email pwHash signupDate intention
           handleAuthLogin (LoginData email pwd) >>= \case
             LoginSuccess userInfo -> pure $ SignupSuccess userInfo
             LoginFailed  msg      -> throwError $
@@ -129,7 +130,7 @@ handleAuthChangePwd (UserInfo userId _ _ _) (ChangePwdData oldPwd newPwd) = do
       pwHash <- mkPwHash newPwd
       update userId (userPwHash .~ pwHash)
       pure ChangePwdSuccess
-    else pure $ ChangePwdFailure "wrong password"
+    else pure $ ChangePwdFailure "Wrong password."
 
 -- Project ----------------------------------------------------------------------
 

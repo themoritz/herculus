@@ -17,6 +17,7 @@ import           Data.Bson              ((=:))
 import qualified Data.Bson              as Bson
 import           Data.Text              (Text)
 import qualified Data.Text.Encoding     as Text
+import           Data.Time.Clock        (UTCTime)
 
 import           GHC.Generics           (Generic)
 import qualified Text.Email.Validate    as Email
@@ -80,10 +81,11 @@ verifyEmail = Email.isValid . Text.encodeUtf8 . unEmail
 -- User model ------------------------------------------------------------------
 
 data User = User
-  { _userName      :: Text
-  , _userEmail     :: Email
-  , _userPwHash    :: PwHash
-  , _userIntention :: Text
+  { _userName       :: Text
+  , _userEmail      :: Email
+  , _userPwHash     :: PwHash
+  , _userSignupDate :: UTCTime
+  , _userIntention  :: Text
   } deriving (Generic, NFData, Show)
 
 userName :: Lens' User Text
@@ -95,6 +97,9 @@ userEmail = lens _userEmail (\s a -> s { _userEmail = a })
 userPwHash :: Lens' User PwHash
 userPwHash = lens _userPwHash (\s a -> s { _userPwHash = a })
 
+userSignupDate :: Lens' User UTCTime
+userSignupDate = lens _userSignupDate (\s a -> s { _userSignupDate = a })
+
 userIntention :: Lens' User Text
 userIntention = lens _userIntention (\s a -> s { _userIntention = a })
 
@@ -103,10 +108,11 @@ instance Model User where
 
 instance ToDocument User where
   toDocument User{..} =
-    [ "name"      =: _userName
-    , "email"     =: _userEmail
-    , "pwHash"    =: _userPwHash
-    , "intention" =: _userIntention
+    [ "name"       =: _userName
+    , "email"      =: _userEmail
+    , "pwHash"     =: _userPwHash
+    , "signupDate" =: _userSignupDate
+    , "intention"  =: _userIntention
     ]
 
 instance FromDocument User where
@@ -114,6 +120,7 @@ instance FromDocument User where
     User <$> Bson.lookup "name" doc
          <*> Bson.lookup "email" doc
          <*> Bson.lookup "pwHash" doc
+         <*> Bson.lookup "signupDate" doc
          <*> Bson.lookup "intention" doc
 
 type PwHash = Base64
