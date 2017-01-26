@@ -59,7 +59,7 @@ a.link-type:hover {
   color: $brand-light;
 }
 
-button {
+.button {
   border: 3px solid $brand-dark;
   border-radius: 30px;
   padding: 12px 24px;
@@ -70,19 +70,19 @@ button {
   transition: background-color 0.3s, color 0.3s;
 }
 
-.cover button, .cover p {
+.cover .button, .cover p {
   text-shadow: 2px 2px 8px black;
 }
-.cover button:hover {
+.cover .button:hover {
   text-shadow: none;
 }
 
-button:hover {
+.button:hover {
   color: $anthrazit-light;
   background-color: $brand-dark;
 }
 
-button:focus {
+.button:focus {
   outline: none;
 }
 
