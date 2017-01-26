@@ -94,6 +94,7 @@ appHeader = defineView "header" $ \st ->
           , "alt" $= "logo"
           ] mempty
         cldiv_ "text" "Herculus"
+        cldiv_ "beta" "beta"
       case st ^. stateSession of
         StateLoggedIn liSt ->
           case liSt ^. LoggedIn.stateSubState of

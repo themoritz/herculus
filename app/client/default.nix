@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> {}, apiUrl, websocketUrl }:
+{ pkgs ? import <nixpkgs> {}, apiUrl ? "/", websocketUrl ? "/" }:
 
 let
   ghcjs-bundle = import ./ghcjs-bundle.nix { inherit pkgs; };
@@ -19,7 +19,6 @@ in
         WEBSOCKET_URL="${websocketUrl}" \
         GIT_REV=`git rev-parse --short HEAD` \
         `npm bin`/webpack --config webpack.prod.config.js --progress
-      cd public/js && mv bundle.js app.js
       zopfli --i15 public/js/app.js
     '';
     installPhase = ''

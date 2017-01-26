@@ -135,6 +135,11 @@
       font-size: 26px;
       color: white;
     }
+    .beta {
+      margin-top: 5px;
+      color: $brand-dark;
+      transform: rotate(20deg);
+    }
   }
 
   .projectName {

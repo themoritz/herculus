@@ -1,6 +1,8 @@
 var webpack = require('webpack')
 var config = require('./webpack.config.js')
 
+config.output.filename = 'js/app.js'
+
 config.plugins.push(
   new webpack.DefinePlugin({
     'process.env': {
