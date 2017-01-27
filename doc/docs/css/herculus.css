@@ -10,7 +10,7 @@ a:hover {
   color: #ff1489;
   text-decoration: none;
 }
-li>a {
+.nav > li > a {
   font-weight: normal;
 }
 code {

@@ -1,8 +1,9 @@
-site_name: Herculus
+site_name: Herculus Docs
 pages:
-  - Formulas: formulas.md
+  - Home: index.md
   - Guides:
       - Building Your First App: guides/app.md
+  - Formulas: formulas.md
 theme: cinder
 extra_css:
   - "css/herculus.css"
