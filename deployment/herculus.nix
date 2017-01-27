@@ -5,6 +5,8 @@
     { config, pkgs, ... }:
 
     let
+      domain = "herculus.io";
+
       # Landing page
       landingPage = import ./../landing-page/client { inherit pkgs; };
 
@@ -12,8 +14,8 @@
       herculusServer = import ./../app/server { inherit pkgs; };
       herculusClient = import ./../app/client {
         inherit pkgs;
-        apiUrl = "https://app.herculus.io/api";
-        websocketUrl = "wss://app.herculus.io/websocket";
+        apiUrl = "https://app.${domain}/api";
+        websocketUrl = "wss://app.${domain}/websocket";
       };
 
       # Documentation
@@ -26,6 +28,7 @@
     in {
   
       nixpkgs.config.allowUnfree = true;
+      nixpkgs.config.allowBroken = true;
 
       networking.firewall.allowedTCPPorts = [ 80 sslPort ];
 
@@ -46,7 +49,7 @@
           after = [ "data.mount" "network.target" "mongodb" ];
           serviceConfig.ExecStart = ''
             ${herculusServer}/bin/server-exe \
-              --port ${appServerPort} \
+              --port ${toString appServerPort} \
               --database-name herculus \
           '';
               #--asset-directory ${herculusClient}
@@ -69,17 +72,17 @@
               '';
             };
             # Redirect traffic without subdomain
-            "herculus.io" = {
+            "${domain}" = {
               extraConfig = ''
-                return 301 https://www.herculus.io$request_uri;
+                return 301 https://www.${domain}$request_uri;
               '';
             };
             # App
-            "app.herculus.io" = {
+            "app.${domain}" = {
               port = sslPort;
               locations = {
                 "/websocket" = {
-                  proxyPass = "http://localhost:${appServerPort}";
+                  proxyPass = "http://localhost:${toString appServerPort}";
                   extraConfig = ''
                     proxy_http_version 1.1;
                     proxy_set_header Upgrade $http_upgrade;
@@ -87,14 +90,16 @@
                   '';
                 };
                 "/api" = {
-                  proxyPass = "http://localhost:${appServerPort}";
+                  proxyPass = "http://localhost:${toString appServerPort}";
                   extraConfig = ''
                     proxy_set_header X-Real-IP $remote_addr;
                     proxy_set_header X-Forwarded-For $remote_addr;
                     proxy_set_header Host $host;
                   '';
                 };
-                "/doc".root = "${documentation}";
+                "/doc".extraConfig = ''
+                  alias ${documentation};
+                '';
                 "/" = {
                   root = "${herculusClient}";
                   extraConfig = ''

@@ -2,8 +2,12 @@
   machine = { resources, ... }: {
     deployment.targetEnv = "virtualbox";
     deployment.virtualbox = {
-      memorySize = 1024;
       headless = true;
+      memorySize = 1024;
+      disks.xvdf = {
+        port = 1;
+        size = 1024;
+      };
     };
   };
 }
