@@ -1,35 +1,11 @@
 # Herculus Landing Page
 
-Built using jekyll. For installation instructions, see https://jekyllrb.com/docs/installation/.
-
-## Preparation
-
-Use `bundle` to install jekyll.
-For a system-wide install of `bundle`, do
+## Developing
 
 ```shell
-$ sudo gem install bundle
+$ nix-shell --command "bash develop.sh"
 ```
 
-Also, for development you will need gulp.
-For a local installation, do
-
-```shell
-$ npm install
-```
-
-## Development
-
-```shell
-$ bundle install
-```
-
-```shell
-$ npm run watch
-```
-
-## Deployment
-
-```shell
-$ ./deploy.hs
-```
+A window in you browser should be opened and directed to `localhost:3000`. CSS
+and images will be injected when they change, and all pages will automatically
+reload when updated.

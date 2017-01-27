@@ -1,17 +1,5 @@
 {
-  "name": "landing-page",
-  "version": "1.0.0",
-  "description": "Built using jekyll. For installation instructions, see https://jekyllrb.com/docs/installation/.",
-  "main": "index.js",
-  "scripts": {
-    "watch": "gulp"
-  },
-  "author": "",
-  "license": "ISC",
   "devDependencies": {
-    "browser-sync": "^2.16.0",
-    "gulp": "^3.9.1",
-    "gulp-shell": "^0.5.2",
-    "lodash": "^4.16.2"
+    "browser-sync": "^2.18.6"
   }
 }
