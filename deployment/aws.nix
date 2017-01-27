@@ -1,12 +1,10 @@
 let
   region = "us-east-1";
-  accessKeyId = "moritz";
 in
 {
   machine = { resources, ... }: {
     deployment.targetEnv = "ec2";
     deployment.ec2 = {
-      accessKeyId = accessKeyId;
       region = region;
       zone = "us-east-1a"; # Same as EBS volume
       instanceType = "t2.micro";
@@ -16,6 +14,6 @@ in
     };
   };
   resources.ec2KeyPairs.landingKeys = {
-    inherit region accessKeyId;
+    inherit region;
   };
 }

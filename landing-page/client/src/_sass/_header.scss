@@ -7,6 +7,7 @@ header {
     background-color: $anthrazit;
     box-sizing: border-box;
     padding-bottom: 5px;
+    height: $logo-size + 25px;
 
     &:after {
       content: "";
@@ -19,8 +20,12 @@ header {
     }
 
     .title {
+      position: absolute;
+      left: 0px;
+      top: 0px;
       padding: 10px;
       height: $logo-size;
+      width: 50%;
       .logo {
         float: left;
         width: $logo-size;
@@ -32,6 +37,38 @@ header {
         font-weight: bold;
         font-size: 26pt;
         vertical-align: middle;
+      }
+    }
+
+    .menu {
+      position: absolute;
+      right: 0px;
+      top: 0px;
+      box-sizing: border-box;
+      width: 50%;
+      height: $logo-size + 20px;
+      font-size: 14pt;
+      ul {
+        list-style: none;
+        margin: 0px;
+        height: 100%;
+        li {
+          float: right;
+          height: 100%;
+          padding: 0px;
+          a {
+            vertical-align: middle;
+            display: block;
+            box-sizing: border-box;
+            padding: 25px 30px;
+            height: 100%;
+            color: $light-gray;
+            &:hover {
+              color: $brand-light;
+              background-color: lighten($anthrazit, 5%);
+            }
+          }
+        }
       }
     }
   }
