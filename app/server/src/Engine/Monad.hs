@@ -448,7 +448,8 @@ storeListByQuery what query p = do
     apply as (i, (x, a)) = if p a
       then case x of
         Cached        -> as
-        Change Create -> as ++ [Entity i a]
+        Change Create -> as -- We don't add these here since "Created" entries
+                            -- have actually been created in the DB.
         Change Update -> updateList (\(Entity i' _) -> i' == i)
                                     (Entity i a) as
         Change Delete -> filter (\(Entity i' _) -> i' /= i) as
