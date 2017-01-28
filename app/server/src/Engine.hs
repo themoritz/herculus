@@ -13,6 +13,7 @@ import           Control.Monad.Except
 import           Data.Foldable                (for_)
 import qualified Data.Map                     as Map
 import           Data.Maybe                   (mapMaybe)
+import qualified Data.Text                    as T (length)
 
 import           Lib.Api.Rest                 (Command (..))
 import           Lib.Api.WebSocket
@@ -124,6 +125,8 @@ executeCommand = \case
     void $ createColumn (emptyDataCol tableId)
 
   CmdDataColUpdate columnId dataType isDerived code -> do
+    when (T.length code > 1000) $ throwError $
+      ErrUser "The length of formulas is currently limited to 1000 characters."
     oldCol <- getColumn columnId
     withDataCol oldCol $ \dataCol -> do
       -- Apply changes
@@ -165,6 +168,8 @@ executeCommand = \case
     void $ createColumn (emptyReportCol tableId)
 
   CmdReportColUpdate columnId template format language -> do
+    when (T.length template > 10000) $ throwError $
+      ErrUser "The length of templates is currently limited to 10000 characters."
     oldCol <- getColumn columnId
     withReportCol oldCol $ \_ ->
       modifyColumn columnId $ columnKind . _ColumnReport
@@ -188,6 +193,9 @@ executeCommand = \case
     graphModify $ purgeColumn columnId
 
   CmdRowCreate tableId -> do
+    rows <- getTableRows tableId
+    when (length rows >= 200) $ throwError $
+      ErrUser "Tables are currently limited to have at most 200 rows."
     rowId <- createRow $ Row tableId
     columns <- getTableColumns tableId
     for_ columns $ \(Entity columnId column) ->

@@ -10,7 +10,7 @@ import           Prelude                        hiding (unlines)
 
 import           Control.Lens
 import           Control.Monad.Except           (ExceptT (ExceptT), runExceptT)
-import           Control.Monad.IO.Class         (MonadIO, liftIO)
+import           Control.Monad.IO.Class         (MonadIO)
 import qualified Data.ByteString.Lazy           as BL
 import qualified Data.ByteString.Lazy.Char8     as BL8
 import           Data.Foldable                  (for_, traverse_)
