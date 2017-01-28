@@ -61,7 +61,7 @@ jsonWebSocketNew :: FromJSON a
                  -> IO JSWebSocket
 jsonWebSocketNew url msgHandler openHandler closeHandler = do
   ref <- newIORef Nothing
-  isOpen <- atomically $ newTMVar ()
+  isOpen <- atomically newEmptyTMVar
   queue <- atomically newTQueue
   let onMessage msg = case decodeStrict msg of
         Nothing -> pure ()
