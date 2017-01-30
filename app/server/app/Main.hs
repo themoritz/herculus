@@ -13,14 +13,16 @@ import           Control.Monad.Except
 import           Data.Aeson
 import           Data.Monoid                    ((<>))
 import           Data.Proxy
+import           Data.Text                      (Text)
+
 import           Database.MongoDB               ((=:))
 import qualified Database.MongoDB               as Mongo
 import           Network.Wai.Handler.Warp       as Warp
 import           Network.Wai.Handler.WebSockets
 import           Network.WebSockets
 import           Servant                        ((:<|>) (..), (:>),
-                                                 Context (..), Raw, Server,
-                                                 serveDirectory,
+                                                 Context (..), Get, PlainText,
+                                                 Raw, Server, serveDirectory,
                                                  serveWithContext)
 
 import           Auth                           (AuthMiddleware, authHandler)
@@ -37,7 +39,8 @@ import           Monads
 import           Options                        (Options (..), getOptions)
 
 type AllRoutes =
-       "api" :> Routes
+       "api" :> "status" :> Get '[PlainText] Text
+  :<|> "api" :> Routes
   :<|> Raw
 
 routes :: Proxy AllRoutes
@@ -45,7 +48,8 @@ routes = Proxy
 
 rest :: HexlEnv -> FilePath -> Server AllRoutes
 rest env path =
-         (hexlToServant env) handle
+         pure ("Everything is ok." :: Text)
+    :<|> (hexlToServant env) handle
     :<|> serveDirectory path
 
 wsApp :: HexlEnv -> ServerApp
