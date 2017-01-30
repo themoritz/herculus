@@ -19,12 +19,12 @@ body {
       }
       @include on-medium() {
         height: $cover-height-md;
-        padding: 50px 0px;
+        padding: 40px 0px;
         font-size: 24pt;
       }
       @include on-large() {
         height: $cover-height-lg;
-        padding: 75px 0px;
+        padding: 65px 0px;
         font-size: 24pt;
       }
       box-sizing: border-box;
@@ -38,6 +38,17 @@ body {
           color: $brand-light;
         }
         color: white;
+        &.get-started {
+          margin-top: 25px;
+          font-size: 14pt;
+          a {
+            color: $medium-gray;
+            font-weight: bold;
+          }
+          a:hover {
+            color: $brand-light;
+          }
+        }
       }
     }
     .screencasts {

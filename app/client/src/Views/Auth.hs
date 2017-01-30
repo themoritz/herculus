@@ -299,7 +299,7 @@ signup = defineStatefulView "signup" initialSignupViewState $ \viewState _ ->
            ]
          p_ $ do
            "Your feedback to "
-           strong_ "hi@herculus.io"
+           strong_ "moritz@herculus.io"
            " is highly appreciated."
        p_ $ do
          "Back to "

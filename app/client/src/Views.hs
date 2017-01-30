@@ -233,9 +233,9 @@ appFooter :: ReactView State
 appFooter = defineView "footer" $ \_ ->
   cldiv_ "footer" $ do
     "Contact us at "
-    a_ [ "href" $= "mailto:hi@herculus.io"
+    a_ [ "href" $= "mailto:moritz@herculus.io"
       , "className" $= "on-dark"
-      ] "hi@herculus.io"
+      ] "moritz@herculus.io"
 
 --
 
