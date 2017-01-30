@@ -1,6 +1,6 @@
 # Building Your First Herculus App
 
-In this guide we are going to create a simple Herculus application. We will
+In this guide we are going to create a simple Herculus application. Let's
 assume that you are working as a freelancer and that you want to have a tool
 that
 
@@ -34,10 +34,10 @@ _Add table..._ input field, and enter the name:
 ![Add a new table](app/new-table.png)
 
 Our first table will be the collection of clients that we work for, so we will
-call it _Clients_. After you press enter, the newly created table will be
-created and opened. Naturally, every table consists of _columns_ and _rows_. We
-can add rows or columns by pressing the bottom left or top right plus icons,
-respectively. In our case,
+call it _Clients_. After you press enter, the table will be created and
+opened. Naturally, every table consists of _columns_ and _rows_. We can add rows
+or columns by pressing the bottom left or top right plus icons, respectively. In
+our case,
 
 * each row will correspond to one of our clients
 * each column will correspond to an attribute that a client has.
@@ -45,7 +45,7 @@ respectively. In our case,
 ### Adding Columns
 
 Let's first create a couple of columns for every attribute that we might
-need. Press to top right plus icon and select _New data column_:
+need. Press the top right plus icon and select _New data column_:
 
 ![Add a new column](app/new-column.png)
 
@@ -128,9 +128,9 @@ by creating a column with a formula. Specifically, we may want to calculate the
 amount billed for every item, which is the the rate that we negotiated with the
 client of this item, multiplied by the number of hours we worked.
 
-First, it's convenient to see how much will actually be billed for every item,
-and second, we can use this amount for further data processing downstream when
-we generate the bill.
+Reasons for having such a column might be that, first, it's convenient to see
+how much will actually be billed for every item, and second, that we can use this
+amount for further data processing downstream when we generate the bill.
 
 In order to generate this data, we create a new column named _Amount_ with type
 `Number`. Then, while the column config dialog is still open, we tick the _Use
@@ -188,9 +188,9 @@ bills. We'll do this in two steps:
 For step one, we create a new column, called _Items_, which will be of type
 `List (Row from Items)`. This means that every cell in this row has as its value
 a list of (references to) rows from the _Items_ table. For more information on
-the `List` type, see [Types](../../formulas/#types). You can select configure
-the column to have that type by selecting `List` from the first dropdown, `Row`
-from the second, and _Items_ from the third:
+the `List` type, see [Types](../../formulas/#types). You can configure the
+column to have that type by selecting `List` from the first dropdown, `Row` from
+the second, and _Items_ from the third:
 
 ![List of Rows from Items](app/list-row-items.png)
 
@@ -214,12 +214,12 @@ it. Basically, we are doing two things:
   tells us whether it should be included in the list we are computing. There are
   three conditions that all need to be met (so we are combining them with the
   "and" operator `&&`):
-    1. The item's date needs to be larger or equal than the start of the period
-       of the current bill (where "larger" means later). Keep in mind that the
-       formula is evaluated for every cell in the column, which in this case
-       represents a bill.
-    2. The item's date needs to be less or equal than the end of the period we
-       are considering.
+    1. The item's date needs to be larger than or equal to the start of the
+       period of the current bill (where "larger" means later). Keep in mind
+       that the formula is evaluated for every cell in the column, which in this
+       case represents a bill.
+    2. The item's date needs to be less than or equal to the end of the period
+       we are considering.
     3. The client that is selected in the item is the same as the client that
        the current bill is for.
 
