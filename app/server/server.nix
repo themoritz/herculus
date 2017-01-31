@@ -1,4 +1,4 @@
-{ mkDerivation, aeson, base, base64-bytestring, bytestring
+{ mkDerivation, aeson, base, base64-bytestring, bytestring, mime-mail
 , containers, directory, either, entropy, fast-logger, filepath
 , neat-interpolation, lens, herculus-lib, monad-control, monad-logger
 , mongoDB, mtl, network, optparse-applicative, pandoc, pretty-show
@@ -12,7 +12,7 @@ mkDerivation {
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
-    aeson base base64-bytestring bytestring containers directory
+    aeson base base64-bytestring bytestring containers directory mime-mail
     entropy fast-logger filepath neat-interpolation lens herculus-lib
     monad-control monad-logger mongoDB mtl network optparse-applicative
     pandoc pretty-show servant servant-server stm text time

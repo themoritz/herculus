@@ -32,6 +32,9 @@
 
       networking.firewall.allowedTCPPorts = [ 80 sslPort ];
 
+      # We want to use sendmail
+      networking.defaultMailServer = import ./smtp.nix;
+
       environment.systemPackages = [
         pkgs.mongodb-tools
       ];

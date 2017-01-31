@@ -23,8 +23,9 @@ let
 in
 
   server.overrideDerivation (super: {
-    buildInputs = super.buildInputs ++ [ pkgs.makeWrapper latex ];
+    buildInputs = super.buildInputs ++ [ pkgs.makeWrapper ];
     postInstall = ''
-      wrapProgram "$out/bin/server-exe" --suffix PATH : ${latex}/bin
+      wrapProgram "$out/bin/server-exe" --suffix PATH : ${latex}/bin \
+                                        --suffix PATH : ${pkgs.ssmtp}/sbin
     '';
   })
