@@ -82,8 +82,6 @@ handleAuthLogin (LoginData email pwd) =
   where
     failMessage = LoginFailed "Wrong email or password."
     getSession userId = do
-      eSession <- getOneByQuery [ "userId" =: toObjectId userId ]
-      for_ eSession $ \(Entity sessionId _) -> delete (sessionId :: Id Session)
       session <- mkSession userId
       create session $> session
 
