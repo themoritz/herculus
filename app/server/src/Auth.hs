@@ -5,6 +5,7 @@ module Auth
   ( authHandler
   , AuthMiddleware
   , mkSession
+  , lookUpSession
   , prolongSession
   ) where
 

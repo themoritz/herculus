@@ -18,8 +18,7 @@ import           React.Flux      (ReactElementM, ReactView, button_, classNames,
 import           Lib.Model.Auth  (ChangePwdData (..), Email (..),
                                   LoginData (..), SignupData (..))
 import qualified LoggedIn
-import           Store           (Action (Login, Signup, ToLoginForm, ToSignupForm),
-                                  dispatch, dispatchLoggedIn)
+import           Store           (Action (..), dispatch, dispatchLoggedIn)
 import           Views.Common    (keyENTER)
 
 
@@ -132,6 +131,13 @@ login = defineStatefulView "login" initialLoginViewState $ \viewState _ ->
                , onClick $ \_ _ _ -> (dispatch ToSignupForm, Nothing)
                ] "Sign up"
              "."
+         tr_ $ td_
+           [ "colSpan" $= "2"
+           ] $ do
+             button_
+               [ classNames [ ("pure", True) ]
+               , onClick $ \_ _ _ -> (dispatch ToResetPasswordForm, Nothing)
+               ] "Forgot your password?"
 
 signup_ :: ReactElementM eh ()
 signup_ = view signup () mempty
@@ -400,3 +406,54 @@ changePassword =
              [ classNames [ ("enabled", formValid)]
              , onClick $ \_ _ st -> ajaxSubmit st
              ] "Submit"
+
+-- Reset Password
+
+resetPassword_ :: ReactElementM eh ()
+resetPassword_ = view resetPassword () mempty
+
+resetPassword :: ReactView ()
+resetPassword =
+  defineStatefulView "reset password" "" $
+    \email () -> do
+    let formValid = not $ Text.null email
+        ajaxSubmit email' = if formValid
+          then (dispatch $ ResetPassword email', Nothing)
+          else ([], Nothing)
+        keyDownHandler _ evt st | keyENTER evt = ajaxSubmit st
+                                | otherwise    = ([], Nothing)
+    cldiv_ "form" $ do
+      h1_ "Reset Password"
+      p_ "Please enter the email address you signed up with."
+      table_ $ tbody_ $ do
+        tr_ $ do
+          td_ $
+            label_
+              [ "htmlFor" $= "email"
+              ] "Email"
+          td_ $ input_
+            [ classNames
+                [ ("auth-input", True)
+                ]
+            , "type" $= "text"
+            , "value" &= email
+            , "autoFocus" &= True
+            , "name" $= "email"
+            , onChange $ \ev _ ->
+                ([], Just (target ev "value"))
+            , onKeyDown keyDownHandler
+            ]
+        tr_ $ td_
+           [ "className" $= "submit"
+           , "colSpan" $= "2"
+           ] $ button_
+             [ classNames [ ("enabled", formValid)]
+             , onClick $ \_ _ st -> ajaxSubmit st
+             ] "Submit"
+      p_ $ do
+        "Back to "
+        button_
+          [ classNames [ ("pure", True) ]
+          , onClick $ \_ _ _ -> (dispatch ToLoginForm, Nothing)
+          ] "login"
+        "."

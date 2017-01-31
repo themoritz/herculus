@@ -43,6 +43,8 @@ type Routes =
  :<|> AuthSignup
  :<|> AuthGetUserInfo -- given session key, retrieve user info
  :<|> AuthChangePassword
+ :<|> AuthSendResetLink
+ :<|> AuthResetPassword
 
  :<|> ProjectCreate
  :<|> ProjectList
@@ -94,6 +96,8 @@ type AuthLogout         = SessionProtect :> "auth"      :> "logout"             
 type AuthSignup         =                   "auth"      :> "signup"         :> ReqBody '[JSON] SignupData :> Post '[JSON] SignupResponse
 type AuthGetUserInfo    =                   "auth"      :> "userInfo"       :> ReqBody '[JSON] SessionKey :> Post '[JSON] GetUserInfoResponse
 type AuthChangePassword = SessionProtect :> "auth"      :> "changePassword" :> ReqBody '[JSON] ChangePwdData :> Post '[JSON] ChangePwdResponse
+type AuthSendResetLink  =                   "auth"      :> "sendResetLink"  :> ReqBody '[JSON] Text       :> Post '[JSON] ()
+type AuthResetPassword  =                   "auth"      :> "resetPassword"  :> Capture "sessionKey" SessionKey :> Get '[PlainText] Text
 
 type ProjectCreate      = SessionProtect :> "project"   :> "create"         :> ReqBody '[JSON] Text                                              :> Post '[JSON] (Entity ProjectClient)
 type ProjectList        = SessionProtect :> "project"   :> "list"                                                                                :> Get '[JSON] [Entity ProjectClient]

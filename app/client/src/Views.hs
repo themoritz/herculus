@@ -32,7 +32,8 @@ import           Store                 (Action (MessageAction),
                                         State, dispatch, dispatchLoggedIn,
                                         dispatchProject, dispatchProjectCommand,
                                         stateMessage, stateSession, store)
-import           Views.Auth            (changePassword_, login_, signup_)
+import           Views.Auth            (changePassword_, login_, resetPassword_,
+                                        signup_)
 import           Views.Combinators     (clspan_, inputNew_, menuItem_)
 import           Views.Common          (keyENTER, keyESC)
 import           Views.Foreign         (onClickOutside_)
@@ -50,6 +51,7 @@ app = defineControllerView "app" store $ \st () ->
       cldiv_ "content-body" $ case st ^. stateSession of
         StateLoggedOut LoggedOutLoginForm -> login_
         StateLoggedOut LoggedOutSignupForm -> signup_
+        StateLoggedOut LoggedOutResetPasswordForm -> resetPassword_
         StateLoggedOut LoggedOutUninitialized -> cldiv_ "form" "Failed to load. Please reload."
         StateLoggedIn liSt ->
           case liSt ^. LoggedIn.stateSubState of

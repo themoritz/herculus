@@ -13,6 +13,7 @@ let
   server = myPackages.callPackage ./server.nix { };
   latex = pkgs.texlive.combine { inherit (pkgs.texlive)
     scheme-basic
+    collection-langgerman
     collection-fontsrecommended
     collection-latexrecommended
     lato

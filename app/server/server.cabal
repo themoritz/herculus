@@ -38,6 +38,7 @@ library
                      , filepath
                      , lens
                      , herculus-lib
+                     , mime-mail
                      , monad-control
                      , monad-logger
                      , mongoDB

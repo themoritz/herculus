@@ -56,6 +56,7 @@ data SessionState
 data LoggedOutState
   = LoggedOutLoginForm
   | LoggedOutSignupForm
+  | LoggedOutResetPasswordForm
   | LoggedOutUninitialized
   deriving (Show)
 
@@ -74,8 +75,10 @@ data Action
   -- Session
   | ToSignupForm
   | ToLoginForm
+  | ToResetPasswordForm
   | Signup SignupData
   | Login LoginData
+  | ResetPassword Text
   | MessageAction Message.Action
   | LoggedInAction LoggedIn.Action
   deriving (Generic, Show)
@@ -226,6 +229,9 @@ eval = \case
   ToLoginForm ->
     stateSession .= StateLoggedOut LoggedOutLoginForm
 
+  ToResetPasswordForm ->
+    stateSession .= StateLoggedOut LoggedOutResetPasswordForm
+
   Login loginData -> do
     result <- apiCall $ request api (Proxy :: Proxy Api.AuthLogin) loginData
     case result of
@@ -234,6 +240,13 @@ eval = \case
         showMessage $ Message.SetSuccess "Successfully logged in."
       LoginFailed txt ->
         showMessage $ Message.SetWarning txt
+
+  ResetPassword email -> do
+    apiCall $ request api (Proxy :: Proxy Api.AuthSendResetLink) email
+    showMessage $ Message.SetSuccess
+      "An email with a reset link will be sent to the given address \
+      \(provided it exists). Please also check your spam folder."
+    eval ToLoginForm
 
   MessageAction a ->
     stateMessage .= Message.runAction a

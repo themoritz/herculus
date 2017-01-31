@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
 
 module Handler.Rest where
@@ -10,16 +11,23 @@ import           Prelude                        hiding (unlines)
 
 import           Control.Lens
 import           Control.Monad.Except           (ExceptT (ExceptT), runExceptT)
-import           Control.Monad.IO.Class         (MonadIO)
+import           Control.Monad.IO.Class         (MonadIO, liftIO)
+
+import qualified Data.ByteString.Base64.URL     as Base64URL
 import qualified Data.ByteString.Lazy           as BL
 import qualified Data.ByteString.Lazy.Char8     as BL8
-import           Data.Foldable                  (for_, traverse_)
+import           Data.Foldable                  (traverse_)
 import           Data.Functor                   (($>))
 import           Data.Monoid
 import           Data.Text                      (Text, pack, unlines, unpack)
+import qualified Data.Text.Encoding             as Text (decodeUtf8)
+import qualified Data.Text.Lazy                 as TL
 import           Data.Traversable               (for)
+
 import           Database.MongoDB               ((=:))
+import qualified Network.Mail.Mime              as Mail
 import           Servant
+import           System.Entropy                 (getEntropy)
 import qualified Text.Pandoc                    as Pandoc
 import qualified Text.Pandoc.Error              as Pandoc
 
@@ -37,7 +45,7 @@ import           Lib.Model.Table
 import           Lib.Template.Interpreter
 import           Lib.Types
 
-import           Auth                           (mkSession)
+import           Auth                           (lookUpSession, mkSession)
 import           Auth.Permission                (permissionColumn,
                                                  permissionProject)
 import           Engine
@@ -52,6 +60,8 @@ handle =
   :<|> handleAuthSignup
   :<|> handleAuthGetUserInfo
   :<|> handleAuthChangePwd
+  :<|> handleAuthSendResetLink
+  :<|> handleAuthResetPassword
 
   :<|> handleProjectCreate
   :<|> handleProjectList
@@ -129,6 +139,55 @@ handleAuthChangePwd (UserInfo userId _ _ _) (ChangePwdData oldPwd newPwd) = do
       update userId (userPwHash .~ pwHash)
       pure ChangePwdSuccess
     else pure $ ChangePwdFailure "Wrong password."
+
+handleAuthSendResetLink :: (MonadIO m, MonadHexl m) => Text -> m ()
+handleAuthSendResetLink email =
+  getOneByQuery [ "email" =: email ] >>= \case
+    Left _ -> pure ()
+    Right (Entity userId user) -> do
+      -- We're using the session mechanism here to generate unique reset tokens
+      session <- mkSession userId
+      _ <- create session
+      let path = safeLink (Proxy @Routes) (Proxy @AuthResetPassword)
+                          (session ^. sessionKey)
+          link = "https://app.herculus.io/api/" <> show path
+      let recipient = Mail.Address (Just (user ^. userName))
+                                   (unEmail $ user ^. userEmail)
+          sender = Mail.Address (Just "Herculus Admin") "admin@herculus.io"
+          subject = "Password Reset"
+          body = TL.unlines
+            [ "Hi " <> TL.fromStrict (user ^. userName) <> ","
+            , ""
+            , "Someone requested to reset your Herculus password. If that "
+            , "person was you, please go to the following address:"
+            , ""
+            , TL.pack link
+            , ""
+            , "If you did not request this, you can just ignore this email."
+            ]
+          mail = Mail.simpleMail' recipient sender subject body
+      liftIO $ Mail.renderSendMailCustom "sendmail" ["-t"] mail
+
+handleAuthResetPassword :: (MonadIO m, MonadHexl m) => SessionKey -> m Text
+handleAuthResetPassword sKey =
+  lookUpSession sKey >>= \case
+    Left _ ->
+      pure "This reset link is not valid or has expired."
+    Right UserInfo{..} -> do
+      newPassword <- Text.decodeUtf8 . Base64URL.encode <$> liftIO (getEntropy 8)
+      newPwHash <- mkPwHash newPassword
+      update _uiUserId (userPwHash .~ newPwHash)
+      deleteByQuery (Proxy @Session) [ "sessionKey" =: _uiSessionKey ]
+      pure $ unlines
+        [ "The Herculus login password for the email address " <>
+          unEmail _uiUserEmail <>
+          " has been changed to: "
+        , ""
+        , newPassword
+        , ""
+        , "Please log in with this new password and then use the"
+        , "\"Change Password\" functionality to choose a new password."
+        ]
 
 -- Project ----------------------------------------------------------------------
 
