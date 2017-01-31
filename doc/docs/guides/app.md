@@ -155,7 +155,7 @@ spreadsheets, this would be done using the "vlookup" function.
 
 If you want to read more about how to acces data from other columns and tables,
 see
-[Accessing Data From Other Cells](../../formulas/#accessing-data-from-other-cells-tables-columns).
+[Accessing Data From Other Cells](../formulas/#accessing-data-from-other-cells-tables-columns).
 
 ## The Bills Table
 
@@ -188,7 +188,7 @@ bills. We'll do this in two steps:
 For step one, we create a new column, called _Items_, which will be of type
 `List (Row from Items)`. This means that every cell in this row has as its value
 a list of (references to) rows from the _Items_ table. For more information on
-the `List` type, see [Types](../../formulas/#types). You can configure the
+the `List` type, see [Types](../formulas/#types). You can configure the
 column to have that type by selecting `List` from the first dropdown, `Row` from
 the second, and _Items_ from the third:
 
@@ -207,7 +207,7 @@ filter includeItem #Items
 ```
 
 This formula is slightly more complicated than the previous one, and you may
-want to read the [Formulas Manual](../../formulas) to better understand
+want to read the [Formulas Manual](../formulas) to better understand
 it. Basically, we are doing two things:
 
 * First, we define a function called `includeItem` which, for some given `item`,
@@ -230,7 +230,7 @@ it. Basically, we are doing two things:
 
 * Second, we filter all the rows from the _Items_ table according to the
   function we just defined. In this case,
-  the [filter function](../../formulas/#filter) takes two arguments:
+  the [filter function](../formulas/#filter) takes two arguments:
     1. A function that takes a `Row from Items` and returns a `Bool`. the
        `includeItem` is precisely such a function.
     2. A list of such rows: `List (Row from Items)`. The argument we supply,
@@ -238,7 +238,7 @@ it. Basically, we are doing two things:
 
        It then filters the list given by the second argument, keeping exactly
        those elements for which the `includeItem` function returns true.
-       
+
 
 Now click _Save_. If you entered everything correctly, every cell in this column
 will now contain a list of the items that are billable to the respective client
@@ -301,9 +301,9 @@ Total amount to pay:
 ```
 
 The template language is quite staightforward. You can read more about it
-under [Report Templates](../../formulas/#report-templates). Also, you might want
-to learn about [anonymous functions](../../formulas/#anonymous-functions) and
-the [included functions](../../formulas/#included-functions) of which we use
+under [Report Templates](../formulas/#report-templates). Also, you might want
+to learn about [anonymous functions](../formulas/#anonymous-functions) and
+the [included functions](../formulas/#included-functions) of which we use
 some here.
 
 After you click _Save_, and given that everything went fine, you should see a
