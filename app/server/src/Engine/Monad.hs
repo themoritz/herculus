@@ -94,7 +94,7 @@ class MonadError AppError m => MonadEngine m where
 
   -- Operations on dependency graph
 
-  graphGets   :: (DependencyGraph -> a) -> m a
+  graphGetsM   :: (DependencyGraph -> m a) -> m a
   graphModify :: (DependencyGraph -> DependencyGraph) -> m ()
   graphSetCodeDependencies :: Id Column -> CodeDependencies -> m Bool
   graphSetTypeDependencies :: Id Column -> TypeDependencies -> m Bool
@@ -176,7 +176,7 @@ instance MonadHexl m => MonadEngine (EngineT m) where
 
   askProjectId = ask
 
-  graphGets f = f <$> use engineGraph
+  graphGetsM f = use engineGraph >>= f
 
   graphModify f = engineGraph %= f
 
@@ -189,7 +189,8 @@ instance MonadHexl m => MonadEngine (EngineT m) where
 
   graphSetTypeDependencies columnId deps = do
     graph <- use engineGraph
-    case setTypeDependencies columnId deps graph of
+    let getTableId c = view columnTableId <$> getColumn c
+    setTypeDependencies columnId getTableId deps graph >>= \case
       Nothing     -> pure True
       Just graph' -> (engineGraph .= graph') $> False
 

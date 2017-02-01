@@ -30,7 +30,7 @@ import           Monads
 propagate :: MonadEngine m => m ()
 propagate = do
   startCols <- getEvalRoots
-  graphGets (getDependantsTopological startCols) >>= \case
+  graphGetsM (getDependantsTopological getColumnTableId startCols) >>= \case
     Nothing -> throwError $ ErrBug $ T.unlines
       [ "propagate: Dependency graph contains cycles."
       , "Please report this as a bug!" ]

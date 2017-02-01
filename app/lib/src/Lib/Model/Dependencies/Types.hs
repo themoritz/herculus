@@ -40,6 +40,7 @@ instance Serialize TableDependency
 data AddTargetMode
   = AddOne
   | AddAll
+  deriving (Show)
 
 -- | Kinds of code dependencies (from the view of a column)
 data CodeDependencies = CodeDependencies

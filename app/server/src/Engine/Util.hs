@@ -9,11 +9,19 @@ import           Control.Monad.Except
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
+import           Lib.Model.Dependencies
 import           Lib.Model.Row
+import           Lib.Model.Table
 import           Lib.Types
 
 import           Engine.Monad
 import           Monads
+
+graphGets :: MonadEngine m => (DependencyGraph -> a) -> m a
+graphGets f = graphGetsM (pure . f)
+
+getColumnTableId :: MonadEngine m => Id Column -> m (Id Table)
+getColumnTableId c = view columnTableId <$> getColumn c
 
 getCellValue :: MonadEngine m => Id Column -> Id Row -> m (Maybe Value)
 getCellValue columnId rowId = do

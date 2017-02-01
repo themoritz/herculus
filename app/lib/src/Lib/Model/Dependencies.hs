@@ -1,9 +1,10 @@
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes        #-}
-{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
 
 module Lib.Model.Dependencies
   ( DependencyGraph
@@ -92,15 +93,6 @@ getAllColumnDependants (c, t) graph =
     alignDeps (This ColDepRef) = AddOne
     alignDeps _                = AddAll
 
--- | Version of 'getAllColumnDependants' which returns an empty list if the
--- given column is not part of the graph. Used for cycle detection.
-getAllColumnDependants' :: Id Column -> DependencyGraph
-                        -> [(Id Column, AddTargetMode)]
-getAllColumnDependants' c graph =
-  case graph ^. columnDependants . at c of
-    Nothing     -> []
-    Just (t, _) -> getAllColumnDependants (c, t) graph
-
 --------------------------------------------------------------------------------
 
 getTableDependants :: Id Table
@@ -134,12 +126,15 @@ purgeTable t graph = flip execState graph $ do
   mapM_ purgeColumn' columns
   tableDependants . at t .= Nothing
 
-setTypeDependencies :: Id Column
+setTypeDependencies :: Monad m
+                    => Id Column
+                    -> (Id Column -> m (Id Table))
                     -> TypeDependencies
                     -> DependencyGraph
-                    -> Maybe DependencyGraph
-setTypeDependencies c typeDeps graph =
-    getDependantsTopological [c] graph' $> graph'
+                    -> m (Maybe DependencyGraph)
+setTypeDependencies c getTableId typeDeps graph = do
+    result <- getDependantsTopological getTableId [c] graph'
+    pure $ result $> graph'
   where
     graph' = flip execState graph $ do
       let tblDepsSet = tablesOfTypeDeps typeDeps
@@ -195,7 +190,7 @@ setCodeDependencies getTableId c codeDeps graph = do
       Right (dep, typ) ->
         tableDependants . at dep . non Map.empty . at c .= Just typ
 
-  case getDependantsTopological [c] graph' of
+  getDependantsTopological getTableId [c] graph' >>= \case
     Nothing -> pure Nothing
     Just _  -> pure $ Just graph'
 
@@ -203,11 +198,16 @@ setCodeDependencies getTableId c codeDeps graph = do
 
 type ColumnOrder = [(Id Column, [(Id Column, AddTargetMode)])]
 
-getDependantsTopological :: [Id Column] -> DependencyGraph -> Maybe ColumnOrder
-getDependantsTopological roots graph =
-    tail <$> evalState (runMaybeT $ topSort nullObjectId) Map.empty
+getDependantsTopological
+  :: forall m. Monad m
+  => (Id Column -> m (Id Table))
+  -> [Id Column]
+  -> DependencyGraph
+  -> m (Maybe ColumnOrder)
+getDependantsTopological getTableId roots graph =
+    fmap tail <$> evalStateT (runMaybeT $ topSort nullObjectId) Map.empty
   where
-    topSort :: Id Column -> MaybeT (State (Map (Id Column) Bool)) ColumnOrder
+    topSort :: Id Column -> MaybeT (StateT (Map (Id Column) Bool) m) ColumnOrder
     topSort x = gets (Map.lookup x) >>= \case
       -- Currently working on
       Just False -> empty -- Found circle
@@ -216,9 +216,13 @@ getDependantsTopological roots graph =
       -- Not yet visited
       Nothing -> do
         modify $ Map.insert x False
-        childOrders <- mapM (topSort . fst) (getAllColumnDependants' x graph')
+        tableId <- if x == nullObjectId
+          then pure nullObjectId
+          else lift $ lift $ getTableId x
+        let dependants = getAllColumnDependants (x, tableId) graph'
+        childOrders <- mapM (topSort . fst) dependants
         modify $ Map.insert x True
-        pure $ (x, getAllColumnDependants' x graph') : join (reverse childOrders)
+        pure $ (x, dependants) : join (reverse childOrders)
 
     -- Modified graph that contains edges from a fake node to all the root
     -- columns.
