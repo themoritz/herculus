@@ -103,7 +103,7 @@ handleAuthLogout (UserInfo userId _ _ _) =
 
 handleAuthSignup :: (MonadIO m, MonadHexl m) => SignupData -> m SignupResponse
 handleAuthSignup (SignupData uName email pwd intention) =
-  getOneByQuery [ "email" =: uName ] >>= \case
+  getOneByQuery [ "email" =: email ] >>= \case
     Right (_ :: Entity User) -> pure $
       SignupFailed "A user with that email address already exists."
     Left _  -> do
