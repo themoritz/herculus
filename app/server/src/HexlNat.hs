@@ -16,13 +16,14 @@ import           Servant                ((:~>) (..), Handler, ServantErr (..),
                                          enter, err400, err401, err403, err500)
 import           Servant.Utils.Enter    (Enter)
 
-import           Monads                 (AppError (..), HexlEnv, HexlT, runHexl)
+import           Monads                 (AppError (..), HexlEnv, HexlT,
+                                         runHexlT)
 
 
 hexlToServant :: (Enter h (HexlT IO :~> Handler) s)
              => HexlEnv -> h -> s
 hexlToServant env = enter $ Nat $ \hexlAction ->
-  liftIO (runHexl env hexlAction)
+  liftIO (runHexlT env hexlAction)
     >>= either (throwError . appErrToServantErr) pure
 
 appErrToServantErr :: AppError -> ServantErr

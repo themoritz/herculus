@@ -1,9 +1,11 @@
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE TypeOperators       #-}
 
 module Handler.Rest where
 
@@ -12,6 +14,7 @@ import           Prelude                        hiding (unlines)
 import           Control.Lens
 import           Control.Monad.Except           (ExceptT (ExceptT), runExceptT)
 import           Control.Monad.IO.Class         (MonadIO, liftIO)
+import           Control.Monad.Reader
 
 import qualified Data.ByteString.Base64.URL     as Base64URL
 import qualified Data.ByteString.Lazy           as BL
@@ -45,7 +48,8 @@ import           Lib.Model.Table
 import           Lib.Template.Interpreter
 import           Lib.Types
 
-import           Auth                           (lookUpSession, mkSession)
+import           Auth                           (getUserInfo, lookUpSession,
+                                                 mkSession)
 import           Auth.Permission                (permissionColumn,
                                                  permissionProject)
 import           Engine
@@ -53,8 +57,33 @@ import           Engine.Monad
 import           Engine.Util
 import           Monads
 
-handle :: ServerT Routes (HexlT IO)
+type RoutesHandler = HexlT IO
+
+handle :: ServerT Routes RoutesHandler
 handle =
+       handleAuth
+  :<|> getProjectHandler
+  :<|> getReportCellHandler
+
+getProjectHandler :: Maybe SessionKey -> ServerT ProjectRoutes RoutesHandler
+getProjectHandler mSessKey = enter (authenticate mSessKey) handleProject
+
+getReportCellHandler :: Maybe SessionKey -> ServerT ReportCellRoutes RoutesHandler
+getReportCellHandler mSessKey = enter (authenticate mSessKey) handleReportCell
+
+authenticate :: Maybe SessionKey -> ProjectHandler :~> RoutesHandler
+authenticate mSessKey = Nat $ \handler -> do
+  userInfo <- getUserInfo mSessKey
+  env <- askHexlEnv
+  result <- lift $ runReaderT (runHexlT env handler) userInfo
+  either throwError pure result
+
+-- Auth ------------------------------------------------------------------------
+
+type AuthHandler = HexlT IO
+
+handleAuth :: ServerT AuthRoutes AuthHandler
+handleAuth =
        handleAuthLogin
   :<|> handleAuthLogout
   :<|> handleAuthSignup
@@ -62,19 +91,6 @@ handle =
   :<|> handleAuthChangePwd
   :<|> handleAuthSendResetLink
   :<|> handleAuthResetPassword
-
-  :<|> handleProjectCreate
-  :<|> handleProjectList
-  :<|> handleProjectSetName
-  :<|> handleProjectDelete
-  :<|> handleProjectLoad
-  :<|> handleProjectRunCommand
-
-  :<|> handleCellGetReportPDF
-  :<|> handleCellGetReportHTML
-  :<|> handleCellGetReportPlain
-
--- Auth ------------------------------------------------------------------------
 
 handleAuthLogin :: (MonadIO m, MonadHexl m) => LoginData -> m LoginResponse
 handleAuthLogin (LoginData email pwd) =
@@ -95,9 +111,10 @@ handleAuthLogin (LoginData email pwd) =
       session <- mkSession userId
       create session $> session
 
-handleAuthLogout :: MonadHexl m => SessionData -> m ()
-handleAuthLogout (UserInfo userId _ _ _) =
-  getOneByQuery [ "userId" =: toObjectId userId ] >>= \case
+handleAuthLogout :: (MonadIO m, MonadHexl m) => Maybe SessionKey -> m ()
+handleAuthLogout sKey = do
+  userInfo <- getUserInfo sKey
+  getOneByQuery [ "userId" =: toObjectId (userInfo ^. uiUserId) ] >>= \case
     Left  msg -> throwError $ ErrBug msg
     Right (Entity sessionId _) -> delete (sessionId :: Id Session)
 
@@ -118,9 +135,12 @@ handleAuthSignup (SignupData uName email pwd intention) =
               ErrBug $ "Signed up, but login failed: " <> msg
         else pure $ SignupFailed "Please enter a valid email address."
 
-handleAuthGetUserInfo :: MonadHexl m => SessionKey -> m GetUserInfoResponse
-handleAuthGetUserInfo sKey = do
+handleAuthGetUserInfo :: MonadHexl m => Maybe SessionKey -> m GetUserInfoResponse
+handleAuthGetUserInfo mSKey = do
   eUser <- runExceptT $ do
+    sKey <- case mSKey of
+      Nothing -> throwError "No auth header found"
+      Just s  -> pure s
     Entity _ session <- ExceptT $ getOneByQuery [ "sessionKey" =: sKey ]
     let userId = session ^. sessionUserId
     user <- ExceptT $ getById userId
@@ -130,8 +150,10 @@ handleAuthGetUserInfo sKey = do
     Right userInfo -> GetUserInfoSuccess userInfo
 
 handleAuthChangePwd :: (MonadIO m, MonadHexl m)
-                    => SessionData -> ChangePwdData -> m ChangePwdResponse
-handleAuthChangePwd (UserInfo userId _ _ _) (ChangePwdData oldPwd newPwd) = do
+                    => Maybe SessionKey -> ChangePwdData -> m ChangePwdResponse
+handleAuthChangePwd sKey (ChangePwdData oldPwd newPwd) = do
+  userInfo <- getUserInfo sKey
+  let userId = userInfo ^. uiUserId
   user <- getById' userId
   if verifyPassword oldPwd (user ^. userPwHash)
     then do
@@ -148,9 +170,9 @@ handleAuthSendResetLink email =
       -- We're using the session mechanism here to generate unique reset tokens
       session <- mkSession userId
       _ <- create session
-      let path = safeLink (Proxy @Routes) (Proxy @AuthResetPassword)
+      let path = safeLink (Proxy @AuthRoutes) (Proxy @AuthResetPassword)
                           (session ^. sessionKey)
-          link = "https://app.herculus.io/api/" <> show path
+          link = "https://app.herculus.io/api/auth/" <> show path
       let recipient = Mail.Address (Just (user ^. userName))
                                    (unEmail $ user ^. userEmail)
           sender = Mail.Address (Just "Herculus Admin") "admin@herculus.io"
@@ -191,39 +213,65 @@ handleAuthResetPassword sKey =
 
 -- Project ----------------------------------------------------------------------
 
-handleProjectCreate :: MonadHexl m => SessionData -> Text -> m (Entity ProjectClient)
-handleProjectCreate (UserInfo userId _ _ _) projName = do
+type ProjectHandler = HexlT (ReaderT UserInfo IO)
+
+handleProject :: ServerT ProjectRoutes ProjectHandler
+handleProject =
+       handleProjectCreate
+  :<|> handleProjectList
+  :<|> handleProjectSetName
+  :<|> handleProjectDelete
+  :<|> handleProjectLoad
+  :<|> handleProjectRunCommand
+
+handleProjectCreate
+  :: (MonadHexl m, MonadReader UserInfo m)
+  => Text -> m (Entity ProjectClient)
+handleProjectCreate projName = do
+  userId <- asks _uiUserId
   let project = Project projName userId emptyDependencyGraph
   projectId <- create project
   pure $ toClient $ Entity projectId project
 
-handleProjectList :: MonadHexl m => SessionData -> m [Entity ProjectClient]
-handleProjectList (UserInfo userId _ _ _) =
+handleProjectList
+  :: (MonadHexl m, MonadReader UserInfo m)
+  => m [Entity ProjectClient]
+handleProjectList = do
+  userId <- asks _uiUserId
   map toClient <$> listByQuery [ "owner" =: toObjectId userId ]
 
-handleProjectSetName :: MonadHexl m => SessionData -> Id ProjectClient -> Text -> m ()
-handleProjectSetName (UserInfo userId _ _ _) projectId name = do
+handleProjectSetName
+  :: (MonadHexl m, MonadReader UserInfo m)
+  => Id ProjectClient -> Text -> m ()
+handleProjectSetName projectId name = do
+  userId <- asks _uiUserId
   let i = fromClientId projectId
   permissionProject userId i
   update i $ projectName .~ name
 
-handleProjectDelete :: MonadHexl m => SessionData -> Id ProjectClient -> m ()
-handleProjectDelete sessionData@(UserInfo userId _ _ _) projectId = do
+handleProjectDelete
+  :: (MonadHexl m, MonadReader UserInfo m)
+  => Id ProjectClient -> m ()
+handleProjectDelete projectId = do
+  userId <- asks _uiUserId
   let i = fromClientId projectId
   permissionProject userId i
   tables <- listByQuery [ "projectId" =: toObjectId i ]
-  traverse_ (handleProjectRunCommand sessionData projectId .
+  traverse_ (handleProjectRunCommand projectId .
              CmdTableDelete .
              entityId) tables
   delete i
 
-handleProjectLoad :: MonadHexl m => SessionData -> Id ProjectClient
-                  -> m ( ProjectClient
-                       , [Entity Table]
-                       , [Entity Column]
-                       , [Entity Row]
-                       , [Entity Cell] )
-handleProjectLoad (UserInfo userId _ _ _) projectId = do
+handleProjectLoad
+  :: (MonadHexl m, MonadReader UserInfo m)
+  => Id ProjectClient
+  -> m ( ProjectClient
+       , [Entity Table]
+       , [Entity Column]
+       , [Entity Row]
+       , [Entity Cell] )
+handleProjectLoad projectId = do
+  userId <- asks _uiUserId
   let i = fromClientId projectId
   permissionProject userId i
   project <- getById' i
@@ -236,8 +284,11 @@ handleProjectLoad (UserInfo userId _ _ _) projectId = do
   let (columns, rows, cells) = mconcat dat
   pure (toClient project, tables, columns, rows, cells)
 
-handleProjectRunCommand :: MonadHexl m => SessionData -> Id ProjectClient -> Command -> m ()
-handleProjectRunCommand (UserInfo userId _ _ _) projectId cmd = do
+handleProjectRunCommand
+  :: (MonadHexl m, MonadReader UserInfo m)
+  => Id ProjectClient -> Command -> m ()
+handleProjectRunCommand projectId cmd = do
+  userId <- asks _uiUserId
   let i = fromClientId projectId
   permissionProject userId i
   -- Check that project id implied by the command matches `i`.
@@ -264,10 +315,19 @@ handleProjectRunCommand (UserInfo userId _ _ _) projectId cmd = do
 
 --------------------------------------------------------------------------------
 
-handleCellGetReportPDF :: MonadHexl m => SessionData
-                       -> Maybe SessionKey -> Id Column -> Id Row
-                       -> m BL.ByteString
-handleCellGetReportPDF (UserInfo userId _ _ _) _ columnId rowId = do
+type ReportCellHandler = HexlT (ReaderT UserInfo IO)
+
+handleReportCell :: ServerT ReportCellRoutes ReportCellHandler
+handleReportCell =
+       handleCellGetReportPDF
+  :<|> handleCellGetReportHTML
+  :<|> handleCellGetReportPlain
+
+handleCellGetReportPDF
+  :: (MonadHexl m, MonadReader UserInfo m)
+  => Id Column -> Id Row -> m BL.ByteString
+handleCellGetReportPDF columnId rowId = do
+  userId <- asks _uiUserId
   permissionColumn userId columnId
   (repCol, plain) <- evalReport columnId rowId
   case repCol ^. reportColLanguage of
@@ -280,7 +340,7 @@ handleCellGetReportPDF (UserInfo userId _ _ _) _ columnId rowId = do
             "Error running pdflatex: " <> (pack . BL8.unpack) e <>
             "Source: " <> plain
           Right pdf -> pure pdf
-      Just reader -> case reader Pandoc.def (unpack plain) of
+      Just r -> case r Pandoc.def (unpack plain) of
         Left err -> throwError $
           ErrUser $ unlines
             [ "Could not read generated code into pandoc document: "
@@ -307,9 +367,11 @@ handleCellGetReportPDF (UserInfo userId _ _ _) _ columnId rowId = do
               "Source: " <> (pack . show) (Pandoc.writeLaTeX options pandoc)
             Right pdf -> pure pdf
 
-handleCellGetReportHTML :: MonadHexl m => SessionData
-                        -> Maybe SessionKey -> Id Column -> Id Row -> m Text
-handleCellGetReportHTML (UserInfo userId _ _ _) _ columnId rowId = do
+handleCellGetReportHTML
+  :: (MonadHexl m, MonadReader UserInfo m)
+  => Id Column -> Id Row -> m Text
+handleCellGetReportHTML columnId rowId = do
+  userId <- asks _uiUserId
   permissionColumn userId columnId
   col <- getById' columnId
   (repCol, plain) <- evalReport columnId rowId
@@ -317,7 +379,7 @@ handleCellGetReportHTML (UserInfo userId _ _ _) _ columnId rowId = do
     Nothing   -> pure plain
     Just lang -> case getPandocReader lang (repCol ^. reportColFormat) of
       Nothing -> pure plain
-      Just reader -> case reader Pandoc.def (unpack plain) of
+      Just r -> case r Pandoc.def (unpack plain) of
         Left err -> pure $ pack $ show err
         Right pandoc -> do
           template <- getDefaultTemplate "html5" >>= \case
@@ -334,9 +396,11 @@ handleCellGetReportHTML (UserInfo userId _ _ _) _ columnId rowId = do
                 }
           pure $ pack $ Pandoc.writeHtmlString options pandoc
 
-handleCellGetReportPlain :: MonadHexl m => SessionData
-                         -> Maybe SessionKey -> Id Column -> Id Row -> m Text
-handleCellGetReportPlain (UserInfo userId _ _ _) _ columnId rowId = do
+handleCellGetReportPlain
+  :: (MonadHexl m, MonadReader UserInfo m)
+  => Id Column -> Id Row -> m Text
+handleCellGetReportPlain columnId rowId = do
+  userId <- asks _uiUserId
   permissionColumn userId columnId
   snd <$> evalReport columnId rowId
 
@@ -353,8 +417,6 @@ getPandocReader lang format = case lang of
   ReportLanguageHTML     -> case format of
     ReportFormatHTML -> Nothing
     _                -> Just Pandoc.readHtml
-
--- Helper ----------------------------------------------------------------------
 
 evalReport :: MonadHexl m => Id Column -> Id Row -> m (ReportCol, Text)
 evalReport columnId rowId = do

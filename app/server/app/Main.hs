@@ -22,10 +22,9 @@ import           Network.Wai.Handler.WebSockets
 import           Network.WebSockets
 import           Servant                        ((:<|>) (..), (:>),
                                                  Context (..), Get, PlainText,
-                                                 Raw, Server, serveDirectory,
-                                                 serveWithContext)
+                                                 Raw, Server, serve,
+                                                 serveDirectory)
 
-import           Auth                           (AuthMiddleware, authHandler)
 import           ConnectionManager
 import           Handler.Rest
 import           Handler.WebSocket
@@ -70,12 +69,8 @@ wsApp env pending =
       flip finally disconnect $ forever $
         eitherDecode <$> receiveData connection >>= \case
           Left msg -> putStrLn msg
-          Right wsUp -> runHexl env (handleClientMessage connectionId wsUp)
+          Right wsUp -> runHexlT env (handleClientMessage connectionId wsUp)
             >>= either print pure
-
--- middleware
-handlerContext :: HexlEnv -> Context (AuthMiddleware ': '[])
-handlerContext env = authHandler env :. EmptyContext
 
 main :: IO ()
 main = do
@@ -96,6 +91,6 @@ main = do
   connections <- atomically $ newTVar mkConnectionManager
   let env = HexlEnv pipe optMongoCollection connections
       webSocketApp = wsApp env
-      restApp = serveWithContext routes (handlerContext env) $ rest env optAssetDir
+      restApp = serve routes $ rest env optAssetDir
   putStrLn $ "Listening on port " <> show optPort <> " ..."
   Warp.run optPort $ websocketsOr defaultConnectionOptions webSocketApp restApp

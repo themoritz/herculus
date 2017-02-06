@@ -17,7 +17,8 @@ module Monads
   , HexlEnv (..)
   , HexlT
   , atomicallyConnectionMgr
-  , runHexl
+  , runHexlT
+  , askHexlEnv
   ) where
 
 import           Control.Concurrent.STM      as STM
@@ -112,9 +113,27 @@ newtype HexlT m a = HexlT
              , Applicative
              , Monad
              , MonadIO
-             , MonadReader HexlEnv
              , MonadError AppError
              )
+
+runHexlT :: HexlEnv -> HexlT m a -> m (Either AppError a)
+runHexlT env action = runReaderT (runExceptT (unHexlT action)) env
+
+askHexlEnv :: Monad m => HexlT m HexlEnv
+askHexlEnv = HexlT $ lift $ ask
+
+asksHexlEnv :: Monad m => (HexlEnv -> a) -> HexlT m a
+asksHexlEnv f = f <$> askHexlEnv
+
+instance MonadTrans HexlT where
+  lift = HexlT . lift . lift
+
+instance MonadReader r m => MonadReader r (HexlT m) where
+  ask = lift ask
+  local f action = do
+    env <- askHexlEnv
+    result <- lift $ local f (runHexlT env action)
+    either throwError pure result
 
 -- TODO: Filter for logLevel and show context
 instance MonadIO m => MonadLogger (HexlT m) where
@@ -223,7 +242,7 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
 
 instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
   sendWS connectionIds msg = do
-    mgr <- asks envConnections
+    mgr <- asksHexlEnv envConnections
     liftIO $ do
       connections <- fmap catMaybes $ atomicallyConnectionMgr mgr $
         for connectionIds getConnection
@@ -231,7 +250,7 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
         sendTextData connection $ encode msg
 
   withConnectionMgr action = do
-    ref <- asks envConnections
+    ref <- asksHexlEnv envConnections
     liftIO $ atomicallyConnectionMgr ref action
 
   --
@@ -258,13 +277,10 @@ atomicallyConnectionMgr ref action = atomically $ do
   writeTVar ref manager'
   pure a
 
-runHexl :: HexlEnv -> HexlT m a -> m (Either AppError a)
-runHexl env action = runReaderT (runExceptT (unHexlT action)) env
-
 --
 
 runMongo :: MonadIO m => Mongo.Action IO a -> HexlT m a
 runMongo action = do
-  pipe <- asks envPipe
-  database <- asks envDatabase
+  pipe <- asksHexlEnv envPipe
+  database <- asksHexlEnv envDatabase
   liftIO $ Mongo.access pipe Mongo.master database action

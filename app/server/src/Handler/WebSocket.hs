@@ -16,7 +16,7 @@ handleClientMessage :: MonadHexl m => Mgr.ConnectionId -> WsUpMessage -> m ()
 handleClientMessage connection = \case
 
   WsUpAuthenticate sKey -> do
-    response <- handleAuthGetUserInfo sKey
+    response <- handleAuthGetUserInfo (Just sKey)
     case response of
       GetUserInfoSuccess (UserInfo userId _ _ _) ->
         withConnectionMgr $ Mgr.authUser connection userId
