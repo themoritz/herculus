@@ -8,8 +8,13 @@ import Control.Monad.Aff.Class (liftAff)
 import Control.Monad.Aff.Console (log)
 import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.State (modify)
+import Data.Array (head, length)
 import Data.Either (Either(Right, Left))
+import Data.Lens ((^.))
 import Data.Maybe (Maybe(Nothing, Just))
+import Lib.Model (Entity(..))
+import Lib.Model.Auth (Email(..), LoginData(..), LoginResponse(..), SignupData(..), uiSessionKey, uiUserName)
+import Lib.Model.Project (projectClientName)
 import Lib.Types (Id(..))
 import Servant.PureScript.Affjax (AjaxError, errorToString)
 import Types (AppM)
@@ -36,9 +41,21 @@ app = H.lifecycleComponent
     
     eval :: Query ~> H.ComponentDSL State Query o (AppM eff)
     eval (Init next) = do
+      let loginData = LoginData
+            { ldEmail: Email { unEmail: "mdrexl@fastmail.fm" }
+            , ldPassword: "Andreas"
+            }
 
-      apiCall (Api.postProjectSetNameByProjectId "DLDJK" (Id "f")) $ \t ->
-        pure unit
+      apiCall (Api.postAuthLogin loginData) $ case _ of
+        LoginFailed e -> liftAff $ log e
+        LoginSuccess userInfo -> do
+          liftAff $ log $ userInfo ^. uiUserName
+          let auth = userInfo ^. uiSessionKey
+          apiCall (Api.getProjectList auth) $ \ps -> case head ps of
+            Nothing -> pure unit
+            Just (Entity e) -> do
+              apiCall (Api.getProjectLoadByProjectId auth e.entityId) $ \result ->
+                liftAff $ log $ e.entityVal ^. projectClientName
 
       pure next
 

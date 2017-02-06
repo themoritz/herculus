@@ -9,27 +9,30 @@
 module Lib.Types where
 
 import           Control.DeepSeq
-import           Control.Exception  (SomeException, displayException, evaluate,
-                                     try)
+import           Control.Exception    (SomeException, displayException,
+                                       evaluate, try)
 
-import           Data.Aeson         (FromJSON (..), ToJSON (..))
-import           Data.Bson          (ObjectId (..), Val (..))
+import           Data.Aeson           (FromJSON (..), ToJSON (..))
+import qualified Data.Aeson           as Aeson
+import           Data.Bson            (ObjectId (..), Val (..))
+import qualified Data.ByteString.Lazy as BL
 import           Data.Decimal
-import           Data.Monoid        ((<>))
+import           Data.Monoid          ((<>))
 import           Data.Serialize
-import           Data.Text          (Text, pack, unpack)
+import           Data.Text            (Text, pack, unpack)
 import           Data.Text.Encoding
-import           Data.Time.Calendar (Day (..))
-import           Data.Time.Clock    (NominalDiffTime, UTCTime (..), addUTCTime)
-import           Data.Time.Format   (defaultTimeLocale, parseTimeM)
-import qualified Data.Time.Format   as T (formatTime)
-import           Data.Typeable      (Typeable)
+import           Data.Time.Calendar   (Day (..))
+import           Data.Time.Clock      (NominalDiffTime, UTCTime (..),
+                                       addUTCTime)
+import           Data.Time.Format     (defaultTimeLocale, parseTimeM)
+import qualified Data.Time.Format     as T (formatTime)
+import           Data.Typeable        (Typeable)
 
-import           Text.Printf        (PrintfArg (..), formatRealFloat, printf)
-import           Text.Read          (readMaybe)
+import           Text.Printf          (PrintfArg (..), formatRealFloat, printf)
+import           Text.Read            (readMaybe)
 
 import           GHC.Generics
-import           System.IO.Unsafe   (unsafePerformIO)
+import           System.IO.Unsafe     (unsafePerformIO)
 
 import           Web.HttpApiData
 
@@ -69,12 +72,12 @@ instance FromJSON (Id a) where
       Just i  -> pure (Id i)
 
 instance FromHttpApiData (Id a) where
-  parseUrlPiece piece = case readMaybe $ unpack piece of
+  parseUrlPiece piece = case Aeson.decode $ BL.fromStrict $ encodeUtf8 piece of
     Nothing -> Left $ "Expected 12 byte hex string, found " <> piece
-    Just i  -> Right (Id i)
+    Just i  -> Right i
 
 instance ToHttpApiData (Id a) where
-  toUrlPiece (Id i) = pack $ show i
+  toUrlPiece = decodeUtf8 . BL.toStrict . Aeson.encode
 
 instance ToName (Id a) where
   toName (Id obj) = pack $ show obj

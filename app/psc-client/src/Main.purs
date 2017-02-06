@@ -15,6 +15,5 @@ main = runHalogenAff $ do
   body <- awaitBody
   let settings = defaultSettings $ SPParams_
         { baseURL: "api/"
-        , authorization: "secret"
         }
   runUI (H.hoist (runAppM settings) app) unit body
