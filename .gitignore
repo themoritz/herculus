@@ -14,3 +14,6 @@ dist/
 # All node stuff
 node_modules/
 npm-debug.log
+
+# All bower stuff
+bower_components/

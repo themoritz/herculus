@@ -79,6 +79,17 @@ library
                      , RecordWildCards
   ghc-options:         -Wall
 
+executable psc-gen
+  hs-source-dirs:      psc-gen
+  main-is:             Main.hs
+  default-language:    Haskell2010
+  build-depends:       base
+                     , containers
+                     , herculus-lib
+                     , lens
+                     , purescript-bridge
+                     , servant-purescript
+
 test-suite herculus-lib-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test

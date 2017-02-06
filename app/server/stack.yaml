@@ -1,10 +1,11 @@
-resolver: lts-7.1
+resolver: lts-7.15
 packages:
-- location: '.'
+  - '.'
+  - '../lib'
 
-- location: ../lib
-
-extra-deps: []
+extra-deps:
+  - servant-purescript-0.6.0.0
+  - purescript-bridge-0.9.0.0
 
 # Override default flag values for local packages and extra-deps
 flags: {}
