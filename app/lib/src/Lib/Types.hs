@@ -172,7 +172,5 @@ data ChangeOp
   | Delete
   deriving (Eq, Generic, Show)
 
-instance NFData ChangeOp
-
 instance ToJSON ChangeOp
 instance FromJSON ChangeOp

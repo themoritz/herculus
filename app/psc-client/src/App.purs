@@ -13,9 +13,11 @@ import Data.Either (Either(Right, Left))
 import Data.Lens ((^.))
 import Data.Maybe (Maybe(Nothing, Just))
 import Lib.Api.Schema.Auth (LoginData(..), LoginResponse(..), uiSessionKey, uiUserName)
-import Lib.Api.Schema.Project (Project(..))
+import Lib.Api.Schema.Project (Command(..), Project(..), ProjectData(..))
+import Lib.Model (Entity(..))
 import Lib.Model.Auth (Email(..))
-import Lib.Types (Id(..))
+import Lib.Model.Table (Table(..))
+import Lib.Custom (Id(..))
 import Servant.PureScript.Affjax (AjaxError, errorToString)
 import Types (AppM)
 
@@ -54,8 +56,12 @@ app = H.lifecycleComponent
           apiCall (Api.getProjectList auth) $ \ps -> case head ps of
             Nothing -> pure unit
             Just (Project p) -> do
-              apiCall (Api.getProjectLoadByProjectId auth p._projectId) $ \result ->
-                liftAff $ log $ p._projectName
+              liftAff $ log $ p._projectName
+              apiCall (Api.getProjectLoadByProjectId auth p._projectId) $ \(ProjectData pd) ->
+                case head pd._pdTables of
+                  Nothing -> pure unit
+                  Just (Entity e) -> do
+                    liftAff $ log "Done."
 
       pure next
 

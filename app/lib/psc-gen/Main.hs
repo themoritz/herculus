@@ -22,12 +22,14 @@ import           Lib.Api.Rest
 import           Lib.Api.Schema.Auth
 import           Lib.Api.Schema.Column
 import           Lib.Api.Schema.Project
+import           Lib.Api.WebSocket
 import           Lib.Model
 import qualified Lib.Model.Auth                            as M
 import qualified Lib.Model.Cell                            as M
 import qualified Lib.Model.Column                          as M
 import qualified Lib.Model.Row                             as M
 import qualified Lib.Model.Table                           as M
+import           Lib.Types
 
 data Bridge
 
@@ -37,24 +39,34 @@ bridgeProxy = Proxy
 bridge :: BridgePart
 bridge =
       defaultBridge
-  <|> (typeName ^== "Number" >> pure psNumber)
-  <|> (typeName ^== "Time" >> pure psString)
+  <|> numberBridge
+  <|> dateTimeBridge
   <|> (typeName ^== "Base64" >> pure psString)
   <|> (typeName ^== "Base64Url" >> pure psString)
+  <|> (idBridge "Lib.Types" "Id" "Id")
+  <|> (idBridge "Lib.Types" "Ref" "Ref")
   <|> (idBridge "Lib.Model.Project" "Project" "ProjectTag")
   <|> (idBridge "Lib.Model.Column" "Column" "ColumnTag")
-  <|> utcTimeBridge
+  <|> (idBridge "Lib.Model.Auth" "User" "UserTag")
+
+numberBridge :: BridgePart
+numberBridge = do
+  typeModule ^== "Lib.Types"
+  typeName ^== "Number"
+  pure $ TypeInfo "" "Lib.Custom" "ValNumber" []
+
+dateTimeBridge :: BridgePart
+dateTimeBridge = do
+  typeModule ^== "Lib.Types"
+  typeName ^== "Time"
+  pure $ TypeInfo "" "Lib.Custom" "ValTime" []
 
 idBridge :: Text -> Text -> Text -> BridgePart
 idBridge modul name tag = do
   typeModule ^== modul
   typeName ^== name
-  pure $ TypeInfo "" "Lib.Types" tag []
-
-utcTimeBridge :: BridgePart
-utcTimeBridge = do
-  typeName ^== "UTCTime"
-  pure $ TypeInfo "purescript-datetime" "Data.Date" "Date" []
+  params <- psTypeParameters
+  pure $ TypeInfo "" "Lib.Custom" tag params
 
 instance HasBridge Bridge where
   languageBridge _ = buildBridge bridge
@@ -73,7 +85,6 @@ types =
   , mkSumType (Proxy @SignupData)
   , mkSumType (Proxy @SignupResponse)
   -- Lib.Model.Auth
-  , mkSumType (Proxy @M.User)
   , mkSumType (Proxy @M.Email)
   -- Lib.Model.Cell
   , mkSumType (Proxy @M.Cell)
@@ -99,6 +110,11 @@ types =
   , mkSumType (Proxy @M.Row)
   -- Lib.Model.Table
   , mkSumType (Proxy @M.Table)
+  -- Lib.Types
+  , mkSumType (Proxy @ChangeOp)
+  -- Lib.Api.WebSocket
+  , mkSumType (Proxy @WsUpMessage)
+  , mkSumType (Proxy @WsDownMessage)
   ]
 
 main :: IO ()

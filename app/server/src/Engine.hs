@@ -15,6 +15,7 @@ import qualified Data.Map                     as Map
 import           Data.Maybe                   (mapMaybe)
 import qualified Data.Text                    as T (length)
 
+import           Lib.Api.Schema.Column        (columnFromEntity)
 import           Lib.Api.Schema.Project       (Command (..))
 import           Lib.Api.WebSocket
 import           Lib.Model
@@ -57,22 +58,22 @@ runCommand projectId cmd = do
   sendWS connections $ WsDownProjectDiff
     projectId
     (filterChanges _storeCells)
-    (filterChanges _storeColumns)
+    (filterChanges _storeColumns & traverse . _2 %~ columnFromEntity)
     (filterChanges _storeRows)
     (filterChanges _storeTables)
 
-filterChanges :: StoreMap a -> [(Id a, ChangeOp, a)]
+filterChanges :: StoreMap a -> [(ChangeOp, Entity a)]
 filterChanges = mapMaybe f . Map.toList
-  where f (i, (Change op, a)) = Just (i, op, a)
+  where f (i, (Change op, a)) = Just (op, Entity i a)
         f (_, (Cached, _))    = Nothing
 
 commit :: (Model a, MonadHexl m) => StoreMap a -> m ()
 commit m = do
-  let filterUpserts (i, op, a) = case op of
+  let filterUpserts (op, Entity i a) = case op of
         Create -> Nothing
         Update -> Just $ Entity i a
         Delete -> Nothing
-      filterDeletes (i, op, _) = case op of
+      filterDeletes (op, Entity i _) = case op of
         Create -> Nothing
         Update -> Nothing
         Delete -> Just i

@@ -3,42 +3,37 @@
 
 module Lib.Api.WebSocket where
 
-import           Data.Aeson          (FromJSON, ToJSON)
-import           Data.Text           (Text)
+import           Data.Aeson            (FromJSON, ToJSON)
+import           Data.Text             (Text)
 
 
 import           GHC.Generics
 
-import           Lib.Api.Schema.Auth (GetUserInfoResponse)
-import           Lib.Model.Auth      (SessionKey)
-import           Lib.Model.Cell
-import           Lib.Model.Column
-import           Lib.Model.Project
-import           Lib.Model.Row
-import           Lib.Model.Table
+import           Lib.Api.Schema.Auth   (GetUserInfoResponse)
+import           Lib.Api.Schema.Column
+import           Lib.Model
+import qualified Lib.Model.Auth        as M (SessionKey)
+import qualified Lib.Model.Cell        as M
+import qualified Lib.Model.Project     as M
+import qualified Lib.Model.Row         as M
+import qualified Lib.Model.Table       as M
 import           Lib.Types
 
 data WsUpMessage
-  = WsUpAuthenticate SessionKey
+  = WsUpAuthenticate M.SessionKey
   | WsUpLogout
-  | WsUpSubscribe (Id Project)
+  | WsUpSubscribe (Id M.Project)
   | WsUpUnsubscribe
-  deriving (Generic, Show)
+  deriving (Generic, ToJSON, FromJSON, Show)
 
-instance ToJSON WsUpMessage
-instance FromJSON WsUpMessage
-
-type Diff a = [(Id a, ChangeOp, a)]
+type Diff a = [(ChangeOp, a)]
 
 data WsDownMessage
   = WsDownAuthResponse GetUserInfoResponse
   | WsDownSubscribeError Text
-  | WsDownProjectDiff (Id Project)
-                      (Diff Cell)
+  | WsDownProjectDiff (Id M.Project)
+                      (Diff (Entity M.Cell))
                       (Diff Column)
-                      (Diff Row)
-                      (Diff Table)
-  deriving (Generic, Show)
-
-instance ToJSON WsDownMessage
-instance FromJSON WsDownMessage
+                      (Diff (Entity M.Row))
+                      (Diff (Entity M.Table))
+  deriving (Generic, ToJSON, FromJSON, Show)

@@ -59,7 +59,7 @@ data Column = Column
   , _columnTableId :: Id M.Table
   , _columnName    :: Text
   , _columnKind    :: ColumnKind
-  } deriving (Generic, ToJSON, FromJSON)
+  } deriving (Generic, ToJSON, FromJSON, Show)
 
 makeLenses ''Column
 
