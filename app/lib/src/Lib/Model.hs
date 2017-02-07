@@ -25,10 +25,6 @@ data Entity a = Entity
   , entityVal :: a
   } deriving (Typeable, Generic, Show)
 
-instance ClientModel s c => ClientModel (Entity s) (Entity c) where
-  toClient (Entity i s)   = Entity (toClientId i) (toClient s)
-  fromClient (Entity i c) = Entity (fromClientId i) (fromClient c)
-
 entityToTuple :: Entity a -> (Id a, a)
 entityToTuple (Entity i a) = (i, a)
 

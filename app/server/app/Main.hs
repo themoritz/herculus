@@ -20,9 +20,8 @@ import qualified Database.MongoDB               as Mongo
 import           Network.Wai.Handler.Warp       as Warp
 import           Network.Wai.Handler.WebSockets
 import           Network.WebSockets
-import           Servant                        ((:<|>) (..), (:>),
-                                                 Context (..), Get, PlainText,
-                                                 Raw, Server, serve,
+import           Servant                        ((:<|>) (..), (:>), Get,
+                                                 PlainText, Raw, Server, serve,
                                                  serveDirectory)
 
 import           ConnectionManager

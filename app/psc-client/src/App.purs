@@ -1,9 +1,9 @@
 module App where
 
 import Prelude
-import Api.Rest as Api
 import Halogen as H
 import Halogen.HTML as HH
+import Lib.Api.Rest as Api
 import Control.Monad.Aff.Class (liftAff)
 import Control.Monad.Aff.Console (log)
 import Control.Monad.Except (ExceptT, runExceptT)
@@ -12,9 +12,9 @@ import Data.Array (head, length)
 import Data.Either (Either(Right, Left))
 import Data.Lens ((^.))
 import Data.Maybe (Maybe(Nothing, Just))
-import Lib.Model (Entity(..))
-import Lib.Model.Auth (Email(..), LoginData(..), LoginResponse(..), SignupData(..), uiSessionKey, uiUserName)
-import Lib.Model.Project (projectClientName)
+import Lib.Api.Schema.Auth (LoginData(..), LoginResponse(..), uiSessionKey, uiUserName)
+import Lib.Api.Schema.Project (Project(..))
+import Lib.Model.Auth (Email(..))
 import Lib.Types (Id(..))
 import Servant.PureScript.Affjax (AjaxError, errorToString)
 import Types (AppM)
@@ -53,9 +53,9 @@ app = H.lifecycleComponent
           let auth = userInfo ^. uiSessionKey
           apiCall (Api.getProjectList auth) $ \ps -> case head ps of
             Nothing -> pure unit
-            Just (Entity e) -> do
-              apiCall (Api.getProjectLoadByProjectId auth e.entityId) $ \result ->
-                liftAff $ log $ e.entityVal ^. projectClientName
+            Just (Project p) -> do
+              apiCall (Api.getProjectLoadByProjectId auth p._projectId) $ \result ->
+                liftAff $ log $ p._projectName
 
       pure next
 

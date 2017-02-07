@@ -25,6 +25,9 @@ library
                      , Lib.NamedMap
                      , Lib.Api.Rest
                      , Lib.Api.Rest.Report
+                     , Lib.Api.Schema.Auth
+                     , Lib.Api.Schema.Column
+                     , Lib.Api.Schema.Project
                      , Lib.Api.WebSocket
                      , Lib.Util.Base64
                      , Lib.Types
@@ -89,6 +92,7 @@ executable psc-gen
                      , lens
                      , purescript-bridge
                      , servant-purescript
+                     , text
 
 test-suite herculus-lib-test
   type:                exitcode-stdio-1.0

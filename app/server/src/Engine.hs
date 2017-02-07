@@ -15,7 +15,7 @@ import qualified Data.Map                     as Map
 import           Data.Maybe                   (mapMaybe)
 import qualified Data.Text                    as T (length)
 
-import           Lib.Api.Rest                 (Command (..))
+import           Lib.Api.Schema.Project       (Command (..))
 import           Lib.Api.WebSocket
 import           Lib.Model
 import           Lib.Model.Cell
@@ -55,7 +55,7 @@ runCommand projectId cmd = do
   -- Send changes to clients
   connections <- withConnectionMgr $ getConnectionsToProject projectId
   sendWS connections $ WsDownProjectDiff
-    (toClientId projectId)
+    projectId
     (filterChanges _storeCells)
     (filterChanges _storeColumns)
     (filterChanges _storeRows)

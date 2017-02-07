@@ -35,11 +35,12 @@ import qualified Text.Pandoc                    as Pandoc
 import qualified Text.Pandoc.Error              as Pandoc
 
 import           Lib.Api.Rest
+import qualified Lib.Api.Schema.Auth            as Api
+import qualified Lib.Api.Schema.Column          as Api
+import qualified Lib.Api.Schema.Project         as Api
 import           Lib.Compiler.Interpreter.Types
 import           Lib.Model
 import           Lib.Model.Auth
-import           Lib.Model.Cell
-import           Lib.Model.Class
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
 import           Lib.Model.Project
@@ -92,21 +93,23 @@ handleAuth =
   :<|> handleAuthSendResetLink
   :<|> handleAuthResetPassword
 
-handleAuthLogin :: (MonadIO m, MonadHexl m) => LoginData -> m LoginResponse
-handleAuthLogin (LoginData email pwd) =
+handleAuthLogin
+  :: (MonadIO m, MonadHexl m)
+  => Api.LoginData -> m Api.LoginResponse
+handleAuthLogin (Api.LoginData email pwd) =
   getOneByQuery [ "email" =: email ] >>= \case
     Left _ -> pure failMessage
     Right (Entity userId user) -> do
       if verifyPassword pwd (user ^. userPwHash)
         then do
           session <- getSession userId
-          pure $ LoginSuccess $ UserInfo userId
+          pure $ Api.LoginSuccess $ Api.UserInfo userId
                                          (user ^. userName)
                                          (user ^. userEmail)
                                          (session ^. sessionKey)
         else pure failMessage
   where
-    failMessage = LoginFailed "Wrong email or password."
+    failMessage = Api.LoginFailed "Wrong email or password."
     getSession userId = do
       session <- mkSession userId
       create session $> session
@@ -114,28 +117,30 @@ handleAuthLogin (LoginData email pwd) =
 handleAuthLogout :: (MonadIO m, MonadHexl m) => Maybe SessionKey -> m ()
 handleAuthLogout sKey = do
   userInfo <- getUserInfo sKey
-  getOneByQuery [ "userId" =: toObjectId (userInfo ^. uiUserId) ] >>= \case
+  getOneByQuery [ "userId" =: toObjectId (userInfo ^. Api.uiUserId) ] >>= \case
     Left  msg -> throwError $ ErrBug msg
     Right (Entity sessionId _) -> delete (sessionId :: Id Session)
 
-handleAuthSignup :: (MonadIO m, MonadHexl m) => SignupData -> m SignupResponse
-handleAuthSignup (SignupData uName email pwd intention) =
+handleAuthSignup :: (MonadIO m, MonadHexl m) => Api.SignupData -> m Api.SignupResponse
+handleAuthSignup (Api.SignupData uName email pwd intention) =
   getOneByQuery [ "email" =: email ] >>= \case
     Right (_ :: Entity User) -> pure $
-      SignupFailed "A user with that email address already exists."
+      Api.SignupFailed "A user with that email address already exists."
     Left _  -> do
       if verifyEmail email
         then do
           pwHash <- mkPwHash pwd
           Time signupDate <- getCurrentTime
           _ <- create $ User uName email pwHash signupDate intention
-          handleAuthLogin (LoginData email pwd) >>= \case
-            LoginSuccess userInfo -> pure $ SignupSuccess userInfo
-            LoginFailed  msg      -> throwError $
+          handleAuthLogin (Api.LoginData email pwd) >>= \case
+            Api.LoginSuccess userInfo -> pure $ Api.SignupSuccess userInfo
+            Api.LoginFailed  msg      -> throwError $
               ErrBug $ "Signed up, but login failed: " <> msg
-        else pure $ SignupFailed "Please enter a valid email address."
+        else pure $ Api.SignupFailed "Please enter a valid email address."
 
-handleAuthGetUserInfo :: MonadHexl m => Maybe SessionKey -> m GetUserInfoResponse
+handleAuthGetUserInfo
+  :: MonadHexl m
+  => Maybe SessionKey -> m Api.GetUserInfoResponse
 handleAuthGetUserInfo mSKey = do
   eUser <- runExceptT $ do
     sKey <- case mSKey of
@@ -144,23 +149,24 @@ handleAuthGetUserInfo mSKey = do
     Entity _ session <- ExceptT $ getOneByQuery [ "sessionKey" =: sKey ]
     let userId = session ^. sessionUserId
     user <- ExceptT $ getById userId
-    pure $ UserInfo userId (user ^. userName) (user ^. userEmail) sKey
+    pure $ Api.UserInfo userId (user ^. userName) (user ^. userEmail) sKey
   pure $ case eUser of
-    Left err       -> GetUserInfoFailed err
-    Right userInfo -> GetUserInfoSuccess userInfo
+    Left err       -> Api.GetUserInfoFailed err
+    Right userInfo -> Api.GetUserInfoSuccess userInfo
 
-handleAuthChangePwd :: (MonadIO m, MonadHexl m)
-                    => Maybe SessionKey -> ChangePwdData -> m ChangePwdResponse
-handleAuthChangePwd sKey (ChangePwdData oldPwd newPwd) = do
+handleAuthChangePwd
+  :: (MonadIO m, MonadHexl m)
+  => Maybe SessionKey -> Api.ChangePwdData -> m Api.ChangePwdResponse
+handleAuthChangePwd sKey (Api.ChangePwdData oldPwd newPwd) = do
   userInfo <- getUserInfo sKey
-  let userId = userInfo ^. uiUserId
+  let userId = userInfo ^. Api.uiUserId
   user <- getById' userId
   if verifyPassword oldPwd (user ^. userPwHash)
     then do
       pwHash <- mkPwHash newPwd
       update userId (userPwHash .~ pwHash)
-      pure ChangePwdSuccess
-    else pure $ ChangePwdFailure "Wrong password."
+      pure Api.ChangePwdSuccess
+    else pure $ Api.ChangePwdFailure "Wrong password."
 
 handleAuthSendResetLink :: (MonadIO m, MonadHexl m) => Text -> m ()
 handleAuthSendResetLink email =
@@ -195,7 +201,7 @@ handleAuthResetPassword sKey =
   lookUpSession sKey >>= \case
     Left _ ->
       pure "This reset link is not valid or has expired."
-    Right UserInfo{..} -> do
+    Right Api.UserInfo{..} -> do
       newPassword <- Text.decodeUtf8 . Base64URL.encode <$> liftIO (getEntropy 8)
       newPwHash <- mkPwHash newPassword
       update _uiUserId (userPwHash .~ newPwHash)
@@ -213,7 +219,7 @@ handleAuthResetPassword sKey =
 
 -- Project ----------------------------------------------------------------------
 
-type ProjectHandler = HexlT (ReaderT UserInfo IO)
+type ProjectHandler = HexlT (ReaderT Api.UserInfo IO)
 
 handleProject :: ServerT ProjectRoutes ProjectHandler
 handleProject =
@@ -225,74 +231,71 @@ handleProject =
   :<|> handleProjectRunCommand
 
 handleProjectCreate
-  :: (MonadHexl m, MonadReader UserInfo m)
-  => Text -> m (Entity ProjectClient)
+  :: (MonadHexl m, MonadReader Api.UserInfo m)
+  => Text -> m Api.Project
 handleProjectCreate projName = do
-  userId <- asks _uiUserId
+  userId <- asks Api._uiUserId
   let project = Project projName userId emptyDependencyGraph
   projectId <- create project
-  pure $ toClient $ Entity projectId project
+  pure $ Api.projectFromEntity $ Entity projectId project
 
 handleProjectList
-  :: (MonadHexl m, MonadReader UserInfo m)
-  => m [Entity ProjectClient]
+  :: (MonadHexl m, MonadReader Api.UserInfo m)
+  => m [Api.Project]
 handleProjectList = do
-  userId <- asks _uiUserId
-  map toClient <$> listByQuery [ "owner" =: toObjectId userId ]
+  userId <- asks Api._uiUserId
+  map Api.projectFromEntity <$> listByQuery [ "owner" =: toObjectId userId ]
 
 handleProjectSetName
-  :: (MonadHexl m, MonadReader UserInfo m)
-  => Id ProjectClient -> Text -> m ()
+  :: (MonadHexl m, MonadReader Api.UserInfo m)
+  => Id Project -> Text -> m ()
 handleProjectSetName projectId name = do
-  userId <- asks _uiUserId
-  let i = fromClientId projectId
-  permissionProject userId i
-  update i $ projectName .~ name
+  userId <- asks Api._uiUserId
+  permissionProject userId projectId
+  update projectId $ projectName .~ name
 
 handleProjectDelete
-  :: (MonadHexl m, MonadReader UserInfo m)
-  => Id ProjectClient -> m ()
+  :: (MonadHexl m, MonadReader Api.UserInfo m)
+  => Id Project -> m ()
 handleProjectDelete projectId = do
-  userId <- asks _uiUserId
-  let i = fromClientId projectId
-  permissionProject userId i
-  tables <- listByQuery [ "projectId" =: toObjectId i ]
+  userId <- asks Api._uiUserId
+  permissionProject userId projectId
+  tables <- listByQuery [ "projectId" =: toObjectId projectId ]
   traverse_ (handleProjectRunCommand projectId .
              CmdTableDelete .
              entityId) tables
-  delete i
+  delete projectId
 
 handleProjectLoad
-  :: (MonadHexl m, MonadReader UserInfo m)
-  => Id ProjectClient
-  -> m ( ProjectClient
-       , [Entity Table]
-       , [Entity Column]
-       , [Entity Row]
-       , [Entity Cell] )
+  :: (MonadHexl m, MonadReader Api.UserInfo m)
+  => Id Project
+  -> m Api.ProjectData
 handleProjectLoad projectId = do
-  userId <- asks _uiUserId
-  let i = fromClientId projectId
-  permissionProject userId i
-  project <- getById' i
-  tables <- listByQuery [ "projectId" =: toObjectId i ]
+  userId <- asks Api._uiUserId
+  permissionProject userId projectId
+  project <- getById' projectId
+  tables <- listByQuery [ "projectId" =: toObjectId projectId ]
   dat <- for tables $ \(Entity tableId _) -> do
     columns <- listByQuery [ "tableId" =: toObjectId tableId ]
     rows <- listByQuery [ "tableId" =: toObjectId tableId ]
     cells <- listByQuery [ "tableId" =: toObjectId tableId ]
     pure (columns, rows, cells)
   let (columns, rows, cells) = mconcat dat
-  pure (toClient project, tables, columns, rows, cells)
+  pure $ Api.ProjectData
+           (Api.projectFromEntity (Entity projectId project))
+           tables
+           (map Api.columnFromEntity columns)
+           rows
+           cells
 
 handleProjectRunCommand
-  :: (MonadHexl m, MonadReader UserInfo m)
-  => Id ProjectClient -> Command -> m ()
+  :: (MonadHexl m, MonadReader Api.UserInfo m)
+  => Id Project -> Command -> m ()
 handleProjectRunCommand projectId cmd = do
-  userId <- asks _uiUserId
-  let i = fromClientId projectId
-  permissionProject userId i
+  userId <- asks Api._uiUserId
+  permissionProject userId projectId
   -- Check that project id implied by the command matches `i`.
-  let ofTable t = getById' t >>= \table -> if _tableProjectId table == i
+  let ofTable t = getById' t >>= \table -> if _tableProjectId table == projectId
         then pure ()
         else throwError $ ErrBug $ "Given project id does not match project id "
                                 <> "implied by the command."
@@ -311,11 +314,11 @@ handleProjectRunCommand projectId cmd = do
     CmdRowCreate t             -> ofTable t
     CmdRowDelete r             -> ofRow r
     CmdCellSet c _ _           -> ofColumn c
-  runCommand i cmd
+  runCommand projectId cmd
 
 --------------------------------------------------------------------------------
 
-type ReportCellHandler = HexlT (ReaderT UserInfo IO)
+type ReportCellHandler = HexlT (ReaderT Api.UserInfo IO)
 
 handleReportCell :: ServerT ReportCellRoutes ReportCellHandler
 handleReportCell =
@@ -324,10 +327,10 @@ handleReportCell =
   :<|> handleCellGetReportPlain
 
 handleCellGetReportPDF
-  :: (MonadHexl m, MonadReader UserInfo m)
+  :: (MonadHexl m, MonadReader Api.UserInfo m)
   => Id Column -> Id Row -> m BL.ByteString
 handleCellGetReportPDF columnId rowId = do
-  userId <- asks _uiUserId
+  userId <- asks Api._uiUserId
   permissionColumn userId columnId
   (repCol, plain) <- evalReport columnId rowId
   case repCol ^. reportColLanguage of
@@ -368,10 +371,10 @@ handleCellGetReportPDF columnId rowId = do
             Right pdf -> pure pdf
 
 handleCellGetReportHTML
-  :: (MonadHexl m, MonadReader UserInfo m)
+  :: (MonadHexl m, MonadReader Api.UserInfo m)
   => Id Column -> Id Row -> m Text
 handleCellGetReportHTML columnId rowId = do
-  userId <- asks _uiUserId
+  userId <- asks Api._uiUserId
   permissionColumn userId columnId
   col <- getById' columnId
   (repCol, plain) <- evalReport columnId rowId
@@ -397,10 +400,10 @@ handleCellGetReportHTML columnId rowId = do
           pure $ pack $ Pandoc.writeHtmlString options pandoc
 
 handleCellGetReportPlain
-  :: (MonadHexl m, MonadReader UserInfo m)
+  :: (MonadHexl m, MonadReader Api.UserInfo m)
   => Id Column -> Id Row -> m Text
 handleCellGetReportPlain columnId rowId = do
-  userId <- asks _uiUserId
+  userId <- asks Api._uiUserId
   permissionColumn userId columnId
   snd <$> evalReport columnId rowId
 

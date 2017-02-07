@@ -9,3 +9,8 @@ derive instance genericId :: Generic (Id a)
 newtype Ref a = Ref { unRef :: String }
 
 derive instance genericRef :: Generic (Ref a)
+
+-- Id tags
+
+data ColumnTag
+data ProjectTag

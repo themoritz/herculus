@@ -5,9 +5,8 @@
 
 module Lib.Model.Table where
 
-import           Control.DeepSeq
-
 import           Control.Lens      (Lens', lens)
+
 import           Data.Aeson        (FromJSON, ToJSON)
 import           Data.Text         (Text)
 
@@ -23,7 +22,7 @@ import           Lib.Types
 data Table = Table
   { _tableProjectId :: Id Project
   , _tableName      :: Text
-  } deriving (Generic, NFData, Show)
+  } deriving (Generic, Show)
 
 tableProjectId :: Lens' Table (Id Project)
 tableProjectId = lens _tableProjectId (\s a -> s { _tableProjectId = a })

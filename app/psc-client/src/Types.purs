@@ -1,7 +1,7 @@
 module Types where
 
 import Prelude
-import Api.Rest (SPParams_)
+import Lib.Api.Rest (SPParams_)
 import Control.Monad.Aff (Aff)
 import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Reader (runReaderT, ReaderT)

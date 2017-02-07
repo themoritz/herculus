@@ -2,7 +2,7 @@ module Main where
 
 import Prelude
 import Halogen as H
-import Api.Rest (SPParams_(SPParams_))
+import Lib.Api.Rest (SPParams_(SPParams_))
 import App (app)
 import Control.Monad.Eff (Eff)
 import Halogen.Aff (awaitBody, runHalogenAff)

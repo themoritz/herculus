@@ -17,10 +17,11 @@ import qualified Data.Time.Clock        as Clock
 import           Database.MongoDB       ((=:))
 import           System.Entropy         (getEntropy)
 
+import           Lib.Api.Schema.Auth
 import           Lib.Model              (Entity (..))
 import           Lib.Model.Auth         (Session (..), SessionKey, User,
-                                         UserInfo (UserInfo), sessionExpDate,
-                                         sessionUserId, userEmail, userName)
+                                         sessionExpDate, sessionUserId,
+                                         userEmail, userName)
 import           Lib.Types              (Id, Time (Time), addSeconds)
 import           Lib.Util.Base64        (mkBase64Url)
 import           Monads                 (AppError (..), MonadDB (..))

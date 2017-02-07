@@ -4,14 +4,15 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell     #-}
 {-# LANGUAGE TupleSections       #-}
 
 module Lib.Model.Column where
 
-import           Control.DeepSeq
+import           Control.Lens                 (makeLenses)
 
 import           Control.Lens
-import           Data.Aeson                   (FromJSON (..), ToJSON (..))
+import           Data.Aeson                   (FromJSON, ToJSON)
 import           Data.Aeson.Bson
 import           Data.Bson                    (Val, (=:))
 import qualified Data.Bson                    as Bson
@@ -34,13 +35,7 @@ data DataType
   | DataRowRef (Id Table)
   | DataList DataType
   | DataMaybe DataType
-  deriving (Eq, Ord, Show, Read, Generic, NFData)
-
-instance ToJSON DataType
-instance FromJSON DataType
-
-instance ToBSON DataType
-instance FromBSON DataType
+  deriving (Eq, Ord, Show, Read, Generic, ToJSON, FromJSON)
 
 getTypeDependencies :: DataType -> TypeDependencies
 getTypeDependencies = \case
@@ -52,26 +47,84 @@ getTypeDependencies = \case
   DataList sub  -> getTypeDependencies sub
   DataMaybe sub -> getTypeDependencies sub
 
+--------------------------------------------------------------------------------
+
+data CompileResult a
+  = CompileResultOk a
+  | CompileResultNone
+  | CompileResultError Text
+  deriving (Eq, Show, Generic, ToJSON, FromJSON)
+
+type DataCompileResult = CompileResult CExpr
+type ReportCompileResult = CompileResult CTemplate
+
+data IsDerived
+  = Derived
+  | NotDerived
+  deriving (Eq, Ord, Show, Read, Generic, ToJSON, FromJSON)
+
+data ReportLanguage
+  = ReportLanguageMarkdown
+  | ReportLanguageLatex
+  | ReportLanguageHTML
+  deriving (Eq, Ord, Generic, ToJSON, FromJSON, Read, Show)
+
+data ReportFormat
+  = ReportFormatPlain
+  | ReportFormatPDF
+  | ReportFormatHTML
+  deriving (Eq, Ord, Generic, ToJSON, FromJSON, Read, Show)
+
+--------------------------------------------------------------------------------
+
+data ReportCol = ReportCol
+  { _reportColTemplate         :: Text
+  , _reportColCompiledTemplate :: ReportCompileResult
+  , _reportColLanguage         :: Maybe ReportLanguage
+  , _reportColFormat           :: ReportFormat
+  } deriving (Eq, Generic, ToJSON, FromJSON, Show)
+
+makeLenses ''ReportCol
+
+--------------------------------------------------------------------------------
+
+data DataCol = DataCol
+  { _dataColType          :: DataType
+  , _dataColIsDerived     :: IsDerived
+  , _dataColSourceCode    :: Text
+  , _dataColCompileResult :: DataCompileResult
+  } deriving (Eq, Generic, ToJSON, FromJSON, Show)
+
+makeLenses ''DataCol
+
+--------------------------------------------------------------------------------
+
+data ColumnKind
+  = ColumnReport ReportCol
+  | ColumnData DataCol
+  deriving (Eq, Show, ToJSON, FromJSON, Generic)
+
+makePrisms ''ColumnKind
+
+instance ToBSON ColumnKind
+instance FromBSON ColumnKind
+
+instance Val ColumnKind where
+  val = toValue
+  cast' = decodeValue
+
+--------------------------------------------------------------------------------
+
 data Column = Column
   { _columnTableId :: Id Table
   , _columnName    :: Text
   , _columnKind    :: ColumnKind
-  } deriving (Eq, Generic, NFData, Show)
+  } deriving (Eq, Generic, ToJSON, FromJSON, Show)
 
-columnTableId :: Lens' Column (Id Table)
-columnTableId = lens _columnTableId (\c i -> c { _columnTableId = i})
-
-columnName :: Lens' Column Text
-columnName = lens _columnName (\c n -> c { _columnName = n})
-
-columnKind :: Lens' Column ColumnKind
-columnKind = lens _columnKind (\c k -> c { _columnKind = k})
+makeLenses ''Column
 
 instance Model Column where
   collectionName = const "columns"
-
-instance ToJSON Column
-instance FromJSON Column
 
 instance ToDocument Column where
   toDocument (Column t name kind) =
@@ -89,49 +142,10 @@ instance FromDocument Column where
       Right kind ->  pure $ Column (fromObjectId t) name kind
       Left msg   -> Left $ pack msg
 
-data ColumnKind
-  = ColumnReport ReportCol
-  | ColumnData DataCol
-  deriving (Eq, Show, NFData, Generic)
+-- Util ------------------------------------------------------------------------
 
-_ColumnReport :: Prism' ColumnKind ReportCol
-_ColumnReport = prism' ColumnReport $ \case
-  ColumnReport rep -> Just rep
-  ColumnData   _   -> Nothing
-
-_ColumnData :: Prism' ColumnKind DataCol
-_ColumnData = prism' ColumnData $ \case
-  ColumnReport _   -> Nothing
-  ColumnData   dat -> Just dat
-
-instance ToJSON ColumnKind
-instance FromJSON ColumnKind
-
-instance ToBSON ColumnKind
-instance FromBSON ColumnKind
-
-instance Val ColumnKind where
-  val = toValue
-  cast' = decodeValue
-
-data ReportCol = ReportCol
-  { _reportColTemplate         :: Text
-  , _reportColCompiledTemplate :: ReportCompileResult
-  , _reportColLanguage         :: Maybe ReportLanguage
-  , _reportColFormat           :: ReportFormat
-  } deriving (Eq, Generic, NFData, Show)
-
-reportColTemplate :: Lens' ReportCol Text
-reportColTemplate = lens _reportColTemplate (\r t -> r { _reportColTemplate = t})
-
-reportColCompiledTemplate :: Lens' ReportCol ReportCompileResult
-reportColCompiledTemplate = lens _reportColCompiledTemplate (\r ct -> r { _reportColCompiledTemplate = ct})
-
-reportColLanguage :: Lens' ReportCol (Maybe ReportLanguage)
-reportColLanguage = lens _reportColLanguage (\r l -> r { _reportColLanguage = l})
-
-reportColFormat :: Lens' ReportCol ReportFormat
-reportColFormat = lens _reportColFormat (\r f -> r { _reportColFormat = f})
+emptyDataColType :: DataType
+emptyDataColType = DataNumber
 
 emptyReportCol :: Id Table -> Column
 emptyReportCol i = Column
@@ -145,49 +159,6 @@ emptyReportCol i = Column
     }
   }
 
-instance ToJSON ReportCol
-instance FromJSON ReportCol
-
-data ReportLanguage
-  = ReportLanguageMarkdown
-  | ReportLanguageLatex
-  | ReportLanguageHTML
-  deriving (Eq, Ord, Generic, NFData, Read, Show)
-
-instance ToJSON ReportLanguage
-instance FromJSON ReportLanguage
-
-data ReportFormat
-  = ReportFormatPlain
-  | ReportFormatPDF
-  | ReportFormatHTML
-  deriving (Eq, Ord, Generic, NFData, Read, Show)
-
-instance ToJSON ReportFormat
-instance FromJSON ReportFormat
-
-data DataCol = DataCol
-  { _dataColType          :: DataType
-  , _dataColIsDerived     :: IsDerived
-  , _dataColSourceCode    :: Text
-  , _dataColCompileResult :: DataCompileResult
-  } deriving (Eq, Generic, NFData, Show)
-
-dataColType :: Lens' DataCol DataType
-dataColType = lens _dataColType (\d dt -> d { _dataColType = dt })
-
-dataColIsDerived :: Lens' DataCol IsDerived
-dataColIsDerived = lens _dataColIsDerived (\d iD -> d { _dataColIsDerived = iD })
-
-dataColSourceCode :: Lens' DataCol Text
-dataColSourceCode = lens _dataColSourceCode (\d s -> d { _dataColSourceCode = s })
-
-dataColCompileResult :: Lens' DataCol DataCompileResult
-dataColCompileResult = lens _dataColCompileResult (\d cr -> d { _dataColCompileResult = cr })
-
-emptyDataColType :: DataType
-emptyDataColType = DataNumber
-
 emptyDataCol :: Id Table -> Column
 emptyDataCol i = Column
   { _columnTableId = i
@@ -199,41 +170,6 @@ emptyDataCol i = Column
     , _dataColCompileResult = CompileResultNone
     }
   }
-
-instance ToJSON DataCol
-instance FromJSON DataCol
-
-data CompileResult a
-  = CompileResultOk a
-  | CompileResultNone
-  | CompileResultError Text
-  deriving (Eq, Show, Generic, NFData)
-
-type DataCompileResult = CompileResult CExpr
-type ReportCompileResult = CompileResult CTemplate
-
-instance ToJSON a => ToJSON (CompileResult a)
-instance FromJSON a => FromJSON (CompileResult a)
-
-instance ToBSON a => ToBSON (CompileResult a)
-instance FromBSON a => FromBSON (CompileResult a)
-
-data IsDerived
-  = Derived
-  | NotDerived
-  deriving (Eq, Ord, Show, Read, Generic, NFData)
-
-instance ToJSON IsDerived
-instance FromJSON IsDerived
-
-instance ToBSON IsDerived
-instance FromBSON IsDerived
-
-instance Val IsDerived where
-  val = toValue
-  cast' = decodeValue
-
--- util
 
 getColumnError :: Column -> Maybe Text
 getColumnError col = case col ^. columnKind of

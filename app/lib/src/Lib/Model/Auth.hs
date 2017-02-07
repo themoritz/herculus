@@ -2,11 +2,12 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
 module Lib.Model.Auth where
 
 import           Control.DeepSeq        (NFData)
-import           Control.Lens           (Lens', lens)
+import           Control.Lens           (makeLenses)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 
 import           Crypto.PasswordStore   (makePassword)
@@ -35,38 +36,12 @@ instance Bson.Val Email where
   val = Bson.val . unEmail
   cast' = fmap Email . Bson.cast'
 
--- Login -----------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-data LoginData = LoginData
-  { ldEmail    :: Email
-  , ldPassword :: Text
-  } deriving (Generic, FromJSON, ToJSON, NFData, Show)
-
+type PwHash = Base64
 type SessionKey = Base64Url
 
-data LoginResponse
-  = LoginSuccess UserInfo
-  | LoginFailed Text
-  deriving (Generic, FromJSON, ToJSON, NFData)
-
 -- Sign up ---------------------------------------------------------------------
-
-data SignupData = SignupData
-  { suUserName  :: Text
-  , suEmail     :: Email
-  , suPassword  :: Text
-  , suIntention :: Text
-  } deriving (Generic, FromJSON, ToJSON, NFData, Show)
-
-data SignupResponse
-  = SignupSuccess UserInfo
-  | SignupFailed Text
-  deriving (Generic, FromJSON, ToJSON, NFData)
-
-data GetUserInfoResponse
-  = GetUserInfoSuccess UserInfo
-  | GetUserInfoFailed Text
-  deriving (Generic, FromJSON, ToJSON, NFData, Show)
 
 mkPwHash :: MonadIO m => Text -> m PwHash
 mkPwHash txt = liftIO $ toBase64Unsafe <$> makePassword (Text.encodeUtf8 txt) 17
@@ -88,20 +63,7 @@ data User = User
   , _userIntention  :: Text
   } deriving (Generic, NFData, Show)
 
-userName :: Lens' User Text
-userName = lens _userName (\s a -> s { _userName = a })
-
-userEmail :: Lens' User Email
-userEmail = lens _userEmail (\s a -> s { _userEmail = a })
-
-userPwHash :: Lens' User PwHash
-userPwHash = lens _userPwHash (\s a -> s { _userPwHash = a })
-
-userSignupDate :: Lens' User UTCTime
-userSignupDate = lens _userSignupDate (\s a -> s { _userSignupDate = a })
-
-userIntention :: Lens' User Text
-userIntention = lens _userIntention (\s a -> s { _userIntention = a })
+makeLenses ''User
 
 instance Model User where
   collectionName = const "users"
@@ -123,28 +85,6 @@ instance FromDocument User where
          <*> Bson.lookup "signupDate" doc
          <*> Bson.lookup "intention" doc
 
-type PwHash = Base64
-
--- | A "user" object that is available to auth protected handlers
-data UserInfo = UserInfo
-  { _uiUserId     :: Id User
-  , _uiUserName   :: Text
-  , _uiUserEmail  :: Email
-  , _uiSessionKey :: SessionKey
-  } deriving (Generic, FromJSON, ToJSON, NFData, Show)
-
-uiUserId :: Lens' UserInfo (Id User)
-uiUserId = lens _uiUserId (\s a -> s { _uiUserId = a })
-
-uiUserName :: Lens' UserInfo Text
-uiUserName = lens _uiUserName (\s a -> s { _uiUserName = a })
-
-uiUserEmail :: Lens' UserInfo Email
-uiUserEmail = lens _uiUserEmail (\s a -> s { _uiUserEmail = a })
-
-uiSessionKey :: Lens' UserInfo SessionKey
-uiSessionKey = lens _uiSessionKey (\s a -> s { _uiSessionKey = a })
-
 -- Session model ---------------------------------------------------------------
 
 data Session = Session
@@ -153,14 +93,7 @@ data Session = Session
   , _sessionExpDate :: Time
   } deriving (Generic, NFData, Show)
 
-sessionUserId :: Lens' Session (Id User)
-sessionUserId = lens _sessionUserId (\s a -> s { _sessionUserId = a })
-
-sessionKey :: Lens' Session SessionKey
-sessionKey = lens _sessionKey (\s a -> s { _sessionKey = a })
-
-sessionExpDate :: Lens' Session Time
-sessionExpDate = lens _sessionExpDate (\s a -> s { _sessionExpDate = a })
+makeLenses ''Session
 
 instance Model Session where
   collectionName = const "sessions"
@@ -177,15 +110,3 @@ instance FromDocument Session where
     <$> (fromObjectId <$> Bson.lookup "userId" doc)
     <*> Bson.lookup "sessionKey" doc
     <*> Bson.lookup "sessionExpDate" doc
-
--- Change password -------------------------------------------------------------
-
-data ChangePwdData = ChangePwdData
-  { cpdOldPassword :: Text
-  , cpdNewPassword :: Text
-  } deriving (Generic, FromJSON, ToJSON, NFData, Show)
-
-data ChangePwdResponse
-  = ChangePwdSuccess
-  | ChangePwdFailure Text
-  deriving (Generic, FromJSON, ToJSON, NFData)
