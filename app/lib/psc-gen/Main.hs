@@ -124,8 +124,8 @@ main = do
     settings m = defaultSettings
       & apiModuleName .~ m
       & readerParams .~ Set.fromList
-          -- [ "Authorization"
-          [ "baseURL"
+          [ "Authorization"
+          , "baseURL"
           ]
     writeApiToModule m = writeAPIModuleWithSettings (settings m)
   writeApiToModule "Lib.Api.Rest" "../psc-client/src" bridgeProxy (Proxy @Routes')

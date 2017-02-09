@@ -2,6 +2,7 @@ resolver: lts-7.15
 packages:
   - '.'
   - '../../../purescript-bridge'
+  - '../../../servant-purescript'
 extra-deps:
   - servant-purescript-0.6.0.0
   - purescript-bridge-0.9.0.0

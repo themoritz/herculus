@@ -8,6 +8,8 @@
     "tests"
   ],
   "dependencies": {
+    "purescript-websocket-simple": "^1.0.1",
+    "purescript-aff-bus": "^1.0.0",
     "purescript-halogen": "master",
     "purescript-profunctor-lenses": "^2.6.0",
     "purescript-servant-support": "themoritz/purescript-servant-support#psc-10"
