@@ -1,17 +1,12 @@
 module Herculus.Monad where
 
-import Prelude
+import Herculus.Prelude
+
 import Ace.Types (ACE)
 import Control.Monad.Aff (Aff)
-import Control.Monad.Aff.Class (class MonadAff)
-import Control.Monad.Eff.Class (class MonadEff, liftEff)
 import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Eff.Ref (Ref, readRef, writeRef)
-import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.Free (Free, foldFree, liftF)
-import Control.Monad.Reader (class MonadAsk, ReaderT, runReaderT)
-import Data.Either (Either)
-import Data.Maybe (Maybe(..), fromMaybe)
 import Halogen (ComponentDSL)
 import Halogen.Aff (HalogenEffects)
 import Lib.Api.Rest (SPParams_(..))

@@ -1,27 +1,20 @@
 module Herculus.App where
 
-import Prelude
+import Herculus.Prelude
 import Control.Monad.Aff.Bus as Bus
 import Halogen as H
 import Halogen.Component.ChildPath as CP
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import Halogen.Query.EventSource as ES
 import Herculus.Ace as Ace
 import Herculus.Play as Play
 import Herculus.WebSocket as WebSocket
 import Control.Coroutine (emit)
-import Control.Monad.Reader (ask)
 import Control.Monad.Rec.Class (forever)
-import Control.Monad.State (modify)
-import Control.Monad.Trans.Class (lift)
-import Data.Const (Const)
-import Data.Either (Either(..))
-import Data.Maybe (Maybe(..))
-import Halogen (liftAff)
 import Halogen.Component.ChildPath (type (\/), type (<\/>))
-import Halogen.Query.EventSource (EventSource(..), SubscribeStatus(..))
-import Herculus.Monad (ApiT, Herc, HercEnv, getAuthToken, runApiT)
+import Herculus.Monad (ApiT, HercEnv, Herc, getAuthToken, runApiT)
 import Lib.Api.WebSocket (WsDownMessage, WsUpMessage(..))
 import Servant.PureScript.Affjax (errorToString)
 
@@ -101,10 +94,10 @@ app = H.lifecycleParentComponent
     eval (Initialize next) = do
       bus <- liftAff Bus.make
       modify _{ wiring = Just { notificationBus: bus } }
-      H.subscribe $ EventSource do
+      H.subscribe $ ES.EventSource do
         let go = forever do
               e <- lift $ liftAff $ Bus.read bus
-              emit (Notify e Listening)
+              emit (Notify e ES.Listening)
         pure { producer: go, done: pure unit }
       pure next
 

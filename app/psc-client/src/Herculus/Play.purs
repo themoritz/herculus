@@ -1,16 +1,13 @@
 module Herculus.Play where
 
-import Prelude
+import Herculus.Prelude
+
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Lib.Api.Rest as Api
-import Control.Monad.Aff.Class (liftAff)
 import Control.Monad.Aff.Console (log)
-import Control.Monad.Trans.Class (lift)
 import Data.Array (head)
-import Data.Lens ((^.))
-import Data.Maybe (Maybe(Nothing, Just))
 import Herculus.Monad (Herc, HercEnv, setAuthToken)
 import Lib.Api.Schema.Auth (LoginData(LoginData), LoginResponse(LoginSuccess, LoginFailed), uiSessionKey, uiUserName)
 import Lib.Api.Schema.Project (Project(Project), ProjectData(ProjectData))

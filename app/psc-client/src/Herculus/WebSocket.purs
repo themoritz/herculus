@@ -1,6 +1,7 @@
 module Herculus.WebSocket where
 
-import Prelude
+import Herculus.Prelude
+
 import Control.Coroutine as CR
 import Halogen as H
 import Halogen.HTML as HH
@@ -8,20 +9,13 @@ import Halogen.Query.EventSource as ES
 import WebSocket as WS
 import Control.Monad.Aff (Aff, forkAff, later', runAff)
 import Control.Monad.Aff.AVar (AVar, makeVar, peekVar, putVar, takeVar)
-import Control.Monad.Aff.Class (liftAff)
-import Control.Monad.Eff.Class (liftEff)
 import Control.Monad.Eff.Ref (Ref, newRef, readRef, writeRef)
 import Control.Monad.Eff.Var (set)
 import Control.Monad.Rec.Class (forever)
-import Control.Monad.State (get, put)
-import Control.Monad.Trans.Class (lift)
 import DOM.Websocket.Event.Types (MessageEvent)
 import Data.Argonaut.Core (stringify)
 import Data.Argonaut.Generic.Aeson (decodeJson, encodeJson)
 import Data.Argonaut.Parser (jsonParser)
-import Data.Either (Either(..))
-import Data.Generic (class Generic)
-import Data.Maybe (Maybe(..))
 import Halogen.Query.HalogenM (halt)
 import Herculus.Monad (Herc, HercEffects, HercEnv)
 

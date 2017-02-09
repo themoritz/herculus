@@ -1,6 +1,7 @@
 module Herculus.Ace where
 
-import Prelude
+import Herculus.Prelude
+
 import Ace as Ace
 import Ace.EditSession as Session
 import Ace.Editor as Editor
@@ -8,9 +9,6 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 import Ace.Types (Editor)
-import Control.Monad.Eff.Class (liftEff)
-import Control.Monad.State (gets, modify)
-import Data.Maybe (Maybe(..))
 import Halogen.Query.HalogenM (halt)
 import Herculus.Monad (Herc)
 

@@ -1,10 +1,10 @@
 module Main where
 
-import Prelude
+import Herculus.Prelude
+
 import Halogen as H
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Ref (newRef)
-import Data.Maybe (Maybe(..))
 import Halogen.Aff (awaitBody, runHalogenAff)
 import Halogen.VDom.Driver (runUI)
 import Herculus.App (app)
