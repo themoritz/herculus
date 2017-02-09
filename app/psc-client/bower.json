@@ -12,6 +12,8 @@
     "purescript-aff-bus": "^1.0.0",
     "purescript-halogen": "master",
     "purescript-profunctor-lenses": "^2.6.0",
-    "purescript-servant-support": "themoritz/purescript-servant-support#psc-10"
+    "purescript-servant-support": "themoritz/purescript-servant-support#psc-10",
+    "purescript-ace": "^3.0.0",
+    "ace-builds": "^1.2.6"
   }
 }

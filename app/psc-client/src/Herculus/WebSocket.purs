@@ -43,7 +43,7 @@ type Vars =
 
 type State = Maybe Vars
 
-data Message mo
+data Output mo
   = Opened
   | Closed
   | Message mo
@@ -52,7 +52,7 @@ webSocket
   :: forall mi mo
    . (Generic mi, Generic mo)
   => String -> HercEnv
-  -> H.Component HH.HTML (Query mi) Unit (Message mo) Herc
+  -> H.Component HH.HTML (Query mi) Unit (Output mo) Herc
 webSocket url { notify } = H.lifecycleComponent
   { initialState: const Nothing
   , receiver: const Nothing
@@ -64,7 +64,7 @@ webSocket url { notify } = H.lifecycleComponent
 
   where
 
-  eval :: Query mi ~> H.ComponentDSL State (Query mi) (Message mo) Herc
+  eval :: Query mi ~> H.ComponentDSL State (Query mi) (Output mo) Herc
   eval (Initialize next) = do
     queue <- liftAff makeVar
     open <- liftAff makeVar

@@ -1,6 +1,7 @@
 module Herculus.Monad where
 
 import Prelude
+import Ace.Types (ACE)
 import Control.Monad.Aff (Aff)
 import Control.Monad.Aff.Class (class MonadAff)
 import Control.Monad.Eff.Class (class MonadEff, liftEff)
@@ -20,9 +21,10 @@ import Servant.PureScript.Settings (SPSettings_, defaultSettings)
 import WebSocket (WEBSOCKET)
 
 type HercEffects = HalogenEffects
-  ( "ajax"    :: AJAX
-  , "console" :: CONSOLE
-  , "ws"      :: WEBSOCKET
+  ( ajax    :: AJAX
+  , ace     :: ACE
+  , console :: CONSOLE
+  , ws      :: WEBSOCKET
   )
 
 type BaseUrl = String

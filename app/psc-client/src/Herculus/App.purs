@@ -6,11 +6,14 @@ import Halogen as H
 import Halogen.Component.ChildPath as CP
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
+import Halogen.HTML.Properties as HP
+import Herculus.Ace as Ace
 import Herculus.Play as Play
 import Herculus.WebSocket as WebSocket
 import Control.Coroutine (emit)
 import Control.Monad.Reader (ask)
 import Control.Monad.Rec.Class (forever)
+import Control.Monad.State (modify)
 import Control.Monad.Trans.Class (lift)
 import Data.Const (Const)
 import Data.Either (Either(..))
@@ -26,7 +29,8 @@ data Query a
   = Initialize a
   | Notify String a
   | Test a
-  | PrintWsMessage (WebSocket.Message WsDownMessage) a
+  | PrintWsMessage (WebSocket.Output WsDownMessage) a
+  | SetText String a
 
 type Wiring =
   { notificationBus :: Bus.BusRW String
@@ -36,10 +40,16 @@ type State =
   { error :: String
   , msg :: String
   , wiring :: Maybe Wiring
+  , text :: String
   }
 
-type ChildQuery = WebSocket.Query WsUpMessage <\/> Play.Query <\/> Const Void
-type ChildSlot = Unit \/ Unit \/ Void
+type ChildQuery =
+      WebSocket.Query WsUpMessage
+ <\/> Play.Query
+ <\/> Ace.Query
+ <\/> Const Void
+
+type ChildSlot = Unit \/ Unit \/ Unit \/ Void
 
 app :: forall i o. H.Component HH.HTML Query i o Herc
 app = H.lifecycleParentComponent
@@ -57,6 +67,7 @@ app = H.lifecycleParentComponent
     initialState =
       { error: "None"
       , msg: ""
+      , text: "Editor"
       , wiring: Nothing
       }
 
@@ -77,12 +88,19 @@ app = H.lifecycleParentComponent
                                      (env notificationBus)
           in
             HH.slot' CP.cp1 unit ws unit (Just <<< H.action <<< PrintWsMessage)
+        , HH.hr_
+        , HH.input
+            [ HE.onValueInput (HE.input SetText)
+            , HP.value st.text
+            ]
+        , HH.slot' CP.cp3 unit Ace.ace st.text $ case _ of
+            Ace.TextChanged t -> Just $ H.action $ SetText t
         ]
 
     eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot o Herc
     eval (Initialize next) = do
       bus <- liftAff Bus.make
-      H.modify _{ wiring = Just { notificationBus: bus } }
+      modify _{ wiring = Just { notificationBus: bus } }
       H.subscribe $ EventSource do
         let go = forever do
               e <- lift $ liftAff $ Bus.read bus
@@ -91,7 +109,7 @@ app = H.lifecycleParentComponent
       pure next
 
     eval (Notify e next) = do
-      H.modify _{ error = e }
+      modify _{ error = e }
       pure next
 
     eval (Test next) = do
@@ -99,11 +117,15 @@ app = H.lifecycleParentComponent
       pure next
 
     eval (PrintWsMessage msg next) = do
-      H.modify _{ msg = case msg of
+      modify _{ msg = case msg of
                      WebSocket.Message _ -> "received message"
                      WebSocket.Opened -> "opened"
                      WebSocket.Closed -> "closed"
                 }
+      pure next
+
+    eval (SetText text next) = do
+      modify _{ text = text }
       pure next
 
 -- Utils -----------------------------------------------------------------------
