@@ -23,7 +23,7 @@ import Data.Either (Either(..))
 import Data.Generic (class Generic)
 import Data.Maybe (Maybe(..))
 import Halogen.Query.HalogenM (halt)
-import Herculus.Monad (AppM, Env, AppEffects)
+import Herculus.Monad (Herc, HercEffects, HercEnv)
 
 data Query mi a
   = Initialize a
@@ -49,10 +49,10 @@ data Message mo
   | Message mo
 
 webSocket
-  :: forall mi mo eff
+  :: forall mi mo
    . (Generic mi, Generic mo)
-  => String -> Env
-  -> H.Component HH.HTML (Query mi) Unit (Message mo) (AppM eff)
+  => String -> HercEnv
+  -> H.Component HH.HTML (Query mi) Unit (Message mo) Herc
 webSocket url { notify } = H.lifecycleComponent
   { initialState: const Nothing
   , receiver: const Nothing
@@ -64,7 +64,7 @@ webSocket url { notify } = H.lifecycleComponent
 
   where
 
-  eval :: Query mi ~> H.ComponentDSL State (Query mi) (Message mo) (AppM eff)
+  eval :: Query mi ~> H.ComponentDSL State (Query mi) (Message mo) Herc
   eval (Initialize next) = do
     queue <- liftAff makeVar
     open <- liftAff makeVar
@@ -135,10 +135,10 @@ webSocket url { notify } = H.lifecycleComponent
     pure $ reply ES.Listening
 
 wsService
-  :: forall mi eff
+  :: forall mi
    . String
   -> Vars
-  -> CR.Producer (Query mi ES.SubscribeStatus) (Aff (AppEffects eff)) Unit
+  -> CR.Producer (Query mi ES.SubscribeStatus) (Aff HercEffects) Unit
 wsService url vars = do
   conn@(WS.Connection socket) <- lift $ liftEff $ do
     c <- WS.newWebSocket (WS.URL url) []

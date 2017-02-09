@@ -7,11 +7,11 @@ import Halogen.HTML.Events as HE
 import Lib.Api.Rest as Api
 import Control.Monad.Aff.Class (liftAff)
 import Control.Monad.Aff.Console (log)
-import Control.Monad.State (get, put)
+import Control.Monad.Trans.Class (lift)
 import Data.Array (head)
 import Data.Lens ((^.))
 import Data.Maybe (Maybe(Nothing, Just))
-import Herculus.Monad (AppM, Env, setAuthToken)
+import Herculus.Monad (Herc, HercEnv, setAuthToken)
 import Lib.Api.Schema.Auth (LoginData(LoginData), LoginResponse(LoginSuccess, LoginFailed), uiSessionKey, uiUserName)
 import Lib.Api.Schema.Project (Project(Project), ProjectData(ProjectData))
 import Lib.Model (Entity(..))
@@ -24,7 +24,7 @@ data Query a
   | Foo a
 
 
-play :: forall i o eff. Env -> H.Component HH.HTML Query i o (AppM eff)
+play :: forall i o. HercEnv -> H.Component HH.HTML Query i o Herc
 play { withApi } = H.lifecycleComponent
     { initialState: const unit
     , receiver: const Nothing
@@ -42,7 +42,7 @@ play { withApi } = H.lifecycleComponent
           [ HH.text "Foo" ]
         ]
     
-    eval :: Query ~> H.ComponentDSL State Query o (AppM eff)
+    eval :: Query ~> H.ComponentDSL State Query o Herc
     eval (Init next) = do
       let loginData = LoginData
             { ldEmail: Email { unEmail: "mdrexl@fastmail.fm" }
@@ -53,10 +53,7 @@ play { withApi } = H.lifecycleComponent
         LoginFailed e -> liftAff $ log e
         LoginSuccess userInfo -> do
           liftAff $ log $ userInfo ^. uiUserName
-          setAuthToken (userInfo ^. uiSessionKey)
-          H.lift $ put $ Just "bar"
-          t <- H.lift get
-          liftAff $ log $ show t
+          lift $ setAuthToken (userInfo ^. uiSessionKey)
           withApi Api.getProjectList \ps ->
           case head ps of
             Nothing -> pure unit

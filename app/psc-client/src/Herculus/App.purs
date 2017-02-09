@@ -18,7 +18,7 @@ import Data.Maybe (Maybe(..))
 import Halogen (liftAff)
 import Halogen.Component.ChildPath (type (\/), type (<\/>))
 import Halogen.Query.EventSource (EventSource(..), SubscribeStatus(..))
-import Herculus.Monad (ApiT, AppM, Env, getAuthToken, runApiT)
+import Herculus.Monad (ApiT, Herc, HercEnv, getAuthToken, runApiT)
 import Lib.Api.WebSocket (WsDownMessage, WsUpMessage(..))
 import Servant.PureScript.Affjax (errorToString)
 
@@ -41,7 +41,7 @@ type State =
 type ChildQuery = WebSocket.Query WsUpMessage <\/> Play.Query <\/> Const Void
 type ChildSlot = Unit \/ Unit \/ Void
 
-app :: forall i o eff. H.Component HH.HTML Query i o (AppM eff)
+app :: forall i o. H.Component HH.HTML Query i o Herc
 app = H.lifecycleParentComponent
   { initialState: const initialState
   , render
@@ -60,7 +60,7 @@ app = H.lifecycleParentComponent
       , wiring: Nothing
       }
 
-    render :: State -> H.ParentHTML Query ChildQuery ChildSlot (AppM eff)
+    render :: State -> H.ParentHTML Query ChildQuery ChildSlot Herc
     render st = case st.wiring of
       Nothing -> HH.text "loading"
       Just { notificationBus } -> HH.div_
@@ -79,7 +79,7 @@ app = H.lifecycleParentComponent
             HH.slot' CP.cp1 unit ws unit (Just <<< H.action <<< PrintWsMessage)
         ]
 
-    eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot o (AppM eff)
+    eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot o Herc
     eval (Initialize next) = do
       bus <- liftAff Bus.make
       H.modify _{ wiring = Just { notificationBus: bus } }
@@ -108,7 +108,7 @@ app = H.lifecycleParentComponent
 
 -- Utils -----------------------------------------------------------------------
 
-env :: forall r. Bus.BusW' r String -> Env
+env :: forall r. Bus.BusW' r String -> HercEnv
 env bus =
   { withApi
   , notify
@@ -116,18 +116,18 @@ env bus =
 
   where
   notify
-    :: forall s i o eff
-     . String -> H.ComponentDSL s i o (AppM eff) Unit
+    :: forall s i o
+     . String -> H.ComponentDSL s i o Herc Unit
   notify msg = liftAff $ Bus.write msg bus
 
   withApi
-    :: forall s i o eff a
-     . ApiT (AppM eff) a
-    -> (a -> H.ComponentDSL s i o (AppM eff) Unit)
-    -> H.ComponentDSL s i o (AppM eff) Unit
+    :: forall s i o a
+     . ApiT Herc a
+    -> (a -> H.ComponentDSL s i o Herc Unit)
+    -> H.ComponentDSL s i o Herc Unit
   withApi call handler = do
     baseUrl <- ask
-    token <- getAuthToken
+    token <- lift getAuthToken
     result <- H.lift $ runApiT baseUrl token call
     case result of
       Left e -> notify $ errorToString e

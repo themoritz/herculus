@@ -2,13 +2,16 @@ module Herculus.Monad where
 
 import Prelude
 import Control.Monad.Aff (Aff)
+import Control.Monad.Aff.Class (class MonadAff)
+import Control.Monad.Eff.Class (class MonadEff, liftEff)
 import Control.Monad.Eff.Console (CONSOLE)
+import Control.Monad.Eff.Ref (Ref, readRef, writeRef)
 import Control.Monad.Except (ExceptT, runExceptT)
-import Control.Monad.Reader (runReaderT, ReaderT)
-import Control.Monad.State (StateT, evalStateT, get, put)
+import Control.Monad.Free (Free, foldFree, liftF)
+import Control.Monad.Reader (class MonadAsk, ReaderT, runReaderT)
 import Data.Either (Either)
 import Data.Maybe (Maybe(..), fromMaybe)
-import Halogen (ComponentDSL, lift)
+import Halogen (ComponentDSL)
 import Halogen.Aff (HalogenEffects)
 import Lib.Api.Rest (SPParams_(..))
 import Network.HTTP.Affjax (AJAX)
@@ -16,32 +19,73 @@ import Servant.PureScript.Affjax (AjaxError)
 import Servant.PureScript.Settings (SPSettings_, defaultSettings)
 import WebSocket (WEBSOCKET)
 
-type AppEffects eff = HalogenEffects
+type HercEffects = HalogenEffects
   ( "ajax"    :: AJAX
   , "console" :: CONSOLE
   , "ws"      :: WEBSOCKET
-  | eff
   )
 
 type BaseUrl = String
 type AuthToken = Maybe String
 
--- | App monad. Has reader access to servant-purescript params.
-type AppM eff =
-  StateT AuthToken (ReaderT BaseUrl (Aff (AppEffects eff)))
+type Wiring =
+  { baseUrl :: BaseUrl
+  , authTokenRef :: Ref AuthToken
+  }
 
-runAppM
-  :: forall eff
-   . BaseUrl
-  -> (AppM eff ~> Aff (AppEffects eff))
-runAppM env = \action ->
-  runReaderT (evalStateT action Nothing) env
+type Herc = HercM HercEffects
 
-getAuthToken :: forall s i o eff. ComponentDSL s i o (AppM eff) AuthToken
-getAuthToken = lift get
+data HercF eff a
+  = Aff (Aff eff a)
+  | GetAuthToken (AuthToken -> a)
+  | SetAuthToken AuthToken a
+  | GetBaseUrl (BaseUrl -> a)
 
-setAuthToken :: forall s i o eff. String -> ComponentDSL s i o (AppM eff) Unit
-setAuthToken = lift <<< put <<< Just
+newtype HercM eff a = HercM (Free (HercF eff) a)
+
+unHercM :: forall eff. HercM eff ~> Free (HercF eff)
+unHercM (HercM m) = m
+
+derive newtype instance functorHercM :: Functor (HercM eff)
+derive newtype instance applyHercM :: Apply (HercM eff)
+derive newtype instance applicativeHercM :: Applicative (HercM eff)
+derive newtype instance bindHercM :: Bind (HercM eff)
+derive newtype instance monadHercM :: Monad (HercM eff)
+
+instance monadEffHercM :: MonadEff eff (HercM eff) where
+  liftEff = HercM <<< liftF <<< Aff <<< liftEff
+
+instance monadAffHercM :: MonadAff eff (HercM eff) where
+  liftAff = HercM <<< liftF <<< Aff
+
+instance monadAskHercM :: MonadAsk String (HercM eff) where
+  ask = HercM $ liftF $ GetBaseUrl id
+
+getAuthToken :: Herc AuthToken
+getAuthToken = HercM $ liftF $ GetAuthToken id
+
+setAuthToken :: String -> Herc Unit
+setAuthToken t = HercM $ liftF $ SetAuthToken (Just t) unit
+
+--------------------------------------------------------------------------------
+
+runHerc :: Wiring -> Herc ~> Aff HercEffects
+runHerc { baseUrl, authTokenRef } = foldFree go <<< unHercM
+  where
+
+  go :: HercF HercEffects ~> Aff HercEffects
+  go = case _ of
+    Aff aff ->
+      aff
+    GetAuthToken reply -> do
+      token <- liftEff $ readRef authTokenRef
+      pure (reply token)
+    SetAuthToken token next -> do
+      liftEff $ writeRef authTokenRef token
+      pure next
+    GetBaseUrl reply -> pure (reply baseUrl)
+
+--------------------------------------------------------------------------------
 
 type ApiT m
   = ExceptT AjaxError (ReaderT (SPSettings_ SPParams_) m)
@@ -59,13 +103,13 @@ runApiT baseUrl mToken action =
   in
     runReaderT (runExceptT action) settings
 
-type Env =
+type HercEnv =
   { withApi
-      :: forall s i o eff a
-       . ApiT (AppM eff) a
-      -> (a -> ComponentDSL s i o (AppM eff) Unit)
-      -> ComponentDSL s i o (AppM eff) Unit
+      :: forall s i o a
+       . ApiT Herc a
+      -> (a -> ComponentDSL s i o Herc Unit)
+      -> ComponentDSL s i o Herc Unit
   , notify
-      :: forall s i o eff
-       . String -> ComponentDSL s i o (AppM eff) Unit
+      :: forall s i o
+       . String -> ComponentDSL s i o Herc Unit
   }
