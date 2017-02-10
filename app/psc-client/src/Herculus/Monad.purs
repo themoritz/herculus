@@ -22,11 +22,12 @@ type HercEffects = HalogenEffects
   , ws      :: WEBSOCKET
   )
 
-type BaseUrl = String
+type Url = String
 type AuthToken = Maybe String
 
 type Wiring =
-  { baseUrl :: BaseUrl
+  { apiUrl :: Url
+  , webSocketUrl :: Url
   , authTokenRef :: Ref AuthToken
   }
 
@@ -36,7 +37,8 @@ data HercF eff a
   = Aff (Aff eff a)
   | GetAuthToken (AuthToken -> a)
   | SetAuthToken AuthToken a
-  | GetBaseUrl (BaseUrl -> a)
+  | GetApiUrl (Url -> a)
+  | GetWebSocketUrl (Url -> a)
 
 newtype HercM eff a = HercM (Free (HercF eff) a)
 
@@ -55,19 +57,22 @@ instance monadEffHercM :: MonadEff eff (HercM eff) where
 instance monadAffHercM :: MonadAff eff (HercM eff) where
   liftAff = HercM <<< liftF <<< Aff
 
-instance monadAskHercM :: MonadAsk String (HercM eff) where
-  ask = HercM $ liftF $ GetBaseUrl id
-
 getAuthToken :: Herc AuthToken
 getAuthToken = HercM $ liftF $ GetAuthToken id
 
 setAuthToken :: String -> Herc Unit
 setAuthToken t = HercM $ liftF $ SetAuthToken (Just t) unit
 
+getApiUrl :: Herc Url
+getApiUrl = HercM $ liftF $ GetApiUrl id
+
+getWebSocketUrl :: Herc Url
+getWebSocketUrl = HercM $ liftF $ GetWebSocketUrl id
+
 --------------------------------------------------------------------------------
 
 runHerc :: Wiring -> Herc ~> Aff HercEffects
-runHerc { baseUrl, authTokenRef } = foldFree go <<< unHercM
+runHerc { apiUrl, webSocketUrl, authTokenRef } = foldFree go <<< unHercM
   where
 
   go :: HercF HercEffects ~> Aff HercEffects
@@ -80,7 +85,8 @@ runHerc { baseUrl, authTokenRef } = foldFree go <<< unHercM
     SetAuthToken token next -> do
       liftEff $ writeRef authTokenRef token
       pure next
-    GetBaseUrl reply -> pure (reply baseUrl)
+    GetApiUrl reply -> pure (reply apiUrl)
+    GetWebSocketUrl reply -> pure (reply webSocketUrl)
 
 --------------------------------------------------------------------------------
 
@@ -89,12 +95,12 @@ type ApiT m
 
 runApiT
   :: forall m a
-   . BaseUrl -> AuthToken
+   . Url -> AuthToken
   -> ApiT m a -> m (Either AjaxError a)
-runApiT baseUrl mToken action =
+runApiT apiUrl mToken action =
   let
     settings = defaultSettings $ SPParams_
-      { baseURL: baseUrl
+      { baseURL: apiUrl
       , authorization: fromMaybe "Nothing" mToken
       }
   in

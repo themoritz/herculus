@@ -12,9 +12,10 @@ import Herculus.Ace as Ace
 import Herculus.Play as Play
 import Herculus.WebSocket as WebSocket
 import Control.Coroutine (emit)
+import Control.Monad.Aff.Console (log)
 import Control.Monad.Rec.Class (forever)
 import Halogen.Component.ChildPath (type (\/), type (<\/>))
-import Herculus.Monad (ApiT, HercEnv, Herc, getAuthToken, runApiT)
+import Herculus.Monad (ApiT, Herc, HercEnv, getApiUrl, getAuthToken, getWebSocketUrl, runApiT)
 import Lib.Api.WebSocket (WsDownMessage, WsUpMessage(..))
 import Servant.PureScript.Affjax (errorToString)
 
@@ -27,6 +28,7 @@ data Query a
 
 type Wiring =
   { notificationBus :: Bus.BusRW String
+  , webSocketUrl :: String
   }
 
 type State =
@@ -67,17 +69,17 @@ app = H.lifecycleParentComponent
     render :: State -> H.ParentHTML Query ChildQuery ChildSlot Herc
     render st = case st.wiring of
       Nothing -> HH.text "loading"
-      Just { notificationBus } -> HH.div_
+      Just { webSocketUrl, notificationBus } -> HH.div_
         [ HH.slot' CP.cp2 unit (Play.play $ env notificationBus) unit absurd
         , HH.hr_
         , HH.text st.error
         , HH.hr_
         , HH.button
           [ HE.onClick (HE.input_ Test) ]
-          [ HH.text "Send" ]
+          [ HH.text "Send!" ]
         , HH.text st.msg
         , let
-            ws = WebSocket.webSocket "ws://localhost:3000/websocket"
+            ws = WebSocket.webSocket webSocketUrl
                                      (env notificationBus)
           in
             HH.slot' CP.cp1 unit ws unit (Just <<< H.action <<< PrintWsMessage)
@@ -92,8 +94,14 @@ app = H.lifecycleParentComponent
 
     eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot o Herc
     eval (Initialize next) = do
+      liftAff $ log "Hallo"
       bus <- liftAff Bus.make
-      modify _{ wiring = Just { notificationBus: bus } }
+      webSocketUrl <- lift getWebSocketUrl
+      modify _{ wiring = Just
+                  { notificationBus: bus
+                  , webSocketUrl: webSocketUrl
+                  }
+              }
       H.subscribe $ ES.EventSource do
         let go = forever do
               e <- lift $ liftAff $ Bus.read bus
@@ -141,9 +149,9 @@ env bus =
     -> (a -> H.ComponentDSL s i o Herc Unit)
     -> H.ComponentDSL s i o Herc Unit
   withApi call handler = do
-    baseUrl <- ask
+    apiUrl <- lift getApiUrl
     token <- lift getAuthToken
-    result <- H.lift $ runApiT baseUrl token call
+    result <- H.lift $ runApiT apiUrl token call
     case result of
       Left e -> notify $ errorToString e
       Right a -> handler a

@@ -1,0 +1,10 @@
+$ace: 200px;
+
+body {
+  font-family: sans-serif;
+  max-width: 800px;
+  margin: auto;
+}
+.ace_editor {
+  height: $ace;
+}
