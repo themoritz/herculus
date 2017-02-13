@@ -28,8 +28,12 @@ var config = {
             options: {
               plugins: function () {
                 return [
-                  require('autoprefixer'),
-                  require('precss')
+                  require('postcss-import'),
+                  require('postcss-simple-vars'),
+                  require('postcss-calc'),
+                  require('postcss-color-function'),
+                  require('postcss-nested'),
+                  require('autoprefixer')
                 ]
               }
             }
@@ -51,6 +55,14 @@ var config = {
             sourceMaps: true
           }
         }
+      },
+      {
+        test: /\.woff(2)?(\?v=[0-9]\.[0-9]\.[0-9])?$/,
+        loader: 'url-loader?limit=10000&mimetype=application/font-woff'
+      },
+      {
+        test: /\.(ttf|eot|svg)(\?v=[0-9]\.[0-9]\.[0-9])?$/,
+        loader: 'file-loader'
       }
     ]
   },

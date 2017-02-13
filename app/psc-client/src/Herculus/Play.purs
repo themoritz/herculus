@@ -7,7 +7,8 @@ import Halogen.HTML.Events as HE
 import Lib.Api.Rest as Api
 import Control.Monad.Aff.Console (log)
 import Data.Array (head)
-import Herculus.Monad (Herc, setAuthToken, withApi)
+import Herculus.Monad (Herc, notify, setAuthToken, withApi)
+import Herculus.Notifications.Types as N
 import Lib.Api.Schema.Auth (LoginData(LoginData), LoginResponse(LoginSuccess, LoginFailed), uiSessionKey, uiUserName)
 import Lib.Api.Schema.Project (Project(Project), ProjectData(ProjectData))
 import Lib.Model (Entity(..))
@@ -40,6 +41,11 @@ play = H.lifecycleComponent
     
     eval :: Query ~> H.ComponentDSL State Query o Herc
     eval (Init next) = do
+      notify
+        { kind: N.Error
+        , message: "Foo"
+        , detail: Nothing
+        }
       let loginData = LoginData
             { ldEmail: Email { unEmail: "mdrexl@fastmail.fm" }
             , ldPassword: "Andreas"

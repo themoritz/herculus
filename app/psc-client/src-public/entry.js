@@ -1,4 +1,5 @@
 require('./css/main.css')
+require('font-awesome/css/font-awesome.css');
 
 var ace = require('brace')
 

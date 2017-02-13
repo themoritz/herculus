@@ -1,10 +1,12 @@
-$ace: 200px;
+@import "partials/notifications";
 
-body {
-  font-family: sans-serif;
-  max-width: 800px;
-  margin: auto;
+body, html {
+  font-family: "Open Sans", "Arial", sans-serif;
+  height: 100%;
+  margin: 0px;
+  position: relative;
 }
+
 .ace_editor {
-  height: $ace;
+  height: 200px;
 }

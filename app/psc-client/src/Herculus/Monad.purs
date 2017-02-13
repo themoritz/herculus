@@ -1,10 +1,10 @@
 module Herculus.Monad where
 
 import Herculus.Prelude
-import Control.Monad.Aff.Bus as Bus
 import Herculus.Notifications.Types as Notify
 import Ace.Types (ACE)
 import Control.Monad.Aff (Aff)
+import Control.Monad.Aff.AVar (AVar, putVar)
 import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Eff.Ref (Ref, readRef, writeRef)
 import Control.Monad.Free (Free, foldFree, liftF)
@@ -31,7 +31,7 @@ type Wiring =
   { apiUrl :: Url
   , webSocketUrl :: Url
   , authTokenRef :: Ref AuthToken
-  , notificationBus :: Bus.BusRW Notify.Config
+  , notifications :: AVar Notify.Config
   }
 
 type Herc = HercM HercEffects
@@ -93,7 +93,7 @@ runHerc wiring = foldFree go <<< unHercM
       liftEff $ writeRef wiring.authTokenRef token
       pure next
     Notify cfg next -> do
-      Bus.write cfg wiring.notificationBus
+      putVar wiring.notifications cfg
       pure next
     GetApiUrl reply -> pure (reply wiring.apiUrl)
     GetWebSocketUrl reply -> pure (reply wiring.webSocketUrl)

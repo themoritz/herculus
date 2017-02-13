@@ -8,7 +8,7 @@ import Halogen.HTML.Properties as HP
 import Data.Array (deleteAt, snoc)
 import Herculus.Monad (Herc)
 import Herculus.Notifications.Types (Config, Kind(..))
-import Herculus.Utils (cldiv_, clspan_, faIcon_, mkIndexed)
+import Herculus.Utils (cldiv, cldiv_, clspan_, faIcon_, mkIndexed)
 
 data Query a
   = Push Config a
@@ -54,24 +54,18 @@ notifications = H.component
           Warn -> "Warning"
           Error -> "Error"
       in
-        cldiv_ ("message" <> cls)
-        [ cldiv_ "header"
-          [ cldiv_ "title"
-            [ clspan_ "symbol"
-              [ faIcon_ icon
-              ]
+        cldiv_ ("notification  notification--" <> cls)
+        [ cldiv_ "notification__header"
+          [ cldiv_ "notification__title"
+            [ faIcon_ icon
             , HH.text title
             ]
-          , cldiv_ "button"
-            [ HH.button
-              [ HP.class_ (H.ClassName "pure")
-              , HE.onClick (HE.input_ (Dismiss i))
-              ]
-              [ faIcon_ "time" ]
-            ]
-          , cldiv_ "content"
-            [ HH.text cfg.message
-            ]
+          , cldiv "notification__close"
+            [ HE.onClick (HE.input_ (Dismiss i)) ]
+            [ faIcon_ "times" ]
+          ]
+        , cldiv_ "notification__content"
+          [ HH.text cfg.message
           ]
         ]
 
