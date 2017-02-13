@@ -1,12 +1,12 @@
 module Herculus.Monad where
 
 import Herculus.Prelude
-
 import Ace.Types (ACE)
 import Control.Monad.Aff (Aff)
 import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Eff.Ref (Ref, readRef, writeRef)
 import Control.Monad.Free (Free, foldFree, liftF)
+import Flatpickr.Types (FLATPICKR)
 import Halogen (ComponentDSL)
 import Halogen.Aff (HalogenEffects)
 import Lib.Api.Rest (SPParams_(..))
@@ -16,10 +16,11 @@ import Servant.PureScript.Settings (SPSettings_, defaultSettings)
 import WebSocket (WEBSOCKET)
 
 type HercEffects = HalogenEffects
-  ( ajax    :: AJAX
-  , ace     :: ACE
-  , console :: CONSOLE
-  , ws      :: WEBSOCKET
+  ( ajax      :: AJAX
+  , ace       :: ACE
+  , console   :: CONSOLE
+  , ws        :: WEBSOCKET
+  , flatpickr :: FLATPICKR
   )
 
 type Url = String

@@ -1,5 +1,5 @@
 {
-  "name": "herculus purescript client",
+  "name": "herculus-purescript-client",
   "ignore": [
     "**/.*",
     "node_modules",
@@ -13,6 +13,7 @@
     "purescript-halogen": "master",
     "purescript-profunctor-lenses": "^2.6.0",
     "purescript-servant-support": "master",
+    "purescript-flatpickr": "master",
     "purescript-ace": "^3.0.0"
   }
 }

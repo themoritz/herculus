@@ -49,7 +49,7 @@ ace = H.lifecycleComponent
   eval :: Query ~> H.ComponentDSL State Query Output Herc
   eval (Initialize next) = do
     H.getHTMLElementRef (H.RefLabel "ace") >>= case _ of
-      Nothing -> pure unit
+      Nothing -> halt "Ace: Could not find elemet to attach to."
       Just el -> do
         editor <- liftEff $ Ace.editNode el Ace.ace
         session <- liftEff $ Editor.getSession editor
@@ -76,7 +76,7 @@ ace = H.lifecycleComponent
       Just editor -> do
         current <- H.liftEff $ Editor.getValue editor
         when (value /= current) do
-          void $ H.liftEff $ Editor.setValue value (Just (-1)) editor
+          void $ liftEff $ Editor.setValue value (Just (-1)) editor
     pure next
 
   eval (HandleChange reply) = do
