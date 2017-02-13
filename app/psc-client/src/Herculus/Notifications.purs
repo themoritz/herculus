@@ -4,11 +4,10 @@ import Herculus.Prelude
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
-import Halogen.HTML.Properties as HP
 import Data.Array (deleteAt, snoc)
 import Herculus.Monad (Herc)
 import Herculus.Notifications.Types (Config, Kind(..))
-import Herculus.Utils (cldiv, cldiv_, clspan_, faIcon_, mkIndexed)
+import Herculus.Utils (cldiv, cldiv_, faIcon_, mkIndexed)
 
 data Query a
   = Push Config a
@@ -31,7 +30,9 @@ notifications = H.component
   where
 
   render :: State -> H.ComponentHTML Query
-  render st = HH.div_ (map renderOne $ mkIndexed st.notifications)
+  render st = cldiv_
+    "notifications"
+    (map renderOne $ mkIndexed st.notifications)
 
     where
 

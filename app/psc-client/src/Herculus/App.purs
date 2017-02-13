@@ -13,27 +13,31 @@ import Herculus.Play as Play
 import Herculus.WebSocket as WebSocket
 import Halogen.Component.ChildPath (type (\/), type (<\/>))
 import Herculus.Monad (Herc)
+import Herculus.LogIn as LogIn
+import Lib.Api.Schema.Auth (UserInfo(..))
 import Lib.Api.WebSocket (WsDownMessage, WsUpMessage(..))
 
 data Query a
   = Notify NotifyTypes.Config a
-  | Test a
-  | PrintWsMessage (WebSocket.Output WsDownMessage) a
-  | SetText String a
+  | Goto View a
+
+data View
+  = LoggedIn UserInfo
+  | SignUp
+  | LogIn
+  | ForgotPassword
+  | Initializing
 
 type State =
-  { msg :: String
-  , text :: String
+  { view :: View
   }
 
 type ChildQuery =
-      WebSocket.Query WsUpMessage
- <\/> Play.Query
- <\/> Ace.Query
- <\/> Notify.Query
+      Notify.Query
+ <\/> LogIn.Query
  <\/> Const Void
 
-type ChildSlot = Unit \/ Unit \/ Unit \/ Unit \/ Void
+type ChildSlot = Unit \/ Unit \/ Void
 
 app :: forall i o. H.Component HH.HTML Query i o Herc
 app = H.parentComponent
@@ -47,47 +51,23 @@ app = H.parentComponent
 
     initialState :: State
     initialState =
-      { msg: ""
-      , text: "Editor"
+      { view: LogIn
       }
 
     render :: State -> H.ParentHTML Query ChildQuery ChildSlot Herc
-    render st = HH.div_
-        [ HH.slot' CP.cp2 unit Play.play unit absurd
-        , HH.hr_
-        , HH.slot' CP.cp4 unit Notify.notifications unit absurd
-        , HH.hr_
-        , HH.button
-          [ HE.onClick (HE.input_ Test) ]
-          [ HH.text "Send!" ]
-        , HH.text st.msg
-        , HH.slot' CP.cp1 unit WebSocket.webSocket unit (Just <<< H.action <<< PrintWsMessage)
-        , HH.hr_
-        , HH.input
-            [ HE.onValueInput (HE.input SetText)
-            , HP.value st.text
-            ]
-        , HH.slot' CP.cp3 unit Ace.ace st.text $ case _ of
-            Ace.TextChanged t -> Just $ H.action $ SetText t
-        ]
+    render st = case st.view of
+      LoggedIn ui -> HH.text "Logged in"
+      SignUp -> HH.text "signup"
+      LogIn -> HH.slot' CP.cp2 unit LogIn.comp unit \(LogIn.LoggedIn ui) ->
+        Just $ Goto (LoggedIn ui) unit
+      ForgotPassword -> HH.text "Forgot pw"
+      Initializing -> HH.text "Initializing"
 
     eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot o Herc
     eval (Notify cfg next) = do
-      H.query' CP.cp4 unit (H.action (Notify.Push cfg))
+      H.query' CP.cp1 unit (H.action $ Notify.Push cfg)
       pure next
 
-    eval (Test next) = do
-      H.query' CP.cp1 unit (H.action (WebSocket.Send $ WsUpAuthenticate "ff"))
-      pure next
-
-    eval (PrintWsMessage msg next) = do
-      modify _{ msg = case msg of
-                     WebSocket.Message _ -> "received message"
-                     WebSocket.Opened -> "opened"
-                     WebSocket.Closed -> "closed"
-                }
-      pure next
-
-    eval (SetText text next) = do
-      modify _{ text = text }
+    eval (Goto view next) = do
+      modify _{ view = view }
       pure next
