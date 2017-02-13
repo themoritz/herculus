@@ -10,6 +10,7 @@ module Herculus.Prelude
   , module Control.Monad.Error.Class
   , module Control.Monad.Except
   , module Control.Monad.Maybe.Trans
+  , module Control.Monad.Rec.Class
   , module Control.Monad.Reader
   , module Control.Monad.Trans.Class
   , module Control.Plus
@@ -38,6 +39,7 @@ import Control.Monad.Error.Class (class MonadError, throwError, catchError)
 import Control.Monad.Except (ExceptT(..), runExcept, runExceptT, except)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.Reader (class MonadAsk, class MonadReader, ask, ReaderT, runReaderT)
+import Control.Monad.Rec.Class (forever)
 import Control.Monad.Trans.Class (class MonadTrans, lift)
 import Control.Plus (class Plus, empty)
 

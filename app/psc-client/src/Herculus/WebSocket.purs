@@ -1,23 +1,22 @@
 module Herculus.WebSocket where
 
 import Herculus.Prelude
-
 import Control.Coroutine as CR
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.Query.EventSource as ES
+import Herculus.Notifications.Types as Notify
 import WebSocket as WS
 import Control.Monad.Aff (Aff, forkAff, later', runAff)
 import Control.Monad.Aff.AVar (AVar, makeVar, peekVar, putVar, takeVar)
 import Control.Monad.Eff.Ref (Ref, newRef, readRef, writeRef)
 import Control.Monad.Eff.Var (set)
-import Control.Monad.Rec.Class (forever)
 import DOM.Websocket.Event.Types (MessageEvent)
 import Data.Argonaut.Core (stringify)
 import Data.Argonaut.Generic.Aeson (decodeJson, encodeJson)
 import Data.Argonaut.Parser (jsonParser)
 import Halogen.Query.HalogenM (halt)
-import Herculus.Monad (Herc, HercEffects, HercEnv)
+import Herculus.Monad (Herc, HercEffects, getWebSocketUrl, notify)
 
 data Query mi a
   = Initialize a
@@ -45,9 +44,8 @@ data Output mo
 webSocket
   :: forall mi mo
    . (Generic mi, Generic mo)
-  => String -> HercEnv
-  -> H.Component HH.HTML (Query mi) Unit (Output mo) Herc
-webSocket url { notify } = H.lifecycleComponent
+  => H.Component HH.HTML (Query mi) Unit (Output mo) Herc
+webSocket = H.lifecycleComponent
   { initialState: const Nothing
   , receiver: const Nothing
   , render: const (HH.text "")
@@ -95,6 +93,7 @@ webSocket url { notify } = H.lifecycleComponent
 
   eval (Connect next) = do
     st <- get
+    url <- lift getWebSocketUrl
     case st of
       Nothing -> halt "WebSocket not initialized."
       Just vars ->
@@ -124,7 +123,11 @@ webSocket url { notify } = H.lifecycleComponent
     let
       message = WS.runMessage $ WS.runMessageEvent event
     case jsonParser message >>= decodeJson of
-      Left e -> notify e
+      Left e -> notify
+        { kind: Notify.Error
+        , message: "WebSocket JSON decode error."
+        , detail: Just e
+        }
       Right mo -> H.raise (Message mo)
     pure $ reply ES.Listening
 

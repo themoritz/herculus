@@ -7,19 +7,8 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Data.Array (deleteAt, snoc)
 import Herculus.Monad (Herc)
+import Herculus.Notifications.Types (Config, Kind(..))
 import Herculus.Utils (cldiv_, clspan_, faIcon_, mkIndexed)
-
-data Kind
-  = Info
-  | Success
-  | Warn
-  | Error
-
-type Config =
-  { kind :: Kind
-  , message :: String
-  , detail :: Maybe String
-  }
 
 data Query a
   = Push Config a
@@ -29,7 +18,7 @@ type State =
   { notifications :: Array Config
   }
 
-notifications :: H.Component HH.HTML Query Unit Unit Herc
+notifications :: H.Component HH.HTML Query Unit Void Herc
 notifications = H.component
   { initialState: const
       { notifications: []
@@ -86,7 +75,7 @@ notifications = H.component
           ]
         ]
 
-  eval :: Query ~> H.ComponentDSL State Query Unit Herc
+  eval :: Query ~> H.ComponentDSL State Query Void Herc
   eval (Push config next) = do
     modify \st -> st
       { notifications = snoc st.notifications config

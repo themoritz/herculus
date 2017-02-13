@@ -1,17 +1,18 @@
 module Herculus.Monad where
 
 import Herculus.Prelude
+import Control.Monad.Aff.Bus as Bus
+import Herculus.Notifications.Types as Notify
 import Ace.Types (ACE)
 import Control.Monad.Aff (Aff)
 import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Eff.Ref (Ref, readRef, writeRef)
 import Control.Monad.Free (Free, foldFree, liftF)
 import Flatpickr.Types (FLATPICKR)
-import Halogen (ComponentDSL)
 import Halogen.Aff (HalogenEffects)
 import Lib.Api.Rest (SPParams_(..))
 import Network.HTTP.Affjax (AJAX)
-import Servant.PureScript.Affjax (AjaxError)
+import Servant.PureScript.Affjax (AjaxError, errorToString)
 import Servant.PureScript.Settings (SPSettings_, defaultSettings)
 import WebSocket (WEBSOCKET)
 
@@ -30,6 +31,7 @@ type Wiring =
   { apiUrl :: Url
   , webSocketUrl :: Url
   , authTokenRef :: Ref AuthToken
+  , notificationBus :: Bus.BusRW Notify.Config
   }
 
 type Herc = HercM HercEffects
@@ -38,6 +40,7 @@ data HercF eff a
   = Aff (Aff eff a)
   | GetAuthToken (AuthToken -> a)
   | SetAuthToken AuthToken a
+  | Notify Notify.Config a
   | GetApiUrl (Url -> a)
   | GetWebSocketUrl (Url -> a)
 
@@ -64,6 +67,9 @@ getAuthToken = HercM $ liftF $ GetAuthToken id
 setAuthToken :: String -> Herc Unit
 setAuthToken t = HercM $ liftF $ SetAuthToken (Just t) unit
 
+notify :: forall m. MonadTrans m => Notify.Config -> m Herc Unit
+notify cfg = lift $ HercM $ liftF $ Notify cfg unit
+
 getApiUrl :: Herc Url
 getApiUrl = HercM $ liftF $ GetApiUrl id
 
@@ -73,7 +79,7 @@ getWebSocketUrl = HercM $ liftF $ GetWebSocketUrl id
 --------------------------------------------------------------------------------
 
 runHerc :: Wiring -> Herc ~> Aff HercEffects
-runHerc { apiUrl, webSocketUrl, authTokenRef } = foldFree go <<< unHercM
+runHerc wiring = foldFree go <<< unHercM
   where
 
   go :: HercF HercEffects ~> Aff HercEffects
@@ -81,13 +87,16 @@ runHerc { apiUrl, webSocketUrl, authTokenRef } = foldFree go <<< unHercM
     Aff aff ->
       aff
     GetAuthToken reply -> do
-      token <- liftEff $ readRef authTokenRef
+      token <- liftEff $ readRef wiring.authTokenRef
       pure (reply token)
     SetAuthToken token next -> do
-      liftEff $ writeRef authTokenRef token
+      liftEff $ writeRef wiring.authTokenRef token
       pure next
-    GetApiUrl reply -> pure (reply apiUrl)
-    GetWebSocketUrl reply -> pure (reply webSocketUrl)
+    Notify cfg next -> do
+      Bus.write cfg wiring.notificationBus
+      pure next
+    GetApiUrl reply -> pure (reply wiring.apiUrl)
+    GetWebSocketUrl reply -> pure (reply wiring.webSocketUrl)
 
 --------------------------------------------------------------------------------
 
@@ -107,13 +116,20 @@ runApiT apiUrl mToken action =
   in
     runReaderT (runExceptT action) settings
 
-type HercEnv =
-  { withApi
-      :: forall s i o a
-       . ApiT Herc a
-      -> (a -> ComponentDSL s i o Herc Unit)
-      -> ComponentDSL s i o Herc Unit
-  , notify
-      :: forall s i o
-       . String -> ComponentDSL s i o Herc Unit
-  }
+withApi
+  :: forall m a
+   . (MonadTrans m, Monad (m Herc))
+  => ApiT Herc a
+  -> (a -> m Herc Unit)
+  -> m Herc Unit
+withApi call handler = do
+  apiUrl <- lift getApiUrl
+  token <- lift getAuthToken
+  result <- lift $ runApiT apiUrl token call
+  case result of
+    Left e -> notify
+      { kind: Notify.Error
+      , message: "Api call failed."
+      , detail: Just $ errorToString e
+      }
+    Right a -> handler a

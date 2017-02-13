@@ -1,14 +1,13 @@
 module Herculus.Play where
 
 import Herculus.Prelude
-
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Lib.Api.Rest as Api
 import Control.Monad.Aff.Console (log)
 import Data.Array (head)
-import Herculus.Monad (Herc, HercEnv, setAuthToken)
+import Herculus.Monad (Herc, setAuthToken, withApi)
 import Lib.Api.Schema.Auth (LoginData(LoginData), LoginResponse(LoginSuccess, LoginFailed), uiSessionKey, uiUserName)
 import Lib.Api.Schema.Project (Project(Project), ProjectData(ProjectData))
 import Lib.Model (Entity(..))
@@ -21,8 +20,8 @@ data Query a
   | Foo a
 
 
-play :: forall i o. HercEnv -> H.Component HH.HTML Query i o Herc
-play { withApi } = H.lifecycleComponent
+play :: forall i o. H.Component HH.HTML Query i o Herc
+play = H.lifecycleComponent
     { initialState: const unit
     , receiver: const Nothing
     , render

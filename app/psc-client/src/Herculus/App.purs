@@ -1,40 +1,28 @@
 module Herculus.App where
 
 import Herculus.Prelude
-import Control.Monad.Aff.Bus as Bus
 import Halogen as H
 import Halogen.Component.ChildPath as CP
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Halogen.Query.EventSource as ES
 import Herculus.Ace as Ace
+import Herculus.Notifications as Notify
+import Herculus.Notifications.Types as NotifyTypes
 import Herculus.Play as Play
 import Herculus.WebSocket as WebSocket
-import Control.Coroutine (emit)
-import Control.Monad.Aff.Console (log)
-import Control.Monad.Rec.Class (forever)
 import Halogen.Component.ChildPath (type (\/), type (<\/>))
-import Herculus.Monad (ApiT, Herc, HercEnv, getApiUrl, getAuthToken, getWebSocketUrl, runApiT)
+import Herculus.Monad (Herc)
 import Lib.Api.WebSocket (WsDownMessage, WsUpMessage(..))
-import Servant.PureScript.Affjax (errorToString)
 
 data Query a
-  = Initialize a
-  | Notify String a
+  = Notify NotifyTypes.Config a
   | Test a
   | PrintWsMessage (WebSocket.Output WsDownMessage) a
   | SetText String a
 
-type Wiring =
-  { notificationBus :: Bus.BusRW String
-  , webSocketUrl :: String
-  }
-
 type State =
-  { error :: String
-  , msg :: String
-  , wiring :: Maybe Wiring
+  { msg :: String
   , text :: String
   }
 
@@ -42,47 +30,38 @@ type ChildQuery =
       WebSocket.Query WsUpMessage
  <\/> Play.Query
  <\/> Ace.Query
+ <\/> Notify.Query
  <\/> Const Void
 
-type ChildSlot = Unit \/ Unit \/ Unit \/ Void
+type ChildSlot = Unit \/ Unit \/ Unit \/ Unit \/ Void
 
 app :: forall i o. H.Component HH.HTML Query i o Herc
-app = H.lifecycleParentComponent
+app = H.parentComponent
   { initialState: const initialState
   , render
   , eval
   , receiver: const Nothing
-  , initializer: Just (H.action Initialize)
-  , finalizer: Nothing
   }
 
   where
 
     initialState :: State
     initialState =
-      { error: "None"
-      , msg: ""
+      { msg: ""
       , text: "Editor"
-      , wiring: Nothing
       }
 
     render :: State -> H.ParentHTML Query ChildQuery ChildSlot Herc
-    render st = case st.wiring of
-      Nothing -> HH.text "loading"
-      Just { webSocketUrl, notificationBus } -> HH.div_
-        [ HH.slot' CP.cp2 unit (Play.play $ env notificationBus) unit absurd
+    render st = HH.div_
+        [ HH.slot' CP.cp2 unit Play.play unit absurd
         , HH.hr_
-        , HH.text st.error
+        , HH.slot' CP.cp4 unit Notify.notifications unit absurd
         , HH.hr_
         , HH.button
           [ HE.onClick (HE.input_ Test) ]
           [ HH.text "Send!" ]
         , HH.text st.msg
-        , let
-            ws = WebSocket.webSocket webSocketUrl
-                                     (env notificationBus)
-          in
-            HH.slot' CP.cp1 unit ws unit (Just <<< H.action <<< PrintWsMessage)
+        , HH.slot' CP.cp1 unit WebSocket.webSocket unit (Just <<< H.action <<< PrintWsMessage)
         , HH.hr_
         , HH.input
             [ HE.onValueInput (HE.input SetText)
@@ -93,24 +72,8 @@ app = H.lifecycleParentComponent
         ]
 
     eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot o Herc
-    eval (Initialize next) = do
-      liftAff $ log "Hallo"
-      bus <- liftAff Bus.make
-      webSocketUrl <- lift getWebSocketUrl
-      modify _{ wiring = Just
-                  { notificationBus: bus
-                  , webSocketUrl: webSocketUrl
-                  }
-              }
-      H.subscribe $ ES.EventSource do
-        let go = forever do
-              e <- lift $ liftAff $ Bus.read bus
-              emit (Notify e ES.Listening)
-        pure { producer: go, done: pure unit }
-      pure next
-
-    eval (Notify e next) = do
-      modify _{ error = e }
+    eval (Notify cfg next) = do
+      H.query' CP.cp4 unit (H.action (Notify.Push cfg))
       pure next
 
     eval (Test next) = do
@@ -128,30 +91,3 @@ app = H.lifecycleParentComponent
     eval (SetText text next) = do
       modify _{ text = text }
       pure next
-
--- Utils -----------------------------------------------------------------------
-
-env :: forall r. Bus.BusW' r String -> HercEnv
-env bus =
-  { withApi
-  , notify
-  }
-
-  where
-  notify
-    :: forall s i o
-     . String -> H.ComponentDSL s i o Herc Unit
-  notify msg = liftAff $ Bus.write msg bus
-
-  withApi
-    :: forall s i o a
-     . ApiT Herc a
-    -> (a -> H.ComponentDSL s i o Herc Unit)
-    -> H.ComponentDSL s i o Herc Unit
-  withApi call handler = do
-    apiUrl <- lift getApiUrl
-    token <- lift getAuthToken
-    result <- H.lift $ runApiT apiUrl token call
-    case result of
-      Left e -> notify $ errorToString e
-      Right a -> handler a
