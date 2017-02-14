@@ -9,6 +9,7 @@ import Herculus.Notifications.Types as N
 import Lib.Api.Rest as Api
 import Data.String (length)
 import Herculus.Monad (Herc, notify, withApi)
+import Herculus.Router as R
 import Herculus.Utils (cldiv_)
 import Herculus.Utils.Forms (renderRow, renderSubmit)
 import Lib.Api.Schema.Auth (SignupData(SignupData), SignupResponse(SignupSuccess, SignupFailed), UserInfo)
@@ -97,7 +98,7 @@ comp = H.component
       , HH.text " is highly appreciated."
       ]
     , HH.a
-      [ HP.href "#login" ]
+      [ HP.href (R.getLink R.LogIn) ]
       [ HH.text "Back to login" ]
     ]
 

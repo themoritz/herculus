@@ -4,6 +4,8 @@ module Herculus.Prelude
   , module Control.Apply
   , module Control.Bind
   , module Control.Monad
+  , module Control.Monad.Aff
+  , module Control.Monad.Eff
   , module Control.Monad.Aff.Class
   , module Control.Monad.Eff.Class
   , module Control.Monad.State.Class
@@ -32,6 +34,8 @@ import Control.Alt (class Alt, (<|>))
 import Control.Apply ((*>), (<*))
 import Control.Bind (join, (>=>), (<=<))
 import Control.Monad (when, unless)
+import Control.Monad.Aff (Aff)
+import Control.Monad.Eff (Eff)
 import Control.Monad.Aff.Class (class MonadAff, liftAff)
 import Control.Monad.Eff.Class (class MonadEff, liftEff)
 import Control.Monad.State.Class (class MonadState, modify, get, put, gets)

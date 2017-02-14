@@ -13,33 +13,29 @@ import Herculus.Play as Play
 import Herculus.WebSocket as WebSocket
 import Halogen.Component.ChildPath (type (\/), type (<\/>))
 import Herculus.Monad (Herc)
+import Herculus.Router (setPath, Routes(..))
 import Herculus.Auth.LogIn as LogIn
 import Herculus.Auth.SignUp as SignUp
+import Herculus.Auth.ResetPassword as ResetPw
 import Lib.Api.Schema.Auth (UserInfo(..))
 import Lib.Api.WebSocket (WsDownMessage, WsUpMessage(..))
 
 data Query a
   = Notify NotifyTypes.Config a
-  | Goto View a
-
-data View
-  = LoggedIn UserInfo
-  | SignUp
-  | LogIn
-  | ForgotPassword
-  | Initializing
+  | Goto Routes a
 
 type State =
-  { view :: View
+  { view :: Routes
   }
 
 type ChildQuery =
       Notify.Query
  <\/> LogIn.Query
  <\/> SignUp.Query
+ <\/> ResetPw.Query
  <\/> Const Void
 
-type ChildSlot = Unit \/ Unit \/ Unit \/ Void
+type ChildSlot = Unit \/ Unit \/ Unit \/ Unit \/ Void
 
 app :: forall i o. H.Component HH.HTML Query i o Herc
 app = H.parentComponent
@@ -65,7 +61,8 @@ app = H.parentComponent
             Just $ Goto (LoggedIn ui) unit
           LogIn -> HH.slot' CP.cp2 unit LogIn.comp unit \(LogIn.LoggedIn ui) ->
             Just $ Goto (LoggedIn ui) unit
-          ForgotPassword -> HH.text "Forgot pw"
+          ForgotPassword -> HH.slot' CP.cp4 unit ResetPw.comp unit \ResetPw.Done ->
+            Just $ Goto LogIn unit
           Initializing -> HH.text "Initializing"
       ]
 
@@ -75,5 +72,6 @@ app = H.parentComponent
       pure next
 
     eval (Goto view next) = do
+      liftAff $ setPath view
       modify _{ view = view }
       pure next

@@ -7,9 +7,8 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Herculus.Notifications.Types as N
 import Lib.Api.Rest as Api
-import DOM.Event.KeyboardEvent (KeyboardEvent, code)
-import Halogen.HTML.Properties (InputType(..))
 import Herculus.Monad (Herc, notify, withApi)
+import Herculus.Router as R
 import Herculus.Utils (cldiv_)
 import Lib.Api.Schema.Auth (LoginData(LoginData), LoginResponse(LoginSuccess, LoginFailed), UserInfo)
 import Lib.Model.Auth (Email(..))
@@ -54,12 +53,12 @@ comp = H.component
       ]
     , HH.text "Not registered yet? "
     , HH.a
-      [ HP.href "#signup" ]
+      [ HP.href (R.getLink R.SignUp) ]
       [ HH.text "Sign up" ]
     , HH.text "."
     , HH.br_
     , HH.a
-      [ HP.href "#reset-password" ]
+      [ HP.href (R.getLink R.ForgotPassword) ]
       [ HH.text "Forgot your password?" ]
     ]
 
