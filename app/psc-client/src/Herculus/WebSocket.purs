@@ -7,7 +7,7 @@ import Halogen.HTML as HH
 import Halogen.Query.EventSource as ES
 import Herculus.Notifications.Types as Notify
 import WebSocket as WS
-import Control.Monad.Aff (Aff, forkAff, later', runAff)
+import Control.Monad.Aff (forkAff, later', runAff)
 import Control.Monad.Aff.AVar (AVar, makeVar, peekVar, putVar, takeVar)
 import Control.Monad.Eff.Ref (Ref, newRef, readRef, writeRef)
 import Control.Monad.Eff.Var (set)
@@ -93,7 +93,7 @@ webSocket = H.lifecycleComponent
 
   eval (Connect next) = do
     st <- get
-    url <- lift getWebSocketUrl
+    url <- getWebSocketUrl
     case st of
       Nothing -> halt "WebSocket not initialized."
       Just vars ->

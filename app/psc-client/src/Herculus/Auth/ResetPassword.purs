@@ -8,7 +8,7 @@ import Halogen.HTML.Properties as HP
 import Herculus.Notifications.Types as N
 import Herculus.Router as R
 import Lib.Api.Rest as Api
-import Herculus.Monad (Herc, notify, withApi)
+import Herculus.Monad (Herc, gotoRoute, notify, withApi)
 import Herculus.Utils (cldiv_)
 import Herculus.Utils.Forms (renderRow, renderSubmit)
 
@@ -16,13 +16,11 @@ data Query a
   = SetEmail String a
   | SendLink a
 
-data Output = Done
-
 type State =
   { email :: String
   }
 
-comp :: H.Component HH.HTML Query Unit Output Herc
+comp :: H.Component HH.HTML Query Unit Void Herc
 comp = H.component
   { initialState: const
       { email: ""
@@ -50,7 +48,7 @@ comp = H.component
       [ HH.text "Back to login" ]
     ]
 
-  eval :: Query ~> H.ComponentDSL State Query Output Herc
+  eval :: Query ~> H.ComponentDSL State Query Void Herc
   eval (SetEmail email next) = do
     modify _{ email = email }
     pure next
@@ -64,5 +62,5 @@ comp = H.component
             \address (provided it exists). Please also check your spam folder."
         , detail: Nothing
         }
-      H.raise Done
+      gotoRoute $ R.LoggedIn R.ProjectOverview
     pure next

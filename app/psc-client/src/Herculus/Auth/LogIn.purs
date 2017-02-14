@@ -7,26 +7,24 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Herculus.Notifications.Types as N
 import Lib.Api.Rest as Api
-import Herculus.Monad (Herc, notify, withApi)
-import Herculus.Router as R
+import Herculus.Monad (Herc, notify, setAuthToken, withApi, gotoRoute)
 import Herculus.Utils (cldiv_)
-import Lib.Api.Schema.Auth (LoginData(LoginData), LoginResponse(LoginSuccess, LoginFailed), UserInfo)
-import Lib.Model.Auth (Email(..))
 import Herculus.Utils.Forms (renderRow, renderSubmit)
+import Lib.Api.Schema.Auth (LoginData(LoginData), LoginResponse(LoginSuccess, LoginFailed), UserInfo(..))
+import Lib.Model.Auth (Email(..))
+import Herculus.Router as R
 
 data Query a
   = SetEmail String a
   | SetPassword String a
   | PerformLogin a
 
-data Output = LoggedIn UserInfo
-
 type State =
   { email :: String
   , password :: String
   }
 
-comp :: H.Component HH.HTML Query Unit Output Herc
+comp :: H.Component HH.HTML Query Unit Void Herc
 comp = H.component
   { initialState: const
       { email: ""
@@ -62,7 +60,7 @@ comp = H.component
       [ HH.text "Forgot your password?" ]
     ]
 
-  eval :: Query ~> H.ComponentDSL State Query Output Herc
+  eval :: Query ~> H.ComponentDSL State Query Void Herc
   eval (SetEmail email next) = do
     modify _{ email = email }
     pure next
@@ -74,15 +72,18 @@ comp = H.component
   eval (PerformLogin next) = do
     { email, password } <- get
     let
-     ld =
-       { ldEmail: Email { unEmail: email }
-       , ldPassword: password
-       }
+      ld =
+        { ldEmail: Email { unEmail: email }
+        , ldPassword: password
+        }
     withApi (Api.postAuthLogin $ LoginData ld) case _ of
       LoginFailed msg -> notify
         { kind: N.Warn
         , message: "Login failed."
         , detail: Just msg
         }
-      LoginSuccess userInfo -> H.raise $ LoggedIn userInfo
+      LoginSuccess (UserInfo userInfo) -> do
+        setAuthToken userInfo._uiSessionKey
+        gotoRoute $ R.LoggedIn R.ProjectOverview
+        
     pure next

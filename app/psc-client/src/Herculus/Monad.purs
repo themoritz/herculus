@@ -3,13 +3,14 @@ module Herculus.Monad where
 import Herculus.Prelude
 import Herculus.Notifications.Types as Notify
 import Ace.Types (ACE)
-import Control.Monad.Aff (Aff)
 import Control.Monad.Aff.AVar (AVar, putVar)
 import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Eff.Ref (Ref, readRef, writeRef)
 import Control.Monad.Free (Free, foldFree, liftF)
+import DOM (DOM)
 import Flatpickr.Types (FLATPICKR)
 import Halogen.Aff (HalogenEffects)
+import Herculus.Router (Root, setPath)
 import Lib.Api.Rest (SPParams_(..))
 import Network.HTTP.Affjax (AJAX)
 import Servant.PureScript.Affjax (AjaxError, errorToString)
@@ -61,20 +62,23 @@ instance monadEffHercM :: MonadEff eff (HercM eff) where
 instance monadAffHercM :: MonadAff eff (HercM eff) where
   liftAff = HercM <<< liftF <<< Aff
 
-getAuthToken :: Herc AuthToken
-getAuthToken = HercM $ liftF $ GetAuthToken id
+getAuthToken :: forall m. MonadTrans m => m Herc AuthToken
+getAuthToken = lift $ HercM $ liftF $ GetAuthToken id
 
-setAuthToken :: String -> Herc Unit
-setAuthToken t = HercM $ liftF $ SetAuthToken (Just t) unit
+setAuthToken :: forall m. MonadTrans m => String -> m Herc Unit
+setAuthToken t = lift $ HercM $ liftF $ SetAuthToken (Just t) unit
 
 notify :: forall m. MonadTrans m => Notify.Config -> m Herc Unit
 notify cfg = lift $ HercM $ liftF $ Notify cfg unit
 
-getApiUrl :: Herc Url
-getApiUrl = HercM $ liftF $ GetApiUrl id
+getApiUrl :: forall m. MonadTrans m => m Herc Url
+getApiUrl = lift $ HercM $ liftF $ GetApiUrl id
 
-getWebSocketUrl :: Herc Url
-getWebSocketUrl = HercM $ liftF $ GetWebSocketUrl id
+getWebSocketUrl :: forall m. MonadTrans m => m Herc Url
+getWebSocketUrl = lift $ HercM $ liftF $ GetWebSocketUrl id
+
+gotoRoute :: forall eff m. MonadEff (dom :: DOM | eff) m => Root -> m Unit
+gotoRoute = liftEff <<< setPath
 
 --------------------------------------------------------------------------------
 
@@ -123,8 +127,8 @@ withApi
   -> (a -> m Herc Unit)
   -> m Herc Unit
 withApi call handler = do
-  apiUrl <- lift getApiUrl
-  token <- lift getAuthToken
+  apiUrl <- getApiUrl
+  token <- getAuthToken
   result <- lift $ runApiT apiUrl token call
   case result of
     Left e -> notify

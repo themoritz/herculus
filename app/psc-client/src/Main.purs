@@ -2,10 +2,9 @@ module Main where
 
 import Herculus.Prelude
 import Halogen as H
-import Herculus.App as App
+import Herculus.Root as Root
 import Control.Monad.Aff (forkAff)
 import Control.Monad.Aff.AVar (makeVar, takeVar)
-import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Exception (error)
 import Control.Monad.Eff.Ref (newRef)
 import DOM.HTML (window)
@@ -38,10 +37,10 @@ main apiUrl webSocketUrl hotReload = do
         , authTokenRef
         , notifications
         }
-    io <- runUI (H.hoist (runHerc wiring) App.app) unit body
+    io <- runUI (H.hoist (runHerc wiring) Root.comp) unit body
     forkAff do
       Tuple old new <- matchesAff pRoute
-      io.query $ H.action $ App.Goto new
+      io.query $ H.action $ Root.Goto new
     forkAff $ forever do
       cfg <- takeVar notifications
-      io.query $ H.action $ App.Notify cfg
+      io.query $ H.action $ Root.Notify cfg

@@ -6,13 +6,13 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Herculus.Notifications.Types as N
+import Herculus.Router as R
 import Lib.Api.Rest as Api
 import Data.String (length)
-import Herculus.Monad (Herc, notify, withApi)
-import Herculus.Router as R
+import Herculus.Monad (Herc, gotoRoute, notify, setAuthToken, withApi)
 import Herculus.Utils (cldiv_)
 import Herculus.Utils.Forms (renderRow, renderSubmit)
-import Lib.Api.Schema.Auth (SignupData(SignupData), SignupResponse(SignupSuccess, SignupFailed), UserInfo)
+import Lib.Api.Schema.Auth (SignupData(SignupData), SignupResponse(SignupSuccess, SignupFailed), UserInfo(..))
 import Lib.Model.Auth (Email(..))
 
 data Query a
@@ -23,8 +23,6 @@ data Query a
   | SetPwConfirm String a
   | PerformSignup a
 
-data Output = SignedUp UserInfo
-
 type State =
   { intention :: String
   , name :: String
@@ -34,7 +32,7 @@ type State =
   , validationError :: Maybe String
   }
 
-comp :: H.Component HH.HTML Query Unit Output Herc
+comp :: H.Component HH.HTML Query Unit Void Herc
 comp = H.component
   { initialState: const
       { intention: ""
@@ -102,7 +100,7 @@ comp = H.component
       [ HH.text "Back to login" ]
     ]
 
-  eval :: Query ~> H.ComponentDSL State Query Output Herc
+  eval :: Query ~> H.ComponentDSL State Query Void Herc
   eval (SetIntention val next) = do
     modify _{ intention = val }
     pure next
@@ -148,5 +146,7 @@ comp = H.component
             , message: "Sign up failed."
             , detail: Just msg
             }
-          SignupSuccess userInfo -> H.raise $ SignedUp userInfo
+          SignupSuccess (UserInfo userInfo) -> do
+            setAuthToken userInfo._uiSessionKey
+            gotoRoute $ R.LoggedIn R.ProjectOverview
     pure next
