@@ -11,6 +11,7 @@ import Herculus.Monad (Herc)
 import Herculus.Router as R
 import Herculus.Auth.LogIn as LogIn
 import Herculus.Auth.SignUp as SignUp
+import Herculus.Utils.Templates (plainApp)
 import Herculus.Auth.ResetPassword as ResetPw
 import Herculus.LoggedIn as LoggedIn
 
@@ -51,10 +52,14 @@ comp = H.parentComponent
   render st = HH.div_
     [ HH.slot' CP.cp1 unit Notify.comp unit absurd
     , case st.view of
-        R.LoggedIn sub   -> HH.slot' CP.cp5 unit LoggedIn.comp sub absurd
-        R.SignUp         -> HH.slot' CP.cp3 unit SignUp.comp unit absurd
-        R.LogIn          -> HH.slot' CP.cp2 unit LogIn.comp unit absurd
-        R.ForgotPassword -> HH.slot' CP.cp4 unit ResetPw.comp unit absurd
+        R.LoggedIn sub ->
+          HH.slot' CP.cp5 unit LoggedIn.comp sub absurd
+        R.SignUp -> plainApp $
+          HH.slot' CP.cp3 unit SignUp.comp unit absurd
+        R.LogIn -> plainApp $
+          HH.slot' CP.cp2 unit LogIn.comp unit absurd
+        R.ForgotPassword -> plainApp $
+          HH.slot' CP.cp4 unit ResetPw.comp unit absurd
     ]
 
   eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot o Herc

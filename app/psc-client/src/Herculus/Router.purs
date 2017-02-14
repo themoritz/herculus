@@ -17,11 +17,9 @@ data Root
 
 data LoggedIn
   = ProjectOverview
-  | ProjectDetail ProjectDetail
+  | ProjectDetail Project
 
-data ProjectDetail
-  = Project (Id Lib.Project)
-  | Table (Id Lib.Table)
+data Project = Project (Id Lib.Project) (Maybe (Id Lib.Table))
 
 pRoute :: Match Root
 pRoute =
@@ -29,14 +27,16 @@ pRoute =
   <|> LogIn <$ lit "login"
   <|> ForgotPassword <$ lit "reset-password"
   <|> LoggedIn ProjectOverview <$ lit "projects"
-  <|> (LoggedIn <<< ProjectDetail) <$> pProjectDetail
+  <|> (LoggedIn <<< ProjectDetail) <$> pProject
 
-  where
-
-  pProjectDetail :: Match ProjectDetail
-  pProjectDetail =
-        (Project <<< Id) <$> (lit "project" *> str)
-    <|> (Table <<< Id) <$> (lit "table" *> str)
+pProject :: Match Project
+pProject =
+  let
+    p = Id <$> (lit "project" *> str)
+    mTable = (Just <<< Id) <$> (lit "table" *> str)
+         <|> pure Nothing
+  in
+    Project <$> p <*> mTable
 
 toPath :: Root -> String
 toPath = case _ of
@@ -45,9 +45,10 @@ toPath = case _ of
   ForgotPassword -> "reset-password"
   LoggedIn li -> case li of
     ProjectOverview -> "projects"
-    ProjectDetail pd -> case pd of
-      Project (Id p) -> "project/" <> p
-      Table (Id t) -> "table/" <> t
+    ProjectDetail (Project (Id p) mTable) ->
+      "project/" <> p <> case mTable of
+        Just (Id t) -> "/table/" <> t
+        Nothing -> ""
 
 getLink :: Root -> String
 getLink r = "#" <> toPath r

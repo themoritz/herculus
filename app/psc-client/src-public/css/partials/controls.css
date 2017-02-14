@@ -1,0 +1,17 @@
+.header-input {
+  box-sizing: border-box;
+  background: lighten($anthrazit, 3%);
+  border: 1px solid darken($anthrazit, 3%);
+  border-radius: 2px;
+  font-size: inherit;
+  outline: none;
+  padding: 4px 5px 1px 5px;
+  color: white;
+  width: 110px;
+  transition-property: width, border-color;
+  transition-duration: 200ms;
+  &:focus {
+    width: 200px;
+    border-color: darken($anthrazit, 7%);
+  }
+}

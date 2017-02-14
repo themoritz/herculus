@@ -1,0 +1,182 @@
+@import "../modules/colors"
+
+.container {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+}
+
+.content-body {
+  position: absolute;
+  left: 0px;
+  top: $menubar-height;
+  right: 0px;
+  bottom: $footer-height;
+}
+
+.menubar {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  right: 0px;
+  height: $menubar-height;
+  background-color: $anthrazit;
+  box-sizing: border-box;
+
+  &:after {
+    content: "";
+    position: absolute;
+    height: 5px;
+    left: 0px;
+    right: 0px;
+    bottom: 0px;
+    background: linear-gradient(to right, $brand-dark 0%, $brand-light 100%);
+  }
+}
+
+.navigation {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  vertical-align: middle;
+
+  div.user-settings {
+    float: right;
+    padding-bottom: 4px;
+  }
+
+  button { // Projects
+    background-color: $light-anthrazit;
+    color: $medium-gray;
+    border: none;
+    box-shadow: none;
+    padding: 5px;
+    padding-bottom: 3px;
+    margin-left: 3px;
+    text-align: right;
+    font-weight: bold;
+    font-size: 16px;
+    float: right;
+    &:hover {
+      color: $brand-light;
+    }
+  }
+  .user-settings {
+    .small-menu {
+      right: 0px;
+      top: 30px;
+    }
+  }
+}
+
+$titleWidth: 163px;
+$titlePaddingLeft: 10px;
+
+.title {
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  width: $titleWidth;
+  height: 46px;
+  font-weight: bold;
+  padding-left: $titlePaddingLeft;
+  display: table;
+}
+
+.title__logo {
+  display: table-cell;
+  width: 30px;
+  height: 46px;
+  vertical-align: middle;
+  img {
+    width: 30px;
+    height: 30px;
+    padding-top: 6px;
+  }
+}
+
+.title__text {
+  display: table-cell;
+  vertical-align: middle;
+  padding-left: 10px;
+  font-size: 26px;
+  color: white;
+}
+
+.title__beta {
+  margin-top: 5px;
+  color: $brand-dark;
+  transform: rotate(20deg);
+}
+
+.project-name {
+  position: absolute;
+  top: 10px;
+  left: $titleWidth + $titlePaddingLeft;
+  right: 200px;
+  color: $medium-gray;
+  text-transform: capitalize;
+  text-align: center;
+  font-size: 22px;
+  button {
+    vertical-align: middle;
+    font-size: 12px;
+    color: $gray;
+    margin-left: 5px;
+  }
+}
+
+.table-list {
+  position: absolute;
+  bottom: 5px;
+  left: 0px;
+  right: 0px;
+  height: 32px;
+  // Add table
+  input {
+    margin-left: 10px;
+    margin-top: 2px;
+  }
+  ul {
+    list-style: none;
+    margin: 0px;
+    padding: 0px;
+    height: 100%;
+    float: left;
+    li {
+      input {
+        margin-left: 0px;
+        margin-top: -1px;
+      }
+      &.active>span {
+        margin-right: 10px;
+      }
+      button {
+        font-size: 11px;
+        padding-right: 0px;
+        margin-left: 5px;
+        vertical-align: middle;
+      }
+      float: left;
+      font-weight: bold;
+      padding: 4px 10px;
+      height: 100%;
+      cursor: pointer;
+      color: $gray;
+      display: inline-block;
+      box-sizing: border-box;
+      transition-property: color;
+      transition-duration: 75ms;
+      &:hover {
+        color: $brand-light;
+      }
+      &.active {
+        color: $brand-light;
+        background-color: lighten($anthrazit, 5%);
+        border-top-right-radius: 2px;
+        border-top-left-radius: 2px;
+      }
+    }
+  }
+}
+

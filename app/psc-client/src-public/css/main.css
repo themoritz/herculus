@@ -1,5 +1,7 @@
 @import "partials/notifications";
 @import "partials/auth";
+@import "partials/layout";
+@import "partials/controls";
 
 body, html {
   font-family: "Open Sans", "Arial", sans-serif;

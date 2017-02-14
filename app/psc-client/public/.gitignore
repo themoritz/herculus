@@ -2,7 +2,7 @@ index.html
 bundle.js
 bundle.js.map
 *.eot
-*.svg
+/*.svg
 *.woff
 *.woff2
 *.ttf

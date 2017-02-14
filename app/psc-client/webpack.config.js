@@ -107,7 +107,8 @@ var config = {
 // instead of exporting the webpack config.
 if (require.main === module) {
   var compiler = webpack(config);
-  var app = require('express')();
+  var express = require('express');
+  var app = express();
   var proxy = require('express-http-proxy');
 
   app
@@ -130,6 +131,7 @@ if (require.main === module) {
       }
     }))
     .use(require('webpack-hot-middleware')(compiler))
+    .use(express.static('./public'))
     .listen(port);
 } else {
   module.exports = config;
