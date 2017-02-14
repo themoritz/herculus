@@ -1,4 +1,5 @@
 @import "partials/notifications";
+@import "partials/auth";
 
 body, html {
   font-family: "Open Sans", "Arial", sans-serif;

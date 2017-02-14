@@ -13,7 +13,8 @@ import Herculus.Play as Play
 import Herculus.WebSocket as WebSocket
 import Halogen.Component.ChildPath (type (\/), type (<\/>))
 import Herculus.Monad (Herc)
-import Herculus.LogIn as LogIn
+import Herculus.Auth.LogIn as LogIn
+import Herculus.Auth.SignUp as SignUp
 import Lib.Api.Schema.Auth (UserInfo(..))
 import Lib.Api.WebSocket (WsDownMessage, WsUpMessage(..))
 
@@ -35,9 +36,10 @@ type State =
 type ChildQuery =
       Notify.Query
  <\/> LogIn.Query
+ <\/> SignUp.Query
  <\/> Const Void
 
-type ChildSlot = Unit \/ Unit \/ Void
+type ChildSlot = Unit \/ Unit \/ Unit \/ Void
 
 app :: forall i o. H.Component HH.HTML Query i o Herc
 app = H.parentComponent
@@ -55,13 +57,17 @@ app = H.parentComponent
       }
 
     render :: State -> H.ParentHTML Query ChildQuery ChildSlot Herc
-    render st = case st.view of
-      LoggedIn ui -> HH.text "Logged in"
-      SignUp -> HH.text "signup"
-      LogIn -> HH.slot' CP.cp2 unit LogIn.comp unit \(LogIn.LoggedIn ui) ->
-        Just $ Goto (LoggedIn ui) unit
-      ForgotPassword -> HH.text "Forgot pw"
-      Initializing -> HH.text "Initializing"
+    render st = HH.div_
+      [ HH.slot' CP.cp1 unit Notify.comp unit absurd
+      , case st.view of
+          LoggedIn ui -> HH.text "Logged in"
+          SignUp -> HH.slot' CP.cp3 unit SignUp.comp unit \(SignUp.SignedUp ui) ->
+            Just $ Goto (LoggedIn ui) unit
+          LogIn -> HH.slot' CP.cp2 unit LogIn.comp unit \(LogIn.LoggedIn ui) ->
+            Just $ Goto (LoggedIn ui) unit
+          ForgotPassword -> HH.text "Forgot pw"
+          Initializing -> HH.text "Initializing"
+      ]
 
     eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot o Herc
     eval (Notify cfg next) = do

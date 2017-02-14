@@ -17,8 +17,8 @@ type State =
   { notifications :: Array Config
   }
 
-notifications :: H.Component HH.HTML Query Unit Void Herc
-notifications = H.component
+comp :: H.Component HH.HTML Query Unit Void Herc
+comp = H.component
   { initialState: const
       { notifications: []
       }
@@ -54,9 +54,14 @@ notifications = H.component
           Success -> "Success"
           Warn -> "Warning"
           Error -> "Error"
+        detail msg =
+          [ cldiv_ "notification__detail"
+            [ HH.text msg
+            ]
+          ]
       in
         cldiv_ ("notification  notification--" <> cls)
-        [ cldiv_ "notification__header"
+        ([ cldiv_ "notification__header"
           [ cldiv_ "notification__title"
             [ faIcon_ icon
             , HH.text title
@@ -68,7 +73,7 @@ notifications = H.component
         , cldiv_ "notification__content"
           [ HH.text cfg.message
           ]
-        ]
+        ] <> maybe [] detail cfg.detail)
 
   eval :: Query ~> H.ComponentDSL State Query Void Herc
   eval (Push config next) = do

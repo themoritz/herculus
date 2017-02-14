@@ -23,6 +23,11 @@ $width: 230px;
   margin-top: 10px;
 }
 
+.notification__detail {
+  margin-top: 10px;
+  font-size: smaller;
+}
+
 .notification__header {
   display: table;
 }
@@ -55,11 +60,11 @@ $width: 230px;
 }
 
 .notification--success {
-  background-color: darken(green, 2%);
+  background-color: color(green lightness(-2%));
 }
 
 .notification--warning {
-  background-color: darken(orange, 2%);
+  background-color: color(orange lightness(-2%));
 }
 
 .notification--error {

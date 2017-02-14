@@ -15,6 +15,8 @@ import Data.Nullable (toMaybe)
 import Halogen.Aff (awaitBody, runHalogenAff)
 import Halogen.VDom.Driver (runUI)
 import Herculus.Monad (runHerc, HercEffects)
+import Herculus.Router (pRoute)
+import Routing (matchesAff)
 
 main :: String -> String -> Boolean -> Eff HercEffects Unit
 main apiUrl webSocketUrl hotReload = do
@@ -37,6 +39,9 @@ main apiUrl webSocketUrl hotReload = do
         , notifications
         }
     io <- runUI (H.hoist (runHerc wiring) App.app) unit body
+    forkAff do
+      Tuple old new <- matchesAff pRoute
+      io.query $ H.action $ App.Goto new
     forkAff $ forever do
       cfg <- takeVar notifications
       io.query $ H.action $ App.Notify cfg

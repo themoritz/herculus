@@ -13,6 +13,7 @@
     "purescript-profunctor-lenses": "^2.6.0",
     "purescript-servant-support": "master",
     "purescript-flatpickr": "master",
+    "purescript-routing": "^3.0.0",
     "purescript-ace": "^3.0.0"
   }
 }
