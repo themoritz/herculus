@@ -1,10 +1,9 @@
 module Herculus.Router where
 
 import Herculus.Prelude
-import Lib.Api.Schema.Project (Project) as Lib
-import Lib.Model.Table (Table) as Lib
 import DOM (DOM)
-import Lib.Custom (Id(..))
+import Lib.Custom (Id(..), ProjectTag)
+import Lib.Model.Table (Table) as Lib
 import Routing.Hash (setHash)
 import Routing.Match (Match)
 import Routing.Match.Class (lit, str)
@@ -19,7 +18,7 @@ data LoggedIn
   = ProjectOverview
   | ProjectDetail Project
 
-data Project = Project (Id Lib.Project) (Maybe (Id Lib.Table))
+data Project = Project (Id ProjectTag) (Maybe (Id Lib.Table))
 
 pRoute :: Match Root
 pRoute =

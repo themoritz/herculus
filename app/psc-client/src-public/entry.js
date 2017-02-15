@@ -1,7 +1,14 @@
 require('./css/main.css')
+
+// Font-awesome
 require('font-awesome/css/font-awesome.css');
 
+// Ace editor
 var ace = require('brace')
+
+// Basil for local storage
+require('basil.js')
+global.basil = new window.Basil({expireDays: 60})
 
 var apiUrl = process.env.API_URL || 'http://localhost:3000/api/'
 var webSocketUrl = process.env.WEBSOCKET_URL || 'ws://localhost:3000/websocket'

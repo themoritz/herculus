@@ -1,0 +1,32 @@
+@import "../modules/colors";
+
+.projects {
+  padding: 20px;
+  width: 90%;
+}
+
+.projects__tile {
+  float: left;
+  width: 200px;
+  height: 90px;
+  background-color: $medium-gray;
+  color: $anthrazit;
+  margin-right: 24px;
+  margin-bottom: 24px;
+  text-align: left;
+  cursor: pointer;
+  padding: 10px;
+  span {
+    padding: 3px;
+    text-transform: capitalize;
+  }
+}
+
+.projects__tile--new {
+  vertical-align: middle;
+  background-color: $light-gray;
+  text-align: center;
+  p {
+    margin-top: 20px;
+  }
+}

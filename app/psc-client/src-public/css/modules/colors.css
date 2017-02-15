@@ -1,11 +1,11 @@
 $light-gray: #f4f4f4;
-$medium-gray: darken(white, 10%);
+$medium-gray: color(white lightness(-10%));
 
 $anthrazit: #28373C;
-$light-anthrazit: lighten($anthrazit, 5%);
+$light-anthrazit: color($anthrazit lightness(5%));
 $gray: rgba(255, 255, 255, 0.5);
 
 $brand-dark: #ff1489;
 $brand-light: #e9ff00;
-$link: lighten($anthrazit, 5%);
-$link-hover: darken($brand-dark, 10%);
+$link: color($anthrazit lightness(5%));
+$link-hover: color($brand-dark lightness(-10%));

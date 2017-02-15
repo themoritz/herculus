@@ -8,14 +8,14 @@ import Halogen.HTML.Properties as HP
 import Herculus.Router as R
 import Data.Map (Map)
 import Herculus.Monad (Herc)
-import Lib.Api.Schema.Auth (UserInfo(..))
-import Lib.Api.Schema.Column (Column(..))
-import Lib.Api.Schema.Project (Project(..))
-import Lib.Custom (Id(..))
-import Lib.Model (Entity(..))
-import Lib.Model.Cell (Cell(..), CellContent)
-import Lib.Model.Row (Row(..))
-import Lib.Model.Table (Table(..))
+import Lib.Api.Schema.Auth (UserInfo)
+import Lib.Api.Schema.Column (Column)
+import Lib.Api.Schema.Project (Project)
+import Lib.Custom (Id, ProjectTag)
+import Lib.Model (Entity)
+import Lib.Model.Cell (Cell, CellContent)
+import Lib.Model.Row (Row)
+import Lib.Model.Table (Table)
 import Lib.Types (ChangeOp)
 
 type Diff a = Array (Tuple ChangeOp a)
@@ -24,7 +24,7 @@ data Query a
   = Initialize a
   | Update Input a
   | OpenTable (Id Table) a
-  | LoadProject (Id Project) a
+  | LoadProject (Id ProjectTag) a
   | SetName String a
   | ApplyDiff (Diff (Entity Cell))
               (Diff Column)
@@ -42,7 +42,7 @@ type State =
     , cells :: Map Coords CellContent
     }
   , view :: Maybe (Id Table)
-  , projectId :: Id Project
+  , projectId :: Id ProjectTag
   , userInfo :: UserInfo
   }
 

@@ -5,9 +5,9 @@ import Herculus.Notifications.Types as Notify
 import Ace.Types (ACE)
 import Control.Monad.Aff.AVar (AVar, putVar)
 import Control.Monad.Eff.Console (CONSOLE)
-import Control.Monad.Eff.Ref (Ref, readRef, writeRef)
 import Control.Monad.Free (Free, foldFree, liftF)
 import DOM (DOM)
+import Data.Nullable (Nullable, toMaybe)
 import Flatpickr.Types (FLATPICKR)
 import Halogen.Aff (HalogenEffects)
 import Herculus.Router (Root, setPath)
@@ -17,11 +17,14 @@ import Servant.PureScript.Affjax (AjaxError, errorToString)
 import Servant.PureScript.Settings (SPSettings_, defaultSettings)
 import WebSocket (WEBSOCKET)
 
+foreign import data STORAGE :: !
+
 type HercEffects = HalogenEffects
   ( ajax      :: AJAX
   , ace       :: ACE
   , console   :: CONSOLE
   , ws        :: WEBSOCKET
+  , storage   :: STORAGE
   , flatpickr :: FLATPICKR
   )
 
@@ -31,7 +34,6 @@ type AuthToken = Maybe String
 type Wiring =
   { apiUrl :: Url
   , webSocketUrl :: Url
-  , authTokenRef :: Ref AuthToken
   , notifications :: AVar Notify.Config
   }
 
@@ -40,7 +42,7 @@ type Herc = HercM HercEffects
 data HercF eff a
   = Aff (Aff eff a)
   | GetAuthToken (AuthToken -> a)
-  | SetAuthToken AuthToken a
+  | SetAuthToken String a
   | Notify Notify.Config a
   | GetApiUrl (Url -> a)
   | GetWebSocketUrl (Url -> a)
@@ -66,7 +68,7 @@ getAuthToken :: forall m. MonadTrans m => m Herc AuthToken
 getAuthToken = lift $ HercM $ liftF $ GetAuthToken id
 
 setAuthToken :: forall m. MonadTrans m => String -> m Herc Unit
-setAuthToken t = lift $ HercM $ liftF $ SetAuthToken (Just t) unit
+setAuthToken t = lift $ HercM $ liftF $ SetAuthToken t unit
 
 notify :: forall m. MonadTrans m => Notify.Config -> m Herc Unit
 notify cfg = lift $ HercM $ liftF $ Notify cfg unit
@@ -82,6 +84,11 @@ gotoRoute = liftEff <<< setPath
 
 --------------------------------------------------------------------------------
 
+foreign import basilSet
+  :: forall eff. String -> String -> Eff (storage :: STORAGE | eff) Unit
+foreign import basilGet
+  :: forall eff. String -> Eff (storage :: STORAGE | eff) (Nullable String)
+
 runHerc :: Wiring -> Herc ~> Aff HercEffects
 runHerc wiring = foldFree go <<< unHercM
   where
@@ -91,10 +98,10 @@ runHerc wiring = foldFree go <<< unHercM
     Aff aff ->
       aff
     GetAuthToken reply -> do
-      token <- liftEff $ readRef wiring.authTokenRef
-      pure (reply token)
+      token <- liftEff $ basilGet "sessionKey"
+      pure (reply $ toMaybe token)
     SetAuthToken token next -> do
-      liftEff $ writeRef wiring.authTokenRef token
+      liftEff $ basilSet "sessionKey" token
       pure next
     Notify cfg next -> do
       putVar wiring.notifications cfg

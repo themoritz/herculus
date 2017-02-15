@@ -6,7 +6,6 @@ import Herculus.Root as Root
 import Control.Monad.Aff (forkAff)
 import Control.Monad.Aff.AVar (makeVar, takeVar)
 import Control.Monad.Eff.Exception (error)
-import Control.Monad.Eff.Ref (newRef)
 import DOM.HTML (window)
 import DOM.HTML.Document (body)
 import DOM.HTML.Window (document)
@@ -19,7 +18,6 @@ import Routing (matchesAff)
 
 main :: String -> String -> Boolean -> Eff HercEffects Unit
 main apiUrl webSocketUrl hotReload = do
-  authTokenRef <- newRef Nothing
   runHalogenAff $ do
     body <- if hotReload
       then do
@@ -34,7 +32,6 @@ main apiUrl webSocketUrl hotReload = do
       wiring =
         { apiUrl
         , webSocketUrl
-        , authTokenRef
         , notifications
         }
     io <- runUI (H.hoist (runHerc wiring) Root.comp) unit body

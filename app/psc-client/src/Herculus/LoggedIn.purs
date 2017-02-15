@@ -7,9 +7,10 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Herculus.Notifications.Types as N
 import Herculus.Project as Project
+import Herculus.ProjectOverview as PO
 import Herculus.Router as R
-import Halogen.Component.ChildPath (cp1, type (\/), type (<\/>))
 import Lib.Api.Rest as Api
+import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2)
 import Herculus.Monad (Herc, notify, withApi)
 import Lib.Api.Schema.Auth (GetUserInfoResponse(..), UserInfo(..))
 
@@ -27,9 +28,11 @@ type Input = R.LoggedIn
 
 type ChildQuery =
   Project.Query <\/>
+  PO.Query <\/>
   Const Void
 
 type ChildSlot =
+  Unit \/
   Unit \/
   Void 
 
@@ -52,7 +55,8 @@ comp = H.lifecycleParentComponent
   render st = case st.userInfo of
     Nothing -> HH.text ""
     Just ui -> case st.view of
-      R.ProjectOverview -> HH.text "Overview"
+      R.ProjectOverview ->
+        HH.slot' cp2 unit PO.comp unit absurd
       R.ProjectDetail p ->
         HH.slot' cp1 unit Project.comp (Project.Input ui p) absurd
 
