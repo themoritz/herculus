@@ -1,0 +1,53 @@
+@import "../modules/colors";
+
+.popup-menu {
+  position: absolute;
+  z-index: 10;
+  width: 170px;
+  background-color: white;
+  border-radius: 4px;
+  border: 1px solid $anthrazit;
+  box-shadow: 0px 0px 30px 0px rgba(0,0,0,0.2);
+  overflow: hidden;
+}
+
+.popup-menu--below-left {
+  right: 0px;
+  top: 30px;
+}
+
+.popup-menu--below-right {
+  left: 0px;
+  top: 30px;
+}
+
+.popup-menu__item {
+  text-align: left;
+  font-size: 12pt;
+  font-weight: normal;
+  width: 100%;
+  border-radius: 0px;
+  box-shadow: none;
+  border: none;
+  background: none;
+  outline: none;
+  color: $anthrazit;
+  padding: 0px;
+  display: table;
+  transition-property: background-color, color;
+  transition-duration: 100ms;
+  &:hover {
+    color: white;
+    background-color: $brand-dark;
+  }
+}
+
+.popup-menu__item-icon {
+  display: table-cell;
+  padding: 5px;
+}
+.popup-menu__item-label {
+  display: table-cell;
+  padding: 5px;
+}
+

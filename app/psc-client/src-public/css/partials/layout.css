@@ -39,35 +39,24 @@
   top: 10px;
   right: 10px;
   vertical-align: middle;
+}
 
-  div.user-settings {
-    float: right;
-    padding-bottom: 4px;
-  }
-
-  button { // Projects
-    background-color: $light-anthrazit;
-    color: $medium-gray;
-    border: none;
-    box-shadow: none;
-    padding: 5px;
-    padding-bottom: 3px;
-    margin-left: 3px;
-    text-align: right;
-    font-weight: bold;
-    font-size: 16px;
-    float: right;
-    &:hover {
-      color: $brand-light;
-    }
-  }
-  .user-settings {
-    .small-menu {
-      right: 0px;
-      top: 30px;
-    }
+.navigation__button {
+  background-color: $light-anthrazit;
+  color: $medium-gray;
+  border: none;
+  box-shadow: none;
+  padding: 5px;
+  padding-bottom: 3px;
+  margin-left: 3px;
+  text-align: right;
+  font-weight: bold;
+  font-size: 16px;
+  &:hover {
+    color: $brand-light;
   }
 }
+
 
 $titleWidth: 163px;
 $titlePaddingLeft: 10px;

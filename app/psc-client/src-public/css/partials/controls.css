@@ -15,3 +15,9 @@
     border-color: darken($anthrazit, 7%);
   }
 }
+
+button {
+  cursor: pointer;
+  outline: none;
+  border-radius: 2px;
+}

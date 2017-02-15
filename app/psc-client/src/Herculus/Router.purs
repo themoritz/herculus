@@ -17,6 +17,7 @@ data Root
 data LoggedIn
   = ProjectOverview
   | ProjectDetail Project
+  | ChangePassword
 
 data Project = Project (Id ProjectTag) (Maybe (Id Lib.Table))
 
@@ -26,6 +27,7 @@ pRoute =
   <|> LogIn <$ lit "login"
   <|> ForgotPassword <$ lit "reset-password"
   <|> LoggedIn ProjectOverview <$ lit "projects"
+  <|> LoggedIn ChangePassword <$ lit "change-password"
   <|> (LoggedIn <<< ProjectDetail) <$> pProject
 
 pProject :: Match Project
@@ -44,6 +46,7 @@ toPath = case _ of
   ForgotPassword -> "reset-password"
   LoggedIn li -> case li of
     ProjectOverview -> "projects"
+    ChangePassword -> "change-password"
     ProjectDetail (Project (Id p) mTable) ->
       "project/" <> p <> case mTable of
         Just (Id t) -> "/table/" <> t

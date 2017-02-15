@@ -5,19 +5,24 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import Herculus.ChangePassword as ChangePw
 import Herculus.Notifications.Types as N
 import Herculus.Project as Project
 import Herculus.ProjectOverview as PO
 import Herculus.Router as R
+import Herculus.UserMenu as UserMenu
 import Lib.Api.Rest as Api
-import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2)
-import Herculus.Monad (Herc, notify, withApi)
+import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
+import Herculus.Monad (Herc, gotoRoute, notify, withApi)
+import Herculus.Utils (faIcon_)
+import Herculus.Utils.Templates (app, appHeader, plainApp)
 import Lib.Api.Schema.Auth (GetUserInfoResponse(..), UserInfo(..))
 
 
 data Query a
   = Initialize a
   | Goto R.LoggedIn a
+  | ToOverview a
 
 type State =
   { view :: R.LoggedIn
@@ -29,9 +34,13 @@ type Input = R.LoggedIn
 type ChildQuery =
   Project.Query <\/>
   PO.Query <\/>
+  ChangePw.Query <\/>
+  UserMenu.Query <\/>
   Const Void
 
 type ChildSlot =
+  Unit \/
+  Unit \/
   Unit \/
   Unit \/
   Void 
@@ -53,12 +62,31 @@ comp = H.lifecycleParentComponent
 
   render :: State -> H.ParentHTML Query ChildQuery ChildSlot Herc
   render st = case st.userInfo of
-    Nothing -> HH.text ""
-    Just ui -> case st.view of
-      R.ProjectOverview ->
-        HH.slot' cp2 unit PO.comp unit absurd
-      R.ProjectDetail p ->
-        HH.slot' cp1 unit Project.comp (Project.Input ui p) absurd
+    Nothing -> plainApp $ HH.text ""
+    Just ui ->
+      let
+        uiSlot = HH.slot' cp4 unit UserMenu.comp ui absurd
+        overviewButton = HH.button
+          [ HE.onClick $ HE.input_ ToOverview
+          , HP.class_ (H.ClassName "navigation__button")
+          ]
+          [ faIcon_ "th-large"
+          , HH.text " Projects"
+          ]
+      in
+        case st.view of
+          R.ProjectOverview -> app
+            [ uiSlot ]
+            [ ]
+            (HH.slot' cp2 unit PO.comp unit absurd)
+          R.ProjectDetail p ->
+            HH.slot' cp1 unit Project.comp (Project.Input ui p) absurd
+          R.ChangePassword -> app
+            [ overviewButton
+            , uiSlot
+            ]
+            [ ]
+            (HH.slot' cp3 unit ChangePw.comp unit absurd)
 
   eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot Void Herc
   eval (Initialize next) = do
@@ -76,4 +104,8 @@ comp = H.lifecycleParentComponent
     
   eval (Goto view next) = do
     modify _{ view = view }
+    pure next
+
+  eval (ToOverview next) = do
+    gotoRoute $ R.LoggedIn R.ProjectOverview
     pure next
