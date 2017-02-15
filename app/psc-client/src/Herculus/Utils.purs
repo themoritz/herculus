@@ -1,11 +1,14 @@
 module Herculus.Utils where
 
 import Herculus.Prelude
+import Data.Map as Map
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 import DOM.HTML.Indexed (HTMLdiv)
 import Data.Array (length, zip, (..))
+import Data.Lens (Iso', iso)
+import Data.Map (Map)
 
 cldiv_ :: forall p i. String -> Array (HH.HTML p i) -> HH.HTML p i
 cldiv_ cls = HH.div
@@ -26,3 +29,10 @@ faIcon_ icon = HH.i
 
 mkIndexed :: forall a. Array a -> Array (Tuple Int a)
 mkIndexed xs = zip (0 .. length xs) xs
+
+-- | A version of `non` specialized to `Map.empty` that does not require the
+-- | `Eq` instance.
+nonEmpty :: forall k v. Iso' (Maybe (Map k v)) (Map k v)
+nonEmpty = iso (fromMaybe Map.empty) g
+  where g m | Map.isEmpty m = Nothing
+            | otherwise     = Just m

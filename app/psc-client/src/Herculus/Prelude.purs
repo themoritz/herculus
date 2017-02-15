@@ -9,6 +9,7 @@ module Herculus.Prelude
   , module Control.Monad.Aff.Class
   , module Control.Monad.Eff.Class
   , module Control.Monad.State.Class
+  , module Control.Monad.Writer.Class
   , module Control.Monad.Error.Class
   , module Control.Monad.Except
   , module Control.Monad.Maybe.Trans
@@ -39,6 +40,7 @@ import Control.Monad.Eff (Eff)
 import Control.Monad.Aff.Class (class MonadAff, liftAff)
 import Control.Monad.Eff.Class (class MonadEff, liftEff)
 import Control.Monad.State.Class (class MonadState, modify, get, put, gets)
+import Control.Monad.Writer.Class (class MonadWriter, tell)
 import Control.Monad.Error.Class (class MonadError, throwError, catchError)
 import Control.Monad.Except (ExceptT(..), runExcept, runExceptT, except)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
