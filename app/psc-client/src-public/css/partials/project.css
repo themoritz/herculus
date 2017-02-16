@@ -35,3 +35,54 @@
     border-color: color($anthrazit lightness(-7%));
   }
 }
+
+.table-list {
+  position: absolute;
+  bottom: 5px;
+  left: 0px;
+  right: 0px;
+  height: 32px;
+
+  /* Add table */
+  input {
+    margin-left: 10px;
+    margin-top: 2px;
+  }
+}
+
+.table-list__item {
+  float: left;
+  font-weight: bold;
+  padding: 4px 10px;
+  height: 100%;
+  cursor: pointer;
+  color: $gray;
+  display: inline-block;
+  box-sizing: border-box;
+  transition-property: color;
+  transition-duration: 75ms;
+  input {
+    margin-left: 0px;
+    margin-top: -1px;
+  }
+  button {
+    font-size: 11px;
+    padding-right: 0px;
+    margin-left: 5px;
+    vertical-align: middle;
+  }
+  &:hover {
+    color: $brand-light;
+  }
+}
+
+.table-list__item--selected {
+  color: $brand-light;
+  background-color: color($anthrazit lightness(+5%));
+  border-top-right-radius: 2px;
+  border-top-left-radius: 2px;
+  span {
+    margin-right: 10px;
+  }
+}
+

@@ -1,34 +1,37 @@
 module Herculus.Project where
 
 import Herculus.Prelude
+import Data.Map as Map
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Herculus.Notifications.Types as N
+import Herculus.Project.TableList as TL
 import Herculus.Router as R
 import Herculus.UserMenu as UserMenu
 import Herculus.WebSocket as WS
 import Control.Monad.State (execState, runState)
 import Control.Monad.Writer (execWriterT)
 import DOM.Event.KeyboardEvent (code)
-import Data.Lens (Lens', _Just, lens, view, (.=))
+import Data.Array (head)
+import Data.Lens (Lens', _Just, lens, use, view, (.=))
 import Data.Maybe.First (First(..))
 import Data.String (length)
-import Debug.Trace (traceAny, traceAnyM)
-import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2)
+import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3)
 import Herculus.Monad (Herc, getAuthToken, gotoRoute, notify, withApi)
 import Herculus.Project.Data (Diff, ProjectData, applyDiff, mkProjectData, prepare)
+import Herculus.Project.TableList (Output(..))
 import Herculus.Utils (cldiv_, faIcon_)
 import Herculus.Utils.Templates (app)
-import Lib.Api.Rest (deleteProjectDeleteByProjectId, getProjectLoadByProjectId, postProjectSetNameByProjectId) as Api
+import Lib.Api.Rest (postProjectRunCommandByProjectId, deleteProjectDeleteByProjectId, getProjectLoadByProjectId, postProjectSetNameByProjectId) as Api
 import Lib.Api.Schema.Auth (UserInfo)
 import Lib.Api.Schema.Column (Column)
-import Lib.Api.Schema.Project (Project(..), projectName)
+import Lib.Api.Schema.Project (Command, Project(..), projectId, projectName)
 import Lib.Api.Schema.Project (ProjectData(..)) as Api
 import Lib.Api.WebSocket (WsDownMessage(..), WsUpMessage(..))
 import Lib.Custom (Id, ProjectTag)
-import Lib.Model (Entity)
+import Lib.Model (Entity(..))
 import Lib.Model.Cell (Cell)
 import Lib.Model.Row (Row)
 import Lib.Model.Table (Table)
@@ -43,6 +46,7 @@ data Query a
   | SaveName a
   | DeleteProject a
   | ToOverview a
+  | RunCommand Command a
   | HandleWebSocket (WS.Output WsDownMessage) a
   | ApplyDiff (Diff (Entity Cell))
               (Diff Column)
@@ -55,7 +59,7 @@ data Input = Input UserInfo R.Project
 type State =
   { projectData :: ProjectData
   , view :: Maybe (Id Table)
-  , projectId :: Id ProjectTag
+  , projId :: Id ProjectTag
   , _project :: Maybe Project
   , userInfo :: UserInfo
   , disconnected :: Boolean
@@ -68,9 +72,11 @@ project = lens _._project _{ _project = _ }
 type ChildQuery =
   UserMenu.Query <\/>
   WS.Query WsUpMessage <\/>
+  TL.Query <\/>
   Const Void
 
 type ChildSlot =
+  Unit \/
   Unit \/
   Unit \/
   Void
@@ -91,7 +97,7 @@ comp = H.lifecycleParentComponent
   initialState (Input ui (R.Project p mT)) =
     { projectData: mkProjectData
     , view: mT
-    , projectId: p
+    , projId: p
     , _project: Nothing
     , userInfo: ui
     , disconnected: false
@@ -110,8 +116,6 @@ comp = H.lifecycleParentComponent
         ]
 
       body = HH.text "Body"
-
-      tables = HH.text "tables"
 
       projectName = cldiv_ "project-name" case st._project, st.tmpProjectName of
         Just (Project p), Nothing ->
@@ -154,17 +158,24 @@ comp = H.lifecycleParentComponent
           false -> HH.text ""
       , overviewButton
       , HH.slot' cp1 unit UserMenu.comp st.userInfo absurd
-      , HH.slot' cp2 unit WS.comp unit (Just <<< H.action <<< HandleWebSocket)
+      , HH.slot' cp2 unit WS.comp unit
+                 (Just <<< H.action <<< HandleWebSocket)
       ]
-      [ tables
+      [ HH.slot' cp3 unit TL.comp
+                 { tables: st.projectData._pdTables
+                 , selected: st.view
+                 }
+                 case _ of
+                   Command c -> Just (H.action (RunCommand c))
+                   SelectTable t -> Just (H.action (OpenTable t))
       , projectName
       ]
       body
 
   eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot Void Herc
   eval (Initialize next) = do
-    { userInfo, projectId, view } <- get
-    update userInfo projectId view
+    { userInfo, projId, view } <- get
+    update userInfo projId view
     pure next
 
   eval (Update (Input ui (R.Project p mT)) next) = do
@@ -172,7 +183,9 @@ comp = H.lifecycleParentComponent
     pure next
 
   eval (OpenTable i next) = do
-    modify _{ view = Just i }
+    { projId } <- get
+    gotoRoute $
+      R.LoggedIn $ R.ProjectDetail $ R.Project projId (Just i)
     pure next
 
   eval (StartEditName next) = do
@@ -191,18 +204,18 @@ comp = H.lifecycleParentComponent
     pure next
 
   eval (SaveName next) = do
-    { projectId, tmpProjectName } <- get
+    { projId, tmpProjectName } <- get
     case tmpProjectName of
       Nothing -> pure unit
       Just name -> when (length name > 0) $
-        withApi (Api.postProjectSetNameByProjectId name projectId) \_ -> do
+        withApi (Api.postProjectSetNameByProjectId name projId) \_ -> do
           project <<< _Just <<< projectName .= name
           modify _{ tmpProjectName = Nothing }
     pure next
 
   eval (DeleteProject next) = do
-    { projectId } <- get
-    withApi (Api.deleteProjectDeleteByProjectId projectId) \_ ->
+    { projId } <- get
+    withApi (Api.deleteProjectDeleteByProjectId projId) \_ ->
       gotoRoute $ R.LoggedIn R.ProjectOverview
     pure next
 
@@ -214,7 +227,7 @@ comp = H.lifecycleParentComponent
     case output of
       WS.Opened -> do
         modify _{ disconnected = false }
-        i <- gets _.projectId
+        i <- gets _.projId
         getAuthToken >>= case _ of
           Nothing -> gotoRoute R.LogIn
           Just token -> do
@@ -229,12 +242,14 @@ comp = H.lifecycleParentComponent
             , message: "Could not subscribe to project updates."
             , detail: Just e
             }
-        WsDownProjectDiff projectId cellDiff columnDiff rowDiff tableDiff -> do
+        WsDownProjectDiff _ cellDiff columnDiff rowDiff tableDiff -> do
           { view, projectData } <- get
           let
             m = applyDiff view tableDiff columnDiff rowDiff cellDiff
           case runState (execWriterT m) projectData of
-            Tuple (First newView) newProjectData ->
+            Tuple (First action) newProjectData -> do
+              oldView <- gets _.view
+              let newView = action <|> oldView
               modify _
                 { view = newView
                 , projectData = newProjectData
@@ -244,21 +259,33 @@ comp = H.lifecycleParentComponent
   eval (ApplyDiff cellDiff columnDiff rowDiff tableDiff next) = do
     pure next
 
+  eval (RunCommand cmd next) = do
+    p <- gets _.projId
+    withApi (Api.postProjectRunCommandByProjectId cmd p) (const $ pure unit)
+    pure next
+
   update
     :: UserInfo
     -> Id ProjectTag
     -> Maybe (Id Table)
     -> H.ParentDSL State Query ChildQuery ChildSlot Void Herc Unit
-  update ui p mT =
-    withApi (Api.getProjectLoadByProjectId p) \(Api.ProjectData pd) ->
-      modify _
+  update ui p mT = do
+    currentProjectId <- gets \st -> map (view projectId) st._project
+    case Just p == currentProjectId of
+      false -> withApi (Api.getProjectLoadByProjectId p) \(Api.ProjectData pd) -> do
+        let firstTable = (\(Entity e) -> e.entityId) <$> head pd._pdTables 
+        modify _
+          { view = mT <|> firstTable
+          , projId = p
+          , userInfo = ui
+          , _project = Just pd._pdProject
+          , projectData =
+              let
+                m = prepare pd._pdTables pd._pdColumns pd._pdRows pd._pdCells
+              in
+                execState m mkProjectData
+          }
+      true -> modify _
         { view = mT
-        , projectId = p
         , userInfo = ui
-        , _project = Just pd._pdProject
-        , projectData =
-            let
-              m = prepare pd._pdTables pd._pdColumns pd._pdRows pd._pdCells
-            in
-              execState m mkProjectData
         }
