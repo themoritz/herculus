@@ -9,19 +9,23 @@ import Herculus.Notifications.Types as N
 import Herculus.Router as R
 import Herculus.UserMenu as UserMenu
 import Herculus.WebSocket as WS
-import Lib.Api.Rest as Api
-import Control.Monad.State (runState)
+import Control.Monad.State (execState, runState)
 import Control.Monad.Writer (execWriterT)
-import Data.Lens (Lens', _Just, lens, (.=))
+import DOM.Event.KeyboardEvent (code)
+import Data.Lens (Lens', _Just, lens, view, (.=))
 import Data.Maybe.First (First(..))
+import Data.String (length)
+import Debug.Trace (traceAny, traceAnyM)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2)
 import Herculus.Monad (Herc, getAuthToken, gotoRoute, notify, withApi)
-import Herculus.Project.Data (Diff, ProjectData, applyDiff, mkProjectData)
-import Herculus.Utils (faIcon_)
+import Herculus.Project.Data (Diff, ProjectData, applyDiff, mkProjectData, prepare)
+import Herculus.Utils (cldiv_, faIcon_)
 import Herculus.Utils.Templates (app)
+import Lib.Api.Rest (deleteProjectDeleteByProjectId, getProjectLoadByProjectId, postProjectSetNameByProjectId) as Api
 import Lib.Api.Schema.Auth (UserInfo)
 import Lib.Api.Schema.Column (Column)
-import Lib.Api.Schema.Project (Project, projectName)
+import Lib.Api.Schema.Project (Project(..), projectName)
+import Lib.Api.Schema.Project (ProjectData(..)) as Api
 import Lib.Api.WebSocket (WsDownMessage(..), WsUpMessage(..))
 import Lib.Custom (Id, ProjectTag)
 import Lib.Model (Entity)
@@ -30,9 +34,14 @@ import Lib.Model.Row (Row)
 import Lib.Model.Table (Table)
 
 data Query a
-  = Update Input a
+  = Initialize a
+  | Update Input a
   | OpenTable (Id Table) a
+  | StartEditName a
+  | CancelEditName a
   | SetName String a
+  | SaveName a
+  | DeleteProject a
   | ToOverview a
   | HandleWebSocket (WS.Output WsDownMessage) a
   | ApplyDiff (Diff (Entity Cell))
@@ -50,6 +59,7 @@ type State =
   , _project :: Maybe Project
   , userInfo :: UserInfo
   , disconnected :: Boolean
+  , tmpProjectName :: Maybe String
   }
 
 project :: Lens' State (Maybe Project)
@@ -66,11 +76,13 @@ type ChildSlot =
   Void
 
 comp :: H.Component HH.HTML Query Input Void Herc
-comp = H.parentComponent
+comp = H.lifecycleParentComponent
   { initialState
   , render
   , eval
   , receiver: Just <<< H.action <<< Update
+  , initializer: Just (H.action Initialize)
+  , finalizer: Nothing
   }
 
   where
@@ -83,6 +95,7 @@ comp = H.parentComponent
     , _project: Nothing
     , userInfo: ui
     , disconnected: false
+    , tmpProjectName: Nothing
     }
 
   render :: State -> H.ParentHTML Query ChildQuery ChildSlot Herc
@@ -95,9 +108,45 @@ comp = H.parentComponent
         [ faIcon_ "th-large"
         , HH.text " Projects"
         ]
+
       body = HH.text "Body"
+
       tables = HH.text "tables"
-      projectName = HH.text "project"
+
+      projectName = cldiv_ "project-name" case st._project, st.tmpProjectName of
+        Just (Project p), Nothing ->
+          [ HH.span_
+            [ HH.text (p._projectName) ]
+          , HH.text " "
+          , HH.button
+            [ HP.class_ (H.ClassName "button--pure  button--on-dark")
+            , HP.title "Change project name"
+            , HE.onClick (HE.input_ StartEditName)
+            ]
+            [ faIcon_ "pencil" ]
+          , HH.button
+            [ HP.class_ (H.ClassName "button--pure  button--on-dark")
+            , HP.title "Delete project (careful!)"
+            , HE.onClick (HE.input_ DeleteProject)
+            ]
+            [ faIcon_ "times" ]
+          ]
+        _, Just name ->
+          [ HH.input
+            [ HP.value name
+            , HP.class_ (H.ClassName "header-input")
+            , HP.autofocus true
+            , HE.onValueInput (HE.input SetName)
+            , HE.onKeyDown \e -> case code e of
+                "Enter"  -> Just (H.action SaveName)
+                "Escape" -> Just (H.action CancelEditName)
+                _        -> Nothing
+            -- TODO: investigate DOMException
+            -- , HE.onBlur (HE.input_ CancelEditName)
+            ]
+          ]
+        _, _ -> []
+
     in
       app
       [ case st.disconnected of
@@ -113,17 +162,48 @@ comp = H.parentComponent
       body
 
   eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot Void Herc
+  eval (Initialize next) = do
+    { userInfo, projectId, view } <- get
+    update userInfo projectId view
+    pure next
+
   eval (Update (Input ui (R.Project p mT)) next) = do
+    update ui p mT
     pure next
 
   eval (OpenTable i next) = do
     modify _{ view = Just i }
     pure next
 
+  eval (StartEditName next) = do
+    p <- gets _._project
+    modify _
+      { tmpProjectName = view projectName <$> p
+      }
+    pure next
+
+  eval (CancelEditName next) = do
+    modify _{ tmpProjectName = Nothing }
+    pure next
+
   eval (SetName name next) = do
+    modify _{ tmpProjectName = Just name }
+    pure next
+
+  eval (SaveName next) = do
+    { projectId, tmpProjectName } <- get
+    case tmpProjectName of
+      Nothing -> pure unit
+      Just name -> when (length name > 0) $
+        withApi (Api.postProjectSetNameByProjectId name projectId) \_ -> do
+          project <<< _Just <<< projectName .= name
+          modify _{ tmpProjectName = Nothing }
+    pure next
+
+  eval (DeleteProject next) = do
     { projectId } <- get
-    withApi (Api.postProjectSetNameByProjectId name projectId) \_ ->
-      project <<< _Just <<< projectName .= name
+    withApi (Api.deleteProjectDeleteByProjectId projectId) \_ ->
+      gotoRoute $ R.LoggedIn R.ProjectOverview
     pure next
 
   eval (ToOverview next) = do
@@ -163,3 +243,22 @@ comp = H.parentComponent
 
   eval (ApplyDiff cellDiff columnDiff rowDiff tableDiff next) = do
     pure next
+
+  update
+    :: UserInfo
+    -> Id ProjectTag
+    -> Maybe (Id Table)
+    -> H.ParentDSL State Query ChildQuery ChildSlot Void Herc Unit
+  update ui p mT =
+    withApi (Api.getProjectLoadByProjectId p) \(Api.ProjectData pd) ->
+      modify _
+        { view = mT
+        , projectId = p
+        , userInfo = ui
+        , _project = Just pd._pdProject
+        , projectData =
+            let
+              m = prepare pd._pdTables pd._pdColumns pd._pdRows pd._pdCells
+            in
+              execState m mkProjectData
+        }

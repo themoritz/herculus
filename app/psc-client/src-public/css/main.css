@@ -1,6 +1,7 @@
 @import "partials/notifications";
 @import "partials/auth";
 @import "partials/projectoverview";
+@import "partials/project";
 @import "partials/layout";
 @import "partials/controls";
 @import "partials/menu";

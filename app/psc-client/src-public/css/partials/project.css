@@ -1,0 +1,37 @@
+@import "../modules/colors";
+@import "../modules/dimensions";
+
+.project-name {
+  position: absolute;
+  top: 10px;
+  left: calc($titleWidth + $titlePaddingLeft);
+  right: 200px;
+  color: $medium-gray;
+  text-transform: capitalize;
+  text-align: center;
+  font-size: 22px;
+  button {
+    vertical-align: middle;
+    font-size: 12px;
+    color: $gray;
+    margin-left: 5px;
+  }
+}
+
+.header-input {
+  box-sizing: border-box;
+  background: color($anthrazit lightness(+3%));
+  border: 1px solid color($anthrazit lightness(-3%));
+  border-radius: 2px;
+  font-size: inherit;
+  outline: none;
+  padding: 4px 5px 1px 5px;
+  color: white;
+  width: 110px;
+  transition-property: width, border-color;
+  transition-duration: 200ms;
+  &:focus {
+    width: 200px;
+    border-color: color($anthrazit lightness(-7%));
+  }
+}
