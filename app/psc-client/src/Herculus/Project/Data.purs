@@ -6,6 +6,7 @@ import Data.Generic (gCompare, gEq)
 import Data.Lens (Lens', _1, _2, _Just, lens, use, (.=))
 import Data.Lens.At (at)
 import Data.Map (Map)
+import Data.Maybe.First (First(..))
 import Herculus.Utils (nonEmpty)
 import Lib.Api.Schema.Column (Column, columnId, columnTableId)
 import Lib.Custom (ColumnTag, Id)
@@ -115,11 +116,9 @@ prepare tables columns rows cells = do
     pdTables <<< at tableId <<< _Just
              <<< descColumns <<< at (column ^. columnId) .= Just column
 
-type Action = Maybe (Id Table)
-
 applyDiff
   :: forall m
-   . (MonadState ProjectData m, MonadWriter (Array Action) m)
+   . (MonadState ProjectData m, MonadWriter (First (Id Table)) m)
   => Maybe (Id Table)
   -> Diff (Entity Table)
   -> Diff Column
@@ -140,7 +139,7 @@ applyDiff currentTable tableDiff columnDiff rowDiff cellDiff = do
         -- Go to new table if currently viewing none
         case currentTable of
           Just _  -> pure unit
-          Nothing -> tell [Just tableId]
+          Nothing -> tell $ First $ Just tableId
       Update -> tableLens <<< _Just <<< descTable .= table
       Delete -> do
         tableLens .= Nothing
@@ -151,9 +150,9 @@ applyDiff currentTable tableDiff columnDiff rowDiff cellDiff = do
                        <|> Map.lookupGT tableId tables
         case mNextTableId of
           Nothing ->
-            tell [Nothing]
+            tell $ First Nothing
           Just next ->
-            tell [Just next.key]
+            tell $ First $ Just next.key
   -- Cells
   for_ cellDiff $ \(Tuple op (Entity c)) -> do
     let cell = c.entityVal

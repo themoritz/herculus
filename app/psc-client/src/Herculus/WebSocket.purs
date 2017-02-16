@@ -32,6 +32,7 @@ type Vars =
   , connection :: Ref (Maybe WS.Connection)
   , open :: AVar Unit
   , closed :: Ref Boolean
+  , dead :: Ref Boolean
   }
 
 type State = Maybe Vars
@@ -41,11 +42,11 @@ data Output mo
   | Closed
   | Message mo
 
-webSocket
+comp
   :: forall mi mo
    . (Generic mi, Generic mo)
   => H.Component HH.HTML (Query mi) Unit (Output mo) Herc
-webSocket = H.lifecycleComponent
+comp = H.lifecycleComponent
   { initialState: const Nothing
   , receiver: const Nothing
   , render: const (HH.text "")
@@ -60,19 +61,21 @@ webSocket = H.lifecycleComponent
   eval (Initialize next) = do
     queue <- liftAff makeVar
     open <- liftAff makeVar
-    conn <- liftEff $ newRef Nothing
+    connection <- liftEff $ newRef Nothing
     closed <- liftEff $ newRef true
+    dead <- liftEff $ newRef false
     put $ Just
-      { queue: queue
-      , open: open
-      , connection: conn
-      , closed: closed
+      { queue
+      , open
+      , connection
+      , closed
+      , dead
       }
     -- Consume message queue
     liftAff $ forkAff $ forever do
       m <- peekVar queue
       peekVar open
-      mConn <- liftEff $ readRef conn
+      mConn <- liftEff $ readRef connection
       case mConn of
         Nothing -> pure unit
         Just (WS.Connection socket) -> do
@@ -88,7 +91,9 @@ webSocket = H.lifecycleComponent
         mConn <- liftEff $ readRef vars.connection
         case mConn of
           Nothing -> pure unit
-          Just (WS.Connection socket) -> liftEff socket.close
+          Just (WS.Connection socket) -> liftEff do
+            writeRef vars.dead true
+            socket.close
     pure next
 
   eval (Connect next) = do
@@ -163,6 +168,8 @@ wsService url vars = do
                   liftEff $ writeRef vars.closed true
       writeRef vars.connection Nothing
       emit (Left (OnClose ES.Listening))
-      runAff' $ later' 1000 $
-        liftEff $ emit (Left (Connect ES.Done))
+      dead <- liftEff $ readRef vars.dead
+      unless dead $ void $
+        runAff' $ later' 1000 $
+          liftEff $ emit (Left (Connect ES.Done))
       pure unit
