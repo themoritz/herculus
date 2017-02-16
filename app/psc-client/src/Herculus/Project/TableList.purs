@@ -126,8 +126,9 @@ comp = H.component
 
   eval (CreateNew next) = do
     { newTableName } <- get
-    when (length newTableName > 0) $
+    when (length newTableName > 0) $ do
       H.raise $ Command $ CmdTableCreate newTableName
+      modify _{ newTableName = "" }
     pure next
 
   eval (StartEdit t next) = do
