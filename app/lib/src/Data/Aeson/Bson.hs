@@ -26,7 +26,9 @@ import           Numeric
 instance ToJSON Bson.Value where
   toJSON = aesonifyValue
 
-instance ToJSON Bson.Document where
+-- Compiler thinks this overlaps with `ToJSON a => ToJSON [a]`, but `Bson.Field`
+-- has no `ToJSON` instance.
+instance {-# OVERLAPPING #-} ToJSON Bson.Document where
   toJSON = Aeson.Object . toAeson
 
 class ToJSON a => ToBSON a where
@@ -53,7 +55,7 @@ bsonifyValue (Aeson.Array array) = Bson.Array $
   map bsonifyValue $ Vector.toList array
 bsonifyValue (Aeson.String str) = Bson.String str
 bsonifyValue (Aeson.Number n) = case floatingOrInteger n of
-  Left f -> Bson.Float f
+  Left f  -> Bson.Float f
   Right i -> Bson.Int64 $ fromIntegral (i :: Integer)
 bsonifyValue (Aeson.Bool b) = Bson.Bool b
 bsonifyValue Aeson.Null = Bson.Null

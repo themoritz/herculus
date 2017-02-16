@@ -3,6 +3,7 @@ module Options
   , getOptions
   ) where
 
+import           Data.Monoid         ((<>))
 import           Data.Text           (Text)
 import qualified Data.Text           as Text
 import           Network.Socket      (HostName)

@@ -32,7 +32,6 @@ import qualified Network.Mail.Mime              as Mail
 import           Servant
 import           System.Entropy                 (getEntropy)
 import qualified Text.Pandoc                    as Pandoc
-import qualified Text.Pandoc.Error              as Pandoc
 
 import           Lib.Api.Rest
 import qualified Lib.Api.Schema.Auth            as Api
@@ -354,8 +353,7 @@ handleCellGetReportPDF columnId rowId = do
               "Could not load latex template: " <> pack msg
             Right template -> pure template
           let options = Pandoc.def
-                { Pandoc.writerStandalone = True
-                , Pandoc.writerTemplate = template
+                { Pandoc.writerTemplate = Just template
                 , Pandoc.writerVariables =
                   [ ("papersize", "A4")
                   , ("fontsize", "12pt")
@@ -390,8 +388,7 @@ handleCellGetReportHTML columnId rowId = do
               ErrBug $ "Could not load html5 template: " <> pack msg
             Right template -> pure template
           let options = Pandoc.def
-                { Pandoc.writerStandalone = True
-                , Pandoc.writerTemplate = template
+                { Pandoc.writerTemplate = Just template
                 , Pandoc.writerVariables =
                   [ ("pagetitle", unpack (col ^. columnName))
                   , ("title-prefix", "Report")

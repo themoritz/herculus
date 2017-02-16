@@ -20,17 +20,13 @@ import qualified Lib.Model.Table       as M
 import           Lib.Types
 
 data WsUpMessage
-  = WsUpAuthenticate M.SessionKey
-  | WsUpLogout
-  | WsUpSubscribe (Id M.Project)
-  | WsUpUnsubscribe
+  = WsUpSubscribe M.SessionKey (Id M.Project)
   deriving (Generic, ToJSON, FromJSON, Show)
 
 type Diff a = [(ChangeOp, a)]
 
 data WsDownMessage
-  = WsDownAuthResponse GetUserInfoResponse
-  | WsDownSubscribeError Text
+  = WsDownSubscribeError Text
   | WsDownProjectDiff (Id M.Project)
                       (Diff (Entity M.Cell))
                       (Diff Column)
