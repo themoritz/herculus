@@ -170,6 +170,6 @@ wsService url vars = do
       emit (Left (OnClose ES.Listening))
       dead <- liftEff $ readRef vars.dead
       unless dead $ void $
-        runAff' $ later' 1000 $
+        runAff' $ later' 10000 $
           liftEff $ emit (Left (Connect ES.Done))
       pure unit
