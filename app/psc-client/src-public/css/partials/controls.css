@@ -1,3 +1,20 @@
+@import "../modules/colors";
+
+a, span.link {
+  color: $link;
+  cursor: pointer;
+  text-decoration: none;
+  transition-property: color;
+  transition-duration: 100ms;
+  &:hover {
+    color: $link-hover;
+  }
+}
+
+a.active, span.active {
+  font-weight: bold;
+}
+
 .header-input {
   box-sizing: border-box;
   background: lighten($anthrazit, 3%);
@@ -16,12 +33,33 @@
   }
 }
 
-button {
-  cursor: pointer;
-  outline: none;
+.select, .button {
+  border: 1px solid color($medium-gray lightness(-8%));
   border-radius: 2px;
+  background: $medium-gray;
+  box-shadow: 0px 0px 2px 0px color($medium-gray lightness(-5%));
+  color: $anthrazit;
+  outline: none;
 }
 
+.button {
+  &:active {
+    transform: translate(1px, 1px);
+  }
+  &:hover {
+    box-shadow: 0px 0px 2px 0px color($medium-gray lightness(-15%));
+    color: black;
+  }
+  cursor: pointer;
+}
+
+.select {
+  width: 100%;
+  font-size: inherit;
+  background: $light-gray;
+  border-radius: 2px;
+  outline: none;
+}
 
 .button--pure {
   box-shadow: none;
@@ -35,8 +73,6 @@ button {
   transition-duration: 100ms;
   &:hover {
     color: $link-hover;
-  }
-  &:hover {
     transform: none;
   }
   cursor: pointer;

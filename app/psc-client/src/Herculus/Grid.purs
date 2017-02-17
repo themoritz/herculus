@@ -18,7 +18,7 @@ import Data.Map (Map)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5)
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (Coords(..), RowCache)
-import Herculus.Utils (cldiv_, faButton_, mkIndexed)
+import Herculus.Utils (Options, cldiv_, faButton_, mkIndexed)
 import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), columnId, columnKind)
 import Lib.Api.Schema.Project (Command(CmdReportColCreate, CmdDataColCreate, CmdRowCreate, CmdCellSet, CmdDataColUpdate, CmdReportColUpdate, CmdColumnDelete, CmdColumnSetName, CmdRowDelete))
 import Lib.Custom (ColumnTag, Id, ProjectTag)
@@ -37,7 +37,7 @@ type Input =
   { cells :: Map Coords CellContent
   , cols :: Array Column
   , rows :: Array (Tuple (Id Row) Row)
-  , tables :: Map (Id Table) String
+  , tables :: Options (Id Table)
   , rowCache :: RowCache
   , tableId :: Id Table
   , projectId :: Id ProjectTag

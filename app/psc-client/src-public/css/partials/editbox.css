@@ -15,24 +15,26 @@
 }
 
 .editbox {
-  position: relative;
-  border: 1px solid transparent;
-  box-sizing: border-box;
-  height: 100%;
-  padding: 1px;
-  cursor: pointer;
-  &:hover {
-    border: 1px solid color($medium-gray lightness(-5%));
-    &:after {
-      position: absolute;
-      right: 0px;
-      top: 0px;
-      font-size: 8pt;
-      background-color: color($medium-gray lightness(-5%));
-      color: white;
-      padding: 2px 3px;
-      font-family: "FontAwesome";
-      content: "\f040"; /* fa-pencil */
+  div {
+    position: relative;
+    border: 1px solid transparent;
+    box-sizing: border-box;
+    height: 100%;
+    padding: 1px;
+    cursor: pointer;
+    &:hover {
+      border: 1px solid color($medium-gray lightness(-5%));
+      &:after {
+        position: absolute;
+        right: 0px;
+        top: 0px;
+        font-size: 8pt;
+        background-color: color($medium-gray lightness(-5%));
+        color: white;
+        padding: 2px 3px;
+        font-family: "FontAwesome";
+        content: "\f040"; /* fa-pencil */
+      }
     }
   }
 }

@@ -1,0 +1,189 @@
+@import "../modules/colors";
+
+$dataTypeWidth: 110px;
+$formulaWidth: 540px;
+$diagLeft: 180px;
+$openWidth: 45px;
+
+.column-head {
+  position: absolute;
+  left: 0px;
+  right: $openWidth;
+  top: 0px;
+  bottom: 0px;
+  padding: 5px;
+}
+
+.column-head__info {
+  padding-left: 3px;
+  overflow: hidden;
+  white-space: nowrap;
+  color: gray;
+  font-size: smaller;
+  .fa {
+    margin-right: 5px;
+  }
+}
+
+.column-config {
+  position: absolute;
+  right: 0px;
+  top: 0px;
+  bottom: 0px;
+  width: $openWidth;
+  box-sizing: border-box;
+  padding: 11px;
+  padding-top: 15px;
+}
+
+.column-config__open-icon {
+  color: $link;
+  padding: 0px;
+  transition-property: color;
+  transition-duration: 100ms;
+  &:hover {
+    color: $brand-dark;
+  }
+}
+
+.column-config__open-icon--error {
+  color: color(red saturation(-40%));
+}
+
+.column-popup {
+  position: absolute;
+  left: -$diagLeft;
+  top: 60px;
+  z-index: 10;
+  background-color: white;
+  border-radius: 4px;
+  border: 1px solid lightgray;
+  box-shadow: 0px 0px 20px 0px lightgray;
+  &:before {
+    content: "";
+    position: absolute;
+    background-color: white;
+    width: 20px;
+    height: 20px;
+    -webkit-transform: rotate(45deg);
+    border-top: 1px solid lightgray;
+    border-left: 1px solid lightgray;
+    left: calc($diagLeft + 10px);
+    top: -11px;
+    box-shadow: 0px 0px 20px 0px lightgray;
+    z-index: -1;
+  }
+  .bodyWrapper {
+    border-radius: 4px;
+    z-index: 20;
+    max-height: 500px;
+    overflow-y: auto;
+    background-color: white;
+    .body {
+      display: table;
+      width: 100%;
+      box-sizing: border-box;
+      .datatype {
+        height: 100%;
+        width: $dataTypeWidth;
+        border-right: 1px solid $medium-gray;
+        box-sizing: border-box;
+        display: table-cell;
+        padding: 5px 5px 0px 5px;
+        .select {
+          margin-bottom: 5px;
+        }
+      }
+      .formula {
+        padding: 5px;
+        box-sizing: border-box;
+        height: 100%;
+        width: $formulaWidth;
+        display: table-cell;
+        .inputFormula {
+          border: 1px solid $medium-gray; 
+        }
+        .inputFormula.disabled {
+          opacity: 0.4;
+        }
+      }
+      .language {
+        height: 100%;
+        box-sizing: border-box;
+        display: table-cell;
+        padding: 5px;
+      }
+      .format {
+        height: 100%;
+        box-sizing: border-box;
+        display: table-cell;
+        padding: 5px;
+      }
+      .separator {
+        height: 100%;
+        box-sizing: border-box;
+        display: table-cell;
+        padding: 5px;
+        vertical-align: bottom;
+        text-align: center;
+      }
+    }
+  }
+  .inputTemplate {
+    border: 1px solid $medium-gray; 
+    margin: 5px;
+  }
+  .buttons {
+    padding: 5px;
+    background-color: $light-gray;
+    .left {
+      display: inline-block;
+      width: 50%;
+      font-size: smaller;
+      padding-left: 3px;
+      box-sizing: border-box;
+    }
+    .right {
+      display: inline-block;
+      width: 50%;
+      text-align: right;
+      .button {
+        font-weight: bold;
+        .fa {
+          color: green;
+          margin-right: 5px;
+        }
+      }
+      .delete {
+        margin-right: 5px;
+        .fa {
+          color: color(red saturation(-40%));
+        }
+      }
+    }
+  }
+}
+
+.column-popup--data {
+  width: calc($formulaWidth + $dataTypeWidth);
+}
+.column-popup--report {
+  width: 690px;
+}
+
+.column-popup__error {
+  background-color: color(red lightness(+40%));
+  margin: 0px;
+  padding: 5px;
+  font-size: small;
+}
+
+.column-popup__error-title {
+  color: color(red saturation(-20%));
+  font-weight: bold;
+}
+
+.column-popup__error-body {
+  color: black;
+}
+

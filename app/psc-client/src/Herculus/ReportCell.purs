@@ -31,7 +31,7 @@ comp = H.lifecycleComponent
     { input: _
     , getReportPath: Nothing
     }
-  , receiver: const Nothing
+  , receiver: Just <<< H.action <<< Update
   , initializer: Just (H.action Initialize)
   , finalizer: Nothing
   , render

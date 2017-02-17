@@ -6,8 +6,9 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import DOM.HTML.Indexed (HTMLdiv)
-import Data.Array (length, zip, (..))
+import DOM.HTML.Indexed (HTMLdiv, HTMLspan)
+import Data.Array (find, length, zip, (..))
+import Data.Generic (gShow)
 import Data.Lens (Iso', iso)
 import Data.Map (Map)
 
@@ -23,10 +24,20 @@ clspan_ :: forall p i. String -> Array (HH.HTML p i) -> HH.HTML p i
 clspan_ cls = HH.span
   [ HP.class_ (H.ClassName cls) ]
 
+clspan :: forall p i. String -> Array (HH.IProp HTMLspan i) -> Array (HH.HTML p i) -> HH.HTML p i
+clspan cls props = HH.span
+  ([ HP.class_ (H.ClassName cls) ] <> props)
+
 faIcon_ :: forall p i. String -> HH.HTML p i
 faIcon_ icon = HH.i
   [ HP.class_ (H.ClassName ("fa fa-" <> icon))]
   []
+
+clbutton_ :: forall p f. String -> H.Action f -> Array (HH.HTML p (f Unit)) -> HH.HTML p (f Unit)
+clbutton_ cls query = HH.button
+  [ HE.onClick (HE.input_ query)
+  , HP.class_ (H.ClassName cls)
+  ]
 
 faButton_ :: forall p f. String -> H.Action f -> HH.HTML p (f Unit)
 faButton_ icon query = HH.button
@@ -34,6 +45,31 @@ faButton_ icon query = HH.button
   , HP.class_ (H.ClassName "button--pure")
   ]
   [ faIcon_ (icon <> " fa-fw fa-lg") ]
+
+--------------------------------------------------------------------------------
+
+type Options a = Array
+  { value :: a
+  , label :: String
+  }
+
+dropdown
+  :: forall p f a
+   . Generic a
+  => String -> Options a -> a -> (a -> H.Action f) -> HH.HTML p (f Unit)
+dropdown cls options value query = HH.select
+  [ HP.class_ (H.ClassName cls)
+  , HE.onValueChange \val -> do
+      opt <- find (\o -> gShow o.value == val) options
+      pure (H.action $ query opt.value)
+  , HP.value (gShow value)
+  ]
+  ( options <#> \opt -> HH.option
+      [ HP.value (gShow opt.value) ]
+      [ HH.text opt.label ]
+  )
+
+--------------------------------------------------------------------------------
 
 mkIndexed :: forall a. Array a -> Array (Tuple Int a)
 mkIndexed xs = zip (0 .. length xs) xs

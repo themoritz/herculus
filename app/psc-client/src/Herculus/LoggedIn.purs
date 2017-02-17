@@ -15,8 +15,8 @@ import Lib.Api.Rest as Api
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
 import Herculus.Monad (Herc, gotoRoute, notify, withApi)
 import Herculus.Utils (faIcon_)
-import Herculus.Utils.Templates (app, appHeader, plainApp)
-import Lib.Api.Schema.Auth (GetUserInfoResponse(..), UserInfo(..))
+import Herculus.Utils.Templates (app, plainApp)
+import Lib.Api.Schema.Auth (GetUserInfoResponse(GetUserInfoFailed, GetUserInfoSuccess), UserInfo)
 
 
 data Query a

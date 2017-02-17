@@ -125,7 +125,8 @@ render st =
             { cells: st.projectData._pdCells
             , cols: map snd $ Map.toUnfoldable desc._descColumns
             , rows: Map.toUnfoldable desc._descRows
-            , tables: map (view (descTable <<< tableName)) st.projectData._pdTables
+            , tables: Map.toUnfoldable st.projectData._pdTables <#> \(Tuple i t) ->
+                { value: i, label: t ^. descTable <<< tableName }
             , rowCache: st.projectData._pdRowCache
             , tableId: t
             , projectId: st.projId
