@@ -7,10 +7,9 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Control.Monad.Aff.AVar (AVAR)
 import DOM.HTML.Types (HTMLElement)
-import Debug.Trace (traceAnyM)
 import Halogen.Query.HalogenM (halt)
 import Herculus.Monad (Herc)
-import Herculus.Utils (cldiv, cldiv_, faIcon_)
+import Herculus.Utils (cldiv_, faIcon_)
 
 data Query v a
   = Update (Input v) a

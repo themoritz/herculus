@@ -11,7 +11,7 @@
   left: 0px;
   top: $menubar-height;
   right: 0px;
-  bottom: $footer-height;
+  bottom: 0px;
 }
 
 .menubar {

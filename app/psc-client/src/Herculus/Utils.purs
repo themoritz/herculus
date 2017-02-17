@@ -4,6 +4,7 @@ import Herculus.Prelude
 import Data.Map as Map
 import Halogen as H
 import Halogen.HTML as HH
+import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import DOM.HTML.Indexed (HTMLdiv)
 import Data.Array (length, zip, (..))
@@ -26,6 +27,13 @@ faIcon_ :: forall p i. String -> HH.HTML p i
 faIcon_ icon = HH.i
   [ HP.class_ (H.ClassName ("fa fa-" <> icon))]
   []
+
+faButton_ :: forall p f. String -> H.Action f -> HH.HTML p (f Unit)
+faButton_ icon query = HH.button
+  [ HE.onClick (HE.input_ query)
+  , HP.class_ (H.ClassName "button--pure")
+  ]
+  [ faIcon_ (icon <> " fa-fw fa-lg") ]
 
 mkIndexed :: forall a. Array a -> Array (Tuple Int a)
 mkIndexed xs = zip (0 .. length xs) xs

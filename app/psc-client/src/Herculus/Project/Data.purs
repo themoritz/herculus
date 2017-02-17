@@ -23,7 +23,7 @@ derive instance genericCoords :: Generic Coords
 instance eqCoords :: Eq Coords where eq = gEq
 instance ordCoords :: Ord Coords where compare = gCompare
 
-type RowCache = Map (Id Row) (Map (Id ColumnTag) (Tuple Column CellContent))
+type RowCache = Map (Id Table) (Map (Id Row) (Map (Id ColumnTag) (Tuple Column CellContent)))
 
 --------------------------------------------------------------------------------
 
@@ -53,7 +53,7 @@ descRows = lens _._descRows _{ _descRows = _ }
 
 type ProjectData =
   { _pdCells :: Map Coords CellContent
-  , _pdRowCache :: Map (Id Table) RowCache
+  , _pdRowCache :: RowCache
   , _pdTables :: Map (Id Table) TableDesc
   }
 
@@ -67,7 +67,7 @@ mkProjectData =
 pdCells :: Lens' ProjectData (Map Coords CellContent)
 pdCells = lens _._pdCells _{ _pdCells = _ }
 
-pdRowCache :: Lens' ProjectData (Map (Id Table) RowCache)
+pdRowCache :: Lens' ProjectData RowCache
 pdRowCache = lens _._pdRowCache _{ _pdRowCache = _ }
 
 pdTables :: Lens' ProjectData (Map (Id Table) TableDesc)

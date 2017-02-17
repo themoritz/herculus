@@ -6,30 +6,39 @@ import Data.Map as Map
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.CSS as HC
-import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import Herculus.Column as Col
+import Herculus.DataCell as DataCell
+import Herculus.PopupMenu as Popup
+import Herculus.ReportCell as ReportCell
+import Herculus.Row as Row
 import Data.Array (length)
-import Data.Generic (gCompare, gEq)
 import Data.Int (toNumber)
 import Data.Map (Map)
+import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5)
 import Herculus.Monad (Herc)
-import Herculus.Project.Data (Coords(..))
-import Herculus.Utils (cldiv_)
-import Lib.Api.Schema.Column (Column(..))
-import Lib.Api.Schema.Project (Command, Project(..))
-import Lib.Custom (ColumnTag, Id(..), ProjectTag)
-import Lib.Model (Entity(..))
+import Herculus.Project.Data (Coords(..), RowCache)
+import Herculus.Utils (cldiv_, faButton_, mkIndexed)
+import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), columnId, columnKind)
+import Lib.Api.Schema.Project (Command(CmdReportColCreate, CmdDataColCreate, CmdRowCreate, CmdCellSet, CmdDataColUpdate, CmdReportColUpdate, CmdColumnDelete, CmdColumnSetName, CmdRowDelete))
+import Lib.Custom (ColumnTag, Id, ProjectTag)
 import Lib.Model.Cell (CellContent)
-import Lib.Model.Row (Row(..))
-import Lib.Model.Table (Table(..))
+import Lib.Model.Row (Row)
+import Lib.Model.Table (Table)
 
 data Query a
-  = Update a
+  = Update Input a
+  | SendCommand Command a
+  | AddRow a
+  | AddCol ColType a
+  | TogglePopup a
 
 type Input =
   { cells :: Map Coords CellContent
   , cols :: Array Column
   , rows :: Array (Tuple (Id Row) Row)
+  , tables :: Map (Id Table) String
+  , rowCache :: RowCache
   , tableId :: Id Table
   , projectId :: Id ProjectTag
   }
@@ -40,27 +49,47 @@ type State =
   { input :: Input
   }
 
+data ColType
+  = ReportCol
+  | DataCol
+
 type Child =
+  Row.Query <\/>
+  Col.Query <\/>
+  DataCell.Query <\/>
+  ReportCell.Query <\/>
+  Popup.Query ColType <\/>
   Const Void
 
-data Slot
-  = Row (Id Row)
-  | Column (Id ColumnTag)
-  | Cell (Id ColumnTag) (Id Row)
-
-derive instance genericSlot :: Generic Slot
-instance eqSlot :: Eq Slot where eq = gEq
-instance ordSlot :: Ord Slot where compare = gCompare
+type Slot =
+  Id Row \/
+  Id ColumnTag \/
+  Coords \/
+  Coords \/
+  Unit \/
+  Unit
 
 comp :: H.Component HH.HTML Query Input Output Herc
 comp = H.parentComponent
   { initialState:
       { input: _
       }
-  , receiver: const Nothing
+  , receiver: Just <<< H.action <<< Update
   , render
   , eval
   }
+
+popupEntries :: Array (Popup.Entry ColType)
+popupEntries =
+  [ { icon: "columns"
+    , label: "New data column"
+    , value: DataCol
+    }
+  , { icon: "file-text"
+    , label: "New report column"
+    , value: ReportCol
+    }
+  ]
 
 render :: State -> H.ParentHTML Query Child Slot Herc
 render st = cldiv_ "grid"
@@ -70,19 +99,82 @@ render st = cldiv_ "grid"
   , posDiv 0 (length st.input.rows * cellHeight + headHeight)
            delRowWidth addRowHeight
     [ cldiv_ "grid__row-new"
-      [ HH.text "new row"
+      [ faButton_ "plus-circle" AddRow
       ]
     ]
   -- Add col
   , posDiv (length st.input.cols * cellWidth + delRowWidth) 0
            addColWidth headHeight
     [ cldiv_ "grid__column-new"
-      [ HH.text "new col"
+      [ faButton_ "plus-circle" TogglePopup
+      , HH.slot' cp5 unit Popup.comp
+                 { entries: popupEntries
+                 , position: Popup.BelowRight
+                 }
+                 (Just <<< H.action <<< AddCol)
       ]
     ]
-  ])
+  ] <> rows <> cols <> cells)
 
   where
+
+  irows = mkIndexed st.input.rows
+  icols = mkIndexed st.input.cols
+
+  rows = irows <#> \(Tuple y (Tuple rowId row)) ->
+    posDiv 0 (y * cellHeight + headHeight)
+           delRowWidth cellHeight
+    [ cldiv_ "grid__row"
+      [ HH.slot' cp1 rowId Row.comp unit \Row.Delete ->
+          Just $ H.action $ SendCommand $ CmdRowDelete rowId
+      ]
+    ]
+
+  cols = icols <#> \(Tuple x col) ->
+    posDiv (x * cellWidth + delRowWidth) 0
+           cellWidth headHeight
+    [ cldiv_ "grid__column"
+      [ let
+          colId = col ^. columnId
+          input =
+            { column: col
+            , tables: st.input.tables
+            }
+          handler o = Just $ H.action $ SendCommand case o of
+            Col.SetName name -> CmdColumnSetName colId name
+            Col.Delete -> CmdColumnDelete colId
+            Col.SaveReportCol t f l -> CmdReportColUpdate colId t f l
+            Col.SaveDataCol dt d f -> CmdDataColUpdate colId dt d f
+        in
+          HH.slot' cp2 colId Col.comp input handler
+      ]
+    ]
+
+  cells = do
+    Tuple x col <- icols
+    Tuple y (Tuple rowId row) <- irows
+    let
+      colId = col ^. columnId
+      coords = Coords (col ^. columnId) rowId
+    pure $
+      posDiv (x * cellWidth + delRowWidth) (y * cellHeight + headHeight)
+             cellWidth cellHeight
+      [ cldiv_ "grid__cell"
+        [ case col ^. columnKind of
+            ColumnData dataCol ->
+              case Map.lookup coords st.input.cells of
+                Nothing      -> HH.text "cell not found!"
+                Just content ->
+                  let
+                    input = { content, dataCol }
+                    handler (DataCell.SetValue val) =
+                      Just $ H.action $ SendCommand $ CmdCellSet colId rowId val
+                  in
+                    HH.slot' cp3 coords DataCell.comp input handler
+            ColumnReport reportCol ->
+              HH.slot' cp4 coords ReportCell.comp { reportCol, coords } absurd
+        ]
+      ]
 
   headHeight = 54
   cellHeight = 37
@@ -105,5 +197,26 @@ render st = cldiv_ "grid"
 eval :: Query ~> H.ParentDSL State Query Child Slot Output Herc
 eval = case _ of
 
-  Update next ->
+  Update input next -> do
+    modify _{ input = input }
+    pure next
+
+  SendCommand cmd next -> do
+    H.raise cmd
+    pure next
+
+  AddRow next -> do
+    st <- get
+    H.raise $ CmdRowCreate st.input.tableId
+    pure next
+
+  AddCol colType next -> do
+    st <- get
+    H.raise $ case colType of
+      DataCol -> CmdDataColCreate st.input.tableId
+      ReportCol -> CmdReportColCreate st.input.tableId
+    pure next
+
+  TogglePopup next -> do
+    H.query' cp5 unit (H.action Popup.Toggle)
     pure next

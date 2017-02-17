@@ -1,30 +1,24 @@
-module Herculus.Column where
+module Herculus.DataCell where
 
 import Herculus.Prelude
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Data.Map (Map)
 import Herculus.Monad (Herc)
-import Lib.Api.Schema.Column (Column(..))
-import Lib.Custom (Id(..))
-import Lib.Model.Column (DataType, IsDerived, ReportFormat, ReportLanguage)
-import Lib.Model.Table (Table(..))
+import Lib.Api.Schema.Column (DataCol(..))
+import Lib.Model.Cell (CellContent, Value)
 
 data Query a
   = Update Input a
+  | SetValue' Value a
 
 type Input =
-  { column :: Column
-  , tables :: Map (Id Table) String
+  { content :: CellContent
+  , dataCol :: DataCol
   }
 
-data Output
-  = SetName String
-  | Delete
-  | SaveReportCol String ReportFormat (Maybe ReportLanguage)
-  | SaveDataCol DataType IsDerived String
+data Output = SetValue Value
 
 type State =
   { input :: Input
@@ -47,11 +41,15 @@ comp = H.parentComponent
   }
 
 render :: State -> H.ParentHTML Query Child Slot Herc
-render st = HH.text "Column"
+render st = HH.text "Cell"
 
 eval :: Query ~> H.ParentDSL State Query Child Slot Output Herc
 eval = case _ of
 
   Update input next -> do
     modify _{ input = input }
+    pure next
+
+  SetValue' val next -> do
+    H.raise $ SetValue val
     pure next

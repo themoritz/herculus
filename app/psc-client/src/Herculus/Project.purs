@@ -21,7 +21,7 @@ import Data.Maybe.First (First(..))
 import Data.String (length)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
 import Herculus.Monad (Herc, getAuthToken, gotoRoute, notify, withApi)
-import Herculus.Project.Data (Diff, ProjectData, applyDiff, mkProjectData, prepare)
+import Herculus.Project.Data (Diff, ProjectData, applyDiff, descTable, mkProjectData, prepare)
 import Herculus.Project.TableList (Output(..))
 import Herculus.Utils (cldiv_, faIcon_)
 import Herculus.Utils.Templates (app)
@@ -35,7 +35,7 @@ import Lib.Custom (Id, ProjectTag)
 import Lib.Model (Entity(..))
 import Lib.Model.Cell (Cell)
 import Lib.Model.Row (Row)
-import Lib.Model.Table (Table)
+import Lib.Model.Table (Table, tableName)
 
 data Query a
   = Initialize a
@@ -125,6 +125,8 @@ render st =
             { cells: st.projectData._pdCells
             , cols: map snd $ Map.toUnfoldable desc._descColumns
             , rows: Map.toUnfoldable desc._descRows
+            , tables: map (view (descTable <<< tableName)) st.projectData._pdTables
+            , rowCache: st.projectData._pdRowCache
             , tableId: t
             , projectId: st.projId
             }
@@ -132,7 +134,7 @@ render st =
         case mInput of
           Nothing -> HH.text "Bug: Table not found in projectData."
           Just input -> 
-            HH.slot' cp4 unit Grid.comp input (const Nothing)
+            HH.slot' cp4 unit Grid.comp input (Just <<< H.action <<< RunCommand)
 
     projectName = cldiv_ "project-name" case st._project, st.tmpProjectName of
       Just (Project p), Nothing ->
