@@ -5,6 +5,7 @@
 @import "partials/layout";
 @import "partials/controls";
 @import "partials/menu";
+@import "partials/editbox";
 
 body, html {
   font-family: "Open Sans", "Arial", sans-serif;
