@@ -1,10 +1,14 @@
 require('./css/main.css')
 
 // Font-awesome
-require('font-awesome/css/font-awesome.css');
+require('font-awesome/css/font-awesome.css')
 
 // Ace editor
 var ace = require('brace')
+
+// Flatpickr datepicker
+global.Flatpickr = require('flatpickr')
+require('flatpickr/dist/flatpickr.css')
 
 // Basil for local storage
 require('basil.js')

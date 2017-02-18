@@ -15,6 +15,7 @@
     "purescript-flatpickr": "master",
     "purescript-routing": "^3.0.0",
     "purescript-ace": "^3.0.0",
-    "purescript-halogen-css": "master"
+    "purescript-halogen-css": "master",
+    "purescript-parsing": "^3.2.1"
   }
 }

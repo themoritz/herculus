@@ -7,6 +7,7 @@ import Control.Monad.Aff.AVar (AVar, putVar)
 import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Free (Free, foldFree, liftF)
 import DOM (DOM)
+import Data.JSDate (LOCALE)
 import Data.Nullable (Nullable, toMaybe)
 import Flatpickr.Types (FLATPICKR)
 import Halogen.Aff (HalogenEffects)
@@ -26,6 +27,7 @@ type HercEffects = HalogenEffects
   , ws        :: WEBSOCKET
   , storage   :: STORAGE
   , flatpickr :: FLATPICKR
+  , locale    :: LOCALE
   )
 
 type Url = String

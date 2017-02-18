@@ -166,7 +166,11 @@ render st = cldiv_ "grid"
                 Nothing      -> HH.text "cell not found!"
                 Just content ->
                   let
-                    input = { content, dataCol }
+                    input =
+                      { content
+                      , dataCol
+                      , rowCache: st.input.rowCache
+                      }
                     handler (DataCell.SetValue val) =
                       Just $ H.action $ SendCommand $ CmdCellSet colId rowId val
                   in

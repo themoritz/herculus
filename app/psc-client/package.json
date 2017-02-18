@@ -13,6 +13,7 @@
     "express": "^4.13.4",
     "express-http-proxy": "^0.11.0",
     "file-loader": "^0.10.0",
+    "flatpickr": "^2.3.7",
     "font-awesome": "^4.7.0",
     "html-webpack-plugin": "^2.15.0",
     "postcss-calc": "^5.3.1",
