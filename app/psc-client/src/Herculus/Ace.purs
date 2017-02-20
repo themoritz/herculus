@@ -1,13 +1,13 @@
 module Herculus.Ace where
 
 import Herculus.Prelude
-
 import Ace as Ace
 import Ace.EditSession as Session
 import Ace.Editor as Editor
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
+import Ace (ACE)
 import Ace.Types (Editor)
 import Halogen.Query.HalogenM (halt)
 import Herculus.Monad (Herc)
@@ -61,6 +61,7 @@ comp = H.lifecycleComponent
           }
         { input } <- get
         liftEff do
+          setBlockScrollingInfinity editor
           Editor.setValue input.value (Just (-1)) editor
           Session.setMode input.mode session
           Session.setUseSoftTabs true session
@@ -103,3 +104,6 @@ comp = H.lifecycleComponent
         value <- liftEff $ Editor.getValue editor
         H.raise $ TextChanged value
     pure (reply H.Listening)
+
+foreign import setBlockScrollingInfinity
+  :: forall eff. Editor -> Eff (ace :: ACE | eff) Unit

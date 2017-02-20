@@ -60,7 +60,7 @@ comp = H.component
 
   render :: State -> H.ComponentHTML Query
   render st = cldiv_ "table-list"
-    (map renderTable (Map.toUnfoldable st.input.tables) <>
+    (map renderTable (Map.toAscUnfoldable st.input.tables) <>
     [ HH.input
       [ HP.value st.newTableName
       , HP.class_ (H.ClassName "header-input")

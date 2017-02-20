@@ -19,7 +19,6 @@ import Data.Array (head)
 import Data.Lens (Lens', _Just, lens, view, (.=))
 import Data.Maybe.First (First(..))
 import Data.String (length)
-import Debug.Trace (traceAny)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
 import Herculus.Monad (Herc, getAuthToken, gotoRoute, notify, withApi)
 import Herculus.Project.Data (Diff, ProjectData, applyDiff, descTable, mkProjectData, prepare)
@@ -124,9 +123,9 @@ render st =
           desc <- Map.lookup t st.projectData._pdTables
           pure 
             { cells: st.projectData._pdCells
-            , cols: map snd $ Map.toUnfoldable desc._descColumns
-            , rows: Map.toUnfoldable desc._descRows
-            , tables: Map.toUnfoldable st.projectData._pdTables <#> \(Tuple i t) ->
+            , cols: map snd $ Map.toAscUnfoldable desc._descColumns
+            , rows: Map.toAscUnfoldable desc._descRows
+            , tables: Map.toAscUnfoldable st.projectData._pdTables <#> \(Tuple i t) ->
                 { value: i, label: t ^. descTable <<< tableName }
             , rowCache: st.projectData._pdRowCache
             , tableId: t
@@ -134,10 +133,10 @@ render st =
             }
       in
         case mInput of
-          Nothing -> HH.text "Bug: Table not found in projectData."
+          Nothing -> HH.div_ []
           Just input -> 
             HH.slot' cp4 unit Grid.comp input \cmd ->
-              traceAny cmd \_ -> Just (H.action (RunCommand cmd))
+              Just (H.action (RunCommand cmd))
 
     projectName = cldiv_ "project-name" case st._project, st.tmpProjectName of
       Just (Project p), Nothing ->

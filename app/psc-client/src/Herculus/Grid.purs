@@ -15,6 +15,7 @@ import Herculus.Row as Row
 import Data.Array (length)
 import Data.Int (toNumber)
 import Data.Map (Map)
+import Debug.Trace (trace)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5)
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (Coords(..), RowCache)
@@ -92,7 +93,7 @@ popupEntries =
   ]
 
 render :: State -> H.ParentHTML Query Child Slot Herc
-render st = cldiv_ "grid"
+render st = trace "Rendering grid" \_ -> cldiv_ "grid"
   ([ posDiv 0 0 delRowWidth headHeight
     [ cldiv_ "grid__origin" [] ]
   -- Add row
