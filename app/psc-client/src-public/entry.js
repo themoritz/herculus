@@ -5,6 +5,11 @@ require('font-awesome/css/font-awesome.css')
 
 // Ace editor
 var ace = require('brace')
+require('brace/mode/haskell')
+require('brace/mode/html')
+require('brace/mode/latex')
+require('brace/mode/markdown')
+require('brace/theme/chrome')
 
 // Flatpickr datepicker
 global.Flatpickr = require('flatpickr')

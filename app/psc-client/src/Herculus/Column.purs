@@ -1,7 +1,6 @@
 module Herculus.Column where
 
 import Herculus.Prelude
-import Data.Map as Map
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
@@ -9,7 +8,6 @@ import Halogen.HTML.Properties as HP
 import Herculus.Ace as Ace
 import Herculus.EditBox as Edit
 import Data.Array (cons, find)
-import Data.Map (Map)
 import Halogen.Component.ChildPath (cp1, cp2, type (\/), type (<\/>))
 import Herculus.Monad (Herc)
 import Herculus.Utils (Options, clbutton_, cldiv_, clspan, clspan_, dropdown, faIcon_)
@@ -285,7 +283,10 @@ render st = HH.div_
                                          Derived -> ""
                                          NotDerived -> "disabled"
                    )
-            [ HH.slot' cp2 unit Ace.ace (getFormula dat st)
+            [ HH.slot' cp2 unit Ace.comp
+                       { value: getFormula dat st
+                       , mode: "ace/mode/haskell"
+                       }
                        \(Ace.TextChanged f) -> Just $ H.action $ SetFormula f
             ]
           ]
@@ -339,7 +340,14 @@ render st = HH.div_
           ]
         ]
       , cldiv_ "inputTemplate"
-        [ HH.slot' cp2 unit Ace.ace (getReportTemplate rep st)
+        [ HH.slot' cp2 unit Ace.comp
+                   { value: getReportTemplate rep st
+                   , mode: case getReportLanguage rep st of
+                       Nothing -> "ace/mode/text"
+                       Just ReportLanguageHTML -> "ace/mode/html"
+                       Just ReportLanguageLatex -> "ace/mode/latex"
+                       Just ReportLanguageMarkdown -> "ace/mode/markdown"
+                   }
                    \(Ace.TextChanged t) -> Just (H.action $ SetReportTemplate t)
         ]
       ]

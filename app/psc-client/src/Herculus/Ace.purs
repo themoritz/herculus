@@ -14,29 +14,32 @@ import Herculus.Monad (Herc)
 
 data Query a
   = Initialize a
+  | Update Input a
   | Finalize a
-  | SetText String a
   | HandleChange (H.SubscribeStatus -> a)
 
 type State =
-  { initialValue :: String
+  { input :: Input
   , editor :: Maybe Editor
   }
 
-type Input = String
+type Input =
+  { value :: String
+  , mode :: String
+  }
 
 data Output
   = TextChanged String
 
-ace :: H.Component HH.HTML Query Input Output Herc
-ace = H.lifecycleComponent
+comp :: H.Component HH.HTML Query Input Output Herc
+comp = H.lifecycleComponent
   { initialState:
-      { initialValue: _
+      { input: _
       , editor: Nothing
       }
   , render
   , eval
-  , receiver: Just <<< H.action <<< SetText
+  , receiver: Just <<< H.action <<< Update
   , initializer: Just (H.action Initialize)
   , finalizer: Just (H.action Finalize)
   }
@@ -56,8 +59,15 @@ ace = H.lifecycleComponent
         modify _
           { editor = Just editor
           }
-        value <- gets _.initialValue
-        liftEff $ Editor.setValue value (Just (-1)) editor
+        { input } <- get
+        liftEff do
+          Editor.setValue input.value (Just (-1)) editor
+          Session.setMode input.mode session
+          Session.setUseSoftTabs true session
+          Session.setTabSize 2 session
+          Editor.setTheme "ace/theme/chrome" editor
+          Editor.setMaxLines 100 editor
+          Editor.setHighlightActiveLine false editor
         H.subscribe $ H.eventSource_
           (Session.onChange session)
           (H.request HandleChange)
@@ -69,14 +79,20 @@ ace = H.lifecycleComponent
       }
     pure next
 
-  eval (SetText value next) = do
-    mEditor <- gets _.editor
+  eval (Update input next) = do
+    mEditor <- H.gets _.editor
     case mEditor of
       Nothing -> halt "Ace not properly initialized."
-      Just editor -> do
-        current <- H.liftEff $ Editor.getValue editor
-        when (value /= current) do
-          void $ liftEff $ Editor.setValue value (Just (-1)) editor
+      Just editor -> liftEff do
+        -- Update value
+        current <- Editor.getValue editor
+        when (input.value /= current) do
+          void $ Editor.setValue input.value (Just (-1)) editor
+        -- Update mode
+        session <- Editor.getSession editor
+        Ace.TextMode currentMode <- Session.getMode session
+        when (input.mode /= currentMode) do
+          void $ Session.setMode input.mode session
     pure next
 
   eval (HandleChange reply) = do

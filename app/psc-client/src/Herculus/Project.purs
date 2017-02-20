@@ -19,6 +19,7 @@ import Data.Array (head)
 import Data.Lens (Lens', _Just, lens, view, (.=))
 import Data.Maybe.First (First(..))
 import Data.String (length)
+import Debug.Trace (traceAny)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
 import Herculus.Monad (Herc, getAuthToken, gotoRoute, notify, withApi)
 import Herculus.Project.Data (Diff, ProjectData, applyDiff, descTable, mkProjectData, prepare)
@@ -135,7 +136,8 @@ render st =
         case mInput of
           Nothing -> HH.text "Bug: Table not found in projectData."
           Just input -> 
-            HH.slot' cp4 unit Grid.comp input (Just <<< H.action <<< RunCommand)
+            HH.slot' cp4 unit Grid.comp input \cmd ->
+              traceAny cmd \_ -> Just (H.action (RunCommand cmd))
 
     projectName = cldiv_ "project-name" case st._project, st.tmpProjectName of
       Just (Project p), Nothing ->
@@ -166,7 +168,7 @@ render st =
               "Escape" -> Just (H.action CancelEditName)
               _        -> Nothing
           -- TODO: investigate DOMException
-          -- , HE.onBlur (HE.input_ CancelEditName)
+          , HE.onBlur (HE.input_ CancelEditName)
           ]
         ]
       _, _ -> []
@@ -194,7 +196,7 @@ render st =
 
 eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot Void Herc
 eval (Initialize next) = do
-  { userInfo, projId, view } <- get
+  { userInfo, projId, view } <- H.get
   update userInfo projId view
   pure next
 
@@ -203,13 +205,13 @@ eval (Update (Input ui (R.Project p mT)) next) = do
   pure next
 
 eval (OpenTable i next) = do
-  { projId } <- get
+  { projId } <- H.get
   gotoRoute $
     R.LoggedIn $ R.ProjectDetail $ R.Project projId (Just i)
   pure next
 
 eval (StartEditName next) = do
-  p <- gets _._project
+  p <- H.gets _._project
   modify _
     { tmpProjectName = view projectName <$> p
     }
@@ -224,7 +226,7 @@ eval (SetName name next) = do
   pure next
 
 eval (SaveName next) = do
-  { projId, tmpProjectName } <- get
+  { projId, tmpProjectName } <- H.get
   case tmpProjectName of
     Nothing -> pure unit
     Just name -> when (length name > 0) $
@@ -234,7 +236,7 @@ eval (SaveName next) = do
   pure next
 
 eval (DeleteProject next) = do
-  { projId } <- get
+  { projId } <- H.get
   withApi (Api.deleteProjectDeleteByProjectId projId) \_ ->
     gotoRoute $ R.LoggedIn R.ProjectOverview
   pure next
@@ -247,7 +249,7 @@ eval (HandleWebSocket output next) = do
   case output of
     WS.Opened -> do
       modify _{ disconnected = false }
-      i <- gets _.projId
+      i <- H.gets _.projId
       getAuthToken >>= case _ of
         Nothing -> gotoRoute R.LogIn
         Just token -> do
@@ -263,13 +265,12 @@ eval (HandleWebSocket output next) = do
           , detail: Just e
           }
       WsDownProjectDiff _ cellDiff columnDiff rowDiff tableDiff -> do
-        { view, projectData } <- get
+        { view, projectData } <- H.get
         let
           m = applyDiff view tableDiff columnDiff rowDiff cellDiff
         case runState (execWriterT m) projectData of
           Tuple (First action) newProjectData -> do
-            oldView <- gets _.view
-            let newView = action <|> oldView
+            let newView = action <|> view
             modify _
               { view = newView
               , projectData = newProjectData
@@ -280,7 +281,7 @@ eval (ApplyDiff cellDiff columnDiff rowDiff tableDiff next) = do
   pure next
 
 eval (RunCommand cmd next) = do
-  p <- gets _.projId
+  p <- H.gets _.projId
   withApi (Api.postProjectRunCommandByProjectId cmd p) (const $ pure unit)
   pure next
 
@@ -290,7 +291,7 @@ update
   -> Maybe (Id Table)
   -> H.ParentDSL State Query ChildQuery ChildSlot Void Herc Unit
 update ui p mT = do
-  currentProjectId <- gets \st -> map (view projectId) st._project
+  currentProjectId <- H.gets \st -> map (view projectId) st._project
   case Just p == currentProjectId of
     false -> withApi (Api.getProjectLoadByProjectId p) \(Api.ProjectData pd) -> do
       let firstTable = (\(Entity e) -> e.entityId) <$> head pd._pdTables 

@@ -51,6 +51,7 @@ var config = {
         loader: 'purs-loader',
         query: {
           psc: 'psa',
+          pscIde: true,
           pscArgs: {
             sourceMaps: true
           }

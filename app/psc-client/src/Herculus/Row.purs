@@ -7,7 +7,7 @@ import Herculus.Monad (Herc)
 import Herculus.Utils (faButton_)
 
 data Query a
-  = ClickDelete a
+  = Delete' a
 
 type State = Unit
 
@@ -22,11 +22,11 @@ comp = H.component
   }
 
 render :: State -> H.ComponentHTML Query
-render st = faButton_ "minus-circle" ClickDelete
+render st = faButton_ "minus-circle" Delete'
 
 eval :: Query ~> H.ComponentDSL State Query Output Herc
 eval = case _ of
 
-  ClickDelete next -> do
+  Delete' next -> do
     H.raise Delete
     pure next
