@@ -9,9 +9,55 @@
 @import "partials/column";
 @import "partials/cell";
 
+@import "basscss-basic";
+
+@import "basscss-type-scale";
+@import "basscss-typography";
+@import "basscss-layout";
+@import "basscss-align";
+@import "basscss-margin";
+@import "basscss-padding";
+@import "basscss-grid";
+@import "basscss-flexbox";
+@import "basscss-position";
+@import "basscss-border";
+@import "basscss-hide";
+
 body, html {
   font-family: "Open Sans", "Arial", sans-serif;
   height: 100%;
   margin: 0px;
   position: relative;
+}
+
+:root {
+  --space-1: 5px;
+}
+
+.green {
+  color: green;
+}
+
+.red {
+  color: color(red saturation(-40%));
+}
+
+.lightred {
+  color: color(red lightness(+40%));
+}
+
+.bg-lightred {
+  background-color: color(red lightness(+40%));
+}
+
+.bg-lightgray {
+  background-color: $light-gray;
+}
+
+.bg-white {
+  background-color: white;
+}
+
+.font-smaller {
+  font-size: smaller;
 }

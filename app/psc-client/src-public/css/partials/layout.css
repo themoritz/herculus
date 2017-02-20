@@ -55,6 +55,8 @@
   &:hover {
     color: $brand-light;
   }
+  outline: none;
+  cursor: pointer;
 }
 
 .title {

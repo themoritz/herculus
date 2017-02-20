@@ -46,11 +46,8 @@ $openWidth: 45px;
   }
 }
 
-.column-config__open-icon--error {
-  color: color(red saturation(-40%));
-}
-
 .column-popup {
+  width: 690px;
   position: absolute;
   left: -$diagLeft;
   top: 60px;
@@ -73,117 +70,24 @@ $openWidth: 45px;
     box-shadow: 0px 0px 20px 0px lightgray;
     z-index: -1;
   }
-  .bodyWrapper {
-    border-radius: 4px;
-    z-index: 20;
-    max-height: 500px;
-    overflow-y: auto;
-    background-color: white;
-    .body {
-      display: table;
-      width: 100%;
-      box-sizing: border-box;
-      .datatype {
-        height: 100%;
-        width: $dataTypeWidth;
-        border-right: 1px solid $medium-gray;
-        box-sizing: border-box;
-        display: table-cell;
-        padding: 5px 5px 0px 5px;
-        .select {
-          margin-bottom: 5px;
-        }
-      }
-      .formula {
-        padding: 5px;
-        box-sizing: border-box;
-        height: 100%;
-        width: $formulaWidth;
-        display: table-cell;
-        .inputFormula {
-          border: 1px solid $medium-gray; 
-        }
-        .inputFormula.disabled {
-          opacity: 0.4;
-        }
-      }
-      .language {
-        height: 100%;
-        box-sizing: border-box;
-        display: table-cell;
-        padding: 5px;
-      }
-      .format {
-        height: 100%;
-        box-sizing: border-box;
-        display: table-cell;
-        padding: 5px;
-      }
-      .separator {
-        height: 100%;
-        box-sizing: border-box;
-        display: table-cell;
-        padding: 5px;
-        vertical-align: bottom;
-        text-align: center;
-      }
-    }
-  }
-  .inputTemplate {
-    border: 1px solid $medium-gray; 
-    margin: 5px;
-  }
-  .buttons {
-    padding: 5px;
-    background-color: $light-gray;
-    .left {
-      display: inline-block;
-      width: 50%;
-      font-size: smaller;
-      padding-left: 3px;
-      box-sizing: border-box;
-    }
-    .right {
-      display: inline-block;
-      width: 50%;
-      text-align: right;
-      .button {
-        font-weight: bold;
-        .fa {
-          color: green;
-          margin-right: 5px;
-        }
-      }
-      .delete {
-        margin-right: 5px;
-        .fa {
-          color: color(red saturation(-40%));
-        }
-      }
-    }
-  }
 }
 
-.column-popup--data {
-  width: calc($formulaWidth + $dataTypeWidth);
-}
-.column-popup--report {
-  width: 690px;
-}
-
-.column-popup__error {
-  background-color: color(red lightness(+40%));
-  margin: 0px;
-  padding: 5px;
-  font-size: small;
+.column-popup__wrapper {
+  border-radius: 4px;
+  z-index: 20;
+  max-height: 500px;
+  overflow-y: auto;
+  background-color: white;
 }
 
-.column-popup__error-title {
-  color: color(red saturation(-20%));
-  font-weight: bold;
+.column-popup__datatype {
+  border-right: 1px solid $medium-gray;
 }
 
-.column-popup__error-body {
-  color: black;
+.column-popup__editor {
+  border: 1px solid $medium-gray; 
 }
 
+.column-popup__editor--disabled {
+  opacity: 0.4;
+}

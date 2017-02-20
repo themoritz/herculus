@@ -227,7 +227,7 @@ render st = HH.div_
       [ HP.classes
         [ H.ClassName "button--pure"
         , H.ClassName "column-config__open-icon"
-        , H.ClassName (if isJust getError then "column-config__open-icon--error" else "")
+        , H.ClassName (if isJust getError then "red" else "")
         ]
       , HE.onClick (HE.input_ ConfigOpen)
       ]
@@ -252,13 +252,13 @@ render st = HH.div_
     StatusNone -> Nothing
     StatusError e -> Just e
 
-  dataColConf dat = cldiv_ "column-popup  column-popup--data" (
-    [ cldiv_ "bodyWrapper"
-      [ cldiv_ "body"
-        [ cldiv_ "datatype"
+  dataColConf dat = cldiv_ "column-popup" (
+    [ cldiv_ "column-popup__wrapper"
+      [ cldiv_ "table col-12 bg-white"
+        [ cldiv_ "table-cell col-2 p1 column-popup__datatype"
           [ selBranch (getDataType dat st) SetDataType
           ]
-        , cldiv_ "formula"
+        , cldiv_ "table-cell col-10 p1"
           [ HH.div_
             [ HH.input
               [ HP.type_ HP.InputCheckbox
@@ -279,9 +279,10 @@ render st = HH.div_
               , HH.text ")"
               ]
             ]
-          , cldiv_ ("inputFormula " <> case getIsDerived dat st of
-                                         Derived -> ""
-                                         NotDerived -> "disabled"
+          , cldiv_ ("column-popup__editor " <>
+                    case getIsDerived dat st of
+                      Derived -> ""
+                      NotDerived -> "column-popup__editor--disabled"
                    )
             [ HH.slot' cp2 unit Ace.comp
                        { value: getFormula dat st
@@ -316,10 +317,10 @@ render st = HH.div_
         _ -> HH.text ""
     ]
 
-  reportColConf rep = cldiv_ "column-popup column-popup--report" (
-    [ cldiv_ "bodyWrapper"
-      [ cldiv_ "body"
-        [ cldiv_ "language"
+  reportColConf rep = cldiv_ "column-popup" (
+    [ cldiv_ "column-popup__wrapper"
+      [ cldiv_ "table col-12"
+        [ cldiv_ "table-cell col-6 p1"
           [ HH.text "Input language ("
           , HH.a
             [ HP.href "/doc/formulas/#report-templates"
@@ -330,16 +331,16 @@ render st = HH.div_
           , dropdown "select" reportLangs
                      (getReportLanguage rep st) SetReportLang
           ]
-        , cldiv_ "separator"
+        , cldiv_ "table-cell col-1 p1 align-bottom center"
           [ faIcon_ "long-arrow-right"
           ]
-        , cldiv_ "format"
+        , cldiv_ "table-cell col-5 p1"
           [ HH.text "Output format"
           , dropdown "select" reportFormats
                      (getReportFormat rep st) SetReportFormat
           ]
         ]
-      , cldiv_ "inputTemplate"
+      , cldiv_ "column-popup__editor mb1 mx1"
         [ HH.slot' cp2 unit Ace.comp
                    { value: getReportTemplate rep st
                    , mode: case getReportLanguage rep st of
@@ -356,28 +357,28 @@ render st = HH.div_
 
   confFooter =
     [ case getError of
-        Just e -> cldiv_ "column-popup__error"
-          [ clspan_ "column-popup__error-title"
+        Just e -> cldiv_ "bg-lightred m0 p1 font-smaller"
+          [ clspan_ "red bold"
             [ HH.text "Error"
             ]
-          , cldiv_ "column-popup__error-body"
+          , HH.div_
             [ HH.text e
             ]
           ]
         Nothing -> HH.text ""
-    , cldiv_ "buttons"
+    , cldiv_ "clearfix p1 bg-lightgray"
       [ cldiv_ "left"
-        [ clspan "link"
+        [ clspan "link font-smaller"
           [ HE.onClick (HE.input_ ConfigCancel) ]
           [ HH.text "Cancel" ]
         ]
       , cldiv_ "right"
-        [ clbutton_ "button delete" Delete'
-          [ faIcon_ "close"
+        [ clbutton_ "button bold mr1" Delete'
+          [ faIcon_ "close red mr1"
           , HH.text "Delete column"
           ]
-        , clbutton_ "button" ConfigSave
-          [ faIcon_ "check"
+        , clbutton_ "button bold" ConfigSave
+          [ faIcon_ "check green mr1"
           , HH.text "Save"
           ]
         ]

@@ -30,6 +30,7 @@ var config = {
                 return [
                   require('postcss-import'),
                   require('postcss-simple-vars'),
+                  require('postcss-custom-properties'),
                   require('postcss-calc'),
                   require('postcss-color-function'),
                   require('postcss-nested'),
