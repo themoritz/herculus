@@ -1,72 +1,24 @@
 @import "../modules/colors";
 @import "../modules/dimensions";
 
-$width: 230px;
-
 .notifications {
   position: absolute;
   top: calc($menubar-height + 10px);
   right: 10px;
-  width: $width;
+  width: 230px;
   z-index: 1;
 }
 
 .notification {
   box-shadow: 0px 0px 15px rgba(0,0,0,0.4);
   border-radius: 2px;
-  padding: 10px;
   color: white;
-  margin-bottom: 15px;
-}
-
-.notification__content {
-  margin-top: 10px;
-}
-
-.notification__detail {
-  margin-top: 10px;
-  font-size: smaller;
-}
-
-.notification__header {
-  display: table;
-}
-
-.notification__title {
-  display: table-cell;
-  .fa {
-    margin-right: 8px;
-  }
-  font-weight: bold;
-  font-size: larger;
-  width: calc($width - 20px);
 }
 
 .notification__close {
   cursor: pointer;
-  display: table-cell;
-  text-align: right;
-  padding: 4px;
-  vertical-align: top;
-  width: 20px;
   color: white;
   &:hover {
     color: black;
   }
-}
-
-.notification--info {
-  background-color: color(blue lightness(-2%));
-}
-
-.notification--success {
-  background-color: color(green lightness(-2%));
-}
-
-.notification--warning {
-  background-color: color(orange lightness(-2%));
-}
-
-.notification--error {
-  background-color: color(red lightness(-2%));
 }

@@ -40,10 +40,10 @@ comp = H.component
     renderOne (Tuple i cfg) =
       let
         cls = case cfg.kind of
-          Info -> "info"
-          Success -> "success"
-          Warn -> "warning"
-          Error -> "error"
+          Info -> "bg-blueg"
+          Success -> "bg-green"
+          Warn -> "bg-orange"
+          Error -> "bg-red"
         icon = case cfg.kind of
           Info -> "exclamation-circle"
           Success -> "check-circle-o"
@@ -55,22 +55,22 @@ comp = H.component
           Warn -> "Warning"
           Error -> "Error"
         detail msg =
-          [ cldiv_ "notification__detail"
+          [ cldiv_ "font-smaller mt2"
             [ HH.text msg
             ]
           ]
       in
-        cldiv_ ("notification  notification--" <> cls)
-        ([ cldiv_ "notification__header"
-          [ cldiv_ "notification__title"
-            [ faIcon_ icon
+        cldiv_ ("p2 mb2 notification " <> cls)
+        ([ cldiv_ "clearfix"
+          [ cldiv_ "left bold font-larger"
+            [ faIcon_ $ icon <> " mr2"
             , HH.text title
             ]
-          , cldiv "notification__close"
+          , cldiv "right align-top right-align notification__close"
             [ HE.onClick (HE.input_ (Dismiss i)) ]
             [ faIcon_ "times" ]
           ]
-        , cldiv_ "notification__content"
+        , cldiv_ "mt2"
           [ HH.text cfg.message
           ]
         ] <> maybe [] detail cfg.detail)

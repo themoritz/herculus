@@ -3,7 +3,7 @@
 .popup-menu {
   position: absolute;
   z-index: 10;
-  width: 170px;
+  width: 200px;
   background-color: white;
   border-radius: 4px;
   border: 1px solid $anthrazit;
@@ -22,18 +22,7 @@
 }
 
 .popup-menu__item {
-  text-align: left;
-  font-size: 12pt;
-  font-weight: normal;
-  width: 100%;
-  border-radius: 0px;
-  box-shadow: none;
-  border: none;
-  background: none;
-  outline: none;
   color: $anthrazit;
-  padding: 0px;
-  display: table;
   transition-property: background-color, color;
   transition-duration: 100ms;
   &:hover {
@@ -42,13 +31,3 @@
   }
   cursor: pointer;
 }
-
-.popup-menu__item-icon {
-  display: table-cell;
-  padding: 5px;
-}
-.popup-menu__item-label {
-  display: table-cell;
-  padding: 5px;
-}
-

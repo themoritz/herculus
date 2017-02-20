@@ -65,14 +65,14 @@ comp = H.component
       BelowRight -> "popup-menu--below-right"
 
     menuItem :: Entry v -> H.ComponentHTML (Query v)
-    menuItem e = HH.button
-      [ HP.class_ (H.ClassName "popup-menu__item")
+    menuItem e = HH.div
+      [ HP.class_ (H.ClassName "clearfix popup-menu__item")
       , HE.onClick $ HE.input_ (Select e.value)
       ]
-      [ cldiv_ "popup-menu__item-icon"
+      [ cldiv_ "left p1 pl2"
         [ faIcon_ e.icon
         ]
-      , cldiv_ "popup-menu__item-label"
+      , cldiv_ "left p1"
         [ HH.text e.label ]
       ]
 
