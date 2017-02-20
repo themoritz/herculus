@@ -70,7 +70,7 @@ comp = H.component
     pure next
 
   eval (PerformLogin next) = do
-    { email, password } <- get
+    { email, password } <- H.get
     let
       ld =
         { ldEmail: Email { unEmail: email }

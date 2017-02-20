@@ -59,7 +59,7 @@ comp = H.lifecycleComponent
         modify _
           { editor = Just editor
           }
-        { input } <- get
+        { input } <- H.get
         liftEff do
           setBlockScrollingInfinity editor
           Editor.setValue input.value (Just (-1)) editor
@@ -97,7 +97,7 @@ comp = H.lifecycleComponent
     pure next
 
   eval (HandleChange reply) = do
-    mEditor <- gets _.editor
+    mEditor <- H.gets _.editor
     case mEditor of
       Nothing -> halt "Ace not properly initialized."
       Just editor -> do

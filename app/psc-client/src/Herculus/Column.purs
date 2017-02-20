@@ -407,7 +407,7 @@ eval = case _ of
     pure next
 
   ConfigSave next -> do
-    st <- get
+    st <- H.get
     modify _
       { open = false
       , tmp = emptyTmp

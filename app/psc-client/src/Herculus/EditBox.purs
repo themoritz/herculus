@@ -91,7 +91,7 @@ eval = case _ of
     pure next
 
   SetText str next -> do
-    validate <- gets _.input.validate
+    validate <- H.gets _.input.validate
     case validate str of
       Nothing -> modify _
         { tmpValue = Nothing

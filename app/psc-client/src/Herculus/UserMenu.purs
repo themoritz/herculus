@@ -9,7 +9,7 @@ import Herculus.PopupMenu as Popup
 import Herculus.Router as R
 import Data.String (length, take)
 import Herculus.Monad (Herc, gotoRoute, setAuthToken)
-import Herculus.Utils (cldiv_, faIcon_)
+import Herculus.Utils (faIcon_)
 import Lib.Api.Schema.Auth (UserInfo(..))
 
 data Query a

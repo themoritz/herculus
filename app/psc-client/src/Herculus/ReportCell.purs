@@ -70,7 +70,7 @@ eval :: Query ~> H.ComponentDSL State Query Void Herc
 eval = case _ of
 
   Initialize next -> do
-    input <- gets _.input
+    input <- H.gets _.input
     authToken <- fromMaybe "" <$> getAuthToken
     apiUrl <- getApiUrl
     case input.coords of

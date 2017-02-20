@@ -73,7 +73,7 @@ comp = H.component
     pure next
 
   eval (Submit next) = do
-    st <- get
+    st <- H.get
     let
       result = runExcept do
         when (length st.new < 6) $

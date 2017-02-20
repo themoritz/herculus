@@ -122,7 +122,7 @@ comp = H.component
     pure next
 
   eval (PerformSignup next) = do
-    st <- get
+    st <- H.get
     let
       result = runExcept do
         when (st.name == "") $

@@ -9,9 +9,11 @@
   ],
   "dependencies": {
     "purescript-websocket-simple": "^1.0.1",
-    "purescript-halogen": "master",
+    "purescript-halogen": "themoritz/purescript-halogen#get",
+    "purescript-halogen-vdom": "master",
     "purescript-profunctor-lenses": "^2.6.0",
     "purescript-servant-support": "master",
+    "purescript-argonaut-generic-codecs": "themoritz/purescript-argonaut-generic-codecs#aeson-1-compat",
     "purescript-flatpickr": "master",
     "purescript-routing": "^3.0.0",
     "purescript-ace": "^3.0.0",

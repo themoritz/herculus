@@ -58,7 +58,7 @@ comp = H.lifecycleComponent
     H.getHTMLElementRef (H.RefLabel "flatpickr") >>= case _ of
       Nothing -> halt "DatePicker: Could not find elemet to attach to."
       Just el -> do
-        date <- gets _.input.date
+        date <- H.gets _.input.date
         flatpickr <- liftEff do
           jsdate <- toJSDate date
           let
@@ -74,7 +74,7 @@ comp = H.lifecycleComponent
     pure next
 
   eval (Finalize next) = do
-    mPicker <- gets _.flatpickr
+    mPicker <- H.gets _.flatpickr
     case mPicker of
       Nothing -> halt "DatePicker finalize: not properly initialized."
       Just flatpickr ->
@@ -82,7 +82,7 @@ comp = H.lifecycleComponent
     pure next
 
   eval(Update input next) = do
-    mPicker <- gets _.flatpickr
+    mPicker <- H.gets _.flatpickr
     case mPicker of
       Nothing -> halt "DatePicker update: not properly initialized."
       Just flatpickr ->

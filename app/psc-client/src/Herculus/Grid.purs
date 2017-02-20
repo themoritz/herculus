@@ -211,12 +211,12 @@ eval = case _ of
     pure next
 
   AddRow next -> do
-    st <- get
+    st <- H.get
     H.raise $ CmdRowCreate st.input.tableId
     pure next
 
   AddCol colType next -> do
-    st <- get
+    st <- H.get
     H.raise $ case colType of
       DataCol -> CmdDataColCreate st.input.tableId
       ReportCol -> CmdReportColCreate st.input.tableId

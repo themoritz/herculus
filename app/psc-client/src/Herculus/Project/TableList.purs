@@ -125,14 +125,14 @@ comp = H.component
     pure next
 
   eval (CreateNew next) = do
-    { newTableName } <- get
+    { newTableName } <- H.get
     when (length newTableName > 0) $ do
       H.raise $ Command $ CmdTableCreate newTableName
       modify _{ newTableName = "" }
     pure next
 
   eval (StartEdit t next) = do
-    tables <- gets _.input.tables
+    tables <- H.gets _.input.tables
     case Map.lookup t tables of
       Nothing -> pure unit
       Just table ->
@@ -147,7 +147,7 @@ comp = H.component
     pure next
 
   eval (SaveEdit next) = do
-    { editing, newName } <- get
+    { editing, newName } <- H.get
     case editing of
       Nothing -> pure unit
       Just t -> when (length newName > 0) do

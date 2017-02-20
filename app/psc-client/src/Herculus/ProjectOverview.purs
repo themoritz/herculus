@@ -79,7 +79,7 @@ comp = H.lifecycleComponent
     pure next
 
   eval (CreateProject next) = do
-    { newName } <- get
+    { newName } <- H.get
     withApi (postProjectCreate newName) \(Project p) ->
       gotoRoute $ R.LoggedIn $ R.ProjectDetail $ R.Project p._projectId Nothing
     pure next

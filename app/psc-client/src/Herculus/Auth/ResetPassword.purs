@@ -54,7 +54,7 @@ comp = H.component
     pure next
 
   eval (SendLink next) = do
-    { email } <- get
+    { email } <- H.get
     withApi (Api.postAuthSendResetLink email) \_ -> do
       notify
         { kind: N.Success

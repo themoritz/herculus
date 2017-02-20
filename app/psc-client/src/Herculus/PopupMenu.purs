@@ -83,7 +83,7 @@ comp = H.component
     pure next
 
   eval (Toggle next) = do
-    { open } <- get
+    { open } <- H.get
     setOpen (not open)
     pure next
 

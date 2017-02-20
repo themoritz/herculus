@@ -84,7 +84,7 @@ comp = H.lifecycleComponent
     eval (Connect next)
 
   eval (Finalize next) = do
-    st <- get
+    st <- H.get
     case st of
       Nothing -> halt "WebSocket not initialized."
       Just vars -> do
@@ -93,11 +93,12 @@ comp = H.lifecycleComponent
           Nothing -> pure unit
           Just (WS.Connection socket) -> liftEff do
             writeRef vars.dead true
-            socket.close
+            socket.close' (WS.Code 1000)
+                          (Just (WS.Reason "Finalizing WS component"))
     pure next
 
   eval (Connect next) = do
-    st <- get
+    st <- H.get
     url <- getWebSocketUrl
     case st of
       Nothing -> halt "WebSocket not initialized."
@@ -109,7 +110,7 @@ comp = H.lifecycleComponent
     pure next
 
   eval (Send msg next) = do
-    st <- get
+    st <- H.get
     case st of
       Nothing -> halt "Websocket message bus not ready."
       Just vars ->

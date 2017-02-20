@@ -21,20 +21,17 @@ import Data.Maybe.First (First(..))
 import Data.String (length)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
 import Herculus.Monad (Herc, getAuthToken, gotoRoute, notify, withApi)
-import Herculus.Project.Data (Diff, ProjectData, applyDiff, descTable, mkProjectData, prepare)
+import Herculus.Project.Data (ProjectData, applyDiff, descTable, mkProjectData, prepare)
 import Herculus.Project.TableList (Output(..))
 import Herculus.Utils (cldiv_, faIcon_)
 import Herculus.Utils.Templates (app)
 import Lib.Api.Rest (postProjectRunCommandByProjectId, deleteProjectDeleteByProjectId, getProjectLoadByProjectId, postProjectSetNameByProjectId) as Api
 import Lib.Api.Schema.Auth (UserInfo)
-import Lib.Api.Schema.Column (Column)
 import Lib.Api.Schema.Project (Command, Project(..), projectId, projectName)
 import Lib.Api.Schema.Project (ProjectData(..)) as Api
 import Lib.Api.WebSocket (WsDownMessage(..), WsUpMessage(..))
 import Lib.Custom (Id, ProjectTag)
 import Lib.Model (Entity(..))
-import Lib.Model.Cell (Cell)
-import Lib.Model.Row (Row)
 import Lib.Model.Table (Table, tableName)
 
 data Query a
@@ -49,11 +46,6 @@ data Query a
   | ToOverview a
   | RunCommand Command a
   | HandleWebSocket (WS.Output WsDownMessage) a
-  | ApplyDiff (Diff (Entity Cell))
-              (Diff Column)
-              (Diff (Entity Row))
-              (Diff (Entity Table))
-              a
 
 data Input = Input UserInfo R.Project
 
@@ -247,12 +239,13 @@ eval (ToOverview next) = do
 eval (HandleWebSocket output next) = do
   case output of
     WS.Opened -> do
-      modify _{ disconnected = false }
-      i <- H.gets _.projId
+      { disconnected, projId } <- H.get
+      when disconnected do
+        modify _{ disconnected = false }
       getAuthToken >>= case _ of
         Nothing -> gotoRoute R.LogIn
         Just token -> do
-          H.query' cp2 unit (H.action $ WS.Send $ WsUpSubscribe token i)
+          H.query' cp2 unit (H.action $ WS.Send $ WsUpSubscribe token projId)
           pure unit
     WS.Closed ->
       modify _{ disconnected = true }
@@ -274,9 +267,6 @@ eval (HandleWebSocket output next) = do
               { view = newView
               , projectData = newProjectData
               }
-  pure next
-
-eval (ApplyDiff cellDiff columnDiff rowDiff tableDiff next) = do
   pure next
 
 eval (RunCommand cmd next) = do
