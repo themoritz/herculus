@@ -10,18 +10,16 @@ import Herculus.DatePicker as Date
 import Herculus.EditBox as EditBox
 import Data.Array (deleteAt, length, snoc, take, updateAt)
 import Data.Foldable (intercalate)
-import Data.Map (Map)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3)
-import Halogen.HTML.Properties (id_, placeholder)
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (RowCache)
 import Herculus.Utils (cldiv_, clspan, clspan_, dropdown, faButton_, faIcon_, mkIndexed)
-import Lib.Api.Schema.Column (ColumnKind(..), DataCol(..), columnKind, columnName, dataColIsDerived, dataColType)
-import Lib.Custom (Id(..), ValNumber(..), ValTime(..), parseValNumber)
+import Lib.Api.Schema.Column (ColumnKind(ColumnData), DataCol, columnKind, columnName, dataColIsDerived, dataColType)
+import Lib.Custom (Id, ValNumber(ValNumber), ValTime(ValTime), parseValNumber)
 import Lib.Model.Cell (CellContent(..), Value(..))
 import Lib.Model.Column (DataType(..), IsDerived(..))
-import Lib.Model.Row (Row(..))
-import Lib.Model.Table (Table(..))
+import Lib.Model.Row (Row)
+import Lib.Model.Table (Table)
 
 data Query a
   = Update Input a
@@ -35,6 +33,8 @@ type Input =
   }
 
 data Output = SetValue Value
+
+--------------------------------------------------------------------------------
 
 type State =
   { input :: Input
@@ -52,6 +52,8 @@ type Slot =
   Unit \/
   Unit \/
   Void
+
+--------------------------------------------------------------------------------
 
 data RenderMode
   = Compact
@@ -79,6 +81,8 @@ defaultValue = case _ of
   DataList   _ -> VList []
   DataMaybe  _ -> VMaybe Nothing
 
+--------------------------------------------------------------------------------
+
 comp :: H.Component HH.HTML Query Input Output Herc
 comp = H.parentComponent
   { initialState:
@@ -92,7 +96,7 @@ comp = H.parentComponent
 
 render :: State -> H.ParentHTML Query Child Slot Herc
 render st = case st.input.content of
-  CellError msg -> clspan "error"
+  CellError msg -> clspan "font-smaller italic red"
     [ HP.title msg ]
     [ HH.text "Error" ]
   CellValue val ->
@@ -102,14 +106,16 @@ render st = case st.input.content of
       inline = value (if needsEx then Compact else Full) dt val SetValue'
     in
       case needsEx of
-        true -> cldiv_ "compactWrapper"
-          [ cldiv_ "compact" [ inline ]
-          , cldiv_ "expand"
-            [ faButton_ ("expand " <> if st.expanded then "open" else "")
+        true -> cldiv_ "cell__compact-wrapper"
+          [ cldiv_ "cell__compact" [ inline ]
+          , cldiv_ "cell__expand"
+            [ faButton_ ("expand cell__expand-button " <>
+                         if st.expanded then "cell__expand-button--open" else ""
+                        )
                         ToggleExpanded
             , case st.expanded of
-                true -> cldiv_ "expanded"
-                  [ cldiv_ "body"
+                true -> cldiv_ "cell-expanded"
+                  [ cldiv_ "cell-expanded__body"
                     [ value Full dt val SetValue'
                     ]
                   ]
@@ -168,7 +174,7 @@ render st = case st.input.content of
   editBool
     :: Boolean -> (Boolean -> H.Action Query)
     -> H.ParentHTML Query Child Slot Herc
-  editBool val cb = cldiv_ "bool plain"
+  editBool val cb = cldiv_ "cell-plain"
     [ HH.input
       [ HP.type_ HP.InputCheckbox
       , HP.checked val
@@ -176,7 +182,8 @@ render st = case st.input.content of
       ]
     ]
 
-  showBool val = HH.text (if val then "True" else "False")
+  showBool val = cldiv_ "cell-plain"
+    [ HH.text (if val then "True" else "False") ]
 
   editString
     :: String -> (String -> H.Action Query)
@@ -185,13 +192,14 @@ render st = case st.input.content of
     HH.slot' cp1 unit EditBox.comp
              { value: val
              , placeholder: ""
-             , className: "string"
+             , className: "full-height"
              , show: id
              , validate: Just
              }
              (Just <<< H.action <<< cb)
 
-  showString val = HH.text val
+  showString val = cldiv_ "cell-plain"
+    [ HH.text val ]
 
   editNumber
     :: ValNumber -> (ValNumber -> H.Action Query)
@@ -200,13 +208,14 @@ render st = case st.input.content of
     HH.slot' cp2 unit EditBox.comp
              { value: val
              , placeholder: ""
-             , className: "number"
+             , className: "right-align full-height"
              , show: \(ValNumber str) -> str
              , validate: parseValNumber
              }
              (Just <<< H.action <<< cb)
 
-  showNumber (ValNumber str) = HH.text str
+  showNumber (ValNumber str) = cldiv_ "cell-plain right-align"
+    [ HH.text str ]
 
   editTime
     :: ValTime -> (ValTime -> H.Action Query)
@@ -216,7 +225,8 @@ render st = case st.input.content of
              \(Date.DateChanged val') ->
                Just (H.action (cb val'))
 
-  showTime (ValTime str) = HH.text str
+  showTime (ValTime str) = cldiv_ "cell-plain"
+    [ HH.text str ]
 
   editRowRef
     :: RenderMode -> Id Table -> Maybe (Id Row) -> (Maybe (Id Row) -> H.Action Query)
@@ -340,7 +350,7 @@ render st = case st.input.content of
     Nothing ->
       cldiv_ "maybe nothing"
       [ HH.button
-        [ HP.class_ (H.ClassName "button--pure")
+        [ HP.class_ (H.ClassName "cell-button")
         , HE.onClick $ HE.input_ $ cb (Just (defaultValue subDt)) ]
         [ faIcon_ "plus-circle" ]
       , cldiv_ "content"
@@ -349,7 +359,7 @@ render st = case st.input.content of
     Just val ->
       cldiv_ "maybe just"
       [ HH.button
-        [ HP.class_ (H.ClassName "button--pure")
+        [ HP.class_ (H.ClassName "cell-button")
         , HE.onClick $ HE.input_ $ cb Nothing ]
         [ faIcon_ "minus-circle" ]
       , cldiv_ "content"

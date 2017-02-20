@@ -1,104 +1,85 @@
 @import "../modules/colors";
 
-/* Compact/expanded logic */
+/* Compact/expanded layout -------------------------------------------------- */
 
 $expandWidth: 24px;
 
-.compactWrapper {
+.cell__compact-wrapper {
   height: 100%;
   width: 100%;
   position: relative;
-
-  .compact {
-    position: absolute;
-    left: 0px;
-    right: $expandWidth;
-    bottom: 0px;
-    top: 0px;
-    overflow: hidden;
-
-    ul {
-      display: inline-block;
-    }
-
-    li {
-      display: inline-block;
-    }
-
-  }
-
-  .expand {
-    position: absolute;
-    right: 0px;
-    top: 0px;
-    bottom: 0px;
-    width: $expandWidth;
-    box-sizing: border-box;
-    padding-left: 3px;
-
-    .fa-expand {
-      color: lightgray;
-      &:hover {
-        color: color(lightgray lightness(-10%));
-      }
-    }
-
-    .fa-expand.open {
-      color: $link;
-      &:hover {
-        color: $link-hover;
-      }
-    }
-
-    $expandLeft: 100px;
-    .expanded {
-      position: absolute;
-      z-index: 10;
-      width: 400px;
-      top: 40px;
-      left: -$expandLeft;
-      background-color: white;
-      border: 1px solid lightgray;
-      box-shadow: 0px 0px 20px 0px lightgray;
-      border-radius: 4px;
-      &:before {
-        content: "";
-        position: absolute;
-        background-color: white;
-        width: 20px;
-        height: 20px;
-        -webkit-transform: rotate(45deg);
-        border-top: 1px solid lightgray;
-        border-left: 1px solid lightgray;
-        left: $expandLeft;
-        top: -11px;
-        box-shadow: 0px 0px 20px 0px lightgray;
-        z-index: -1;
-      }
-      .body {
-        border-radius: 4px;
-        z-index: 20;
-        max-height: 600px;
-        overflow-y: auto;
-        background-color: white;
-        padding: 5px;
-      }
-    }
-
-  }
-
 }
 
-/* Plain */
+.cell__compact {
+  position: absolute;
+  left: 0px;
+  right: $expandWidth;
+  bottom: 0px;
+  top: 0px;
+  overflow: hidden;
+}
 
-.cell > .plain {
+.cell__expand {
+  position: absolute;
+  right: 0px;
+  top: 0px;
+  bottom: 0px;
+  width: $expandWidth;
+  box-sizing: border-box;
+}
+
+.cell__expand-button {
+  color: lightgray;
+  &:hover {
+    color: color(lightgray lightness(-10%));
+  }
+}
+
+.cell__expand-button--open {
+  color: $link;
+  &:hover {
+    color: $link-hover;
+  }
+}
+
+$expandLeft: 100px;
+.cell-expanded {
+  position: absolute;
+  z-index: 10;
+  width: 400px;
+  top: 40px;
+  left: -$expandLeft;
+  background-color: white;
+  border: 1px solid lightgray;
+  box-shadow: 0px 0px 20px 0px lightgray;
+  border-radius: 4px;
+  &:before {
+    content: "";
+    position: absolute;
+    background-color: white;
+    width: 20px;
+    height: 20px;
+    -webkit-transform: rotate(45deg);
+    border-top: 1px solid lightgray;
+    border-left: 1px solid lightgray;
+    left: $expandLeft;
+    top: -11px;
+    box-shadow: 0px 0px 20px 0px lightgray;
+    z-index: -1;
+  }
+}
+
+.cell-expanded__body {
+  border-radius: 4px;
+  z-index: 20;
+  max-height: 600px;
+  overflow-y: auto;
+  background-color: white;
+  padding: 5px;
+}
+
+.cell-plain {
   padding: 2px;
-}
-
-/* Number */
-
-.cell > .number {
-  text-align: right;
 }
 
 /* RowRef */
@@ -230,21 +211,13 @@ $expandWidth: 24px;
 
 /* General stuff */
 
-.cell button {
+.cell-button {
   cursor: pointer;
   outline: none;
   background-color: transparent;
-  color: lighten(black, 30%);
+  color: color(black lightness(+30%));
   border: none;
   &:hover {
     color: color(black lightness(+10%));
-  }
-}
-
-.cell {
-  .error {
-    font-size: smaller;
-    font-style: italic;
-    color: color(black lightness(+30%));
   }
 }
