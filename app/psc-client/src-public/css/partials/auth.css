@@ -1,27 +1,13 @@
-@import "../modules/colors";
-
-.auth-form {
-  padding: 20px;
-  td {
-    width: 300px;
-  }
+.auth-form__cell {
+  width: 350px;
 }
 
 .auth-form__input {
   background: $light-gray;
-  border: 1px solid color($light-gray lightness(-3%));
+  border: 1px solid color($light-gray lightness(-10%));
   border-radius: 2px;
   outline: none;
-  margin: 5px 5px;
   color: $anthrazit;
-  font-size: larger;
+  font-size: inherit;
   width: 100%;
-}
-
-.auth-form__submit {
-  text-align: right;
-}
-
-.auth-form__disclaimer {
-  text-align: center;
 }

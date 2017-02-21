@@ -11,10 +11,10 @@ import Data.Map (Map)
 import Data.String (length)
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (TableDesc, descTable)
-import Herculus.Utils (cldiv, cldiv_, faIcon_)
+import Herculus.Utils (cldiv_, faIcon_)
 import Lib.Api.Schema.Project (Command(..))
-import Lib.Custom (Id(..))
-import Lib.Model.Table (Table(..), tableName)
+import Lib.Custom (Id)
+import Lib.Model.Table (Table, tableName)
 
 data Query a
   = SetNewTableName String a
@@ -78,7 +78,7 @@ comp = H.component
     renderTable (Tuple i desc) = HH.div
       [ HE.onClick (HE.input_ $ GoTable i)
       , HP.classes
-        [ H.ClassName "table-list__item"
+        [ H.ClassName "table-list__item left px2 py1 bold"
         , H.ClassName selected
         ]
       ]
@@ -103,13 +103,13 @@ comp = H.component
           false -> []
           true ->
             [ HH.button
-              [ HP.class_ (H.ClassName "button--pure  button--on-dark")
+              [ HP.class_ (H.ClassName "button--pure button--on-dark table-list__item-action align-middle ml2")
               , HP.title "Change table name"
               , HE.onClick (HE.input_ $ StartEdit i)
               ]
               [ faIcon_ "pencil" ]
             , HH.button
-              [ HP.class_ (H.ClassName "button--pure  button--on-dark")
+              [ HP.class_ (H.ClassName "button--pure button--on-dark table-list__item-action align-middle ml1")
               , HP.title "Delete table (careful!)"
               , HE.onClick (HE.input_ $ DeleteTable i)
               ]

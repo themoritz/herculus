@@ -1,32 +1,4 @@
-@import "../modules/colors";
-
 /* Compact/expanded layout -------------------------------------------------- */
-
-$expandWidth: 24px;
-
-.cell__compact-wrapper {
-  height: 100%;
-  width: 100%;
-  position: relative;
-}
-
-.cell__compact {
-  position: absolute;
-  left: 0px;
-  right: $expandWidth;
-  bottom: 0px;
-  top: 0px;
-  overflow: hidden;
-}
-
-.cell__expand {
-  position: absolute;
-  right: 0px;
-  top: 0px;
-  bottom: 0px;
-  width: $expandWidth;
-  box-sizing: border-box;
-}
 
 .cell__expand-button {
   color: lightgray;
@@ -47,7 +19,7 @@ $expandLeft: 100px;
   position: absolute;
   z-index: 10;
   width: 400px;
-  top: 40px;
+  top: 15px;
   left: -$expandLeft;
   background-color: white;
   border: 1px solid lightgray;
@@ -62,7 +34,7 @@ $expandLeft: 100px;
     -webkit-transform: rotate(45deg);
     border-top: 1px solid lightgray;
     border-left: 1px solid lightgray;
-    left: $expandLeft;
+    left: calc($expandLeft + 5px);
     top: -11px;
     box-shadow: 0px 0px 20px 0px lightgray;
     z-index: -1;
@@ -75,144 +47,74 @@ $expandLeft: 100px;
   max-height: 600px;
   overflow-y: auto;
   background-color: white;
-  padding: 5px;
 }
 
-.cell-plain {
-  padding: 2px;
-}
+/* -------------------------------------------------------------------------- */
 
 /* RowRef */
 
-.rowref {
-  select {
-    width: 100%;
-  }
-}
-
-.expanded .rowref {
+.cell-rowref {
   background-color: lightgray;
   border-spacing: 1px;
   border-collapse: separate;
   display: table;
   width: 100%;
   box-sizing: border-box;
-  .field {
-    display: table-row;
-    .key {
-      display: table-cell;
-      padding: 5px;
-      font-weight: bold;
-      background-color: white;
-    }
-    & > .content {
-      display: table-cell;
-      padding: 5px;
-      background-color: white;
-    }
-  }
+}
+.cell-rowref__field {
+  display: table-row;
 }
 
 /* List */
 
-.expanded .list {
-  width: 100%;
-  box-sizing: border-box;
-  $buttonWidth: 24px;
-  .new {
-    background-color: $light-gray;
-    padding: 5px;
-    border-radius: 4px;
-    margin: 4px 2px;
-  }
-  .element-wrapper {
-    width: 100%;
-    padding: 4px 2px;
-    box-sizing: border-box;
-    .element.input > .content {
-      display: table-cell;
-    }
-    .element {
-      display: table;
-      width: 100%;
-      border: 1px solid lightgray;
-      box-shadow: 0px 0px 3px 0px lightgray;
-      box-sizing: border-box;
-      background-color: $light-gray;
-      border-radius: 4px;
-      .delete {
-        width: $buttonWidth;
-        display: table-cell;
-        vertical-align: middle;
-        padding: 5px;
-        border-right: 1px solid lightgray;
-      }
-      & > .content {
-        box-sizing: border-box;
-        width: 100%;
-        padding: 5px;
-      }
-    }
+.cell-list {}
+
+.cell-list__new {
+  background-color: $light-gray;
+  border-radius: 4px;
+}
+
+.cell-list__element {
+  border: 1px solid lightgray;
+  box-shadow: 0px 0px 3px 0px lightgray;
+  background-color: $light-gray;
+  border-radius: 4px;
+  margin-bottom: 5px;
+  &:last-child {
+    margin-bottom: 0px;
   }
 }
 
-.compact .list {
+.cell-list__element-delete {
+  border-right: 1px solid lightgray;
+}
+
+.cell-compact-list__element {
   display: inline-block;
+  border: 1px solid lightgray;
+  overflow: hidden;
+  border-radius: 2px;
+  background-color: $light-gray;
+  font-size: smaller;
+  max-width: 60px;
   white-space: nowrap;
-  .info {
-    color: gray;
-    font-size: smaller;
-    &:after {
-      content: " items";
-    }
-  }
-  .element {
-    vertical-align: middle;
-    margin-left: 5px;
-    display: inline-block;
-    border: 1px solid lightgray;
-    padding: 0px 3px;
-    overflow: hidden;
-    border-radius: 3px;
-    background-color: $light-gray;
-    max-width: 60px;
-    white-space: nowrap;
-    min-height: 24px;
-  }
 }
 
 /* Maybe */
 
-.maybe {
-  $buttonWidth: 24px;
-  position: relative;
-  display: table;
-  width: 100%;
-  .button {
-    display: table-cell;
-    width: $buttonWidth;
-    height: 100%;
-  }
-  .content {
-    display: table-cell;
-    width: 100%;
-    height: 100%;
-    vertical-align: middle;
-  }
+.cell-maybe {}
 
-  &.nothing {
-    color: gray;
-    font-style: italic;
-    height: 26px;
-  }
-  &.just {
-  }
+.cell-maybe--nothing {
+  color: gray;
+  font-style: italic;
+  padding: 2px;
 }
 
 /* General stuff */
 
 .cell-button {
   cursor: pointer;
+  padding: 0px 5px;
   outline: none;
   background-color: transparent;
   color: color(black lightness(+30%));
@@ -220,4 +122,14 @@ $expandLeft: 100px;
   &:hover {
     color: color(black lightness(+10%));
   }
+}
+
+.cell-plain {
+  padding: 2px;
+}
+
+.cell-compact {
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
 }

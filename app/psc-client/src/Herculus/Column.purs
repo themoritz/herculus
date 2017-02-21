@@ -10,7 +10,7 @@ import Herculus.EditBox as Edit
 import Data.Array (cons, find)
 import Halogen.Component.ChildPath (cp1, cp2, type (\/), type (<\/>))
 import Herculus.Monad (Herc)
-import Herculus.Utils (Options, clbutton_, cldiv_, clspan, clspan_, dropdown, faIcon_)
+import Herculus.Utils (Options, clbutton_, cldiv, cldiv_, clspan, clspan_, dropdown, faIcon_)
 import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), CompileStatus(StatusError, StatusNone, StatusOk), DataCol, ReportCol, columnKind, columnName, dataColCompileStatus, dataColIsDerived, dataColSourceCode, dataColType, reportColCompileStatus, reportColFormat, reportColLanguage, reportColTemplate)
 import Lib.Custom (Id(..))
 import Lib.Model.Column (DataType(..), IsDerived(..), ReportFormat(..), ReportLanguage(..))
@@ -163,12 +163,12 @@ comp = H.parentComponent
   }
 
 render :: State -> H.ParentHTML Query Child Slot Herc
-render st = HH.div_
-  [ cldiv_ "column-head"
+render st = cldiv_ "flex items-center"
+  [ cldiv_ "flex-auto"
     [ HH.slot' cp1 unit Edit.comp
                { value: st.input.column ^. columnName
                , placeholder: "Name..."
-               , className: "editbox--column-name"
+               , className: "bold"
                , show: id
                , validate: Just
                }
@@ -180,37 +180,36 @@ render st = HH.div_
 
   where
 
-  columnInfo = cldiv_ "column-head__info"
+  columnInfo = cldiv_ "column-info font-smaller gray"
     case st.input.column ^. columnKind of
       ColumnData dat ->
         [ case dat ^. dataColIsDerived of
-            Derived    -> faIcon_ "superscript"
-            NotDerived -> faIcon_ "i-cursor"
-        , clspan_ "column__datatype"
+            Derived    -> faIcon_ "superscript mr1"
+            NotDerived -> faIcon_ "i-cursor mr1"
+        , HH.span_
           [ HH.text $ dataTypeInfo (dat ^. dataColType)
           ]
         ]
       ColumnReport rep ->
-        [ faIcon_ "file-text-o"
-        , clspan_ "column__report-info"
-          [ let
-              lang = case rep ^. reportColLanguage of
-                Nothing                     -> "Plaintext"
-                Just ReportLanguageMarkdown -> "Markdown"
-                Just ReportLanguageLatex    -> "Latex"
-                Just ReportLanguageHTML     -> "HTML"
-            in
-              HH.text ("Report " <> lang <> " ")
-          , faIcon_ "long-arrow-right"
-          , let
-              format = case rep ^. reportColFormat of
-                ReportFormatPlain -> "Plaintext"
-                ReportFormatPDF   -> "PDF"
-                ReportFormatHTML  -> "HTML"
-            in
-              HH.text format
-          ]
+        [ faIcon_ "file-text-o mr1"
+        , let
+            lang = case rep ^. reportColLanguage of
+              Nothing                     -> "Plaintext"
+              Just ReportLanguageMarkdown -> "Markdown"
+              Just ReportLanguageLatex    -> "Latex"
+              Just ReportLanguageHTML     -> "HTML"
+          in
+            HH.text ("Report " <> lang <> " ")
+        , faIcon_ "long-arrow-right mr1"
+        , let
+            format = case rep ^. reportColFormat of
+              ReportFormatPlain -> "Plaintext"
+              ReportFormatPDF   -> "PDF"
+              ReportFormatHTML  -> "HTML"
+          in
+            HH.text format
         ]
+        
 
   dataTypeInfo = case _ of
     DataBool     -> "Bool"
@@ -222,24 +221,24 @@ render st = HH.div_
     DataList   d -> "List (" <> dataTypeInfo d <> ")"
     DataMaybe  d -> "Maybe (" <> dataTypeInfo d <> ")"
 
-  columnConfig = cldiv_ "column-config" (
+  columnConfig = cldiv_ ""
     [ HH.button
       [ HP.classes
         [ H.ClassName "button--pure"
-        , H.ClassName "column-config__open-icon"
+        , H.ClassName "pr1"
         , H.ClassName (if isJust getError then "red" else "")
         ]
       , HE.onClick (HE.input_ ConfigOpen)
       ]
       [ faIcon_ "gear fa-2x" ]
-    ] <> case st.open of
-      false -> []
-      true ->
-        [ case st.input.column ^. columnKind of
-            ColumnData dat -> dataColConf dat
-            ColumnReport rep -> reportColConf rep
-        ]
-    )
+    , cldiv_ "relative" case st.open of
+        false -> []
+        true ->
+          [ case st.input.column ^. columnKind of
+              ColumnData dat -> dataColConf dat
+              ColumnReport rep -> reportColConf rep
+          ]
+    ]
 
   getError = case st.input.column ^. columnKind of
     ColumnData dat -> case dat ^. dataColIsDerived of

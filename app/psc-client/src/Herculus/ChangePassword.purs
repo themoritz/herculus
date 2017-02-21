@@ -4,7 +4,7 @@ import Herculus.Prelude
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
-
+import Halogen.HTML.Properties as HP
 import Herculus.Notifications.Types as N
 import Herculus.Router as R
 import Lib.Api.Rest as Api
@@ -43,8 +43,10 @@ comp = H.component
   where
 
   render :: State -> H.ComponentHTML Query
-  render st = cldiv_ "auth-form"
-    [ HH.h1_ [ HH.text "Change Password" ]
+  render st = cldiv_ "p3"
+    [ HH.h1
+      [ HP.class_ (HH.ClassName "h2 m0 mb3") ]
+      [ HH.text "Change Password" ]
     , HH.table_
       [ HH.tbody_
         [ renderRow "Old password" "old" true st.old

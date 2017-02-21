@@ -1,7 +1,6 @@
-@import "../modules/colors";
-
 .link {
   color: $link;
+  font-weight: bold;
   cursor: pointer;
   text-decoration: none;
   transition-property: color;
@@ -95,20 +94,29 @@
 
 /* -------------------------------------------------------------------------- */
 
-.header-input {
-  box-sizing: border-box;
-  background: lighten($anthrazit, 3%);
-  border: 1px solid darken($anthrazit, 3%);
-  border-radius: 2px;
-  font-size: inherit;
-  outline: none;
-  padding: 4px 5px 1px 5px;
-  color: white;
-  width: 110px;
-  transition-property: width, border-color;
-  transition-duration: 200ms;
-  &:focus {
-    width: 200px;
-    border-color: darken($anthrazit, 7%);
-  }
+::-webkit-scrollbar-track {
+  background-color: white;
+}
+
+::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+::-webkit-scrollbar-thumb {
+    height: 6px;
+    border: 3px solid rgba(0, 0, 0, 0);
+    background-clip: padding-box;
+    -webkit-border-radius: 7px;
+    background-color: lightgray;
+}
+
+::-webkit-scrollbar-button {
+    width: 0;
+    height: 0;
+    display: none;
+}
+
+::-webkit-scrollbar-corner {
+    background-color: white;
 }

@@ -7,7 +7,7 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import DOM.Event.KeyboardEvent (code)
 import Herculus.Monad (Herc)
-import Herculus.Utils (cldiv)
+import Herculus.Utils (cldiv, cldiv_)
 
 data Query v a
   = Update (Input v) a
@@ -45,14 +45,9 @@ comp = H.component
   }
 
 render :: forall v. State v -> H.ComponentHTML (Query v)
-render st = HH.div
-  [ HP.classes
-    [ H.ClassName "editbox"
-    , H.ClassName st.input.className
-    ]
-  ]
+render st = cldiv_ st.input.className
   [ case st.editing of
-      false -> cldiv (if text == "" then "editbox__placeholder" else "")
+      false -> cldiv ("editbox " <> if text == "" then "gray" else "")
         [ HE.onClick (HE.input_ StartEdit)
         ]
         [ HH.text (if text == "" then st.input.placeholder else text) ]

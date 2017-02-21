@@ -136,13 +136,13 @@ render st =
           [ HH.text (p._projectName) ]
         , HH.text " "
         , HH.button
-          [ HP.class_ (H.ClassName "button--pure  button--on-dark")
+          [ HP.class_ (H.ClassName "button--pure button--on-dark gray ml1 align-middle")
           , HP.title "Change project name"
           , HE.onClick (HE.input_ StartEditName)
           ]
           [ faIcon_ "pencil" ]
         , HH.button
-          [ HP.class_ (H.ClassName "button--pure  button--on-dark")
+          [ HP.class_ (H.ClassName "button--pure button--on-dark gray ml1 align-middle")
           , HP.title "Delete project (careful!)"
           , HE.onClick (HE.input_ DeleteProject)
           ]

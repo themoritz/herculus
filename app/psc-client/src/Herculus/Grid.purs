@@ -92,20 +92,20 @@ popupEntries =
   ]
 
 render :: State -> H.ParentHTML Query Child Slot Herc
-render st = cldiv_ "grid"
+render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll"
   ([ posDiv 0 0 delRowWidth headHeight
-    [ cldiv_ "grid__origin" [] ]
+    [ cldiv_ "grid-cell" [] ]
   -- Add row
   , posDiv 0 (length st.input.rows * cellHeight + headHeight)
            delRowWidth addRowHeight
-    [ cldiv_ "grid__row-new"
+    [ cldiv_ "center p1"
       [ faButton_ "plus-circle" AddRow
       ]
     ]
   -- Add col
   , posDiv (length st.input.cols * cellWidth + delRowWidth) 0
            addColWidth headHeight
-    [ cldiv_ "grid__column-new"
+    [ cldiv_ "center p1"
       [ faButton_ "plus-circle" TogglePopup
       , HH.slot' cp5 unit Popup.comp
                  { entries: popupEntries
@@ -124,7 +124,7 @@ render st = cldiv_ "grid"
   rows = irows <#> \(Tuple y (Tuple rowId row)) ->
     posDiv 0 (y * cellHeight + headHeight)
            delRowWidth cellHeight
-    [ cldiv_ "grid__row"
+    [ cldiv_ "grid-cell p1"
       [ HH.slot' cp1 rowId Row.comp unit \Row.Delete ->
           Just $ H.action $ SendCommand $ CmdRowDelete rowId
       ]
@@ -133,7 +133,7 @@ render st = cldiv_ "grid"
   cols = icols <#> \(Tuple x col) ->
     posDiv (x * cellWidth + delRowWidth) 0
            cellWidth headHeight
-    [ cldiv_ "grid__column"
+    [ cldiv_ "grid-cell p1"
       [ let
           colId = col ^. columnId
           input =
@@ -159,7 +159,7 @@ render st = cldiv_ "grid"
     pure $
       posDiv (x * cellWidth + delRowWidth) (y * cellHeight + headHeight)
              cellWidth cellHeight
-      [ cldiv_ "grid__cell"
+      [ cldiv_ "grid-cell p1"
         [ case col ^. columnKind of
             ColumnData dataCol ->
               case Map.lookup coords st.input.cells of
@@ -189,7 +189,7 @@ render st = cldiv_ "grid"
 
   posDiv :: forall p i. Int -> Int -> Int -> Int -> Array (HH.HTML p i) -> HH.HTML p i
   posDiv left top width height content = HH.div
-    [ HP.class_ (H.ClassName "grid__generic-cell")
+    [ HP.class_ (H.ClassName "absolute")
     , HC.style do
         CSS.left   $ CSS.px $ toNumber left
         CSS.top    $ CSS.px $ toNumber top

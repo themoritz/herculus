@@ -1,3 +1,6 @@
+@import "modules/colors";
+@import "modules/dimensions";
+
 @import "partials/notifications";
 @import "partials/auth";
 @import "partials/projectoverview";
@@ -67,6 +70,10 @@ body, html {
 
 .bg-orange {
   background-color: color(orange saturation(-30%));
+}
+
+.gray {
+  color: gray;
 }
 
 .lightred {

@@ -1,22 +1,14 @@
-@import "../modules/colors";
-@import "../modules/dimensions";
-
 .project-name {
   position: absolute;
   top: 10px;
-  left: calc($titleWidth + $titlePaddingLeft);
+  left: 200px;
   right: 200px;
   color: $medium-gray;
-  text-transform: capitalize;
   text-align: center;
   font-size: 22px;
-  button {
-    vertical-align: middle;
-    font-size: 12px;
-    color: $gray;
-    margin-left: 5px;
-  }
 }
+
+/* -------------------------------------------------------------------------- */
 
 .header-input {
   box-sizing: border-box;
@@ -36,13 +28,14 @@
   }
 }
 
+/* -------------------------------------------------------------------------- */
+
 .table-list {
   position: absolute;
   bottom: 5px;
   left: 0px;
   right: 0px;
   height: 32px;
-
   /* Add table */
   input {
     margin-left: 10px;
@@ -51,29 +44,23 @@
 }
 
 .table-list__item {
-  float: left;
-  font-weight: bold;
-  padding: 4px 10px;
   height: 100%;
   cursor: pointer;
   color: $gray;
-  display: inline-block;
-  box-sizing: border-box;
   transition-property: color;
   transition-duration: 75ms;
+  /* Edit table name */
   input {
     margin-left: 0px;
     margin-top: -1px;
   }
-  button {
-    font-size: 11px;
-    padding-right: 0px;
-    margin-left: 5px;
-    vertical-align: middle;
-  }
   &:hover {
     color: $brand-light;
   }
+}
+
+.table-list__item-action {
+  font-size: 11px;
 }
 
 .table-list__item--selected {
@@ -81,62 +68,12 @@
   background-color: color($anthrazit lightness(+5%));
   border-top-right-radius: 2px;
   border-top-left-radius: 2px;
-  span {
-    margin-right: 10px;
-  }
 }
 
-.grid {
-  position: absolute;
-  left: 0px;
-  top: 0px;
-  right: 0px;
-  bottom: 0px;
-  overflow: scroll;
-}
+/* -------------------------------------------------------------------------- */
 
-.grid__generic-cell {
-  position: absolute;
-}
-
-.grid__cell {
+.grid-cell {
   border-right: 1px solid $medium-gray;
   border-bottom: 1px solid $medium-gray;
-  padding: 5px;
-  box-sizing: border-box;
-  height: 100%;
-}
-.grid__row {
-  border-right: 1px solid $medium-gray;
-  border-bottom: 1px solid $medium-gray;
-  padding: 5px;
-  box-sizing: border-box;
-  height: 100%;
-  text-align: center;
-}
-.grid__column {
-  border-right: 1px solid $medium-gray;
-  border-bottom: 1px solid $medium-gray;
-  box-sizing: border-box;
-  height: 100%;
-}
-.grid__row-new {
-  padding: 5px;
-  box-sizing: border-box;
-  text-align: center;
-}
-.grid__column-new {
-  padding: 5px;
-  box-sizing: border-box;
-  text-align: center;
-  .small-menu {
-    left: 10px;
-    top: 30px;
-  }
-}
-.grid__origin {
-  border-right: 1px solid $medium-gray;
-  border-bottom: 1px solid $medium-gray;
-  box-sizing: border-box;
   height: 100%;
 }

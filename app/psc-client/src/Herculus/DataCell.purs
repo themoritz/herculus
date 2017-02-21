@@ -106,17 +106,19 @@ render st = case st.input.content of
       inline = value (if needsEx then Compact else Full) dt val SetValue'
     in
       case needsEx of
-        true -> cldiv_ "cell__compact-wrapper"
-          [ cldiv_ "cell__compact" [ inline ]
-          , cldiv_ "cell__expand"
+        true -> cldiv_ "flex"
+          [ cldiv_ "flex-auto cell-compact" [ inline ]
+          , cldiv_ ""
             [ faButton_ ("expand cell__expand-button " <>
                          if st.expanded then "cell__expand-button--open" else ""
                         )
                         ToggleExpanded
             , case st.expanded of
-                true -> cldiv_ "cell-expanded"
-                  [ cldiv_ "cell-expanded__body"
-                    [ value Full dt val SetValue'
+                true -> cldiv_ "relative"
+                  [ cldiv_ "cell-expanded"
+                    [ cldiv_ "cell-expanded__body p1"
+                      [ value Full dt val SetValue'
+                      ]
                     ]
                   ]
                 false -> HH.div_ []
@@ -231,9 +233,8 @@ render st = case st.input.content of
   editRowRef
     :: RenderMode -> Id Table -> Maybe (Id Row) -> (Maybe (Id Row) -> H.Action Query)
     -> H.ParentHTML Query Child Slot Herc
-  editRowRef mode t val cb = 
+  editRowRef mode t val cb =  cldiv_ "cell-plain"
     let
-      cls = if isNothing val then "invalid" else ""
       options = Map.toUnfoldable (rows t) <#> \(Tuple r row) ->
         { value: Just r
         , label: showPairs row
@@ -242,23 +243,26 @@ render st = case st.input.content of
         then [ { value: Nothing, label: "" } ]
         else []
     in
-      dropdown cls (defaultOption <> options) val cb
+      [ dropdown "select" (defaultOption <> options) val cb
+      ]
 
   showRowRef mode t val = case mode of
-    Compact -> HH.text case val of
-      Nothing -> "<no row chosen>"
-      Just r -> case Map.lookup r (rows t) of
-        Nothing -> ""
-        Just row -> showPairs row
+    Compact -> cldiv_ "cell-plain"
+      [ HH.text case val of
+          Nothing -> "<no row chosen>"
+          Just r -> case Map.lookup r (rows t) of
+            Nothing -> ""
+            Just row -> showPairs row
+      ]
     Full -> case val of
       Nothing -> HH.text "Impossible: invalid row in derived cell"
       Just r -> case Map.lookup r (rows t) of
         Nothing -> HH.div_ []
-        Just row -> HH.div_ $ Map.toUnfoldable row <#> \(Tuple _ tuple) -> case tuple of
-          Tuple c content -> cldiv_ "field"
-            [ cldiv_ "key"
+        Just row -> cldiv_ "cell-rowref" $ Map.toUnfoldable row <#> \(Tuple _ tuple) -> case tuple of
+          Tuple c content -> cldiv_ "cell-rowref__field"
+            [ cldiv_ "table-cell bg-white bold p1"
               [ HH.text (c ^. columnName) ]
-            , cldiv_ "content"
+            , cldiv_ "table-cell bg-white p1"
               [ case content, c ^. columnKind of
                   CellValue v, ColumnData dat ->
                     showValue mode (dat ^. dataColType) v
@@ -292,53 +296,47 @@ render st = case st.input.content of
   editList
     :: RenderMode -> DataType -> Array Value -> (Array Value -> H.Action Query)
     -> H.ParentHTML Query Child Slot Herc
-  editList mode subDt vals cb = cldiv_ "list"
-    case mode of
+  editList mode subDt vals cb = case mode of
       Compact -> compactList mode subDt vals
-      Full ->
+      Full -> cldiv_ "cell-list" $
         elements <>
-        [ cldiv_ "new"
+        [ cldiv_ "cell-list__new p1"
           [ HH.button
-            [ HE.onClick $ HE.input_ $ cb (snoc vals (defaultValue subDt)) ]
+            [ HP.class_ (H.ClassName "cell-button")
+            , HE.onClick $ HE.input_ $ cb (snoc vals (defaultValue subDt)) ]
             [ faIcon_ "plus-circle" ]
           ]
         ]
     where
     elements = mkIndexed vals <#> \(Tuple i v) ->
-      cldiv_ "element-wrapper"
-      [ cldiv_ "element input"
-        [ cldiv_ "delete"
-          [ HH.button
-            [ HE.onClick $ HE.input_ $ cb (listDel i vals) ]
-            [ faIcon_ "minus-circle" ]
-          ]
-        , cldiv_ "content"
-          [ editValue mode subDt v (\nv -> cb (listMod i nv vals))
-          ]
+      cldiv_ "cell-list__element flex mb1"
+      [ cldiv_ "cell-list__element-delete p1"
+        [ HH.button
+          [ HP.class_ (H.ClassName "cell-button")
+          , HE.onClick $ HE.input_ $ cb (listDel i vals) ]
+          [ faIcon_ "minus-circle" ]
+        ]
+      , cldiv_ "flex-auto p1"
+        [ editValue mode subDt v (\nv -> cb (listMod i nv vals))
         ]
       ]
     listMod i x xs = fromMaybe xs $ updateAt i x xs
     listDel i xs   = fromMaybe xs $ deleteAt i xs
 
-  showList mode subDt vals = cldiv_ "list"
-    case mode of
-      Compact ->
-        compactList mode subDt vals
-      Full -> vals <#> \v ->
-        cldiv_ "element-wrapper" 
-        [ cldiv_ "element"
-          [ cldiv_ "content"
-            [ showValue mode subDt v
-            ]
-          ]
-        ]
+  showList mode subDt vals = case mode of
+    Compact ->
+      compactList mode subDt vals
+    Full -> cldiv_ "cell-list" $ vals <#> \v ->
+      cldiv_ "cell-list__element mb1 p1"
+      [ showValue mode subDt v
+      ]
 
-  compactList mode subDt vals =
-    [ clspan_ "info"
-      [ HH.text $ show $ length vals ]
+  compactList mode subDt vals = cldiv_ "" $
+    [ clspan_ "font-smaller gray align-middle"
+      [ HH.text $ show (length vals) <> " items" ]
     ] <> (
       take 4 vals <#> \v ->
-        cldiv_ "element"
+        cldiv_ "cell-compact-list__element align-middle ml1"
         [ showValue mode subDt v
         ]
     )
@@ -346,29 +344,27 @@ render st = case st.input.content of
   editMaybe
     :: RenderMode -> DataType -> Maybe Value -> (Maybe Value -> H.Action Query)
     -> H.ParentHTML Query Child Slot Herc
-  editMaybe mode subDt mVal cb = case mVal of
+  editMaybe mode subDt mVal cb = cldiv_ "flex items-center" case mVal of
     Nothing ->
-      cldiv_ "maybe nothing"
       [ HH.button
         [ HP.class_ (H.ClassName "cell-button")
         , HE.onClick $ HE.input_ $ cb (Just (defaultValue subDt)) ]
         [ faIcon_ "plus-circle" ]
-      , cldiv_ "content"
+      , cldiv_ "cell-maybe--nothing flex-auto"
         [ HH.text "Nothing" ]
       ]
     Just val ->
-      cldiv_ "maybe just"
       [ HH.button
         [ HP.class_ (H.ClassName "cell-button")
         , HE.onClick $ HE.input_ $ cb Nothing ]
         [ faIcon_ "minus-circle" ]
-      , cldiv_ "content"
+      , cldiv_ "flex-auto"
         [ editValue mode subDt val (cb <<< Just)
         ]
       ]
 
   showMaybe mode subDt mVal = case mVal of
-    Nothing  -> HH.text "Nothing"
+    Nothing  -> cldiv_ "cell-maybe--nothing" [ HH.text "Nothing" ]
     Just val -> showValue mode subDt val
 
 eval :: Query ~> H.ParentDSL State Query Child Slot Output Herc

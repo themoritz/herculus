@@ -50,12 +50,15 @@ comp = H.component
   where
 
   render :: State -> H.ComponentHTML Query
-  render st = cldiv_ "auth-form"
-    [ HH.h1_ [ HH.text "Signup" ]
+  render st = cldiv_ "p3"
+    [ HH.h1
+      [ HP.class_ (HH.ClassName "h2 m0 mb3") ]
+      [ HH.text "Signup" ]
     , HH.table_
       [ HH.tbody_
         [ HH.tr_
-          [ HH.td_
+          [ HH.td
+            [ HP.class_ (HH.ClassName "auth-form__cell")]
             [ HH.label
               [ HP.for "intention" ]
               [ HH.text "What are you planning to use Herculus for? Describe a \
@@ -63,7 +66,8 @@ comp = H.component
                  \to play around."
               ]
             ]
-          , HH.td_
+          , HH.td
+            [ HP.class_ (HH.ClassName "auth-form__cell")]
             [ HH.textarea
               [ HP.class_ (H.ClassName "auth-form__input")
               , HP.value st.intention
@@ -85,18 +89,22 @@ comp = H.component
         ]
       ]
     , HH.text $ fromMaybe "" st.validationError
-    , HH.p_
+    , HH.p
+      [ HP.class_ (HH.ClassName "center") ]
       [ HH.text "Please be aware that this is a beta version. \
           \We are still in the progress of implementing a lot of features. \
           \Bugs may occur, and you may lose your data."
       ]
-    , HH.p_
+    , HH.p
+      [ HP.class_ (HH.ClassName "center") ]
       [ HH.text "Your feedback to "
       , HH.strong_ [ HH.text "moritz@herculus.io" ]
       , HH.text " is highly appreciated."
       ]
     , HH.a
-      [ HP.href (R.getLink R.LogIn) ]
+      [ HP.href (R.getLink R.LogIn)
+      , HP.class_ (HH.ClassName "link")
+      ]
       [ HH.text "Back to login" ]
     ]
 

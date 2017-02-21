@@ -33,8 +33,10 @@ comp = H.component
   where
 
   render :: State -> H.ComponentHTML Query
-  render st = cldiv_ "auth-form"
-    [ HH.h1_ [ HH.text "Reset Password" ]
+  render st = cldiv_ "p3"
+    [ HH.h1
+      [ HP.class_ (HH.ClassName "h2 m0 mb3") ]
+      [ HH.text "Reset Password" ]
     , HH.p_ [ HH.text "Please enter the email address you signed up with." ]
     , HH.table_
       [ HH.tbody_
@@ -44,7 +46,9 @@ comp = H.component
         ]
       ]
     , HH.a
-      [ HP.href (R.getLink R.LogIn) ]
+      [ HP.href (R.getLink R.LogIn)
+      , HP.class_ (HH.ClassName "link")
+      ]
       [ HH.text "Back to login" ]
     ]
 

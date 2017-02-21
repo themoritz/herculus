@@ -14,11 +14,12 @@ keyEnter e = code e == "Enter"
 renderSubmit :: forall f. H.Action f -> H.ComponentHTML f
 renderSubmit onClick = HH.tr_
   [ HH.td
-    [ HP.class_ (H.ClassName "auth-form__submit")
+    [ HP.class_ (H.ClassName "right-align py1")
     , HP.colSpan 2
     ]
     [ HH.button
       [ HE.onClick (HE.input_ onClick)
+      , HP.class_ (HH.ClassName "button")
       ]
       [ HH.text "Submit" ]
     ]
@@ -34,12 +35,14 @@ renderRow
   -> f Unit
   -> H.ComponentHTML f
 renderRow label name password value onInput onEnter = HH.tr_
-  [ HH.td_
+  [ HH.td
+    [ HP.class_ (HH.ClassName "py1 auth-form__cell") ]
     [ HH.label
       [ HP.for name ]
       [ HH.text label ]
     ]
-  , HH.td_
+  , HH.td
+    [ HP.class_ (HH.ClassName "py1 auth-form__cell") ]
     [ HH.input
       [ HP.class_ (H.ClassName "auth-form__input")
       , HP.type_ (if password then HP.InputPassword else HP.InputText)

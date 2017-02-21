@@ -4,6 +4,7 @@ import Herculus.Prelude
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
+import Halogen.HTML.Properties as HP
 import Herculus.Router as R
 import DOM.Event.KeyboardEvent (code)
 import Halogen.HTML.Events (onClick)
@@ -40,17 +41,17 @@ comp = H.lifecycleComponent
   where
 
   render :: State -> H.ComponentHTML Query
-  render st = cldiv_ "projects"
-    ([ HH.h1_ [ HH.text "My Projects" ]
-    , cldiv_ "projects__tile  projects__tile--new"
-      [ HH.p_
-        [ HH.text "Create new..."
-        , HH.input
-          [ HE.onValueInput (HE.input SetNewName)
-          , HE.onKeyDown \e -> case code e of
-              "Enter" -> Just (H.action CreateProject)
-              _       -> Nothing
-          ]
+  render st = cldiv_ "p3" (
+    [ HH.h1
+      [ HP.class_ (HH.ClassName "h2 m0 mb3") ]
+      [ HH.text "My Projects" ]
+    , cldiv_ "project-tile mr3 mb3 p2 bg-lightgray bold"
+      [ HH.text "Create new..."
+      , HH.input
+        [ HE.onValueInput (HE.input SetNewName)
+        , HE.onKeyDown \e -> case code e of
+            "Enter" -> Just (H.action CreateProject)
+            _       -> Nothing
         ]
       ]
     ] <> map renderTile st.projects)
@@ -58,7 +59,7 @@ comp = H.lifecycleComponent
     where
 
     renderTile :: Project -> H.ComponentHTML Query
-    renderTile (Project p) = cldiv "projects__tile"
+    renderTile (Project p) = cldiv "project-tile mr3 mb3 p2"
       [ onClick $ HE.input_ $ SelectProject p._projectId ]
       [ HH.span_
         [ HH.text p._projectName ]
