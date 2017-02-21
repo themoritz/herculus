@@ -9,7 +9,7 @@
   ],
   "dependencies": {
     "purescript-websocket-simple": "^1.0.1",
-    "purescript-halogen": "themoritz/purescript-halogen#get",
+    "purescript-halogen": "master",
     "purescript-halogen-vdom": "master",
     "purescript-profunctor-lenses": "^2.6.0",
     "purescript-servant-support": "master",

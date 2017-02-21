@@ -26,15 +26,16 @@ appHeader
    . Array (HH.HTML p i)
   -> Array (HH.HTML p i)
   -> HH.HTML p i
-appHeader navigation elements = cldiv_ "menubar"
-  ([ cldiv_ "title"
-    [ cldiv_ "title__logo"
+appHeader navigation elements = cldiv_ "menubar" (
+  [ cldiv_ "clearfix"
+    [ cldiv_ "left clearfix"
       [ HH.img
-        [ HP.src "img/herculus.svg"
+        [ HP.class_ (HH.ClassName "herculus__logo left align-baseline m1")
+        , HP.src "img/herculus.svg"
         ]
+      , cldiv_ "herculus__text bold left" [ HH.text "Herculus" ]
+      , cldiv_ "herculus__beta left mt1" [ HH.text "beta" ]
       ]
-    , cldiv_ "title__text" [ HH.text "Herculus" ]
-    , cldiv_ "title__beta" [ HH.text "beta" ]
+    , cldiv_ "right m2" navigation
     ]
-  , cldiv_ "navigation" navigation
   ] <> elements)

@@ -9,7 +9,7 @@ import Herculus.PopupMenu as Popup
 import Herculus.Router as R
 import Data.String (length, take)
 import Herculus.Monad (Herc, gotoRoute, setAuthToken)
-import Herculus.Utils (faIcon_)
+import Herculus.Utils (cldiv_, faIcon_)
 import Lib.Api.Schema.Auth (UserInfo(..))
 
 data Query a
@@ -54,7 +54,7 @@ comp = H.parentComponent
   render :: State -> H.ParentHTML Query (Popup.Query Value) Unit Herc
   render (UserInfo ui) = HH.span_
     [ HH.button
-      [ HP.class_ (H.ClassName "navigation__button")
+      [ HP.class_ (H.ClassName "button--navigation")
       , HE.onClick (HE.input_ Toggle) ]
       [ faIcon_ "cog" ]
     , let
@@ -63,7 +63,9 @@ comp = H.parentComponent
           , entries: entries ui._uiUserName
           }
       in
-        HH.slot unit Popup.comp input (Just <<< H.action <<< OnSelect)
+        cldiv_ "relative"
+        [ HH.slot unit Popup.comp input (Just <<< H.action <<< OnSelect)
+        ]
     ]
 
   eval :: Query ~> H.ParentDSL State Query (Popup.Query Value) Unit Void Herc

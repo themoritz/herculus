@@ -102,7 +102,7 @@ render st =
   let
     overviewButton = HH.button
       [ HE.onClick $ HE.input_ ToOverview
-      , HP.class_ (H.ClassName "navigation__button")
+      , HP.class_ (H.ClassName "button--navigation")
       ]
       [ faIcon_ "th-large"
       , HH.text " Projects"

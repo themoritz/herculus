@@ -74,6 +74,25 @@
   }
 }
 
+.button--navigation {
+  border-radius: 2px;
+  background-color: $light-anthrazit;
+  color: $medium-gray;
+  border: none;
+  box-shadow: none;
+  padding: 5px;
+  padding-bottom: 3px;
+  margin-left: 3px;
+  text-align: right;
+  font-weight: bold;
+  font-size: 16px;
+  &:hover {
+    color: $brand-light;
+  }
+  outline: none;
+  cursor: pointer;
+}
+
 /* -------------------------------------------------------------------------- */
 
 .header-input {
