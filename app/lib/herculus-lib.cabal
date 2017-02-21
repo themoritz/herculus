@@ -1,14 +1,10 @@
 name:                herculus-lib
 version:             0.0.1
-synopsis:            Shared by server and client
-description:         Please see README.md
-homepage:            https://github.com/githubuser/lib#readme
 author:              Moritz Drexl
 maintainer:          mdrexl@fastmail.fm
-copyright:           2016 Moritz Drexl
+copyright:           2016-2017 Moritz Drexl
 category:            Web
 build-type:          Simple
--- extra-source-files:
 cabal-version:       >=1.10
 
 library
@@ -85,11 +81,13 @@ library
 executable psc-gen
   hs-source-dirs:      psc-gen
   main-is:             Main.hs
+  other-modules:       Options
   default-language:    Haskell2010
   build-depends:       base
                      , containers
                      , herculus-lib
                      , lens
+                     , optparse-applicative
                      , purescript-bridge
                      , servant-purescript
                      , text

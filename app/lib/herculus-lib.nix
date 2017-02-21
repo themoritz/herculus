@@ -1,23 +1,28 @@
 { mkDerivation, aeson, attoparsec, base, base64-bytestring, bson
 , bytestring, case-insensitive, cereal, containers, Decimal
-, deepseq, http-api-data, http-media, http-types, lens, mtl, parsec
-, pwstore-fast, scientific, servant, stdenv, text, these, time
-, transformers, union-find, unordered-containers, vector, email-validate
+, deepseq, email-validate, http-api-data, http-media, http-types
+, lens, mtl, optparse-applicative, parsec, purescript-bridge
+, pwstore-fast, scientific, servant, servant-purescript, stdenv
+, text, these, time, transformers, union-find, unordered-containers
+, vector
 }:
 mkDerivation {
   pname = "herculus-lib";
   version = "0.0.1";
   src = ./.;
+  isLibrary = true;
+  isExecutable = true;
   libraryHaskellDepends = [
     aeson attoparsec base base64-bytestring bson bytestring
-    case-insensitive cereal containers Decimal deepseq http-api-data
-    http-media http-types lens mtl parsec pwstore-fast scientific
-    servant text these time transformers union-find unordered-containers
-    vector email-validate
+    case-insensitive cereal containers Decimal deepseq email-validate
+    http-api-data http-media http-types lens mtl parsec pwstore-fast
+    scientific servant text these time transformers union-find
+    unordered-containers vector
+  ];
+  executableHaskellDepends = [
+    base containers lens optparse-applicative purescript-bridge
+    servant-purescript text
   ];
   testHaskellDepends = [ base ];
-  homepage = "https://github.com/githubuser/lib#readme";
-  description = "Shared by server and client";
   license = stdenv.lib.licenses.unfree;
-  doHaddock = false;
 }

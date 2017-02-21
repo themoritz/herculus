@@ -64,7 +64,7 @@ render st = cldiv_ st.input.className
             "Enter"  -> Just (H.action TrySave)
             "Escape" -> Just (H.action CancelEdit)
             _        -> Nothing
-        -- TODO: onBlur
+        , HE.onBlur (HE.input_ CancelEdit)
         ]
    ]
 

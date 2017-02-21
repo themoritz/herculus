@@ -10,10 +10,9 @@ var config = {
     'webpack-hot-middleware/client?reload=true',
     path.join(__dirname, 'src-public/entry.js'),
   ],
-  devtool: 'cheap-module-eval-source-map',
   output: {
     path: path.resolve('./public'),
-    filename: 'bundle.js',
+    filename: 'bundle-[hash:8].js',
     publicPath: ''
   },
   module: {
@@ -70,13 +69,11 @@ var config = {
   },
   plugins: [
     new webpack.DefinePlugin({
-      'process.env.NODE_ENV': JSON.stringify('development'),
       'process.env.API_URL':
         JSON.stringify('http://localhost:'+port+'/proxy/api/'),
       'process.env.WEBSOCKET_URL':
         JSON.stringify('ws://localhost:'+proxyPort+'/websocket')
     }),
-    new webpack.optimize.OccurrenceOrderPlugin(true),
     new webpack.LoaderOptionsPlugin({
       debug: true
     }),

@@ -19,6 +19,11 @@ require('flatpickr/dist/flatpickr.css')
 require('basil.js')
 global.basil = new window.Basil({expireDays: 60})
 
+// Git rev sanity check
+global.herculus$getClientGitRev = function () {
+  return process.env.GIT_REV
+}
+
 var apiUrl = process.env.API_URL || 'http://localhost:3000/api/'
 var webSocketUrl = process.env.WEBSOCKET_URL || 'ws://localhost:3000/websocket'
 

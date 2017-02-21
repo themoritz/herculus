@@ -158,7 +158,6 @@ render st =
               "Enter"  -> Just (H.action SaveName)
               "Escape" -> Just (H.action CancelEditName)
               _        -> Nothing
-          -- TODO: investigate DOMException
           , HE.onBlur (HE.input_ CancelEditName)
           ]
         ]

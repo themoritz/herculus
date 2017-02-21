@@ -49,19 +49,22 @@ render st = case st.input.reportCol ^. reportColCompileStatus of
     Just mkPath -> case st.input.reportCol ^. reportColFormat of
       ReportFormatPlain ->
         HH.a
-        [ HP.href (mkPath "getReportPlain")
+        [ HP.href (mkPath "plain")
+        , HP.class_ (H.ClassName "link")
         , HP.target "_blank"
         ]
         [ faIcon_ "file-text-o fa-lg" ]
       ReportFormatPDF ->
         HH.a
-        [ HP.href (mkPath "getReportPDF")
+        [ HP.href (mkPath "pdf")
+        , HP.class_ (H.ClassName "link")
         , HP.target "_blank"
         ]
         [ faIcon_ "file-pdf-o fa-lg" ]
       ReportFormatHTML ->
         HH.a
-        [ HP.href (mkPath "getReportHTML")
+        [ HP.href (mkPath "html")
+        , HP.class_ (H.ClassName "link")
         , HP.target "_blank"
         ]
         [ faIcon_ "file-code-o fa-lg" ]
@@ -76,10 +79,10 @@ eval = case _ of
     case input.coords of
       Coords (Id colId) (Id rowId) -> modify _
         { getReportPath = Just \which ->
-            apiUrl <> "cell/" <> which <>
+            apiUrl <> "reportCell/" <> which <>
             "/" <> colId <>
             "/" <> rowId <>
-            "?sessionKey=" <> authToken
+            "?authToken=" <> authToken
         }
     pure next
 

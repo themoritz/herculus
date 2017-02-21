@@ -7,6 +7,7 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import DOM.Event.KeyboardEvent (code)
+import DOM.HTML.HTMLElement as DOM
 import Data.Map (Map)
 import Data.String (length)
 import Herculus.Monad (Herc)
@@ -17,7 +18,8 @@ import Lib.Custom (Id)
 import Lib.Model.Table (Table, tableName)
 
 data Query a
-  = SetNewTableName String a
+  = Initialize a
+  | SetNewTableName String a
   | CreateNew a
   | StartEdit (Id Table) a
   | SetNewName String a
@@ -44,16 +46,18 @@ type State =
   }
 
 comp :: H.Component HH.HTML Query Input Output Herc
-comp = H.component
+comp = H.lifecycleComponent
   { initialState:
     { input: _
     , newTableName: ""
     , editing: Nothing
     , newName: ""
     }
+  , receiver: Just <<< H.action <<< Update
+  , initializer: Just (H.action Initialize)
+  , finalizer: Nothing
   , render
   , eval
-  , receiver: Just <<< H.action <<< Update
   }
 
   where
@@ -63,12 +67,14 @@ comp = H.component
     (map renderTable (Map.toAscUnfoldable st.input.tables) <>
     [ HH.input
       [ HP.value st.newTableName
+      , HP.ref (H.RefLabel "add-table")
       , HP.class_ (H.ClassName "header-input")
       , HP.placeholder "Add table..."
       , HE.onValueInput (HE.input SetNewTableName)
       , HE.onKeyDown \e -> case code e of
-          "Enter" -> Just (H.action CreateNew)
-          _       -> Nothing
+          "Enter"  -> Just (H.action CreateNew)
+          "Escape" -> Just (H.action CancelEdit)
+          _        -> Nothing
       ]
     ])
 
@@ -92,7 +98,7 @@ comp = H.component
                 "Enter"  -> Just (H.action SaveEdit)
                 "Escape" -> Just (H.action CancelEdit)
                 _        -> Nothing
-            -- , HE.onBlur (HE.input_ CancelEdit)
+            , HE.onBlur (HE.input_ CancelEdit)
             ]
           false -> HH.span_
             ([ HH.text (desc._descTable ^. tableName)
@@ -120,6 +126,12 @@ comp = H.component
           false -> ""
 
   eval :: Query ~> H.ComponentDSL State Query Output Herc
+  eval (Initialize next) = do
+    H.getHTMLElementRef (H.RefLabel "add-table") >>= case _ of
+      Nothing -> pure unit
+      Just el -> liftEff $ DOM.focus el
+    pure next
+
   eval (SetNewTableName name next) = do
     modify _{ newTableName = name }
     pure next

@@ -31,6 +31,8 @@ import qualified Lib.Model.Row                             as M
 import qualified Lib.Model.Table                           as M
 import           Lib.Types
 
+import           Options
+
 data Bridge
 
 bridgeProxy :: Proxy Bridge
@@ -119,6 +121,7 @@ types =
 
 main :: IO ()
 main = do
+  opts <- getOptions
   writePSTypes "../psc-client/src" (buildBridge bridge) types
   let
     settings m = defaultSettings
@@ -128,4 +131,4 @@ main = do
           , "baseURL"
           ]
     writeApiToModule m = writeAPIModuleWithSettings (settings m)
-  writeApiToModule "Lib.Api.Rest" "../psc-client/src" bridgeProxy (Proxy @Routes')
+  writeApiToModule "Lib.Api.Rest" (optTarget opts) bridgeProxy (Proxy @Routes')

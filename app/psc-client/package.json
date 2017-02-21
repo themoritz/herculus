@@ -3,6 +3,7 @@
   "scripts": {
     "watch": "node ./webpack.config.js",
     "build": "webpack --progress --colors",
+    "build-prod": "webpack --config webpack.prod.config.js --progress --optimize-minimize",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "devDependencies": {
@@ -23,6 +24,8 @@
     "postcss-loader": "^1.2.2",
     "postcss-nested": "^1.0.0",
     "postcss-simple-vars": "^3.0.0",
+    "purescript": "^0.10.7",
+    "purescript-psa": "^0.4.0",
     "purs-loader": "^2.0.0",
     "source-map-loader": "^0.1.5",
     "style-loader": "^0.13.1",
