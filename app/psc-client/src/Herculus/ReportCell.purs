@@ -80,8 +80,8 @@ eval = case _ of
       Coords (Id colId) (Id rowId) -> modify _
         { getReportPath = Just \which ->
             apiUrl <> "reportCell/" <> which <>
-            "/" <> colId <>
-            "/" <> rowId <>
+            "/" <> show colId <>
+            "/" <> show rowId <>
             "?authToken=" <> authToken
         }
     pure next

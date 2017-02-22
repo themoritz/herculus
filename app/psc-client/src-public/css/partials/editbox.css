@@ -1,3 +1,9 @@
+.flatpickr-input {
+  width: 100%;
+  font-size: inherit;
+}
+
+.flatpickr-input,
 .editbox {
   position: relative;
   border: 1px solid transparent;

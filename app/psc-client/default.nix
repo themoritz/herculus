@@ -1,7 +1,7 @@
 { pkgs ? import <nixpkgs> {}
 , herculus-lib ? import ../lib {}
-, apiUrl ? "/"
-, websocketUrl ? "/"
+, apiUrl ? "http://localhost:3000/api/"
+, websocketUrl ? "ws://localhost:3000/websocket"
 }:
 
 with pkgs;
@@ -10,7 +10,6 @@ stdenv.mkDerivation {
   name = "herculus-client";
   src = ./.;
   buildInputs = [
-    git
     zopfli
     nodejs
     nodePackages.bower
@@ -21,7 +20,6 @@ stdenv.mkDerivation {
     npm install --no-optional
     bower install
     psc-gen --target "./src"
-    # GIT_REV=`git rev-parse --short HEAD` \
     API_URL="${apiUrl}" \
       WEBSOCKET_URL="${websocketUrl}" \
       npm run build-prod

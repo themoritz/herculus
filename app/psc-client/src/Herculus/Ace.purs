@@ -66,7 +66,7 @@ comp = H.lifecycleComponent
           Session.setMode input.mode session
           Session.setUseSoftTabs true session
           Session.setTabSize 2 session
-          Editor.setTheme "ace/theme/chrome" editor
+          Editor.setTheme "ace/theme/github" editor
           Editor.setMaxLines 100 editor
           Editor.setHighlightActiveLine false editor
         H.subscribe $ H.eventSource_
