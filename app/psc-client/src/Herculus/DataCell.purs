@@ -47,10 +47,12 @@ type Child =
   Date.Query <\/>
   Const Void
 
+type SlotAddr = String
+
 type Slot =
-  Unit \/
-  Unit \/
-  Unit \/
+  SlotAddr \/
+  SlotAddr \/
+  SlotAddr \/
   Void
 
 --------------------------------------------------------------------------------
@@ -135,24 +137,24 @@ render st = case st.input.content of
     -> H.ParentHTML Query Child Slot Herc
   value mode dt val cb = case derived of
     Derived -> showValue mode dt val
-    NotDerived -> editValue mode dt val cb
+    NotDerived -> editValue "" mode dt val cb
 
   editValue
-    :: RenderMode -> DataType -> Value -> (Value -> H.Action Query)
+    :: SlotAddr -> RenderMode -> DataType -> Value -> (Value -> H.Action Query)
     -> H.ParentHTML Query Child Slot Herc
-  editValue mode dt val cb = case val of
+  editValue slotPrefix mode dt val cb = case val of
     VBool b -> editBool b (cb <<< VBool)
-    VString s -> editString s (cb <<< VString)
-    VNumber n -> editNumber n (cb <<< VNumber)
-    VTime t -> editTime t (cb <<< VTime)
+    VString s -> editString slotPrefix s (cb <<< VString)
+    VNumber n -> editNumber slotPrefix n (cb <<< VNumber)
+    VTime t -> editTime slotPrefix t (cb <<< VTime)
     VRowRef mr -> case dt of
       DataRowRef t -> editRowRef mode t mr (cb <<< VRowRef)
       _            -> HH.div_ []
     VList vs -> case dt of
-      DataList sub -> editList mode sub vs (cb <<< VList)
+      DataList sub -> editList slotPrefix mode sub vs (cb <<< VList)
       _            -> HH.div_ []
     VMaybe v -> case dt of
-      DataMaybe sub -> editMaybe mode sub v (cb <<< VMaybe)
+      DataMaybe sub -> editMaybe slotPrefix mode sub v (cb <<< VMaybe)
       _             -> HH.div_ []
 
   showValue
@@ -188,10 +190,10 @@ render st = case st.input.content of
     [ HH.text (if val then "True" else "False") ]
 
   editString
-    :: String -> (String -> H.Action Query)
+    :: SlotAddr -> String -> (String -> H.Action Query)
     -> H.ParentHTML Query Child Slot Herc
-  editString val cb =
-    HH.slot' cp1 unit EditBox.comp
+  editString slot val cb =
+    HH.slot' cp1 slot EditBox.comp
              { value: val
              , placeholder: ""
              , className: "full-height"
@@ -204,10 +206,10 @@ render st = case st.input.content of
     [ HH.text val ]
 
   editNumber
-    :: ValNumber -> (ValNumber -> H.Action Query)
+    :: SlotAddr -> ValNumber -> (ValNumber -> H.Action Query)
     -> H.ParentHTML Query Child Slot Herc
-  editNumber val cb =
-    HH.slot' cp2 unit EditBox.comp
+  editNumber slot val cb =
+    HH.slot' cp2 slot EditBox.comp
              { value: val
              , placeholder: ""
              , className: "right-align full-height"
@@ -220,10 +222,10 @@ render st = case st.input.content of
     [ HH.text str ]
 
   editTime
-    :: ValTime -> (ValTime -> H.Action Query)
+    :: SlotAddr -> ValTime -> (ValTime -> H.Action Query)
     -> H.ParentHTML Query Child Slot Herc
-  editTime val@(ValTime str) cb =
-    HH.slot' cp3 unit Date.comp { date: val }
+  editTime slot val@(ValTime str) cb =
+    HH.slot' cp3 slot Date.comp { date: val }
              \(Date.DateChanged val') ->
                Just (H.action (cb val'))
 
@@ -294,9 +296,9 @@ render st = case st.input.content of
   rows t = fromMaybe Map.empty $ Map.lookup t st.input.rowCache
 
   editList
-    :: RenderMode -> DataType -> Array Value -> (Array Value -> H.Action Query)
+    :: SlotAddr -> RenderMode -> DataType -> Array Value -> (Array Value -> H.Action Query)
     -> H.ParentHTML Query Child Slot Herc
-  editList mode subDt vals cb = case mode of
+  editList slotPrefix mode subDt vals cb = case mode of
       Compact -> compactList mode subDt vals
       Full -> cldiv_ "cell-list" $
         elements <>
@@ -317,7 +319,8 @@ render st = case st.input.content of
           [ faIcon_ "minus-circle" ]
         ]
       , cldiv_ "flex-auto p1"
-        [ editValue mode subDt v (\nv -> cb (listMod i nv vals))
+        [ editValue (slotPrefix <> show i) mode subDt v
+                    \nv -> cb (listMod i nv vals)
         ]
       ]
     listMod i x xs = fromMaybe xs $ updateAt i x xs
@@ -342,9 +345,9 @@ render st = case st.input.content of
     )
 
   editMaybe
-    :: RenderMode -> DataType -> Maybe Value -> (Maybe Value -> H.Action Query)
+    :: SlotAddr -> RenderMode -> DataType -> Maybe Value -> (Maybe Value -> H.Action Query)
     -> H.ParentHTML Query Child Slot Herc
-  editMaybe mode subDt mVal cb = cldiv_ "flex items-center" case mVal of
+  editMaybe slotPrefix mode subDt mVal cb = cldiv_ "flex items-center" case mVal of
     Nothing ->
       [ HH.button
         [ HP.class_ (H.ClassName "cell-button")
@@ -359,7 +362,7 @@ render st = case st.input.content of
         , HE.onClick $ HE.input_ $ cb Nothing ]
         [ faIcon_ "minus-circle" ]
       , cldiv_ "flex-auto"
-        [ editValue mode subDt val (cb <<< Just)
+        [ editValue slotPrefix mode subDt val (cb <<< Just)
         ]
       ]
 
