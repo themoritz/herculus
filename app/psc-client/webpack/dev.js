@@ -46,6 +46,13 @@ var config = {
     modules: [
       path.join(__dirname, '../node_modules')
     ]
+  },
+  resolve: {
+    modules: [
+      'node_modules',
+      'bower_components'
+    ],
+    extensions: ['.js', '.purs']
   }
 };
 
