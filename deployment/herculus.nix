@@ -12,9 +12,9 @@
 
       # App server 
       herculusServer = import ./../app/server { inherit pkgs; };
-      herculusClient = import ./../app/client {
+      herculusClient = import ./../app/psc-client {
         inherit pkgs;
-        apiUrl = "https://app.${domain}/api";
+        apiUrl = "https://app.${domain}/api/";
         websocketUrl = "wss://app.${domain}/websocket";
       };
 
