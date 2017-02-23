@@ -13,11 +13,14 @@
     "purescript-halogen-vdom": "master",
     "purescript-profunctor-lenses": "^2.6.0",
     "purescript-servant-support": "^6.0.0",
-    "purescript-argonaut-generic-codecs": "themoritz/purescript-argonaut-generic-codecs#aeson-1-compat",
+    "purescript-argonaut-generic-codecs": "^5.0.0",
     "purescript-flatpickr": "master",
     "purescript-routing": "^3.0.0",
     "purescript-ace": "^3.0.0",
     "purescript-halogen-css": "master",
     "purescript-parsing": "^3.2.1"
+  },
+  "resolutions": {
+    "purescript-argonaut-generic-codecs": "^5.0.0"
   }
 }
