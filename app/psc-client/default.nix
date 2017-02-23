@@ -10,6 +10,7 @@ stdenv.mkDerivation {
   name = "herculus-client";
   src = ./.;
   buildInputs = [
+    git
     zopfli
     nodejs
     nodePackages.bower
