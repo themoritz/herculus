@@ -23,7 +23,7 @@ import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
 import Herculus.Monad (Herc, getAuthToken, gotoRoute, notify, withApi)
 import Herculus.Project.Data (ProjectData, applyDiff, descTable, mkProjectData, prepare)
 import Herculus.Project.TableList (Output(..))
-import Herculus.Utils (cldiv_, faIcon_)
+import Herculus.Utils (cldiv_, faIcon_, focusElement)
 import Herculus.Utils.Templates (app)
 import Lib.Api.Rest (postProjectRunCommandByProjectId, deleteProjectDeleteByProjectId, getProjectLoadByProjectId, postProjectSetNameByProjectId) as Api
 import Lib.Api.Schema.Auth (UserInfo)
@@ -75,6 +75,9 @@ type ChildSlot =
   Unit \/
   Unit \/
   Void
+
+projectNameRef :: H.RefLabel
+projectNameRef = H.RefLabel "projectNameRef" 
 
 comp :: H.Component HH.HTML Query Input Void Herc
 comp = H.lifecycleParentComponent
@@ -152,7 +155,7 @@ render st =
         [ HH.input
           [ HP.value name
           , HP.class_ (H.ClassName "header-input")
-          , HP.autofocus true
+          , HP.ref projectNameRef
           , HE.onValueInput (HE.input SetName)
           , HE.onKeyDown \e -> case code e of
               "Enter"  -> Just (H.action SaveName)
@@ -205,6 +208,7 @@ eval (StartEditName next) = do
   modify _
     { tmpProjectName = view projectName <$> p
     }
+  focusElement projectNameRef
   pure next
 
 eval (CancelEditName next) = do

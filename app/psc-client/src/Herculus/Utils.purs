@@ -6,6 +6,8 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import DOM (DOM)
+import DOM.HTML.HTMLElement (focus) as DOM
 import DOM.HTML.Indexed (HTMLdiv, HTMLspan)
 import Data.Array (find, length, zip, (..))
 import Data.Generic (gShow)
@@ -68,6 +70,16 @@ dropdown cls options value query = HH.select
       [ HP.value (gShow opt.value) ]
       [ HH.text opt.label ]
   )
+
+--------------------------------------------------------------------------------
+
+focusElement
+  :: forall s f g p o m eff
+   . MonadEff (dom :: DOM | eff) m
+  => H.RefLabel -> H.HalogenM s f g p o m Unit
+focusElement ref = H.getHTMLElementRef ref >>= case _ of
+  Nothing -> pure unit
+  Just el -> liftEff $ DOM.focus el
 
 --------------------------------------------------------------------------------
 

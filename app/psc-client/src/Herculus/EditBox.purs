@@ -5,9 +5,9 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import DOM.Event.KeyboardEvent (code)
+import DOM.Event.KeyboardEvent (code) as DOM
 import Herculus.Monad (Herc)
-import Herculus.Utils (cldiv, cldiv_)
+import Herculus.Utils (cldiv, cldiv_, focusElement)
 
 data Query v a
   = Update (Input v) a
@@ -31,6 +31,9 @@ type State v =
   , editing :: Boolean
   }
 
+ref :: H.RefLabel
+ref = H.RefLabel "input"
+
 comp :: forall v. H.Component HH.HTML (Query v) (Input v) v Herc
 comp = H.component
   { initialState:
@@ -53,14 +56,14 @@ render st = cldiv_ st.input.className
         [ HH.text (if text == "" then st.input.placeholder else text) ]
       true -> HH.input
         [ HP.placeholder st.input.placeholder
+        , HP.ref ref
         , HP.classes
           [ H.ClassName "editbox__input"
           , H.ClassName (if isJust st.invalidText then "editbox__input--invalid" else "")
           ]
         , HP.value text
-        , HP.autofocus true
         , HE.onValueInput (HE.input SetText)
-        , HE.onKeyDown \e -> case code e of
+        , HE.onKeyDown \e -> case DOM.code e of
             "Enter"  -> Just (H.action TrySave)
             "Escape" -> Just (H.action CancelEdit)
             _        -> Nothing
@@ -83,6 +86,7 @@ eval = case _ of
 
   StartEdit next -> do
     modify _{ editing = true }
+    focusElement ref
     pure next
 
   SetText str next -> do

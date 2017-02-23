@@ -7,18 +7,17 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import DOM.Event.KeyboardEvent (code)
-import DOM.HTML.HTMLElement as DOM
 import Data.Map (Map)
 import Data.String (length)
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (TableDesc, descTable)
-import Herculus.Utils (cldiv_, faIcon_)
+import Herculus.Utils (cldiv_, faIcon_, focusElement)
 import Lib.Api.Schema.Project (Command(..))
-import Lib.Custom (Id)
+import Lib.Custom (Id(..))
 import Lib.Model.Table (Table, tableName)
 
 data Query a
-  = Initialize a
+  = Update Input a
   | SetNewTableName String a
   | CreateNew a
   | StartEdit (Id Table) a
@@ -27,7 +26,6 @@ data Query a
   | GoTable (Id Table) a
   | DeleteTable (Id Table) a
   | CancelEdit a
-  | Update Input a
 
 type Input =
   { selected :: Maybe (Id Table)
@@ -45,8 +43,14 @@ type State =
   , newName :: String
   }
 
+tableNameRef :: Id Table -> H.RefLabel
+tableNameRef (Id t) = H.RefLabel t
+
+addTableRef :: H.RefLabel
+addTableRef = H.RefLabel "add-table"
+
 comp :: H.Component HH.HTML Query Input Output Herc
-comp = H.lifecycleComponent
+comp = H.component
   { initialState:
     { input: _
     , newTableName: ""
@@ -54,8 +58,6 @@ comp = H.lifecycleComponent
     , newName: ""
     }
   , receiver: Just <<< H.action <<< Update
-  , initializer: Just (H.action Initialize)
-  , finalizer: Nothing
   , render
   , eval
   }
@@ -67,7 +69,7 @@ comp = H.lifecycleComponent
     (map renderTable (Map.toAscUnfoldable st.input.tables) <>
     [ HH.input
       [ HP.value st.newTableName
-      , HP.ref (H.RefLabel "add-table")
+      , HP.ref addTableRef
       , HP.class_ (H.ClassName "header-input")
       , HP.placeholder "Add table..."
       , HE.onValueInput (HE.input SetNewTableName)
@@ -91,7 +93,7 @@ comp = H.lifecycleComponent
       [ case Just i == st.editing of
           true -> HH.input
             [ HP.value st.newName
-            , HP.autofocus true
+            , HP.ref $ tableNameRef i
             , HP.class_ (H.ClassName "header-input")
             , HE.onValueInput (HE.input SetNewName)
             , HE.onKeyDown \e -> case code e of
@@ -126,10 +128,10 @@ comp = H.lifecycleComponent
           false -> ""
 
   eval :: Query ~> H.ComponentDSL State Query Output Herc
-  eval (Initialize next) = do
-    H.getHTMLElementRef (H.RefLabel "add-table") >>= case _ of
-      Nothing -> pure unit
-      Just el -> liftEff $ DOM.focus el
+  eval (Update input next) = do
+    modify _{ input = input }
+    when (Map.isEmpty input.tables) do
+      focusElement addTableRef
     pure next
 
   eval (SetNewTableName name next) = do
@@ -147,11 +149,12 @@ comp = H.lifecycleComponent
     tables <- H.gets _.input.tables
     case Map.lookup t tables of
       Nothing -> pure unit
-      Just table ->
+      Just table -> do
         modify _
           { editing = Just t
           , newName = table ^. descTable <<< tableName
           }
+        focusElement $ tableNameRef t
     pure next
   
   eval (SetNewName name next) = do
@@ -177,8 +180,4 @@ comp = H.lifecycleComponent
 
   eval (CancelEdit next) = do
     modify _{ editing = Nothing }
-    pure next
-
-  eval (Update input next) = do
-    modify _{ input = input }
     pure next
