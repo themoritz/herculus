@@ -7,6 +7,7 @@ let
     haskellPackages.override {
       overrides = self: super: {
         herculus-lib = self.callPackage (import ../lib/herculus-lib.nix) {};
+        servant-purescript = super.servant-purescript_0_7_0_0;
       };
     }
   );

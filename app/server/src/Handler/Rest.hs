@@ -11,6 +11,7 @@ module Handler.Rest where
 
 import           Prelude                        hiding (unlines)
 
+import           Control.Concurrent             (forkIO)
 import           Control.Lens
 import           Control.Monad.Except           (ExceptT (ExceptT), runExceptT)
 import           Control.Monad.IO.Class         (MonadIO, liftIO)
@@ -193,7 +194,8 @@ handleAuthSendResetLink email =
             , "If you did not request this, you can just ignore this email."
             ]
           mail = Mail.simpleMail' recipient sender subject body
-      liftIO $ Mail.renderSendMailCustom "sendmail" ["-t"] mail
+      liftIO $ void $ forkIO $
+        Mail.renderSendMailCustom "sendmail" ["-t"] mail
 
 handleAuthResetPassword :: (MonadIO m, MonadHexl m) => SessionKey -> m Text
 handleAuthResetPassword sKey =
