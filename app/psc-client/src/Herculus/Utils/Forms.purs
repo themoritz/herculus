@@ -44,7 +44,7 @@ renderRow label name password value onInput onEnter = HH.tr_
   , HH.td
     [ HP.class_ (HH.ClassName "py1 auth-form__cell") ]
     [ HH.input
-      [ HP.class_ (H.ClassName "auth-form__input")
+      [ HP.class_ (H.ClassName "input")
       , HP.type_ (if password then HP.InputPassword else HP.InputText)
       , HP.value value
       , HP.name name

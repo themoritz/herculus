@@ -23,7 +23,7 @@ import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
 import Herculus.Monad (Herc, getAuthToken, gotoRoute, notify, withApi)
 import Herculus.Project.Data (ProjectData, applyDiff, descTable, mkProjectData, prepare)
 import Herculus.Project.TableList (Output(..))
-import Herculus.Utils (cldiv_, faIcon_, focusElement)
+import Herculus.Utils (cldiv_, clspan_, faIcon_, focusElement)
 import Herculus.Utils.Templates (app)
 import Lib.Api.Rest (postProjectRunCommandByProjectId, deleteProjectDeleteByProjectId, getProjectLoadByProjectId, postProjectSetNameByProjectId) as Api
 import Lib.Api.Schema.Auth (UserInfo)
@@ -169,7 +169,10 @@ render st =
   in
     app
     [ case st.disconnected of
-        true -> HH.text "Disconnected"
+        true -> clspan_ "orange bold pr2 pulsing"
+          [ faIcon_ "wifi pr1"
+          , HH.text "Reconnecting..."
+          ]
         false -> HH.text ""
     , overviewButton
     , HH.slot' cp1 unit UserMenu.comp st.userInfo absurd

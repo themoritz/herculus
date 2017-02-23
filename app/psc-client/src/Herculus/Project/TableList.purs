@@ -7,6 +7,7 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import DOM.Event.KeyboardEvent (code)
+import Data.Lens (view)
 import Data.Map (Map)
 import Data.String (length)
 import Herculus.Monad (Herc)
@@ -162,12 +163,17 @@ comp = H.component
     pure next
 
   eval (SaveEdit next) = do
-    { editing, newName } <- H.get
+    { editing, newName, input } <- H.get
     case editing of
       Nothing -> pure unit
-      Just t -> when (length newName > 0) do
-        H.raise $ Command $ CmdTableSetName t newName
-        modify _{ editing = Nothing }
+      Just t -> do
+        when (length newName > 0) do
+          let
+            oldName = view (descTable <<< tableName) <$>
+                      Map.lookup t input.tables
+          when (Just newName /= oldName) do
+            H.raise $ Command $ CmdTableSetName t newName
+          modify _{ editing = Nothing }
     pure next
 
   eval (GoTable t next) = do

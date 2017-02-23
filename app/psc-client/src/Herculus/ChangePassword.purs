@@ -98,7 +98,7 @@ comp = H.component
           ChangePwdSuccess -> do
             notify
               { kind: N.Success
-              , message: "Successfully change password."
+              , message: "Successfully changed password."
               , detail: Nothing
               }
             gotoRoute $ R.LoggedIn R.ProjectOverview

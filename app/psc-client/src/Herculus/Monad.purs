@@ -14,7 +14,7 @@ import Halogen.Aff (HalogenEffects)
 import Herculus.Router (Root, setPath)
 import Lib.Api.Rest (SPParams_(..))
 import Network.HTTP.Affjax (AJAX)
-import Servant.PureScript.Affjax (AjaxError, errorToString)
+import Servant.PureScript.Affjax (AjaxError, ErrorDescription(ConnectionError, DecodingError, ParsingError, UnexpectedHTTPStatus), runAjaxError)
 import Servant.PureScript.Settings (SPSettings_, defaultSettings)
 import WebSocket (WEBSOCKET)
 
@@ -140,9 +140,32 @@ withApi call handler = do
   token <- getAuthToken
   result <- lift $ runApiT apiUrl token call
   case result of
-    Left e -> notify
-      { kind: Notify.Error
-      , message: "Api call failed."
-      , detail: Just $ errorToString e
-      }
+    Left e -> do
+      let
+        description = (runAjaxError e).description
+      case description of
+        UnexpectedHTTPStatus response -> 
+          notify
+            { kind: Notify.Error
+            , message: response.response
+            , detail: Nothing
+            }
+        ParsingError msg ->
+          notify
+            { kind: Notify.Error
+            , message: "Api request failed."
+            , detail: Just $ "Could not parse json message from server: " <> msg
+            }
+        DecodingError msg -> 
+          notify
+            { kind: Notify.Error
+            , message: "Api request failed."
+            , detail: Just $ "Could not decode json message from server: " <> msg
+            }
+        ConnectionError msg ->
+          notify
+            { kind: Notify.Error
+            , message: "Api request failed."
+            , detail: Just msg
+            }
     Right a -> handler a

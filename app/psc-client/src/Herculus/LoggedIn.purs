@@ -93,12 +93,7 @@ comp = H.lifecycleParentComponent
     withApi Api.getAuthUserInfo $ case _ of
       GetUserInfoSuccess ui -> 
         modify _{ userInfo = Just ui }
-      GetUserInfoFailed msg -> do
-        notify
-          { kind: N.Error
-          , message: "Could not get user info."
-          , detail: Just msg
-          }
+      GetUserInfoFailed _ ->
         liftEff $ R.setPath R.LogIn
     pure next
     
