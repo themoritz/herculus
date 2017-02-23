@@ -1,7 +1,5 @@
-public/js/
-public/doc/
-public/css/
-public/*.woff*
-public/*.svg
-public/*.ttf
-public/*.eot
+output/
+.pulp-cache/
+
+src/Lib/
+src/Api/
