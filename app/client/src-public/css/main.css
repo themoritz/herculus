@@ -77,6 +77,10 @@ body, html {
   color: gray;
 }
 
+.bg-gray {
+  background-color: gray;
+}
+
 .lightred {
   color: color(red lightness(+40%));
 }

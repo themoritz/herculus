@@ -8,12 +8,28 @@
   pointer-events: none;
 }
 
+.pointer-events {
+  pointer-events: auto;
+}
+
 .cursor-col-resize {
   cursor: e-resize;
 }
 
+.cursor-grab {
+  cursor: grab;
+}
+
+.cursor-grabbing {
+  cursor: grabbing;
+}
+
+.overlay-gray {
+  background-color: $anthrazit;
+  opacity: 0.5;
+}
+
 .grid-resizer {
-  pointer-events: auto;
   &:hover {
     background-color: #4285F4;
   }
