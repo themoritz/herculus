@@ -2,20 +2,18 @@ module Herculus.Grid.Control where
 
 import Herculus.Prelude
 import CSS as CSS
-import Data.Map as Map
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.CSS as HC
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import CSS (width)
 import DOM.Event.Event (preventDefault)
 import DOM.Event.Types (MouseEvent, mouseEventToEvent)
 import Data.Array ((!!))
 import Data.Int (round, toNumber)
 import Data.Traversable (Accum, mapAccumL)
 import Herculus.Monad (Herc)
-import Herculus.Utils (cldiv, cldiv_, mkIndexed)
+import Herculus.Utils (cldiv, mkIndexed)
 import Herculus.Utils.Drag (DragEvent(..), dragEventSource)
 
 data Query a

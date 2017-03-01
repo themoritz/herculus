@@ -55,6 +55,8 @@ type ProjectRoutes =
  :<|> ProjectList
  :<|> ProjectSetName
  :<|> ProjectDelete
+ :<|> ProjectColSetWidth
+ :<|> ProjectColReorder
  :<|> ProjectLoad
  :<|> ProjectRunCommand
 
@@ -71,12 +73,14 @@ type AuthChangePassword = "changePassword" :> AuthHeader :> ReqBody '[JSON] Chan
 type AuthSendResetLink  = "sendResetLink"  :> ReqBody '[JSON] Text                        :> Post '[JSON] ()
 type AuthResetPassword  = "resetPassword"  :> Capture "sessionKey" M.SessionKey           :> Get '[PlainText] Text
 
-type ProjectCreate      = "create"     :> ReqBody '[JSON] Text                                        :> Post '[JSON] Project
-type ProjectList        = "list"                                                                      :> Get '[JSON] [Project]
-type ProjectSetName     = "setName"    :> Capture "projectId" (Id M.Project) :> ReqBody '[JSON] Text    :> Post '[JSON] ()
-type ProjectDelete      = "delete"     :> Capture "projectId" (Id M.Project)                            :> Delete '[JSON] ()
-type ProjectLoad        = "load"       :> Capture "projectId" (Id M.Project)                            :> Get '[JSON] ProjectData
-type ProjectRunCommand  = "runCommand" :> Capture "projectId" (Id M.Project) :> ReqBody '[JSON] Command :> Post '[JSON] ()
+type ProjectCreate      = "create"      :> ReqBody '[JSON] Text                                                :> Post '[JSON] Project
+type ProjectList        = "list"                                                                               :> Get '[JSON] [Project]
+type ProjectSetName     = "setName"     :> Capture "projectId" (Id M.Project) :> ReqBody '[JSON] Text          :> Post '[JSON] ()
+type ProjectDelete      = "delete"      :> Capture "projectId" (Id M.Project)                                  :> Delete '[JSON] ()
+type ProjectColSetWidth = "colSetWidth" :> Capture "columnId" (Id M.Column)   :> ReqBody '[JSON] Int           :> Post '[JSON] ()
+type ProjectColReorder  = "colReorder"  :> Capture "columnId" (Id M.Column)   :> ReqBody '[JSON] (Id M.Column) :> Post '[JSON] ()
+type ProjectLoad        = "load"        :> Capture "projectId" (Id M.Project)                                  :> Get '[JSON] ProjectData
+type ProjectRunCommand  = "runCommand"  :> Capture "projectId" (Id M.Project) :> ReqBody '[JSON] Command       :> Post '[JSON] ()
 
 type ReportCellGetPdf   = "pdf"   :> Capture "columnId" (Id M.Column) :> Capture "rowId" (Id M.Row) :> Get '[PDF] LBS.ByteString
 type ReportCellGetHtml  = "html"  :> Capture "columnId" (Id M.Column) :> Capture "rowId" (Id M.Row) :> Get '[HTML] Text
