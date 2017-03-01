@@ -27,6 +27,7 @@ module Herculus.Prelude
   , module Data.Monoid
   , module Data.Traversable
   , module Data.Tuple
+  , Index
   ) where
 
 import Prelude
@@ -59,3 +60,5 @@ import Data.Maybe (Maybe(..), fromMaybe, fromMaybe', isJust, isNothing, maybe, m
 import Data.Monoid (class Monoid, mempty)
 import Data.Traversable (class Traversable, traverse, sequence, for)
 import Data.Tuple (Tuple(..), fst, snd, uncurry)
+
+type Index = Int

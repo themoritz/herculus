@@ -87,11 +87,3 @@
   border-top-right-radius: 2px;
   border-top-left-radius: 2px;
 }
-
-/* -------------------------------------------------------------------------- */
-
-.grid-cell {
-  border-right: 1px solid $medium-gray;
-  border-bottom: 1px solid $medium-gray;
-  height: 100%;
-}

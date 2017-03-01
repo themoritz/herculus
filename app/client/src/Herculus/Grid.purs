@@ -9,13 +9,14 @@ import Halogen.HTML.CSS as HC
 import Halogen.HTML.Properties as HP
 import Herculus.Column as Col
 import Herculus.DataCell as DataCell
+import Herculus.Grid.Control as Control
 import Herculus.PopupMenu as Popup
 import Herculus.ReportCell as ReportCell
 import Herculus.Row as Row
-import Data.Array (length)
+import Data.Array (length, updateAt, (!!), (..))
 import Data.Int (toNumber)
 import Data.Map (Map)
-import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5)
+import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5, cp6)
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (Coords(..), RowCache)
 import Herculus.Utils (Options, cldiv_, faButton_, mkIndexed)
@@ -32,6 +33,7 @@ data Query a
   | AddRow a
   | AddCol ColType a
   | TogglePopup a
+  | ResizeColumn Index Int a
 
 type Input =
   { cells :: Map Coords CellContent
@@ -47,6 +49,7 @@ type Output = Command
 
 type State =
   { input :: Input
+  , colSizes :: Array Int
   }
 
 data ColType
@@ -59,6 +62,7 @@ type Child =
   DataCell.Query <\/>
   ReportCell.Query <\/>
   Popup.Query ColType <\/>
+  Control.Query <\/>
   Const Void
 
 type Slot =
@@ -67,12 +71,14 @@ type Slot =
   Coords \/
   Coords \/
   Unit \/
+  Unit \/
   Unit
 
 comp :: H.Component HH.HTML Query Input Output Herc
 comp = H.parentComponent
   { initialState:
       { input: _
+      , colSizes: [230, 230, 230, 230, 230]
       }
   , receiver: Just <<< H.action <<< Update
   , render
@@ -92,8 +98,8 @@ popupEntries =
   ]
 
 render :: State -> H.ParentHTML Query Child Slot Herc
-render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll"
-  ([ posDiv 0 0 delRowWidth headHeight
+render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll" $
+  [ posDiv 0 0 delRowWidth headHeight
     [ cldiv_ "grid-cell" [] ]
   -- Add row
   , posDiv 0 (length st.input.rows * cellHeight + headHeight)
@@ -103,7 +109,7 @@ render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll"
       ]
     ]
   -- Add col
-  , posDiv (length st.input.cols * cellWidth + delRowWidth) 0
+  , posDiv (colLeft (length st.input.cols)) 0
            addColWidth headHeight
     [ cldiv_ "center p1"
       [ faButton_ "plus-circle" TogglePopup
@@ -114,7 +120,16 @@ render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll"
                  (Just <<< H.action <<< AddCol)
       ]
     ]
-  ] <> rows <> cols <> cells)
+  ] <> rows <> cols <> cells <>
+  [ HH.slot' cp6 unit Control.comp
+             { cols: st.colSizes
+             }
+             case _ of
+               Control.ResizeColumn ix width ->
+                 Just $ H.action $ ResizeColumn ix width
+               Control.ReorderColumn ix ix' ->
+                 Nothing
+  ]
 
   where
 
@@ -131,8 +146,8 @@ render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll"
     ]
 
   cols = icols <#> \(Tuple x col) ->
-    posDiv (x * cellWidth + delRowWidth) 0
-           cellWidth headHeight
+    posDiv (colLeft x) 0
+           (colWidth x) headHeight
     [ cldiv_ "grid-cell p1"
       [ let
           colId = col ^. columnId
@@ -157,8 +172,8 @@ render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll"
       colId = col ^. columnId
       coords = Coords (col ^. columnId) rowId
     pure $
-      posDiv (x * cellWidth + delRowWidth) (y * cellHeight + headHeight)
-             cellWidth cellHeight
+      posDiv (colLeft x) (y * cellHeight + headHeight)
+             (colWidth x) cellHeight
       [ cldiv_ "grid-cell p1"
         [ case col ^. columnKind of
             ColumnData dataCol ->
@@ -184,7 +199,10 @@ render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll"
   cellHeight = 37
   addRowHeight = 37
   delRowWidth = 37
-  cellWidth = 230
+  colWidth ix = fromMaybe 230 $ st.colSizes !! ix
+  colLeft ix = if ix == 0
+               then addColWidth
+               else colLeft (ix - 1) + colWidth (ix - 1)
   addColWidth = 37
 
   posDiv :: forall p i. Int -> Int -> Int -> Int -> Array (HH.HTML p i) -> HH.HTML p i
@@ -223,4 +241,10 @@ eval = case _ of
 
   TogglePopup next -> do
     H.query' cp5 unit (H.action Popup.Toggle)
+    pure next
+
+  ResizeColumn ix width next -> do
+    { colSizes } <- get
+    for_ (updateAt ix width colSizes) \new ->
+      modify _{ colSizes = new }
     pure next

@@ -1,0 +1,24 @@
+.grid-cell {
+  border-right: 1px solid $medium-gray;
+  border-bottom: 1px solid $medium-gray;
+  height: 100%;
+}
+
+.no-pointer-events {
+  pointer-events: none;
+}
+
+.cursor-col-resize {
+  cursor: e-resize;
+}
+
+.grid-resizer {
+  pointer-events: auto;
+  &:hover {
+    background-color: #4285F4;
+  }
+}
+
+.bg-grid-blue {
+  background-color: #4285F4;
+}
