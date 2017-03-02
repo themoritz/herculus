@@ -19,7 +19,7 @@ stdenv.mkDerivation {
   buildPhase = ''
     HOME=.
     npm install --no-optional
-    bower install
+    # bower install
     psc-gen --target "./src"
     API_URL="${apiUrl}" \
       WEBSOCKET_URL="${websocketUrl}" \

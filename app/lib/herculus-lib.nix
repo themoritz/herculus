@@ -24,5 +24,6 @@ mkDerivation {
     servant-purescript text
   ];
   testHaskellDepends = [ base ];
+  doHaddock = false;
   license = stdenv.lib.licenses.unfree;
 }

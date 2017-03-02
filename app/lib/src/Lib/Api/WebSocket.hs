@@ -9,7 +9,6 @@ import           Data.Text             (Text)
 
 import           GHC.Generics
 
-import           Lib.Api.Schema.Auth   (GetUserInfoResponse)
 import           Lib.Api.Schema.Column
 import           Lib.Model
 import qualified Lib.Model.Auth        as M (SessionKey)

@@ -1,9 +1,10 @@
-{ mkDerivation, aeson, base, base64-bytestring, bytestring, mime-mail
+{ mkDerivation, aeson, base, base64-bytestring, bytestring
 , containers, directory, either, entropy, fast-logger, filepath
-, neat-interpolation, lens, herculus-lib, monad-control, monad-logger
-, mongoDB, mtl, network, optparse-applicative, pandoc, pretty-show
-, servant, servant-server, stdenv, stm, text, time, transformers
-, transformers-base, wai, wai-websockets, warp, websockets
+, herculus-lib, lens, mime-mail, monad-control, monad-logger
+, mongoDB, mtl, neat-interpolation, network, optparse-applicative
+, pandoc, pretty-show, servant, servant-server, stdenv, stm, text
+, time, transformers, transformers-base, wai, wai-websockets, warp
+, websockets
 }:
 mkDerivation {
   pname = "server";
@@ -12,19 +13,17 @@ mkDerivation {
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
-    aeson base base64-bytestring bytestring containers directory mime-mail
-    entropy fast-logger filepath neat-interpolation lens herculus-lib
-    monad-control monad-logger mongoDB mtl network optparse-applicative
-    pandoc pretty-show servant servant-server stm text time
-    transformers transformers-base wai websockets
+    aeson base base64-bytestring bytestring containers directory
+    entropy fast-logger filepath herculus-lib lens mime-mail
+    monad-control monad-logger mongoDB mtl neat-interpolation network
+    optparse-applicative pandoc pretty-show servant servant-server stm
+    text time transformers transformers-base wai websockets
   ];
   executableHaskellDepends = [
-    aeson base bytestring either herculus-lib mongoDB mtl servant servant-server
-    stm text transformers wai-websockets warp websockets
+    aeson base bytestring either herculus-lib mongoDB mtl servant
+    servant-server stm text transformers wai-websockets warp websockets
   ];
-  doHaddock = false;
   testHaskellDepends = [ base ];
-  homepage = "https://gitlab.mdrexl.net/mdrexl/hexl";
-  description = "Hexl server";
+  doHaddock = false;
   license = stdenv.lib.licenses.unfree;
 }

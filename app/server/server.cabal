@@ -1,14 +1,10 @@
 name:                server
 version:             0.0.1
-synopsis:            Hexl server
-description:         Please see README.md
-homepage:            https://gitlab.mdrexl.net/mdrexl/hexl
 author:              Moritz Drexl
 maintainer:          mdrexl@fastmail.fm
-copyright:           2016 Moritz Drexl
+copyright:           2016-2017 Moritz Drexl
 category:            Web
 build-type:          Simple
--- extra-source-files:
 cabal-version:       >=1.10
 
 library

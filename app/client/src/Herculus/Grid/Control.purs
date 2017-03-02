@@ -9,8 +9,8 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import DOM.Event.Event (preventDefault)
 import DOM.Event.Types (MouseEvent, mouseEventToEvent)
+import DOM.HTML.HTMLElement (getBoundingClientRect)
 import Data.Array ((!!), toUnfoldable)
-import Data.Foldable (find)
 import Data.Int (round, toNumber)
 import Data.List (List(..))
 import Data.Traversable (Accum, mapAccumL)
@@ -18,7 +18,7 @@ import Herculus.Monad (Herc)
 import Herculus.Utils (cldiv, faIcon_, mkIndexed)
 import Herculus.Utils.Drag (DragEvent(..), dragEventSource, mouseEventToPageCoord)
 import Herculus.Utils.Ordering (Relative(..), RelativeTo(..), getRelativeTarget, reorder)
-import Lib.Custom (ColumnTag, Id(..))
+import Lib.Custom (ColumnTag, Id)
 
 data Query a
   = Update Input a
@@ -45,6 +45,9 @@ type State =
   , action :: Action
   }
 
+containerRef :: H.RefLabel
+containerRef = H.RefLabel "control-ref"
+
 comp :: H.Component HH.HTML Query Input Output Herc
 comp = H.component
   { initialState: \input ->
@@ -64,6 +67,7 @@ render st = HH.div
            Idle      -> [ H.ClassName "no-pointer-events" ]
            Resize _  -> [ H.ClassName "cursor-col-resize"]
            Reorder _ -> [ H.ClassName "cursor-grabbing"]
+  , HP.ref containerRef
   ]
   (join (mapAccumL column 37 (mkIndexed st.cols)).value)
 
@@ -170,12 +174,8 @@ eval = case _ of
     liftEff $ preventDefault $ mouseEventToEvent ev
     H.subscribe $ dragEventSource ev \drag ->
       Just $ Reordering ix left drag H.Listening
-    modify _ { action = Reorder
-               { ix
-               , left
-               , target: getReorderTarget (map snd cols) ev
-               }
-             }
+    target <- getReorderTarget (map snd cols) ev
+    modify _ { action = Reorder { ix, left, target } }
     pure next
 
   Reordering ix left drag next -> do
@@ -183,10 +183,11 @@ eval = case _ of
     case drag of
       Move ev d -> do
         let newLeft = left + round d.offsetX
+        target <- getReorderTarget (map snd cols) ev
         modify _ { action = Reorder
                    { ix
                    , left: newLeft
-                   , target: getReorderTarget (map snd cols) ev
+                   , target
                    }
                  }
       Done _ -> case action of
@@ -196,10 +197,15 @@ eval = case _ of
         _ -> pure unit
     pure next
 
-getReorderTarget :: Array Int -> MouseEvent -> RelativeTo Index
-getReorderTarget cols ev =
+getReorderTarget :: Array Int -> MouseEvent -> H.ComponentDSL State Query Output Herc (RelativeTo Index)
+getReorderTarget cols ev = do
+  -- Note: This doesn't work when the grid does not start at x=0 relative to
+  -- the viewport.
+  scroll <- H.getHTMLElementRef containerRef >>= case _ of
+    Nothing -> pure 0.0
+    Just el -> _.left <$> (liftEff $ getBoundingClientRect el)
   let
-    x = round (mouseEventToPageCoord ev).pageX
+    x = round $ (mouseEventToPageCoord ev).pageX - scroll
     go :: Index -> Int -> List Int -> RelativeTo Index
     go ix left = case _ of
       Nil -> RelativeTo After (ix - 1)
@@ -207,6 +213,5 @@ getReorderTarget cols ev =
         if x < left + width / 2
         then RelativeTo Before ix
         else go (ix + 1) (left + width) tail
-  in
-    go 0 37 (toUnfoldable cols)
+  pure $ go 0 37 (toUnfoldable cols)
     
