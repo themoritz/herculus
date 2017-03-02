@@ -37,6 +37,7 @@ library
                      , Lib.Model.Class
                      , Lib.Model.Dependencies
                      , Lib.Model.Dependencies.Types
+                     , Lib.Model.ViewState
                      , Lib.Template
                      , Lib.Template.Parser
                      , Lib.Template.Typechecker

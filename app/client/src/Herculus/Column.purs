@@ -1,10 +1,12 @@
 module Herculus.Column where
 
 import Herculus.Prelude
+import CSS as CSS
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import Halogen.HTML.CSS as HC
 import Herculus.Ace as Ace
 import Herculus.EditBox as Edit
 import Data.Array (cons, find)
@@ -165,7 +167,11 @@ comp = H.parentComponent
 render :: State -> H.ParentHTML Query Child Slot Herc
 render st = cldiv_ "flex items-center"
   [ cldiv_ "flex-auto"
-    [ HH.slot' cp1 unit Edit.comp
+    [ HH.div
+      [ HC.style do
+          CSS.marginLeft $ CSS.px 18.0
+      ]
+      [ HH.slot' cp1 unit Edit.comp
                { value: st.input.column ^. columnName
                , placeholder: "Name..."
                , className: "bold"
@@ -173,6 +179,7 @@ render st = cldiv_ "flex items-center"
                , validate: Just
                }
                (Just <<< H.action <<< SetName')
+      ]
     , columnInfo
     ]
   , columnConfig

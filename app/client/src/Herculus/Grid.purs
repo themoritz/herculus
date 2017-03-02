@@ -13,13 +13,14 @@ import Herculus.Grid.Control as Control
 import Herculus.PopupMenu as Popup
 import Herculus.ReportCell as ReportCell
 import Herculus.Row as Row
-import Data.Array (length, updateAt, (!!), (..))
+import Data.Array (length, (!!))
 import Data.Int (toNumber)
 import Data.Map (Map)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5, cp6)
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (Coords(..), RowCache)
 import Herculus.Utils (Options, cldiv_, faButton_, mkIndexed)
+import Herculus.Utils.Ordering (orderMap)
 import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), columnId, columnKind)
 import Lib.Api.Schema.Project (Command(CmdReportColCreate, CmdDataColCreate, CmdRowCreate, CmdCellSet, CmdDataColUpdate, CmdReportColUpdate, CmdColumnDelete, CmdColumnSetName, CmdRowDelete))
 import Lib.Custom (ColumnTag, Id, ProjectTag)
@@ -33,23 +34,28 @@ data Query a
   | AddRow a
   | AddCol ColType a
   | TogglePopup a
-  | ResizeColumn Index Int a
+  | ResizeColumn' (Id ColumnTag) Int a
+  | ReorderColumns' (Array (Id ColumnTag)) a
 
 type Input =
   { cells :: Map Coords CellContent
-  , cols :: Array Column
+  , cols :: Map (Id ColumnTag) Column
   , rows :: Array (Tuple (Id Row) Row)
   , tables :: Options (Id Table)
   , rowCache :: RowCache
   , tableId :: Id Table
   , projectId :: Id ProjectTag
+  , colSizes :: Map (Id ColumnTag) Int
+  , colOrder :: Array (Id ColumnTag)
   }
 
-type Output = Command
+data Output
+  = Command Command
+  | ResizeColumn (Id ColumnTag) Int
+  | ReorderColumns (Array (Id ColumnTag))
 
 type State =
   { input :: Input
-  , colSizes :: Array Int
   }
 
 data ColType
@@ -78,7 +84,6 @@ comp :: H.Component HH.HTML Query Input Output Herc
 comp = H.parentComponent
   { initialState:
       { input: _
-      , colSizes: [230, 230, 230, 230, 230]
       }
   , receiver: Just <<< H.action <<< Update
   , render
@@ -109,7 +114,7 @@ render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll" $
       ]
     ]
   -- Add col
-  , posDiv (colLeft (length st.input.cols)) 0
+  , posDiv (colLeft (length orderedCols)) 0
            addColWidth headHeight
     [ cldiv_ "center p1"
       [ faButton_ "plus-circle" TogglePopup
@@ -122,19 +127,23 @@ render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll" $
     ]
   ] <> rows <> cols <> cells <>
   [ HH.slot' cp6 unit Control.comp
-             { cols: st.colSizes
+             { cols: colSizes
              }
              case _ of
-               Control.ResizeColumn ix width ->
-                 Just $ H.action $ ResizeColumn ix width
-               Control.ReorderColumn ix ix' ->
-                 Nothing
+               Control.ResizeColumn colId width ->
+                 Just $ H.action $ ResizeColumn' colId width
+               Control.ReorderColumns orders ->
+                 Just $ H.action $ ReorderColumns' orders
   ]
 
   where
 
+  orderedCols = orderMap st.input.colOrder st.input.cols
+  colSizes = orderedCols <#> \(Tuple colId _) ->
+    Tuple colId (fromMaybe 230 $ Map.lookup colId st.input.colSizes)
+
   irows = mkIndexed st.input.rows
-  icols = mkIndexed st.input.cols
+  icols = mkIndexed orderedCols
 
   rows = irows <#> \(Tuple y (Tuple rowId row)) ->
     posDiv 0 (y * cellHeight + headHeight)
@@ -145,7 +154,7 @@ render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll" $
       ]
     ]
 
-  cols = icols <#> \(Tuple x col) ->
+  cols = icols <#> \(Tuple x (Tuple _ col)) ->
     posDiv (colLeft x) 0
            (colWidth x) headHeight
     [ cldiv_ "grid-cell p1"
@@ -166,7 +175,7 @@ render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll" $
     ]
 
   cells = do
-    Tuple x col <- icols
+    Tuple x (Tuple _ col) <- icols
     Tuple y (Tuple rowId row) <- irows
     let
       colId = col ^. columnId
@@ -199,7 +208,9 @@ render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll" $
   cellHeight = 37
   addRowHeight = 37
   delRowWidth = 37
-  colWidth ix = fromMaybe 230 $ st.colSizes !! ix
+  colWidth ix = case colSizes !! ix of
+    Nothing -> 230
+    Just (Tuple _ size) -> size
   colLeft ix = if ix == 0
                then addColWidth
                else colLeft (ix - 1) + colWidth (ix - 1)
@@ -224,17 +235,17 @@ eval = case _ of
     pure next
 
   SendCommand cmd next -> do
-    H.raise cmd
+    H.raise $ Command cmd
     pure next
 
   AddRow next -> do
     st <- H.get
-    H.raise $ CmdRowCreate st.input.tableId
+    H.raise $ Command $ CmdRowCreate st.input.tableId
     pure next
 
   AddCol colType next -> do
     st <- H.get
-    H.raise $ case colType of
+    H.raise $ Command $ case colType of
       DataCol -> CmdDataColCreate st.input.tableId
       ReportCol -> CmdReportColCreate st.input.tableId
     pure next
@@ -243,8 +254,10 @@ eval = case _ of
     H.query' cp5 unit (H.action Popup.Toggle)
     pure next
 
-  ResizeColumn ix width next -> do
-    { colSizes } <- get
-    for_ (updateAt ix width colSizes) \new ->
-      modify _{ colSizes = new }
+  ResizeColumn' colId width next -> do
+    H.raise $ ResizeColumn colId width
+    pure next
+
+  ReorderColumns' order next -> do
+    H.raise $ ReorderColumns order
     pure next

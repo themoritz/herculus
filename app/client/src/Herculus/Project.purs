@@ -17,6 +17,7 @@ import Control.Monad.Writer (execWriterT)
 import DOM.Event.KeyboardEvent (code)
 import Data.Array (head)
 import Data.Lens (Lens', _Just, lens, view, (.=))
+import Data.Map (Map)
 import Data.Maybe.First (First(..))
 import Data.String (length)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
@@ -25,12 +26,12 @@ import Herculus.Project.Data (ProjectData, applyDiff, descTable, mkProjectData, 
 import Herculus.Project.TableList (Output(..))
 import Herculus.Utils (cldiv_, clspan_, faIcon_, focusElement)
 import Herculus.Utils.Templates (app)
-import Lib.Api.Rest (postProjectRunCommandByProjectId, deleteProjectDeleteByProjectId, getProjectLoadByProjectId, postProjectSetNameByProjectId) as Api
+import Lib.Api.Rest as Api
 import Lib.Api.Schema.Auth (UserInfo)
 import Lib.Api.Schema.Project (Command, Project(..), projectId, projectName)
-import Lib.Api.Schema.Project (ProjectData(..)) as Api
+import Lib.Api.Schema.Project (ProjectData(..)) as Schema
 import Lib.Api.WebSocket (WsDownMessage(..), WsUpMessage(..))
-import Lib.Custom (Id, ProjectTag)
+import Lib.Custom (ColumnTag, Id, ProjectTag)
 import Lib.Model (Entity(..))
 import Lib.Model.Table (Table, tableName)
 
@@ -45,12 +46,16 @@ data Query a
   | DeleteProject a
   | ToOverview a
   | RunCommand Command a
+  | ResizeColumn (Id ColumnTag) Int a
+  | ReorderColumns (Array (Id ColumnTag)) a
   | HandleWebSocket (WS.Output WsDownMessage) a
 
 data Input = Input UserInfo R.Project
 
 type State =
   { projectData :: ProjectData
+  , columnSizes :: Map (Id ColumnTag) Int
+  , columnOrders :: Map (Id Table) (Array (Id ColumnTag))
   , view :: Maybe (Id Table)
   , projId :: Id ProjectTag
   , _project :: Maybe Project
@@ -92,6 +97,8 @@ comp = H.lifecycleParentComponent
 initialState :: Input -> State
 initialState (Input ui (R.Project p mT)) =
   { projectData: mkProjectData
+  , columnSizes: Map.empty
+  , columnOrders: Map.empty
   , view: mT
   , projId: p
   , _project: Nothing
@@ -118,20 +125,25 @@ render st =
           desc <- Map.lookup t st.projectData._pdTables
           pure 
             { cells: st.projectData._pdCells
-            , cols: map snd $ Map.toAscUnfoldable desc._descColumns
+            , cols: desc._descColumns
             , rows: Map.toAscUnfoldable desc._descRows
             , tables: Map.toAscUnfoldable st.projectData._pdTables <#> \(Tuple i t) ->
                 { value: i, label: t ^. descTable <<< tableName }
             , rowCache: st.projectData._pdRowCache
             , tableId: t
             , projectId: st.projId
+            , colSizes: st.columnSizes
+            , colOrder: fromMaybe [] $ Map.lookup t st.columnOrders
             }
       in
         case mInput of
           Nothing -> HH.div_ []
           Just input -> 
-            HH.slot' cp4 unit Grid.comp input \cmd ->
-              Just (H.action (RunCommand cmd))
+            HH.slot' cp4 unit Grid.comp input \o ->
+              Just $ H.action $ case o of
+                Grid.Command cmd -> RunCommand cmd
+                Grid.ResizeColumn colId size -> ResizeColumn colId size
+                Grid.ReorderColumns order -> ReorderColumns order
 
     projectName = cldiv_ "project-name" case st._project, st.tmpProjectName of
       Just (Project p), Nothing ->
@@ -280,6 +292,22 @@ eval (RunCommand cmd next) = do
   withApi (Api.postProjectRunCommandByProjectId cmd p) (const $ pure unit)
   pure next
 
+eval (ResizeColumn colId size next) = do
+  modify \st -> st
+    { columnSizes = Map.insert colId size st.columnSizes }
+  withApi (Api.postProjectColSetWidthByColumnId size colId)
+    (const $ pure unit)
+  pure next
+
+eval (ReorderColumns order next) = do
+  { view } <- get
+  for_ view \tableId -> do
+    modify \st -> st
+      { columnOrders = Map.insert tableId order st.columnOrders }
+    withApi (Api.postProjectReorderColsByTableId order tableId)
+      (const $ pure unit)
+  pure next
+
 update
   :: UserInfo
   -> Id ProjectTag
@@ -288,7 +316,7 @@ update
 update ui p mT = do
   currentProjectId <- H.gets \st -> map (view projectId) st._project
   case Just p == currentProjectId of
-    false -> withApi (Api.getProjectLoadByProjectId p) \(Api.ProjectData pd) -> do
+    false -> withApi (Api.getProjectLoadByProjectId p) \(Schema.ProjectData pd) -> do
       let firstTable = (\(Entity e) -> e.entityId) <$> head pd._pdTables 
       modify _
         { view = mT <|> firstTable
@@ -300,6 +328,8 @@ update ui p mT = do
               m = prepare pd._pdTables pd._pdColumns pd._pdRows pd._pdCells
             in
               execState m mkProjectData
+        , columnSizes = Map.fromFoldable pd._pdColumnSizes
+        , columnOrders = Map.fromFoldable pd._pdColumnOrders
         }
     true -> modify _
       { view = mT

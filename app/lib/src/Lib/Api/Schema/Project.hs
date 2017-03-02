@@ -52,11 +52,13 @@ projectFromEntity (Entity i (M.Project name owner _)) = Project i name owner
 makeLenses ''Project
 
 data ProjectData = ProjectData
-  { _pdProject :: Project
-  , _pdTables  :: [Entity M.Table]
-  , _pdColumns :: [Column]
-  , _pdRows    :: [Entity M.Row]
-  , _pdCells   :: [Entity M.Cell]
+  { _pdProject      :: Project
+  , _pdTables       :: [Entity M.Table]
+  , _pdColumns      :: [Column]
+  , _pdRows         :: [Entity M.Row]
+  , _pdCells        :: [Entity M.Cell]
+  , _pdColumnSizes  :: [(Id M.Column, Int)]
+  , _pdColumnOrders :: [(Id M.Table, [Id M.Column])]
   } deriving (Generic, ToJSON, FromJSON)
 
 makeLenses ''ProjectData

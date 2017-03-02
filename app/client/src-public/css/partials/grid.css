@@ -4,6 +4,8 @@
   height: 100%;
 }
 
+$gridBlue: #4285F4;
+
 .no-pointer-events {
   pointer-events: none;
 }
@@ -31,10 +33,10 @@
 
 .grid-resizer {
   &:hover {
-    background-color: #4285F4;
+    background-color: $gridBlue;
   }
 }
 
 .bg-grid-blue {
-  background-color: #4285F4;
+  background-color: $gridBlue;
 }

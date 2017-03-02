@@ -89,6 +89,10 @@ body, html {
   background-color: color(red lightness(+40%));
 }
 
+.lightgray {
+  color: color($light-gray lightness(-10%));
+}
+
 .bg-lightgray {
   background-color: $light-gray;
 }

@@ -7,12 +7,11 @@ import           Control.Lens      (makeLenses)
 
 import           Data.Bson         ((=:))
 import qualified Data.Bson         as Bson
-import           Data.Serialize    (decode, encode)
-import           Data.Text         (Text)
 
 import           Lib.Model.Class
 import           Lib.Model.Column
 import           Lib.Model.Project
+import           Lib.Model.Table
 import           Lib.Types         (Id, fromObjectId, toObjectId)
 
 --------------------------------------------------------------------------------
@@ -44,25 +43,22 @@ instance FromDocument ColumnWidth where
 --------------------------------------------------------------------------------
 
 data ColumnOrder = ColumnOrder
-  { _coProjectId :: Id Project
-  , _coColumnId  :: Id Column
-  , _coPrevious  :: Maybe (Id Column)
+  { _coTableId :: Id Table
+  , _coOrder   :: [Id Column]
   }
 
 makeLenses ''ColumnOrder
 
 instance Model ColumnOrder where
-  collectionName = const "columnOrder"
+  collectionName = const "columnOrders"
 
 instance ToDocument ColumnOrder where
-  toDocument (ColumnOrder projectId columnId previous) =
-    [ "projectId" =: toObjectId projectId
-    , "columnId" =: toObjectId columnId
-    , "previous" =: toObjectId <$> previous
+  toDocument (ColumnOrder tableId order) =
+    [ "tableId" =: toObjectId tableId
+    , "order" =: map toObjectId order
     ]
 
 instance FromDocument ColumnOrder where
   parseDocument doc =
-    ColumnOrder <$> (fromObjectId <$> Bson.lookup "projectId" doc)
-                <*> (fromObjectId <$> Bson.lookup "columnId" doc)
-                <*> (fmap fromObjectId <$> Bson.lookup "previous" doc)
+    ColumnOrder <$> (fromObjectId <$> Bson.lookup "tableId" doc)
+                <*> (map fromObjectId <$> Bson.lookup "order" doc)

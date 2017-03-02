@@ -122,7 +122,7 @@ types =
 main :: IO ()
 main = do
   opts <- getOptions
-  writePSTypes "../psc-client/src" (buildBridge bridge) types
+  writePSTypes (optTarget opts) (buildBridge bridge) types
   let
     settings m = defaultSettings
       & apiModuleName .~ m

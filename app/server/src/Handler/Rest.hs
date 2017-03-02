@@ -46,13 +46,15 @@ import           Lib.Model.Dependencies
 import           Lib.Model.Project
 import           Lib.Model.Row
 import           Lib.Model.Table
+import           Lib.Model.ViewState
 import           Lib.Template.Interpreter
 import           Lib.Types
 
 import           Auth                           (getUserInfo, lookUpSession,
                                                  mkSession)
 import           Auth.Permission                (permissionColumn,
-                                                 permissionProject)
+                                                 permissionProject,
+                                                 permissionTable)
 import           Engine
 import           Engine.Monad
 import           Engine.Util
@@ -228,6 +230,8 @@ handleProject =
   :<|> handleProjectList
   :<|> handleProjectSetName
   :<|> handleProjectDelete
+  :<|> handleProjectColSetWidth
+  :<|> handleProjectReorderCols
   :<|> handleProjectLoad
   :<|> handleProjectRunCommand
 
@@ -267,6 +271,28 @@ handleProjectDelete projectId = do
              entityId) tables
   delete projectId
 
+handleProjectColSetWidth
+  :: (MonadHexl m, MonadReader Api.UserInfo m)
+  => Id Column -> Int -> m ()
+handleProjectColSetWidth columnId width = do
+  userId <- asks Api._uiUserId
+  permissionColumn userId columnId
+  column <- getById' columnId
+  table <- getById' (column ^. columnTableId)
+  void $ upsert [ "columnId" =: toObjectId columnId ]
+                (ColumnWidth (table ^. tableProjectId) columnId width)
+                (cwWidth .~ width)
+
+handleProjectReorderCols
+  :: (MonadHexl m, MonadReader Api.UserInfo m)
+  => Id Table -> [Id Column] -> m ()
+handleProjectReorderCols tableId order = do
+  userId <- asks Api._uiUserId
+  permissionTable userId tableId
+  void $ upsert [ "tableId" =: toObjectId tableId ]
+                (ColumnOrder tableId order)
+                (coOrder .~ order)
+
 handleProjectLoad
   :: (MonadHexl m, MonadReader Api.UserInfo m)
   => Id Project
@@ -282,12 +308,19 @@ handleProjectLoad projectId = do
     cells <- listByQuery [ "tableId" =: toObjectId tableId ]
     pure (columns, rows, cells)
   let (columns, rows, cells) = mconcat dat
+  colOrders <- for tables $ \(Entity tableId _) -> do
+    order <- either (const []) (_coOrder . entityVal) <$>
+      getOneByQuery [ "tableId" =: toObjectId tableId ]
+    pure (tableId, order)
+  colSizes <- listByQuery [ "projectId" =: toObjectId projectId ]
   pure $ Api.ProjectData
            (Api.projectFromEntity (Entity projectId project))
            tables
            (map Api.columnFromEntity columns)
            rows
            cells
+           (map (\(Entity _ cw) -> (_cwColumnId cw, _cwWidth cw)) colSizes)
+           colOrders
 
 handleProjectRunCommand
   :: (MonadHexl m, MonadReader Api.UserInfo m)

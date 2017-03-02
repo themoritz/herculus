@@ -10,12 +10,15 @@ import Halogen.HTML.Properties as HP
 import DOM.Event.Event (preventDefault)
 import DOM.Event.Types (MouseEvent, mouseEventToEvent)
 import Data.Array ((!!), toUnfoldable)
+import Data.Foldable (find)
 import Data.Int (round, toNumber)
 import Data.List (List(..))
 import Data.Traversable (Accum, mapAccumL)
 import Herculus.Monad (Herc)
 import Herculus.Utils (cldiv, faIcon_, mkIndexed)
 import Herculus.Utils.Drag (DragEvent(..), dragEventSource, mouseEventToPageCoord)
+import Herculus.Utils.Ordering (Relative(..), RelativeTo(..), getRelativeTarget, reorder)
+import Lib.Custom (ColumnTag, Id(..))
 
 data Query a
   = Update Input a
@@ -25,20 +28,20 @@ data Query a
   | Reordering Index Int DragEvent a
 
 type Input =
-  { cols :: Array Int
+  { cols :: Array (Tuple (Id ColumnTag) Int)
   }
 
 data Output
-  = ResizeColumn Index Int
-  | ReorderColumn Index Index
+  = ResizeColumn (Id ColumnTag) Int
+  | ReorderColumns (Array (Id ColumnTag))
 
 data Action
   = Idle
   | Resize { ix :: Index, size :: Int }
-  | Reorder { ix :: Index, left :: Int, target :: Index }
+  | Reorder { ix :: Index, left :: Int, target :: RelativeTo Index }
 
 type State =
-  { cols :: Array Int
+  { cols :: Array (Tuple (Id ColumnTag) Int)
   , action :: Action
   }
 
@@ -66,8 +69,9 @@ render st = HH.div
 
   where
 
-  column :: Int -> Tuple Index Int -> Accum Int (Array (H.ComponentHTML Query))
-  column left (Tuple ix width) =
+  column :: Int -> Tuple Index (Tuple (Id ColumnTag) Int)
+         -> Accum Int (Array (H.ComponentHTML Query))
+  column left (Tuple ix (Tuple _ width)) =
     { accum: left + width
     , value:
       [ case st.action of
@@ -92,7 +96,7 @@ render st = HH.div
             [ ]
       , case st.action of
           Reorder val | val.ix == ix ->
-            cldiv "absolute overlay-gray"
+            cldiv "absolute overlay-gray z2"
             [ HC.style do
                 CSS.width  $ CSS.px $ toNumber width
                 CSS.left   $ CSS.px $ toNumber val.left
@@ -102,11 +106,15 @@ render st = HH.div
             [ ]
           _ -> HH.text ""
       , case st.action of
-          Reorder val | val.target == ix ->
+          Reorder val | getRelativeTarget val.target == ix ->
             cldiv "absolute bg-gray"
             [ HC.style do
+                let x = case val.target of
+                          RelativeTo rel _ -> case rel of
+                            Before -> left
+                            After -> left + width
                 CSS.width  $ CSS.px $ toNumber 3
-                CSS.left   $ CSS.px $ toNumber (left - 1)
+                CSS.left   $ CSS.px $ toNumber (x - 1)
                 CSS.top    $ CSS.px $ toNumber 0
                 CSS.bottom $ CSS.px $ toNumber 0
             ]
@@ -116,13 +124,13 @@ render st = HH.div
                                                Reorder _ -> "cursor-grabbing"
                                                _         -> "cursor-grab")
         [ HC.style do
-            CSS.width  $ CSS.px $ toNumber 11
-            CSS.left   $ CSS.px $ toNumber (left + width - 16)
-            CSS.top    $ CSS.px $ toNumber 24
-            CSS.height $ CSS.px $ toNumber 13
+            CSS.width  $ CSS.px $ toNumber 16
+            CSS.left   $ CSS.px $ toNumber (left + 6)
+            CSS.top    $ CSS.px $ toNumber 7
+            CSS.height $ CSS.px $ toNumber 14
         , HE.onMouseDown $ HE.input \ev -> ReorderStart ix left ev
         ]
-        [ faIcon_ "bars font-smaller gray"
+        [ faIcon_ "reorder fa-rotate-90 lightgray"
         ]
       ]
     }
@@ -136,7 +144,7 @@ eval = case _ of
 
   ResizeStart ix ev next -> do
     { cols } <- get
-    for_ (cols !! ix) \size -> do
+    for_ (cols !! ix) \(Tuple _ size) -> do
       liftEff $ preventDefault $ mouseEventToEvent ev
       H.subscribe $ dragEventSource ev \drag ->
         Just $ Resizing ix drag H.Listening
@@ -145,7 +153,7 @@ eval = case _ of
 
   Resizing ix drag next -> do
     { cols, action } <- get
-    for_ (cols !! ix) \oldSize ->
+    for_ (cols !! ix) \(Tuple colId oldSize) ->
       case drag of
         Move _ d -> do
           let newSize = max 50 (oldSize + round d.offsetX)
@@ -153,7 +161,7 @@ eval = case _ of
         Done _ -> case action of
           Resize val -> do
             modify _ { action = Idle }
-            H.raise $ ResizeColumn ix val.size
+            H.raise $ ResizeColumn colId val.size
           _ -> pure unit
     pure next
     
@@ -165,7 +173,7 @@ eval = case _ of
     modify _ { action = Reorder
                { ix
                , left
-               , target: getReorderTarget cols ev
+               , target: getReorderTarget (map snd cols) ev
                }
              }
     pure next
@@ -178,25 +186,26 @@ eval = case _ of
         modify _ { action = Reorder
                    { ix
                    , left: newLeft
-                   , target: getReorderTarget cols ev
+                   , target: getReorderTarget (map snd cols) ev
                    }
                  }
       Done _ -> case action of
         Reorder val -> do
           modify _ { action = Idle }
+          H.raise $ ReorderColumns $ map fst (reorder ix val.target cols)
         _ -> pure unit
     pure next
 
-getReorderTarget :: Array Int -> MouseEvent -> Index
+getReorderTarget :: Array Int -> MouseEvent -> RelativeTo Index
 getReorderTarget cols ev =
   let
     x = round (mouseEventToPageCoord ev).pageX
-    go :: Index -> Int -> List Int -> Index
+    go :: Index -> Int -> List Int -> RelativeTo Index
     go ix left = case _ of
-      Nil -> ix
+      Nil -> RelativeTo After (ix - 1)
       Cons width tail ->
         if x < left + width / 2
-        then ix
+        then RelativeTo Before ix
         else go (ix + 1) (left + width) tail
   in
     go 0 37 (toUnfoldable cols)
