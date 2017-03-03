@@ -69,7 +69,7 @@ comp = H.component
           , HH.td
             [ HP.class_ (HH.ClassName "auth-form__cell")]
             [ HH.textarea
-              [ HP.class_ (H.ClassName "auth-form__input")
+              [ HP.class_ (H.ClassName "input")
               , HP.value st.intention
               , HP.rows 4
               , HP.name "intention"
