@@ -7,11 +7,13 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Herculus.Grid as Grid
+import Herculus.Modal as Modal
 import Herculus.Notifications.Types as N
 import Herculus.Project.TableList as TL
 import Herculus.Router as R
 import Herculus.UserMenu as UserMenu
 import Herculus.WebSocket as WS
+import Lib.Api.Rest as Api
 import Control.Monad.State (execState, runState)
 import Control.Monad.Writer (execWriterT)
 import DOM.Event.KeyboardEvent (code)
@@ -20,13 +22,12 @@ import Data.Lens (Lens', _Just, lens, view, (.=))
 import Data.Map (Map)
 import Data.Maybe.First (First(..))
 import Data.String (length)
-import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
+import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5)
 import Herculus.Monad (Herc, getAuthToken, gotoRoute, notify, withApi)
 import Herculus.Project.Data (ProjectData, applyDiff, descTable, mkProjectData, prepare)
 import Herculus.Project.TableList (Output(..))
 import Herculus.Utils (cldiv_, clspan_, faIcon_, focusElement)
 import Herculus.Utils.Templates (app)
-import Lib.Api.Rest as Api
 import Lib.Api.Schema.Auth (UserInfo)
 import Lib.Api.Schema.Project (Command, Project(..), projectId, projectName)
 import Lib.Api.Schema.Project (ProjectData(..)) as Schema
@@ -44,6 +45,7 @@ data Query a
   | SetName String a
   | SaveName a
   | DeleteProject a
+  | ReallyDeleteProject a
   | ToOverview a
   | RunCommand Command a
   | ResizeColumn (Id ColumnTag) Int a
@@ -72,6 +74,7 @@ type ChildQuery =
   WS.Query WsUpMessage <\/>
   TL.Query <\/>
   Grid.Query <\/>
+  Modal.Query Boolean <\/>
   Const Void
 
 type ChildSlot =
@@ -79,7 +82,19 @@ type ChildSlot =
   Unit \/
   Unit \/
   Unit \/
+  Unit \/
   Void
+
+deleteConfirmInput :: Modal.Input Boolean
+deleteConfirmInput =
+  { title: "Delete Project"
+  , text: "Do you really want to delete this project? This cannot be undone \
+          \at the moment."
+  , actions:
+    [ { icon: "close red", label: "Cancel", value: false }
+    , { icon: "check green", label: "Delete", value: true }
+    ]
+  }
 
 projectNameRef :: H.RefLabel
 projectNameRef = H.RefLabel "projectNameRef" 
@@ -158,7 +173,7 @@ render st =
           [ faIcon_ "pencil" ]
         , HH.button
           [ HP.class_ (H.ClassName "button--pure button--on-dark gray ml1 align-middle")
-          , HP.title "Delete project (careful!)"
+          , HP.title "Delete project"
           , HE.onClick (HE.input_ DeleteProject)
           ]
           [ faIcon_ "times" ]
@@ -199,6 +214,9 @@ render st =
                  Command c -> Just (H.action (RunCommand c))
                  SelectTable t -> Just (H.action (OpenTable t))
     , projectName
+    , HH.slot' cp5 unit Modal.comp deleteConfirmInput $ case _ of
+        true  -> Just $ H.action ReallyDeleteProject
+        false -> Nothing
     ]
     body
 
@@ -245,6 +263,10 @@ eval (SaveName next) = do
   pure next
 
 eval (DeleteProject next) = do
+  H.query' cp5 unit $ H.action Modal.Open
+  pure next
+
+eval (ReallyDeleteProject next) = do
   { projId } <- H.get
   withApi (Api.deleteProjectDeleteByProjectId projId) \_ ->
     gotoRoute $ R.LoggedIn R.ProjectOverview

@@ -6,10 +6,12 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import Herculus.Modal as Modal
 import DOM.Event.KeyboardEvent (code)
 import Data.Lens (view)
 import Data.Map (Map)
 import Data.String (length)
+import Halogen.Component.ChildPath (cp1, type (\/), type (<\/>))
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (TableDesc, descTable)
 import Herculus.Utils (cldiv_, faIcon_, focusElement)
@@ -26,6 +28,7 @@ data Query a
   | SaveEdit a
   | GoTable (Id Table) a
   | DeleteTable (Id Table) a
+  | ReallyDeleteTable (Id Table) a
   | CancelEdit a
 
 type Input =
@@ -50,8 +53,27 @@ tableNameRef (Id t) = H.RefLabel t
 addTableRef :: H.RefLabel
 addTableRef = H.RefLabel "add-table"
 
+type Child =
+  Modal.Query Boolean <\/>
+  Const Void
+
+type Slot =
+  Id Table \/
+  Void
+
+deleteConfirmInput :: String -> Modal.Input Boolean
+deleteConfirmInput name =
+  { title: "Delete Table"
+  , text: "Do you really want to delete table \"" <> name <> "\"? This cannot \
+          \be undone at the moment."
+  , actions:
+    [ { icon: "close red", label: "Cancel", value: false }
+    , { icon: "check green", label: "Delete", value: true }
+    ]
+  }
+
 comp :: H.Component HH.HTML Query Input Output Herc
-comp = H.component
+comp = H.parentComponent
   { initialState:
     { input: _
     , newTableName: ""
@@ -65,7 +87,7 @@ comp = H.component
 
   where
 
-  render :: State -> H.ComponentHTML Query
+  render :: State -> H.ParentHTML Query Child Slot Herc
   render st = cldiv_ "table-list"
     (map renderTable (Map.toAscUnfoldable st.input.tables) <>
     [ HH.input
@@ -83,29 +105,37 @@ comp = H.component
 
     where
 
-    renderTable :: Tuple (Id Table) TableDesc -> H.ComponentHTML Query
-    renderTable (Tuple i desc) = HH.div
-      [ HE.onClick (HE.input_ $ GoTable i)
-      , HP.classes
-        [ H.ClassName "table-list__item left px2 py1 bold"
-        , H.ClassName selected
+    renderTable
+      :: Tuple (Id Table) TableDesc -> H.ParentHTML Query Child Slot Herc
+    renderTable (Tuple i desc) = HH.div_
+      [ HH.div
+        [ HE.onClick (HE.input_ $ GoTable i)
+        , HP.classes
+          [ H.ClassName "table-list__item left px2 py1 bold"
+          , H.ClassName selected
+          ]
         ]
-      ]
-      [ case Just i == st.editing of
-          true -> HH.input
-            [ HP.value st.newName
-            , HP.ref $ tableNameRef i
-            , HP.class_ (H.ClassName "header-input")
-            , HE.onValueInput (HE.input SetNewName)
-            , HE.onKeyDown \e -> case code e of
-                "Enter"  -> Just (H.action SaveEdit)
-                "Escape" -> Just (H.action CancelEdit)
-                _        -> Nothing
-            , HE.onBlur (HE.input_ CancelEdit)
-            ]
-          false -> HH.span_
-            ([ HH.text (desc._descTable ^. tableName)
-            ] <> actions)
+        [ case Just i == st.editing of
+            true -> HH.input
+              [ HP.value st.newName
+              , HP.ref $ tableNameRef i
+              , HP.class_ (H.ClassName "header-input")
+              , HE.onValueInput (HE.input SetNewName)
+              , HE.onKeyDown \e -> case code e of
+                  "Enter"  -> Just (H.action SaveEdit)
+                  "Escape" -> Just (H.action CancelEdit)
+                  _        -> Nothing
+              , HE.onBlur (HE.input_ CancelEdit)
+              ]
+            false -> HH.span_
+              ([ HH.text (desc._descTable ^. tableName)
+              ] <> actions)
+        ]
+      , HH.slot' cp1 i Modal.comp
+          (deleteConfirmInput (desc._descTable ^. tableName))
+          case _ of
+            true  -> Just $ H.action $ ReallyDeleteTable i
+            false -> Nothing
       ]
       where
         actions = case Just i == st.input.selected of
@@ -119,7 +149,7 @@ comp = H.component
               [ faIcon_ "pencil" ]
             , HH.button
               [ HP.class_ (H.ClassName "button--pure button--on-dark table-list__item-action align-middle ml1")
-              , HP.title "Delete table (careful!)"
+              , HP.title "Delete table"
               , HE.onClick (HE.input_ $ DeleteTable i)
               ]
               [ faIcon_ "times" ]
@@ -128,7 +158,7 @@ comp = H.component
           true -> "table-list__item--selected"
           false -> ""
 
-  eval :: Query ~> H.ComponentDSL State Query Output Herc
+  eval :: Query ~> H.ParentDSL State Query Child Slot Output Herc
   eval (Update input next) = do
     modify _{ input = input }
     when (Map.isEmpty input.tables) do
@@ -181,6 +211,10 @@ comp = H.component
     pure next
 
   eval (DeleteTable t next) = do
+    H.query' cp1 t $ H.action $ Modal.Open
+    pure next
+
+  eval (ReallyDeleteTable t next) = do
     H.raise $ Command $ CmdTableDelete t
     pure next
 
