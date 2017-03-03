@@ -12,7 +12,7 @@ import Herculus.EditBox as Edit
 import Data.Array (cons, find)
 import Halogen.Component.ChildPath (cp1, cp2, type (\/), type (<\/>))
 import Herculus.Monad (Herc)
-import Herculus.Utils (Options, clbutton_, cldiv, cldiv_, clspan, clspan_, dropdown, faIcon_)
+import Herculus.Utils (Options, clbutton_, cldiv_, clspan, clspan_, dropdown, faIcon_)
 import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), CompileStatus(StatusError, StatusNone, StatusOk), DataCol, ReportCol, columnKind, columnName, dataColCompileStatus, dataColIsDerived, dataColSourceCode, dataColType, reportColCompileStatus, reportColFormat, reportColLanguage, reportColTemplate)
 import Lib.Custom (Id(..))
 import Lib.Model.Column (DataType(..), IsDerived(..), ReportFormat(..), ReportLanguage(..))
@@ -399,7 +399,8 @@ eval = case _ of
     pure next
 
   SetName' name next -> do
-    H.raise $ SetName name
+    oldName <- gets \st -> st.input.column ^. columnName
+    when (name /= oldName) $ H.raise $ SetName name
     pure next
 
   ConfigOpen next -> do

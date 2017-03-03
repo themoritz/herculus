@@ -85,7 +85,10 @@ eval = case _ of
     pure next
 
   StartEdit next -> do
-    modify _{ editing = true }
+    modify \st -> st
+      { editing = true
+      , tmpValue = Just st.input.value
+      }
     focusElement ref
     pure next
 
