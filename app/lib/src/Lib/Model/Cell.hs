@@ -6,7 +6,6 @@
 
 module Lib.Model.Cell where
 
-import           Control.DeepSeq
 import           Control.Lens
 import           Control.Monad.Writer
 
@@ -28,7 +27,7 @@ import           Lib.Types
 data CellContent
   = CellValue Value
   | CellError Text
-  deriving (Eq, NFData, Typeable, Generic)
+  deriving (Eq, Typeable, Generic)
 
 instance Show CellContent where
   show = \case
@@ -55,7 +54,7 @@ data Value
   | VRowRef (Maybe (Id Row))
   | VList [Value]
   | VMaybe (Maybe Value)
-  deriving (Generic, NFData, Typeable, Eq)
+  deriving (Generic, Typeable, Eq)
 
 instance Show Value where
   show = \case
@@ -109,7 +108,7 @@ data Cell = Cell
   , _cellTableId  :: Id Table
   , _cellColumnId :: Id Column
   , _cellRowId    :: Id Row
-  } deriving (Generic, NFData, Show)
+  } deriving (Generic, Show)
 
 makeLenses ''Cell
 

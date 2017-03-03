@@ -14,7 +14,6 @@ module Lib.Util.Base64
   , toBase64UrlUnsafe
   ) where
 
-import           Control.DeepSeq            (NFData)
 import           Data.Aeson                 (FromJSON (..), ToJSON (..))
 import qualified Data.Bson                  as Bson
 import           Data.ByteString            (ByteString)
@@ -30,7 +29,7 @@ import           Web.HttpApiData            (FromHttpApiData (..),
 -- | a wrapper around ByteString that only holds
 --   valid base64-encoded bytestrings if used correctly
 newtype Base64 = Base64 { unBase64 :: ByteString }
-  deriving (Generic, NFData, Show, Eq)
+  deriving (Generic, Show, Eq)
 
 instance Bson.Val Base64 where
   val = Bson.val . Text.decodeUtf8 . unBase64
@@ -83,7 +82,7 @@ toBase64 bs = case Base64.decode bs of
 -- | a wrapper around ByteString that only holds
 --   valid base64-url-encoded bytestrings if used correctly
 newtype Base64Url = Base64Url { unBase64Url :: ByteString }
-  deriving (Generic, NFData, Show, Eq)
+  deriving (Generic, Show, Eq)
 
 instance Bson.Val Base64Url where
   val = Bson.val . Text.decodeUtf8 . unBase64Url

@@ -9,7 +9,6 @@
 
 module Lib.Compiler.Types where
 
-import           Control.DeepSeq
 import           Control.Monad.Except
 
 import           Data.Aeson
@@ -123,7 +122,7 @@ data Lit
   = LNumber Number
   | LBool Bool
   | LString Text
-  deriving (Show, Eq, Ord, Generic, NFData)
+  deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON Lit
 instance FromJSON Lit
@@ -173,7 +172,7 @@ data CExpr
   | CColumnRef (Id Column)
   | CWholeColumnRef (Id Table) (Id Column)
   | CTableRef (Id Table)
-  deriving (Show, Eq, Generic, NFData)
+  deriving (Show, Eq, Generic)
 
 instance ToJSON CExpr
 instance FromJSON CExpr

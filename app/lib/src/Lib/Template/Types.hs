@@ -5,7 +5,6 @@
 
 module Lib.Template.Types where
 
-import           Control.DeepSeq
 import           Control.Monad.Except
 
 import           Data.Aeson
@@ -37,7 +36,7 @@ data TTplExpr
   | TTplShow TExpr
 
 newtype CTemplate = CTemplate [CTplExpr]
-  deriving (Eq, Show, Generic, NFData)
+  deriving (Eq, Show, Generic)
 
 instance ToJSON CTemplate
 instance FromJSON CTemplate
@@ -48,7 +47,7 @@ data CTplExpr
   | CTplFor Name CExpr CTemplate
   | CTplIf CExpr CTemplate CTemplate
   | CTplShow CExpr
-  deriving (Eq, Show, Generic, NFData)
+  deriving (Eq, Show, Generic)
 
 instance ToJSON CTplExpr
 instance FromJSON CTplExpr

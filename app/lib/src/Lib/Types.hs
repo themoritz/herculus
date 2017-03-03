@@ -8,7 +8,6 @@
 
 module Lib.Types where
 
-import           Control.DeepSeq
 import           Control.Exception    (SomeException, displayException,
                                        evaluate, try)
 
@@ -16,7 +15,6 @@ import           Data.Aeson           (FromJSON (..), ToJSON (..))
 import qualified Data.Aeson           as Aeson
 import           Data.Bson            (ObjectId (..), Val (..))
 import qualified Data.ByteString.Lazy as BL
-import           Data.Decimal
 import           Data.Monoid          ((<>))
 import           Data.Serialize
 import           Data.Text            (Text, pack, unpack)
@@ -58,9 +56,6 @@ fromObjectId = Id
 nullObjectId :: Id a
 nullObjectId = Id (Oid 0 0)
 
-instance NFData (Id a) where
-  rnf (Id (Oid a b)) = rnf a `seq` rnf b
-
 instance ToJSON (Id a) where
   toJSON (Id i) = toJSON $ show i
 
@@ -92,7 +87,7 @@ instance Serialize (Id a) where
 --
 
 newtype Ref a = Ref { unRef :: Text }
-  deriving (Generic, Eq, Ord, Val, NFData)
+  deriving (Generic, Eq, Ord, Val)
 
 instance Show (Ref a) where
   show = unpack . unRef
@@ -102,25 +97,23 @@ instance FromJSON (Ref a)
 
 --
 
-newtype Number = Number Decimal
-  deriving (Num, Fractional, Eq, Ord, NFData)
+newtype Number = Number Double
+  deriving (Num, Fractional, Eq, Ord)
 
 instance Show Number where
   show (Number x) = show x
 
+-- TODO: Change this next migration
 instance ToJSON Number where
   toJSON (Number x) = toJSON . show $ x
 
+-- TODO: Change this next migration
 instance FromJSON Number where
   parseJSON json = do
     x <- parseJSON json
     case readMaybe x of
       Nothing -> fail "could not read number"
       Just x' -> pure $ Number x'
-
-instance Serialize Number where
-  put (Number (Decimal places mantissa)) = put places >> put mantissa
-  get = Number <$> (Decimal <$> get <*> get)
 
 instance PrintfArg Number where
   formatArg (Number d) = formatRealFloat (read $ show d :: Double)
@@ -133,7 +126,7 @@ formatNumber f n = case unsafePerformIO (try $ evaluate $ printf (unpack f) n) o
 --
 
 newtype Time = Time UTCTime
-  deriving (NFData, Eq, Ord, ToJSON, FromJSON, Val)
+  deriving (Eq, Ord, ToJSON, FromJSON, Val)
 
 instance Show Time where
   show = unpack . formatTime "%F"

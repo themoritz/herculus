@@ -6,7 +6,6 @@
 
 module Lib.Model.Auth where
 
-import           Control.DeepSeq        (NFData)
 import           Control.Lens           (makeLenses)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 
@@ -30,7 +29,7 @@ import           Lib.Util.Base64        (Base64, Base64Url, toBase64Unsafe,
                                          unBase64)
 
 newtype Email = Email { unEmail :: Text }
-  deriving (Generic, FromJSON, ToJSON, NFData, Eq, Show)
+  deriving (Generic, FromJSON, ToJSON, Eq, Show)
 
 instance Bson.Val Email where
   val = Bson.val . unEmail
@@ -61,7 +60,7 @@ data User = User
   , _userPwHash     :: PwHash
   , _userSignupDate :: UTCTime
   , _userIntention  :: Text
-  } deriving (Generic, NFData, Show)
+  } deriving (Generic, Show)
 
 makeLenses ''User
 
@@ -91,7 +90,7 @@ data Session = Session
   { _sessionUserId  :: Id User
   , _sessionKey     :: SessionKey
   , _sessionExpDate :: Time
-  } deriving (Generic, NFData, Show)
+  } deriving (Generic, Show)
 
 makeLenses ''Session
 

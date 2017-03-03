@@ -7,8 +7,6 @@
 
 module Lib.Model where
 
-import           Control.DeepSeq
-
 import           Data.Aeson      (FromJSON, ToJSON)
 import           Data.Bson       ((=:))
 import qualified Data.Bson       as Bson
@@ -30,8 +28,6 @@ entityToTuple (Entity i a) = (i, a)
 
 tupleToEntity :: (Id a, a) -> Entity a
 tupleToEntity (i, a) = Entity i a
-
-deriving instance NFData a => NFData (Entity a)
 
 instance ToJSON a => ToJSON (Entity a)
 instance FromJSON a => FromJSON (Entity a)

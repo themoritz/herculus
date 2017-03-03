@@ -5,7 +5,6 @@
 
 module Lib.Model.Row where
 
-import           Control.DeepSeq
 import           Control.Lens
 
 import           Data.Aeson      (FromJSON, ToJSON)
@@ -21,7 +20,7 @@ import           Lib.Types
 
 data Row = Row
   { _rowTableId :: Id Table
-  } deriving (Generic, NFData, Eq, Ord, Show)
+  } deriving (Generic, Eq, Ord, Show)
 
 rowTableId :: Lens' Row (Id Table)
 rowTableId = lens _rowTableId (\s a -> s { _rowTableId = a })

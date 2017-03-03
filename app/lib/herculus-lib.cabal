@@ -44,8 +44,7 @@ library
                      , Lib.Template.Interpreter
                      , Lib.Template.Types
                      , Data.Aeson.Bson
-  build-depends:       Decimal
-                     , aeson
+  build-depends:       aeson
                      , attoparsec
                      , base >= 4.7 && < 5
                      , base64-bytestring
@@ -54,7 +53,6 @@ library
                      , case-insensitive
                      , cereal
                      , containers
-                     , deepseq
                      , email-validate
                      , http-api-data
                      , http-types
