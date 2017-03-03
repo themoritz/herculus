@@ -7,13 +7,15 @@ import Halogen.HTML as HH
 import Halogen.HTML.CSS as HC
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import Control.Monad.Eff.Console (logShow)
 import DOM.Event.Event (preventDefault)
-import DOM.Event.KeyboardEvent (code, shiftKey)
+import DOM.Event.KeyboardEvent (code, key, shiftKey)
 import DOM.Event.Types (KeyboardEvent, MouseEvent, keyboardEventToEvent, mouseEventToEvent)
 import DOM.HTML.HTMLElement (focus, getBoundingClientRect)
 import Data.Array (length, toUnfoldable, (!!))
 import Data.Int (round, toNumber)
 import Data.List (List(..))
+import Data.String as Str
 import Data.Traversable (mapAccumL)
 import Herculus.Grid.Geometry (gutterWidth, headHeight, rowHeight)
 import Herculus.Monad (Herc)
@@ -108,6 +110,9 @@ type State =
 containerRef :: H.RefLabel
 containerRef = H.RefLabel "control-ref"
 
+selectedCellRef :: H.RefLabel
+selectedCellRef = H.RefLabel "selected-cell"
+
 comp :: H.Component HH.HTML Query Input Output Herc
 comp = H.lifecycleComponent
   { initialState:
@@ -134,8 +139,6 @@ render st = HH.div
            Resize _  -> [ H.ClassName "cursor-col-resize"]
            Reorder _ -> [ H.ClassName "cursor-grabbing"]
            Select    -> [ ]
-  , HP.tabIndex (-1)
-  , HE.onKeyDown $ HE.input KeyDown
   , HP.ref containerRef
   ]
   (join (map column indexedCols) <> cells)
@@ -162,7 +165,7 @@ render st = HH.div
       selecting = case st.action of
         Select -> true
         _      -> false
-    in HH.div
+    in HH.div (
     [ conditionalClasses
       [ { cls: "absolute"
         , on: true
@@ -212,7 +215,12 @@ render st = HH.div
     , HE.onMouseUp $ HE.input_ SelectEnd
     , HE.onDoubleClick $ HE.input_ EditCell
     , HE.onMouseEnter $ HE.input_ $ SelectOver pt
-    ]
+    ] <> if pointEq pt st.selection.start
+         then [ HP.ref selectedCellRef
+              , HP.tabIndex (-1)
+              , HE.onKeyDown $ HE.input KeyDown
+              ]
+         else [ ])
     [ ]
 
   column :: Tuple Index (Tuple (Id ColumnTag) Int)
@@ -283,7 +291,7 @@ eval :: Query ~> H.ComponentDSL State Query Output Herc
 eval = case _ of
 
   Initialize next -> do
-    focusContainer
+    focusCell
     pure next
 
   Update input next -> do
@@ -342,12 +350,12 @@ eval = case _ of
     pure next
 
   SelectStart point ev next -> do
-    focusContainer
     liftEff $ preventDefault $ mouseEventToEvent ev
     modify _
       { selection = singletonRect point
       , action = Select
       }
+    focusCell
     pure next
 
   SelectOver point next -> do
@@ -362,6 +370,7 @@ eval = case _ of
     pure next
 
   EditCell next -> do
+    editCell Nothing
     pure next
 
   KeyDown ev next -> do
@@ -384,11 +393,24 @@ eval = case _ of
       "ArrowDown" -> moveDown
       "Tab" | shiftKey ev -> moveLeft
       "Tab" -> moveRight
-      _ -> pure unit
+      "Enter" -> editCell Nothing
+      _ ->
+        let char = key ev in
+        unless (Str.length char > 1) $ editCell (Just char)
+    focusCell
     pure next
 
-focusContainer :: H.ComponentDSL State Query Output Herc Unit
-focusContainer = H.getHTMLElementRef containerRef >>= case _ of
+editCell :: Maybe String -> H.ComponentDSL State Query Output Herc Unit
+editCell mChar = do
+  modify \st -> st { selection =
+                     { start: st.selection.start
+                     , end: st.selection.start
+                     }
+                   }
+  liftEff $ logShow mChar
+
+focusCell :: H.ComponentDSL State Query Output Herc Unit
+focusCell = H.getHTMLElementRef selectedCellRef >>= case _ of
   Nothing -> pure unit
   Just el -> liftEff $ focus el
 
