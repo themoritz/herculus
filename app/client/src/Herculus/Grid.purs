@@ -17,6 +17,7 @@ import Data.Array (length, (!!))
 import Data.Int (toNumber)
 import Data.Map (Map)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5, cp6)
+import Herculus.Grid.Geometry (addRowHeight, gutterWidth, headHeight, rowHeight)
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (Coords(..), RowCache)
 import Herculus.Utils (Options, cldiv_, faButton_, mkIndexed)
@@ -104,11 +105,11 @@ popupEntries =
 
 render :: State -> H.ParentHTML Query Child Slot Herc
 render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll" $
-  [ posDiv 0 0 delRowWidth headHeight
+  [ posDiv 0 0 gutterWidth headHeight
     [ cldiv_ "grid-cell" [] ]
   -- Add row
-  , posDiv 0 (length st.input.rows * cellHeight + headHeight)
-           delRowWidth addRowHeight
+  , posDiv 0 (length st.input.rows * rowHeight + headHeight)
+           gutterWidth addRowHeight
     [ cldiv_ "center p1"
       [ faButton_ "plus-circle" AddRow
       ]
@@ -128,6 +129,7 @@ render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll" $
   ] <> rows <> cols <> cells <>
   [ HH.slot' cp6 unit Control.comp
              { cols: colSizes
+             , rows: map fst st.input.rows
              }
              case _ of
                Control.ResizeColumn colId width ->
@@ -146,8 +148,8 @@ render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll" $
   icols = mkIndexed orderedCols
 
   rows = irows <#> \(Tuple y (Tuple rowId row)) ->
-    posDiv 0 (y * cellHeight + headHeight)
-           delRowWidth cellHeight
+    posDiv 0 (y * rowHeight + headHeight)
+           gutterWidth rowHeight
     [ cldiv_ "grid-cell p1"
       [ HH.slot' cp1 rowId Row.comp unit \Row.Delete ->
           Just $ H.action $ SendCommand $ CmdRowDelete rowId
@@ -181,8 +183,8 @@ render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll" $
       colId = col ^. columnId
       coords = Coords (col ^. columnId) rowId
     pure $
-      posDiv (colLeft x) (y * cellHeight + headHeight)
-             (colWidth x) cellHeight
+      posDiv (colLeft x) (y * rowHeight + headHeight)
+             (colWidth x) rowHeight
       [ cldiv_ "grid-cell p1"
         [ case col ^. columnKind of
             ColumnData dataCol ->
@@ -204,10 +206,6 @@ render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll" $
         ]
       ]
 
-  headHeight = 54
-  cellHeight = 37
-  addRowHeight = 37
-  delRowWidth = 37
   colWidth ix = case colSizes !! ix of
     Nothing -> 230
     Just (Tuple _ size) -> size

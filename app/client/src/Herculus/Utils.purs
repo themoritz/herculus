@@ -9,7 +9,7 @@ import Halogen.HTML.Properties as HP
 import DOM (DOM)
 import DOM.HTML.HTMLElement (focus) as DOM
 import DOM.HTML.Indexed (HTMLdiv, HTMLspan)
-import Data.Array (find, length, zip, (..))
+import Data.Array (catMaybes, find, length, zip, (..))
 import Data.Generic (gShow)
 import Data.Lens (Iso', iso)
 import Data.Map (Map)
@@ -47,6 +47,13 @@ faButton_ icon query = HH.button
   , HP.class_ (H.ClassName "button--pure")
   ]
   [ faIcon_ (icon <> " fa-fw fa-lg") ]
+
+conditionalClasses
+  :: forall r i. Array { cls :: String, on :: Boolean }
+  -> HH.IProp ("class" :: String | r) i
+conditionalClasses arr = HP.classes $ catMaybes $ arr <#> \x ->
+  if x.on then Just (H.ClassName x.cls)
+          else Nothing
 
 --------------------------------------------------------------------------------
 

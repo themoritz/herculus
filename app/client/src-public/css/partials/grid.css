@@ -27,8 +27,31 @@ $gridBlue: #4285F4;
 }
 
 .overlay-gray {
-  background-color: $anthrazit;
-  opacity: 0.5;
+  background-color: color($anthrazit alpha(0.5));
+}
+
+.overlay-blue {
+  background-color: color($gridBlue alpha(0.2));
+}
+
+.selection--start {
+  border: 2px solid $gridBlue !important;
+}
+
+.selection--border-top {
+  border-top: 1px solid $gridBlue;
+}
+
+.selection--border-bottom {
+  border-bottom: 1px solid $gridBlue;
+}
+
+.selection--border-left {
+  border-left: 1px solid $gridBlue;
+}
+
+.selection--border-right {
+  border-right: 1px solid $gridBlue;
 }
 
 .grid-resizer {
