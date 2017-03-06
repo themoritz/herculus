@@ -8,6 +8,7 @@ import Halogen.HTML as HH
 import Halogen.HTML.CSS as HC
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import Halogen.HTML.Elements.Keyed as HK
 import Herculus.Column as Col
 import Herculus.DataCell as DataCell
 import Herculus.Grid.Control as Control
@@ -22,7 +23,7 @@ import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, 
 import Herculus.Grid.Geometry (Direction, addRowHeight, gutterWidth, headHeight, rowHeight)
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (Coords(..), RowCache)
-import Herculus.Utils (Options, cldiv, cldiv_, faButton_, mkIndexed)
+import Herculus.Utils (Options, cldiv_, faButton_, mkIndexed)
 import Herculus.Utils.Ordering (orderMap)
 import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), columnId, columnKind)
 import Lib.Api.Schema.Project (Command(..))
@@ -112,22 +113,26 @@ popupEntries =
   ]
 
 render :: State -> H.ParentHTML Query Child Slot Herc
-render st = cldiv "absolute left-0 top-0 right-0 bottom-0 overflow-scroll"
+render st = HK.div
   [ HE.onMouseDown $ HE.input MouseDown
   , HE.onMouseMove $ HE.input MouseMove
   , HE.onMouseUp $ HE.input MouseUp
+  , HP.class_ (H.ClassName "absolute left-0 top-0 right-0 bottom-0 overflow-scroll")
   ] $
-  [ posDiv 0 0 gutterWidth headHeight
+  [ Tuple "origin" $
+    posDiv 0 0 gutterWidth headHeight
     [ cldiv_ "grid-cell" [] ]
   -- Add row
-  , posDiv 0 (length st.input.rows * rowHeight + headHeight)
+  , Tuple "add-row" $
+    posDiv 0 (length st.input.rows * rowHeight + headHeight)
            gutterWidth addRowHeight
     [ cldiv_ "center p1"
       [ faButton_ "plus-circle" AddRow
       ]
     ]
   -- Add col
-  , posDiv (colLeft (length orderedCols)) 0
+  , Tuple "add-col" $
+    posDiv (colLeft (length orderedCols)) 0
            addColWidth headHeight
     [ cldiv_ "center p1"
       [ faButton_ "plus-circle" TogglePopup
@@ -139,7 +144,8 @@ render st = cldiv "absolute left-0 top-0 right-0 bottom-0 overflow-scroll"
       ]
     ]
   ] <> rows <> cols <> cells <>
-  [ HH.slot' cp6 unit Control.comp
+  [ Tuple "control" $
+    HH.slot' cp6 unit Control.comp
              { cols: colSizes
              , rows: map fst st.input.rows
              }
@@ -162,6 +168,7 @@ render st = cldiv "absolute left-0 top-0 right-0 bottom-0 overflow-scroll"
   icols = mkIndexed orderedCols
 
   rows = irows <#> \(Tuple y (Tuple rowId row)) ->
+    Tuple (show rowId) $
     posDiv 0 (y * rowHeight + headHeight)
            gutterWidth rowHeight
     [ cldiv_ "grid-cell p1"
@@ -171,11 +178,12 @@ render st = cldiv "absolute left-0 top-0 right-0 bottom-0 overflow-scroll"
     ]
 
   cols = icols <#> \(Tuple x (Tuple _ col)) ->
+    let colId = col ^. columnId in
+    Tuple (show colId) $
     posDiv (colLeft x) 0
            (colWidth x) headHeight
     [ cldiv_ "grid-cell p1"
       [ let
-          colId = col ^. columnId
           input =
             { column: col
             , tables: st.input.tables
@@ -197,6 +205,7 @@ render st = cldiv "absolute left-0 top-0 right-0 bottom-0 overflow-scroll"
       colId = col ^. columnId
       coords = Coords (col ^. columnId) rowId
     pure $
+      Tuple (show colId <> show rowId) $
       posDiv (colLeft x) (y * rowHeight + headHeight)
              (colWidth x) rowHeight
       [ cldiv_ "grid-cell p1"

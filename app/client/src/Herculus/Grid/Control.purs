@@ -5,6 +5,7 @@ import CSS as CSS
 import Data.String as Str
 import Halogen as H
 import Halogen.HTML as HH
+import Halogen.HTML.Elements.Keyed as HK
 import Halogen.HTML.CSS as HC
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
@@ -100,7 +101,7 @@ render st = HH.div
            Select    -> [ H.ClassName "no-pointer-events" ]
   , HP.ref containerRef
   ]
-  (join (map column indexedCols) <> catMaybes selection)
+  (join (map column indexedCols) <> selection)
 
   where
 
@@ -122,50 +123,52 @@ render st = HH.div
     _      -> false
 
   selection =
-    [ if pointEq st.selection.start st.selection.end
-      then Nothing
-      else Just $ HH.div
-        [ conditionalClasses
-          [ { cls: "absolute"
-            , on: true
-            }
-          , { cls: "overlay-blue"
-            , on: true
-            }
-          , { cls: "selection--border"
-            , on: not selecting
-            }
+    [ HK.div_ $ catMaybes
+      [ if pointEq st.selection.start st.selection.end
+        then Nothing
+        else Just $ Tuple "rectangle" $ HH.div
+          [ conditionalClasses
+            [ { cls: "absolute"
+              , on: true
+              }
+            , { cls: "overlay-blue"
+              , on: true
+              }
+            , { cls: "selection--border"
+              , on: not selecting
+              }
+            ]
+          , HC.style do
+              let
+                ul = upperLeft st.selection
+                lr = lowerRight st.selection
+                left = colOffsetAt ul.x
+                top = rowOffsetAt ul.y
+                width = colOffsetAt lr.x - left + colWidthAt lr.x
+                height = rowOffsetAt lr.y - top + rowHeightAt lr.y
+              CSS.left   $ CSS.px $ toNumber (left - 1)
+              CSS.top    $ CSS.px $ toNumber (top - 1)
+              CSS.width  $ CSS.px $ toNumber (width + 1)
+              CSS.height $ CSS.px $ toNumber (height + 1)
           ]
-        , HC.style do
-            let
-              ul = upperLeft st.selection
-              lr = lowerRight st.selection
-              left = colOffsetAt ul.x
-              top = rowOffsetAt ul.y
-              width = colOffsetAt lr.x - left + colWidthAt lr.x
-              height = rowOffsetAt lr.y - top + rowHeightAt lr.y
-            CSS.left   $ CSS.px $ toNumber (left - 1)
-            CSS.top    $ CSS.px $ toNumber (top - 1)
-            CSS.width  $ CSS.px $ toNumber (width + 1)
-            CSS.height $ CSS.px $ toNumber (height + 1)
-        ]
-        [ ]
-    , Just $ cldiv "absolute selection--start"
-        [ HC.style do
-            let
-              left = colOffsetAt st.selection.start.x
-              top = rowOffsetAt st.selection.start.y
-              width = colWidthAt st.selection.start.x
-              height = rowHeightAt st.selection.start.y
-            CSS.left   $ CSS.px $ toNumber (left - 1)
-            CSS.top    $ CSS.px $ toNumber (top - 1)
-            CSS.width  $ CSS.px $ toNumber (width + 1)
-            CSS.height $ CSS.px $ toNumber (height + 1)
-        , HP.ref selectedCellRef
-        , HP.tabIndex (-1)
-        , HE.onKeyDown $ HE.input KeyDown
-        ]
-        [ ]
+          [ ]
+      , Just $ Tuple "selection" $ cldiv "absolute selection--start"
+          [ HC.style do
+              let
+                left = colOffsetAt st.selection.start.x
+                top = rowOffsetAt st.selection.start.y
+                width = colWidthAt st.selection.start.x
+                height = rowHeightAt st.selection.start.y
+              CSS.left   $ CSS.px $ toNumber (left - 1)
+              CSS.top    $ CSS.px $ toNumber (top - 1)
+              CSS.width  $ CSS.px $ toNumber (width + 1)
+              CSS.height $ CSS.px $ toNumber (height + 1)
+          , HP.ref selectedCellRef
+          , HP.tabIndex (-1)
+          , HE.onKeyDown $ HE.input KeyDown
+          ]
+          [ ]
+      ]
     ]
 
   column :: Tuple Index (Tuple (Id ColumnTag) Int)
