@@ -7,21 +7,28 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import DOM.Event.KeyboardEvent (code) as DOM
 import Herculus.Monad (Herc)
-import Herculus.Utils (cldiv, cldiv_, focusElement)
+import Herculus.Utils (cldiv, focusElement)
+
+data SaveKey
+  = Enter
+  | Tab
 
 data Query v a
   = Update (Input v) a
-  | StartEdit a
+  | StartEdit (Maybe String) a
   | SetText String a
-  | TrySave a
+  | TrySave SaveKey a
   | CancelEdit a
 
 type Input v =
   { value :: v
   , placeholder :: String
   , className :: String
+  , inputClassName :: String
+  , invalidClassName :: String
   , show :: v -> String
   , validate :: String -> Maybe v
+  , clickable :: Boolean
   }
 
 type State v =
@@ -31,10 +38,14 @@ type State v =
   , editing :: Boolean
   }
 
+data Output v
+  = Save v SaveKey
+  | Cancel
+
 ref :: H.RefLabel
 ref = H.RefLabel "input"
 
-comp :: forall v. H.Component HH.HTML (Query v) (Input v) v Herc
+comp :: forall v. H.Component HH.HTML (Query v) (Input v) (Output v) Herc
 comp = H.component
   { initialState:
     { input: _
@@ -48,23 +59,26 @@ comp = H.component
   }
 
 render :: forall v. State v -> H.ComponentHTML (Query v)
-render st = cldiv_ st.input.className
+render st = HH.div_
   [ case st.editing of
-      false -> cldiv ("editbox " <> if text == "" then "gray" else "")
-        [ HE.onClick (HE.input_ StartEdit)
-        ]
+      false -> cldiv (st.input.className <> if text == "" then " gray" else "")
+        ( if st.input.clickable
+          then [ HE.onClick (HE.input_ $ StartEdit Nothing) ]
+          else [ ]
+        )
         [ HH.text (if text == "" then st.input.placeholder else text) ]
       true -> HH.input
         [ HP.placeholder st.input.placeholder
         , HP.ref ref
         , HP.classes
-          [ H.ClassName "editbox__input"
-          , H.ClassName (if isJust st.invalidText then "editbox__input--invalid" else "")
+          [ H.ClassName st.input.inputClassName
+          , H.ClassName (if isJust st.invalidText then st.input.invalidClassName else "")
           ]
         , HP.value text
         , HE.onValueInput (HE.input SetText)
         , HE.onKeyDown \e -> case DOM.code e of
-            "Enter"  -> Just (H.action TrySave)
+            "Enter"  -> Just (H.action $ TrySave Enter)
+            "Tab"    -> Just (H.action $ TrySave Tab)
             "Escape" -> Just (H.action CancelEdit)
             _        -> Nothing
         , HE.onBlur (HE.input_ CancelEdit)
@@ -77,22 +91,42 @@ render st = cldiv_ st.input.className
           st.input.show <$> st.tmpValue
       <|> st.invalidText
 
-eval :: forall v. Query v ~> H.ComponentDSL (State v) (Query v) v Herc
+eval :: forall v. Query v ~> H.ComponentDSL (State v) (Query v) (Output v) Herc
 eval = case _ of
 
   Update input next -> do
     modify _{ input = input }
     pure next
 
-  StartEdit next -> do
+  StartEdit mChar next -> do
     modify \st -> st
       { editing = true
       , tmpValue = Just st.input.value
       }
     focusElement ref
+    for_ mChar setText
     pure next
 
   SetText str next -> do
+    setText str
+    pure next
+    
+  TrySave key next -> do
+    gets _.tmpValue >>= case _ of
+      Nothing -> reset
+      Just v -> do
+        reset
+        H.raise $ Save v key
+    pure next
+
+  CancelEdit next -> do
+    reset
+    H.raise Cancel
+    pure next
+
+  where
+
+  setText str = do
     validate <- H.gets _.input.validate
     case validate str of
       Nothing -> modify _
@@ -103,21 +137,6 @@ eval = case _ of
         { tmpValue = Just v
         , invalidText = Nothing
         }
-    pure next
-    
-  TrySave next -> do
-    gets _.tmpValue >>= case _ of
-      Nothing -> reset
-      Just v -> do
-        reset
-        H.raise v
-    pure next
-
-  CancelEdit next -> do
-    reset
-    pure next
-
-  where
 
   reset = modify _
     { tmpValue = Nothing

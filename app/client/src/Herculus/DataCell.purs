@@ -8,11 +8,16 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Herculus.DatePicker as Date
 import Herculus.EditBox as EditBox
+import DOM.Event.Event (stopPropagation)
+import DOM.Event.MouseEvent (MouseEvent, mouseEventToEvent)
 import Data.Array (deleteAt, length, snoc, take)
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (intercalate)
+import Data.Generic (gCompare, gEq)
 import Data.Lens (Setter', _Just, element, traversed)
+import Debug.Trace (traceAny, traceAnyM)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3)
+import Herculus.Grid.Geometry (Direction)
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (RowCache)
 import Herculus.Utils (cldiv_, clspan, clspan_, dropdown, faButton_, faIcon_, mkIndexed)
@@ -29,14 +34,19 @@ data ValSetterF a = ValSetterF (Tuple (Path a) a)
 type ValSetter = Exists ValSetterF
 
 setValueAction :: forall a. Path a -> a -> H.Action Query
-setValueAction path val = SetValue' $ mkExists $ ValSetterF (Tuple path val)
+setValueAction path val = SetValue $ mkExists $ ValSetterF (Tuple path val)
 
 setValue :: forall a. Path a -> a -> Maybe (Query Unit)
 setValue path val = Just $ H.action $ setValueAction path val
 
 data Query a
   = Update Input a
-  | SetValue' ValSetter a
+  -- External
+  | StartEdit (Maybe String) a
+  -- Internal
+  | CancelEdit a
+  | SetValue ValSetter a
+  | ExpandedMouseDown MouseEvent a
   | ToggleExpanded a
 
 type Input =
@@ -45,7 +55,9 @@ type Input =
   , rowCache :: RowCache
   }
 
-data Output = SetValue Value
+data Output
+  = SaveValue Value (Maybe Direction)
+  | YieldFocus
 
 --------------------------------------------------------------------------------
 
@@ -60,12 +72,23 @@ type Child =
   Date.Query <\/>
   Const Void
 
-type SlotAddr = String
+data SlotPath
+  = SlotRoot
+  | SlotSub SlotPath
+  | SlotItem Int SlotPath
+
+ifRootElse :: forall a. SlotPath -> a -> a -> a
+ifRootElse (SlotSub SlotRoot) t _ = t
+ifRootElse _                  _ e = e
+
+derive instance genericSlotPath :: Generic SlotPath
+instance eqSlotPath :: Eq SlotPath where eq = gEq
+instance ordSlotPath :: Ord SlotPath where compare = gCompare
 
 type Slot =
-  SlotAddr \/
-  SlotAddr \/
-  SlotAddr \/
+  SlotPath \/
+  SlotPath \/
+  SlotPath \/
   Void
 
 --------------------------------------------------------------------------------
@@ -123,7 +146,8 @@ render st = case st.input.content of
       case needsEx of
         true -> cldiv_ "flex"
           [ cldiv_ "flex-auto cell-compact" [ inline ]
-          , cldiv_ ""
+          , HH.div
+            [ HE.onMouseDown $ HE.input ExpandedMouseDown ]
             [ faButton_ ("expand cell__expand-button " <>
                          if st.expanded then "cell__expand-button--open" else ""
                         )
@@ -150,24 +174,24 @@ render st = case st.input.content of
     -> H.ParentHTML Query Child Slot Herc
   value mode dt val = case derived of
     Derived -> showValue mode dt val
-    NotDerived -> editValue "" mode dt val id
+    NotDerived -> editValue SlotRoot mode dt val id
 
   editValue
-    :: SlotAddr -> RenderMode -> DataType -> Value -> Path Value
+    :: SlotPath -> RenderMode -> DataType -> Value -> Path Value
     -> H.ParentHTML Query Child Slot Herc
   editValue slot mode dt val path = case val of
     VBool b -> editBool b (path <<< _VBool)
-    VString s -> editString (slot <> "s") s (path <<< _VString)
-    VNumber n -> editNumber (slot <> "n") n (path <<< _VNumber)
-    VTime t -> editTime (slot <> "t") t (path <<< _VTime)
+    VString s -> editString (SlotSub slot) s (path <<< _VString)
+    VNumber n -> editNumber (SlotSub slot) n (path <<< _VNumber)
+    VTime t -> editTime (SlotSub slot) t (path <<< _VTime)
     VRowRef mr -> case dt of
       DataRowRef t -> editRowRef mode t mr (path <<< _VRowRef)
       _            -> HH.div_ []
     VList vs -> case dt of
-      DataList sub -> editList (slot <> "l") mode sub vs (path <<< _VList)
+      DataList sub -> editList (SlotSub slot) mode sub vs (path <<< _VList)
       _            -> HH.div_ []
     VMaybe v -> case dt of
-      DataMaybe sub -> editMaybe (slot <> "m") mode sub v (path <<< _VMaybe)
+      DataMaybe sub -> editMaybe (SlotSub slot) mode sub v (path <<< _VMaybe)
       _             -> HH.div_ []
 
   showValue
@@ -203,39 +227,51 @@ render st = case st.input.content of
     [ HH.text (if val then "True" else "False") ]
 
   editString
-    :: SlotAddr -> String -> Path String
+    :: SlotPath -> String -> Path String
     -> H.ParentHTML Query Child Slot Herc
   editString slot val path =
     HH.slot' cp1 slot EditBox.comp
              { value: val
              , placeholder: ""
              , className: "full-height"
+             , inputClassName: "editbox__input"
+             , invalidClassName: "editbox__input--invalid"
              , show: id
              , validate: Just
+             , clickable: false
              }
-             (setValue path)
+             case _ of
+               EditBox.Save v _ -> setValue path v
+               EditBox.Cancel -> Nothing
 
   showString val = cldiv_ "cell-plain"
     [ HH.text val ]
 
   editNumber
-    :: SlotAddr -> ValNumber -> Path ValNumber
+    :: SlotPath -> ValNumber -> Path ValNumber
     -> H.ParentHTML Query Child Slot Herc
-  editNumber slot val path =
-    HH.slot' cp2 slot EditBox.comp
+  editNumber slot val path = HH.div_
+    [ HH.slot' cp2 slot EditBox.comp
              { value: val
              , placeholder: ""
-             , className: "right-align full-height"
+             , className: "right-align full-height " <>
+                          ifRootElse slot "" "editbox"
+             , inputClassName: "editbox__input"
+             , invalidClassName: "editbox__input--invalid"
              , show: \(ValNumber str) -> str
              , validate: parseValNumber
+             , clickable: false
              }
-             (setValue path)
+             case _ of
+               EditBox.Save v _ -> setValue path v
+               EditBox.Cancel -> Nothing
+    ]
 
   showNumber (ValNumber str) = cldiv_ "cell-plain right-align"
     [ HH.text str ]
 
   editTime
-    :: SlotAddr -> ValTime -> Path ValTime
+    :: SlotPath -> ValTime -> Path ValTime
     -> H.ParentHTML Query Child Slot Herc
   editTime slot val@(ValTime str) path =
     HH.slot' cp3 slot Date.comp { date: val }
@@ -308,7 +344,7 @@ render st = case st.input.content of
   rows t = fromMaybe Map.empty $ Map.lookup t st.input.rowCache
 
   editList
-    :: SlotAddr -> RenderMode -> DataType -> Array Value -> Path (Array Value)
+    :: SlotPath -> RenderMode -> DataType -> Array Value -> Path (Array Value)
     -> H.ParentHTML Query Child Slot Herc
   editList slot mode subDt vals path = case mode of
       Compact -> compactList mode subDt vals
@@ -331,7 +367,7 @@ render st = case st.input.content of
           [ faIcon_ "minus-circle" ]
         ]
       , cldiv_ "flex-auto p1"
-        [ editValue (slot <> show i) mode subDt v (path <<< element i traversed)
+        [ editValue (SlotItem i slot) mode subDt v (path <<< element i traversed)
         ]
       ]
     listDel i xs   = fromMaybe xs $ deleteAt i xs
@@ -355,7 +391,7 @@ render st = case st.input.content of
     )
 
   editMaybe
-    :: SlotAddr -> RenderMode -> DataType -> Maybe Value -> Path (Maybe Value)
+    :: SlotPath -> RenderMode -> DataType -> Maybe Value -> Path (Maybe Value)
     -> H.ParentHTML Query Child Slot Herc
   editMaybe slotPrefix mode subDt mVal path = cldiv_ "flex items-center" case mVal of
     Nothing ->
@@ -387,7 +423,21 @@ eval = case _ of
     modify _{ input = input }
     pure next
 
-  SetValue' setter next -> do
+  StartEdit mChar next -> do
+    dataCol <- gets _.input.dataCol
+    case dataCol ^. dataColType of
+      DataNumber -> do
+        res <- H.query' cp2 (SlotSub SlotRoot) $
+               H.action $ EditBox.StartEdit mChar
+        traceAnyM res
+      _ -> pure Nothing
+    pure next
+
+  CancelEdit next -> do
+    H.raise YieldFocus
+    pure next
+
+  SetValue setter next -> do
     gets _.input.content >>= case _ of
       CellError _ -> pure unit
       CellValue oldVal ->
@@ -395,7 +445,11 @@ eval = case _ of
           go :: forall a. ValSetterF a -> Value -> Value
           go (ValSetterF (Tuple path val)) = path .~ val
         in
-          H.raise $ SetValue $ runExists go setter oldVal
+          H.raise $ SaveValue (runExists go setter oldVal) Nothing
+    pure next
+
+  ExpandedMouseDown ev next -> do
+    liftEff $ stopPropagation $ mouseEventToEvent ev
     pure next
 
   ToggleExpanded next -> do

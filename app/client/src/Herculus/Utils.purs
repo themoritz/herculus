@@ -8,7 +8,7 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import DOM (DOM)
 import DOM.HTML.HTMLElement (focus) as DOM
-import DOM.HTML.Indexed (HTMLdiv, HTMLspan)
+import DOM.HTML.Indexed (HTMLdiv, HTMLspan, HTMLbutton)
 import Data.Array (catMaybes, find, length, zip, (..))
 import Data.Generic (gShow)
 import Data.Lens (Iso', iso)
@@ -46,6 +46,12 @@ faButton_ icon query = HH.button
   [ HE.onClick (HE.input_ query)
   , HP.class_ (H.ClassName "button--pure")
   ]
+  [ faIcon_ (icon <> " fa-fw fa-lg") ]
+
+faButton :: forall p i. String -> Array (HH.IProp HTMLbutton i) -> HH.HTML p i
+faButton icon props = HH.button (
+  [ HP.class_ (H.ClassName "button--pure")
+  ] <> props)
   [ faIcon_ (icon <> " fa-fw fa-lg") ]
 
 conditionalClasses

@@ -6,14 +6,13 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Herculus.ChangePassword as ChangePw
-import Herculus.Notifications.Types as N
 import Herculus.Project as Project
 import Herculus.ProjectOverview as PO
 import Herculus.Router as R
 import Herculus.UserMenu as UserMenu
 import Lib.Api.Rest as Api
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
-import Herculus.Monad (Herc, gotoRoute, notify, withApi)
+import Herculus.Monad (Herc, gotoRoute, withApi)
 import Herculus.Utils (faIcon_)
 import Herculus.Utils.Templates (app, plainApp)
 import Lib.Api.Schema.Auth (GetUserInfoResponse(GetUserInfoFailed, GetUserInfoSuccess), UserInfo)

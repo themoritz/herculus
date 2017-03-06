@@ -6,6 +6,7 @@ import Data.Map as Map
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.CSS as HC
+import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Herculus.Column as Col
 import Herculus.DataCell as DataCell
@@ -13,19 +14,20 @@ import Herculus.Grid.Control as Control
 import Herculus.PopupMenu as Popup
 import Herculus.ReportCell as ReportCell
 import Herculus.Row as Row
+import DOM.Event.MouseEvent (MouseEvent)
 import Data.Array (length, (!!))
 import Data.Int (toNumber)
 import Data.Map (Map)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5, cp6)
-import Herculus.Grid.Geometry (addRowHeight, gutterWidth, headHeight, rowHeight)
+import Herculus.Grid.Geometry (Direction, addRowHeight, gutterWidth, headHeight, rowHeight)
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (Coords(..), RowCache)
-import Herculus.Utils (Options, cldiv_, faButton_, mkIndexed)
+import Herculus.Utils (Options, cldiv, cldiv_, faButton_, mkIndexed)
 import Herculus.Utils.Ordering (orderMap)
 import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), columnId, columnKind)
-import Lib.Api.Schema.Project (Command(CmdReportColCreate, CmdDataColCreate, CmdRowCreate, CmdCellSet, CmdDataColUpdate, CmdReportColUpdate, CmdColumnDelete, CmdColumnSetName, CmdRowDelete))
+import Lib.Api.Schema.Project (Command(..))
 import Lib.Custom (ColumnTag, Id, ProjectTag)
-import Lib.Model.Cell (CellContent)
+import Lib.Model.Cell (CellContent, Value)
 import Lib.Model.Row (Row)
 import Lib.Model.Table (Table)
 
@@ -37,6 +39,12 @@ data Query a
   | TogglePopup a
   | ResizeColumn' (Id ColumnTag) Int a
   | ReorderColumns' (Array (Id ColumnTag)) a
+  | EditCell Coords (Maybe String) a
+  | SaveValue (Id ColumnTag) (Id Row) Value (Maybe Direction) a
+  | YieldFocus a
+  | MouseDown MouseEvent a
+  | MouseMove MouseEvent a
+  | MouseUp MouseEvent a
 
 type Input =
   { cells :: Map Coords CellContent
@@ -104,7 +112,11 @@ popupEntries =
   ]
 
 render :: State -> H.ParentHTML Query Child Slot Herc
-render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll" $
+render st = cldiv "absolute left-0 top-0 right-0 bottom-0 overflow-scroll"
+  [ HE.onMouseDown $ HE.input MouseDown
+  , HE.onMouseMove $ HE.input MouseMove
+  , HE.onMouseUp $ HE.input MouseUp
+  ] $
   [ posDiv 0 0 gutterWidth headHeight
     [ cldiv_ "grid-cell" [] ]
   -- Add row
@@ -136,6 +148,8 @@ render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll" $
                  Just $ H.action $ ResizeColumn' colId width
                Control.ReorderColumns orders ->
                  Just $ H.action $ ReorderColumns' orders
+               Control.EditCell coords mChar ->
+                 Just $ H.action $ EditCell coords mChar
   ]
 
   where
@@ -197,8 +211,11 @@ render st = cldiv_ "absolute left-0 top-0 right-0 bottom-0 overflow-scroll" $
                       , dataCol
                       , rowCache: st.input.rowCache
                       }
-                    handler (DataCell.SetValue val) =
-                      Just $ H.action $ SendCommand $ CmdCellSet colId rowId val
+                    handler = case _ of
+                      DataCell.SaveValue val mDir ->
+                        Just $ H.action $ SaveValue colId rowId val mDir
+                      DataCell.YieldFocus ->
+                        Just $ H.action $ YieldFocus
                   in
                     HH.slot' cp3 coords DataCell.comp input handler
             ColumnReport reportCol ->
@@ -258,4 +275,29 @@ eval = case _ of
 
   ReorderColumns' order next -> do
     H.raise $ ReorderColumns order
+    pure next
+
+  EditCell coords mChar next -> do
+    H.query' cp3 coords $ H.action $ DataCell.StartEdit mChar
+    pure next
+
+  SaveValue colId rowId val mDir next -> do
+    H.raise $ Command $ CmdCellSet colId rowId val
+    H.query' cp6 unit $ H.action $ Control.Focus mDir
+    pure next
+
+  YieldFocus next -> do
+    H.query' cp6 unit $ H.action $ Control.Focus Nothing
+    pure next
+
+  MouseDown ev next -> do
+    H.query' cp6 unit $ H.action $ Control.MouseDown ev
+    pure next
+
+  MouseMove ev next -> do
+    H.query' cp6 unit $ H.action $ Control.MouseMove ev
+    pure next
+
+  MouseUp ev next -> do
+    H.query' cp6 unit $ H.action $ Control.MouseUp ev
     pure next

@@ -4,11 +4,13 @@ import Herculus.Prelude
 import CSS as CSS
 import Halogen as H
 import Halogen.HTML as HH
+import Halogen.HTML.CSS as HC
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Halogen.HTML.CSS as HC
 import Herculus.Ace as Ace
 import Herculus.EditBox as Edit
+import DOM.Event.Event (stopPropagation)
+import DOM.Event.MouseEvent (MouseEvent, mouseEventToEvent)
 import Data.Array (cons, find)
 import Halogen.Component.ChildPath (cp1, cp2, type (\/), type (<\/>))
 import Herculus.Monad (Herc)
@@ -24,6 +26,7 @@ data Query a
   | ConfigOpen a
   | ConfigCancel a
   | ConfigSave a
+  | ConfigMouseDown MouseEvent a
   | SetReportLang (Maybe ReportLanguage) a
   | SetReportFormat ReportFormat a
   | SetReportTemplate String a
@@ -174,11 +177,16 @@ render st = cldiv_ "flex items-center"
       [ HH.slot' cp1 unit Edit.comp
                { value: st.input.column ^. columnName
                , placeholder: "Name..."
-               , className: "bold"
+               , className: "bold editbox"
+               , inputClassName: "editbox__input"
+               , invalidClassName: "editbox__input--invalid"
                , show: id
                , validate: Just
+               , clickable: true
                }
-               (Just <<< H.action <<< SetName')
+               case _ of
+                 Edit.Save v _ -> Just $ H.action $ SetName' v
+                 Edit.Cancel -> Nothing
       ]
     , columnInfo
     ]
@@ -228,7 +236,8 @@ render st = cldiv_ "flex items-center"
     DataList   d -> "List (" <> dataTypeInfo d <> ")"
     DataMaybe  d -> "Maybe (" <> dataTypeInfo d <> ")"
 
-  columnConfig = cldiv_ ""
+  columnConfig = HH.div
+    [ HE.onMouseDown $ HE.input ConfigMouseDown ]
     [ HH.button
       [ HP.classes
         [ H.ClassName "button--pure"
@@ -429,6 +438,10 @@ eval = case _ of
         H.raise $ SaveReportCol (getReportTemplate rep st)
                                 (getReportFormat rep st)
                                 (getReportLanguage rep st)
+    pure next
+
+  ConfigMouseDown ev next -> do
+    liftEff $ stopPropagation $ mouseEventToEvent ev
     pure next
 
   SetReportLang lang next -> do
