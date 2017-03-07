@@ -349,7 +349,6 @@ eval = case _ of
       _ ->
         let char = key ev in
         unless (Str.length char > 1) $ editCell (Just char)
-    focusElement selectedCellRef
     pure next
 
 move :: forall f o. Direction -> H.ComponentDSL State f o Herc Unit
@@ -366,6 +365,7 @@ move dir = do
       { y = max 0 (r.start.y - 1) }
     DirDown -> modifySelection \r -> singletonRect $ r.start
       { y = min (length st.input.rows - 1) (r.start.y + 1) }
+  focusElement selectedCellRef
 
 editCell :: Maybe String -> H.ComponentDSL State Query Output Herc Unit
 editCell mChar = do

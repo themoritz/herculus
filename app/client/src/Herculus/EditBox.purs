@@ -103,8 +103,8 @@ eval = case _ of
       { editing = true
       , tmpValue = Just st.input.value
       }
-    focusElement ref
     for_ mChar setText
+    focusElement ref
     pure next
 
   SetText str next -> do

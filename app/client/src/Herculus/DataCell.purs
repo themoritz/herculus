@@ -250,13 +250,13 @@ render st = case st.input.content of
   editNumber
     :: SlotPath -> ValNumber -> Path ValNumber
     -> H.ParentHTML Query Child Slot Herc
-  editNumber slot val path = HH.div_
-    [ HH.slot' cp2 slot EditBox.comp
+  editNumber slot val path =
+    HH.slot' cp2 slot EditBox.comp
              { value: val
              , placeholder: ""
              , className: "right-align full-height " <>
-                          ifRootElse slot "" "editbox"
-             , inputClassName: "editbox__input"
+                          ifRootElse slot "plaincell" "editbox"
+             , inputClassName: ifRootElse slot "plaincell__input" "editbox__input"
              , invalidClassName: "editbox__input--invalid"
              , show: \(ValNumber str) -> str
              , validate: parseValNumber
@@ -265,7 +265,6 @@ render st = case st.input.content of
              case _ of
                EditBox.Save v _ -> setValue path v
                EditBox.Cancel -> Nothing
-    ]
 
   showNumber (ValNumber str) = cldiv_ "cell-plain right-align"
     [ HH.text str ]
@@ -426,11 +425,17 @@ eval = case _ of
   StartEdit mChar next -> do
     dataCol <- gets _.input.dataCol
     case dataCol ^. dataColType of
-      DataNumber -> do
-        res <- H.query' cp2 (SlotSub SlotRoot) $
-               H.action $ EditBox.StartEdit mChar
-        traceAnyM res
-      _ -> pure Nothing
+      DataNumber ->
+        H.query' cp2 (SlotSub SlotRoot) $
+        H.action $ EditBox.StartEdit mChar
+      DataString ->
+        H.query' cp1 (SlotSub SlotRoot) $
+        H.action $ EditBox.StartEdit mChar
+      DataTime ->
+        -- H.query' cp3 (SlotSub SlotRoot) $
+        -- H.action $ Date.Open mChar
+        pure Nothing
+      _          -> pure Nothing
     pure next
 
   CancelEdit next -> do
