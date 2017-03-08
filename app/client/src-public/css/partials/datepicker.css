@@ -1,0 +1,12 @@
+.flatpickr-input {
+  width: 100%;
+  font-size: inherit;
+}
+
+.flatpickr-input {
+  position: relative;
+  border: 1px solid transparent;
+  box-sizing: border-box;
+  height: 27px;
+  padding: 1px;
+}

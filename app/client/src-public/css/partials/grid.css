@@ -2,6 +2,7 @@
   border-right: 1px solid $medium-gray;
   border-bottom: 1px solid $medium-gray;
   height: 100%;
+  cursor: default;
 }
 
 $gridBlue: #4285F4;
@@ -36,7 +37,10 @@ $gridBlue: #4285F4;
 
 .selection--start {
   outline: none;
-  border: 2px solid $gridBlue;
+  border: 2px solid color($gridBlue saturation(0));
+  &:focus {
+    border: 2px solid $gridBlue;
+  }
 }
 
 .selection--border {

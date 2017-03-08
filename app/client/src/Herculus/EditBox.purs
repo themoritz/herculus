@@ -5,6 +5,8 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import DOM.Event.Event (preventDefault)
+import DOM.Event.KeyboardEvent (KeyboardEvent, keyboardEventToEvent)
 import DOM.Event.KeyboardEvent (code) as DOM
 import Herculus.Monad (Herc)
 import Herculus.Utils (cldiv, focusElement)
@@ -17,7 +19,7 @@ data Query v a
   = Update (Input v) a
   | StartEdit (Maybe String) a
   | SetText String a
-  | TrySave SaveKey a
+  | TrySave (Maybe (Tuple KeyboardEvent SaveKey)) a
   | CancelEdit a
 
 type Input v =
@@ -39,7 +41,7 @@ type State v =
   }
 
 data Output v
-  = Save v SaveKey
+  = Save v (Maybe SaveKey)
   | Cancel
 
 ref :: H.RefLabel
@@ -76,12 +78,12 @@ render st = HH.div_
           ]
         , HP.value text
         , HE.onValueInput (HE.input SetText)
-        , HE.onKeyDown \e -> case DOM.code e of
-            "Enter"  -> Just (H.action $ TrySave Enter)
-            "Tab"    -> Just (H.action $ TrySave Tab)
+        , HE.onKeyDown \ev -> case DOM.code ev of
+            "Enter"  -> Just (H.action $ TrySave $ Just $ Tuple ev Enter)
+            "Tab"    -> Just (H.action $ TrySave $ Just $ Tuple ev Tab)
             "Escape" -> Just (H.action CancelEdit)
             _        -> Nothing
-        , HE.onBlur (HE.input_ CancelEdit)
+        , HE.onBlur (HE.input_ $ TrySave Nothing)
         ]
    ]
 
@@ -111,12 +113,16 @@ eval = case _ of
     setText str
     pure next
     
-  TrySave key next -> do
+  TrySave mKey next -> do
+    for_ mKey \(Tuple ev _) ->
+      liftEff $ preventDefault $ keyboardEventToEvent ev
     gets _.tmpValue >>= case _ of
-      Nothing -> reset
+      Nothing -> do
+        reset
+        H.raise Cancel
       Just v -> do
         reset
-        H.raise $ Save v key
+        H.raise $ Save v (snd <$> mKey)
     pure next
 
   CancelEdit next -> do

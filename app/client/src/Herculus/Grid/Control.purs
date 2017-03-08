@@ -5,21 +5,23 @@ import CSS as CSS
 import Data.String as Str
 import Halogen as H
 import Halogen.HTML as HH
-import Halogen.HTML.Elements.Keyed as HK
 import Halogen.HTML.CSS as HC
+import Halogen.HTML.Elements.Keyed as HK
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import DOM (DOM)
-import DOM.Event.Event (currentTarget, preventDefault)
-import DOM.Event.KeyboardEvent (code, key, shiftKey)
+import DOM.Classy.Event (currentTarget, preventDefault)
+import DOM.Classy.HTMLElement (getBoundingClientRect, scrollLeft, scrollTop)
+import DOM.Event.KeyboardEvent (altKey, code, ctrlKey, key, metaKey, shiftKey)
 import DOM.Event.MouseEvent (clientX, clientY)
 import DOM.Event.Types (KeyboardEvent, MouseEvent, keyboardEventToEvent, mouseEventToEvent)
-import DOM.HTML.HTMLElement (getBoundingClientRect)
+import DOM.HTML.Types (HTMLElement)
+import DOM.Node.Types (Node)
 import Data.Array (catMaybes, length, toUnfoldable, (!!))
 import Data.Int (round, toNumber)
 import Data.List (List(..))
 import Data.Traversable (mapAccumL)
-import Herculus.Grid.Geometry (Direction(..), Point, Rect, gutterWidth, headHeight, lowerRight, pointEq, rowHeight, singletonRect, upperLeft)
+import Herculus.Grid.Geometry (Direction(..), Point, Rect, gutterWidth, headHeight, lowerRight, pointEq, projectOntoRect, rowHeight, singletonRect, upperLeft)
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (Coords(..))
 import Herculus.Utils (cldiv, conditionalClasses, faIcon_, focusElement, mkIndexed)
@@ -37,6 +39,7 @@ data Query a
   | MouseDown MouseEvent a
   | MouseMove MouseEvent a
   | MouseUp MouseEvent a
+  | DoubleClick MouseEvent a
   -- Internal
   | ResizeStart Index MouseEvent a
   | Resizing Index DragEvent a
@@ -91,7 +94,7 @@ comp = H.lifecycleComponent
   }
 
 render :: State -> H.ComponentHTML Query
-render st = HH.div
+render st = HK.div
   [ HP.classes $
     [ H.ClassName "absolute left-0 top-0 right-0 bottom-0"
     ] <> case st.action of
@@ -122,8 +125,8 @@ render st = HH.div
     Select -> true
     _      -> false
 
-  selection =
-    [ HK.div_ $ catMaybes
+  selection = if length st.input.cols == 0 || length st.input.rows == 0 then [] else
+    [ Tuple "selection" $ HK.div_ $ catMaybes
       [ if pointEq st.selection.start st.selection.end
         then Nothing
         else Just $ Tuple "rectangle" $ HH.div
@@ -172,10 +175,10 @@ render st = HH.div
     ]
 
   column :: Tuple Index (Tuple (Id ColumnTag) Int)
-         -> Array (H.ComponentHTML Query)
-  column (Tuple ix (Tuple _ width)) =
+         -> Array (Tuple String (H.ComponentHTML Query))
+  column (Tuple ix (Tuple colId width)) =
     let left = colOffsetAt ix in
-    [ case st.action of
+    [ Tuple ("resize" <> show colId) case st.action of
         Resize val | val.ix == ix ->
           cldiv "absolute bg-grid-blue"
           [ HC.style do
@@ -195,7 +198,7 @@ render st = HH.div
           , HE.onMouseDown $ HE.input \ev -> ResizeStart ix ev
           ]
           [ ]
-    , case st.action of
+    , Tuple ("overlay" <> show colId) case st.action of
         Reorder val | val.ix == ix ->
           cldiv "absolute overlay-gray z2"
           [ HC.style do
@@ -206,7 +209,7 @@ render st = HH.div
           ]
           [ ]
         _ -> HH.text ""
-    , case st.action of
+    , Tuple ("target" <> show colId) case st.action of
         Reorder val | getRelativeTarget val.target == ix ->
           cldiv "absolute bg-gray"
           [ HC.style do
@@ -221,7 +224,8 @@ render st = HH.div
           ]
           [ ]
         _ -> HH.text ""
-    , cldiv ("absolute pointer-events " <> case st.action of
+    , Tuple ("reorder" <> show colId) $
+      cldiv ("absolute pointer-events " <> case st.action of
                                              Reorder _ -> "cursor-grabbing"
                                              _         -> "cursor-grab")
       [ HC.style do
@@ -239,11 +243,25 @@ eval :: Query ~> H.ComponentDSL State Query Output Herc
 eval = case _ of
 
   Initialize next -> do
-    focusElement selectedCellRef
+    focusCell
     pure next
 
   Update input next -> do
-    modify _{ input = input }
+    let bounds =
+          { start: { x: 0, y: 0 }
+          , end: { x: length input.cols - 1
+                 , y: length input.rows - 1
+                 }
+          }
+    oldSelection <- gets _.selection
+    modify _
+      { input = input
+      , selection =
+        { start: projectOntoRect bounds oldSelection.start
+        , end: projectOntoRect bounds oldSelection.end
+        }
+      }
+    focusCell
     pure next
 
   ResizeStart ix ev next -> do
@@ -298,8 +316,9 @@ eval = case _ of
     pure next
 
   Focus mDir next -> do
-    focusElement selectedCellRef
-    for_ mDir move
+    case mDir of
+      Nothing -> focusCell
+      Just dir -> move dir
     pure next
 
   MouseDown ev next -> do
@@ -328,7 +347,12 @@ eval = case _ of
     case action of
       Select -> modify _ { action = Idle }
       _ -> pure unit
-    focusElement selectedCellRef
+    focusCell
+    pure next
+
+  DoubleClick ev next -> do
+    liftEff $ preventDefault $ mouseEventToEvent ev
+    editCell Nothing
     pure next
 
   EditCell' next -> do
@@ -337,18 +361,24 @@ eval = case _ of
 
   KeyDown ev next -> do
     st <- get
-    liftEff $ preventDefault $ keyboardEventToEvent ev
+    let
+      prevDef = liftEff $ preventDefault $ keyboardEventToEvent ev
     case code ev of
-      "ArrowLeft"         -> move DirLeft
-      "ArrowRight"        -> move DirRight
-      "ArrowUp"           -> move DirUp
-      "ArrowDown"         -> move DirDown
-      "Tab" | shiftKey ev -> move DirLeft
-      "Tab"               -> move DirRight
-      "Enter"             -> editCell Nothing
-      _ ->
-        let char = key ev in
-        unless (Str.length char > 1) $ editCell (Just char)
+      "ArrowLeft"         -> prevDef *> move DirLeft
+      "ArrowRight"        -> prevDef *> move DirRight
+      "ArrowUp"           -> prevDef *> move DirUp
+      "ArrowDown"         -> prevDef *> move DirDown
+      "Tab" | shiftKey ev -> prevDef *> move DirLeft
+      "Tab"               -> prevDef *> move DirRight
+      "Enter"             -> prevDef *> editCell Nothing
+      _ -> do
+        let
+          char = key ev
+          skip = Str.length char > 1 ||
+                 ctrlKey ev ||
+                 metaKey ev ||
+                 altKey ev
+        unless skip $ prevDef *> editCell (Just char)
     pure next
 
 move :: forall f o. Direction -> H.ComponentDSL State f o Herc Unit
@@ -365,7 +395,12 @@ move dir = do
       { y = max 0 (r.start.y - 1) }
     DirDown -> modifySelection \r -> singletonRect $ r.start
       { y = min (length st.input.rows - 1) (r.start.y + 1) }
-  focusElement selectedCellRef
+  focusCell
+
+focusCell :: forall f o. H.ComponentDSL State f o Herc Unit
+focusCell = do
+  i <- gets _.input
+  when (length i.cols > 0 && length i.rows > 0) $ focusElement selectedCellRef
 
 editCell :: Maybe String -> H.ComponentDSL State Query Output Herc Unit
 editCell mChar = do
@@ -454,13 +489,15 @@ mkOffsets init arr = res.value
 
 getMouseCoords :: forall eff. MouseEvent -> Eff (dom :: DOM | eff) Point
 getMouseCoords ev = do
-  rect <- liftEff $
-          getBoundingClientRect $
-          unsafeCoerce $
-          currentTarget $
-          mouseEventToEvent ev
+  let
+    unsafeToHtmlElement :: Node -> HTMLElement
+    unsafeToHtmlElement = unsafeCoerce
+    target = unsafeToHtmlElement $ currentTarget $ mouseEventToEvent ev
+  rect <- liftEff $ getBoundingClientRect target
+  sTop <- liftEff $ scrollTop target
+  sLeft <- liftEff $ scrollLeft target
   pure
-    { x: clientX ev - round rect.left
-    , y: clientY ev - round rect.top
+    { x: clientX ev - round (rect.left - sLeft)
+    , y: clientY ev - round (rect.top - sTop)
     }
 

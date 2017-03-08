@@ -6,7 +6,7 @@ import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 import Data.Array (head)
 import Data.JSDate (JSDate)
-import Flatpickr (flatpickr, setDate, onChange, destroy) as FP
+import Flatpickr (flatpickr, setDate, onChange, onClose, destroy, open) as FP
 import Flatpickr.Config (defaultConfig) as FP
 import Flatpickr.Types (DateType(DateJSDate), Flatpickr) as FP
 import Halogen.Query.HalogenM (halt)
@@ -15,9 +15,11 @@ import Lib.Custom (ValTime, fromJSDate, toJSDate)
 
 data Query a
   = Initialize a
-  | Update Input a
   | Finalize a
+  | Update Input a
+  | Open a
   | HandleChange (Array JSDate) (H.SubscribeStatus -> a)
+  | HandleClose (H.SubscribeStatus -> a)
 
 type State =
   { input :: Input
@@ -30,6 +32,7 @@ type Input =
 
 data Output
   = DateChanged ValTime
+  | Closed
 
 comp :: H.Component HH.HTML Query Input Output Herc
 comp = H.lifecycleComponent
@@ -71,6 +74,9 @@ comp = H.lifecycleComponent
         H.subscribe $ H.eventSource
           (\call -> FP.onChange flatpickr \dates _ _ -> call dates)
           (Just <<< H.request <<< HandleChange)
+        H.subscribe $ H.eventSource_
+          (\call -> FP.onClose flatpickr \dates _ _ -> call)
+          (H.request HandleClose)
     pure next
 
   eval (Finalize next) = do
@@ -81,7 +87,7 @@ comp = H.lifecycleComponent
         liftEff $ FP.destroy flatpickr
     pure next
 
-  eval(Update input next) = do
+  eval (Update input next) = do
     mPicker <- H.gets _.flatpickr
     case mPicker of
       Nothing -> halt "DatePicker update: not properly initialized."
@@ -91,10 +97,20 @@ comp = H.lifecycleComponent
           FP.setDate (FP.DateJSDate date) false flatpickr
     pure next
 
-  eval(HandleChange dates reply) = do
+  eval (Open next) = do
+    mPicker <- H.gets _.flatpickr
+    for_ mPicker \picker ->
+      liftEff $ FP.open picker
+    pure next
+
+  eval (HandleChange dates reply) = do
     case head dates of
       Nothing -> pure unit
       Just jsdate -> do
         date <- liftEff $ fromJSDate jsdate
         H.raise $ DateChanged date
+    pure $ reply H.Listening
+
+  eval (HandleClose reply) = do
+    H.raise Closed
     pure $ reply H.Listening

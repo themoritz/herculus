@@ -6,6 +6,7 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import Control.Monad.Eff.Console (CONSOLE, warn)
 import DOM (DOM)
 import DOM.HTML.HTMLElement (focus) as DOM
 import DOM.HTML.Indexed (HTMLdiv, HTMLspan, HTMLbutton)
@@ -88,10 +89,10 @@ dropdown cls options value query = HH.select
 
 focusElement
   :: forall s f g p o m eff
-   . MonadEff (dom :: DOM | eff) m
+   . MonadEff (console :: CONSOLE, dom :: DOM | eff) m
   => H.RefLabel -> H.HalogenM s f g p o m Unit
-focusElement ref = H.getHTMLElementRef ref >>= case _ of
-  Nothing -> pure unit
+focusElement ref@(H.RefLabel label) = H.getHTMLElementRef ref >>= case _ of
+  Nothing -> liftEff $ warn $ "Could not focus element: " <> label
   Just el -> liftEff $ DOM.focus el
 
 --------------------------------------------------------------------------------

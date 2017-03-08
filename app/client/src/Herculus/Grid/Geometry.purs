@@ -44,6 +44,16 @@ pointInRect pt r = inX && inY
 pointEq :: Point -> Point -> Boolean
 pointEq pt1 pt2 = pt1.x == pt2.x && pt1.y == pt2.y
 
+projectOntoRect :: Rect -> Point -> Point
+projectOntoRect r pt =
+  let
+    ul = upperLeft r
+    lr = lowerRight r
+    x = max ul.x pt.x
+    y = max ul.y pt.y
+  in
+    { x: min x lr.x, y: min y lr.y }
+
 --------------------------------------------------------------------------------
 
 headHeight :: Int

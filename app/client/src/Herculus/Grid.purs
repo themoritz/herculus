@@ -46,6 +46,7 @@ data Query a
   | MouseDown MouseEvent a
   | MouseMove MouseEvent a
   | MouseUp MouseEvent a
+  | DoubleClick MouseEvent a
 
 type Input =
   { cells :: Map Coords CellContent
@@ -117,6 +118,7 @@ render st = HK.div
   [ HE.onMouseDown $ HE.input MouseDown
   , HE.onMouseMove $ HE.input MouseMove
   , HE.onMouseUp $ HE.input MouseUp
+  , HE.onDoubleClick $ HE.input DoubleClick
   , HP.class_ (H.ClassName "absolute left-0 top-0 right-0 bottom-0 overflow-scroll")
   ] $
   [ Tuple "origin" $
@@ -291,8 +293,8 @@ eval = case _ of
     pure next
 
   SaveValue colId rowId val mDir next -> do
-    H.raise $ Command $ CmdCellSet colId rowId val
     H.query' cp6 unit $ H.action $ Control.Focus mDir
+    H.raise $ Command $ CmdCellSet colId rowId val
     pure next
 
   YieldFocus next -> do
@@ -309,4 +311,8 @@ eval = case _ of
 
   MouseUp ev next -> do
     H.query' cp6 unit $ H.action $ Control.MouseUp ev
+    pure next
+
+  DoubleClick ev next -> do
+    H.query' cp6 unit $ H.action $ Control.DoubleClick ev
     pure next

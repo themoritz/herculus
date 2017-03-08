@@ -10,6 +10,7 @@
 @import "partials/menu";
 @import "partials/modal";
 @import "partials/editbox";
+@import "partials/datepicker";
 @import "partials/column";
 @import "partials/cell";
 @import "partials/grid";
