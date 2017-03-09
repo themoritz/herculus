@@ -26,7 +26,7 @@ data Query a
   | ConfigOpen a
   | ConfigCancel a
   | ConfigSave a
-  | ConfigMouseDown MouseEvent a
+  | StopPropagation MouseEvent a
   | SetReportLang (Maybe ReportLanguage) a
   | SetReportFormat ReportFormat a
   | SetReportTemplate String a
@@ -237,7 +237,9 @@ render st = cldiv_ "flex items-center"
     DataMaybe  d -> "Maybe (" <> dataTypeInfo d <> ")"
 
   columnConfig = HH.div
-    [ HE.onMouseDown $ HE.input ConfigMouseDown ]
+    [ HE.onMouseDown $ HE.input StopPropagation
+    , HE.onMouseUp $ HE.input StopPropagation
+    ]
     [ HH.button
       [ HP.classes
         [ H.ClassName "button--pure"
@@ -440,7 +442,7 @@ eval = case _ of
                                 (getReportLanguage rep st)
     pure next
 
-  ConfigMouseDown ev next -> do
+  StopPropagation ev next -> do
     liftEff $ stopPropagation $ mouseEventToEvent ev
     pure next
 

@@ -7,7 +7,6 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Herculus.Grid as Grid
-import Herculus.Modal as Modal
 import Herculus.Notifications.Types as N
 import Herculus.Project.TableList as TL
 import Herculus.Router as R
@@ -16,20 +15,19 @@ import Herculus.WebSocket as WS
 import Lib.Api.Rest as Api
 import Control.Monad.State (execState, runState)
 import Control.Monad.Writer (execWriterT)
-import DOM.Event.KeyboardEvent (code)
 import Data.Array (head)
 import Data.Lens (Lens', _Just, lens, view, (.=))
 import Data.Map (Map)
 import Data.Maybe.First (First(..))
-import Data.String (length)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5)
 import Herculus.Monad (Herc, getAuthToken, gotoRoute, notify, withApi)
 import Herculus.Project.Data (ProjectData, applyDiff, descTable, mkProjectData, prepare)
 import Herculus.Project.TableList (Output(..))
-import Herculus.Utils (cldiv_, clspan_, faIcon_, focusElement)
+import Herculus.Project.Settings as Settings
+import Herculus.Utils (clspan_, faIcon_)
 import Herculus.Utils.Templates (app)
 import Lib.Api.Schema.Auth (UserInfo)
-import Lib.Api.Schema.Project (Command, Project(..), projectId, projectName)
+import Lib.Api.Schema.Project (Command, Project, projectId, projectName)
 import Lib.Api.Schema.Project (ProjectData(..)) as Schema
 import Lib.Api.WebSocket (WsDownMessage(..), WsUpMessage(..))
 import Lib.Custom (ColumnTag, Id, ProjectTag)
@@ -40,14 +38,10 @@ data Query a
   = Initialize a
   | Update Input a
   | OpenTable (Id Table) a
-  | StartEditName a
-  | CancelEditName a
-  | SetName String a
-  | SaveName a
-  | DeleteProject a
-  | ReallyDeleteProject a
   | ToOverview a
   | RunCommand Command a
+  | SaveName String a
+  | Delete a
   | ResizeColumn (Id ColumnTag) Int a
   | ReorderColumns (Array (Id ColumnTag)) a
   | HandleWebSocket (WS.Output WsDownMessage) a
@@ -63,7 +57,6 @@ type State =
   , _project :: Maybe Project
   , userInfo :: UserInfo
   , disconnected :: Boolean
-  , tmpProjectName :: Maybe String
   }
 
 project :: Lens' State (Maybe Project)
@@ -74,7 +67,7 @@ type ChildQuery =
   WS.Query WsUpMessage <\/>
   TL.Query <\/>
   Grid.Query <\/>
-  Modal.Query Boolean <\/>
+  Settings.Query <\/>
   Const Void
 
 type ChildSlot =
@@ -84,20 +77,6 @@ type ChildSlot =
   Unit \/
   Unit \/
   Void
-
-deleteConfirmInput :: Modal.Input Boolean
-deleteConfirmInput =
-  { title: "Delete Project"
-  , text: "Do you really want to delete this project? This cannot be undone \
-          \at the moment."
-  , actions:
-    [ { icon: "close red", label: "Cancel", value: false }
-    , { icon: "check green", label: "Delete", value: true }
-    ]
-  }
-
-projectNameRef :: H.RefLabel
-projectNameRef = H.RefLabel "projectNameRef" 
 
 comp :: H.Component HH.HTML Query Input Void Herc
 comp = H.lifecycleParentComponent
@@ -119,7 +98,6 @@ initialState (Input ui (R.Project p mT)) =
   , _project: Nothing
   , userInfo: ui
   , disconnected: false
-  , tmpProjectName: Nothing
   }
 
 render :: State -> H.ParentHTML Query ChildQuery ChildSlot Herc
@@ -160,39 +138,6 @@ render st =
                 Grid.ResizeColumn colId size -> ResizeColumn colId size
                 Grid.ReorderColumns order -> ReorderColumns order
 
-    projectName = cldiv_ "project-name" case st._project, st.tmpProjectName of
-      Just (Project p), Nothing ->
-        [ HH.span_
-          [ HH.text (p._projectName) ]
-        , HH.text " "
-        , HH.button
-          [ HP.class_ (H.ClassName "button--pure button--on-dark gray ml1 align-middle")
-          , HP.title "Change project name"
-          , HE.onClick (HE.input_ StartEditName)
-          ]
-          [ faIcon_ "pencil" ]
-        , HH.button
-          [ HP.class_ (H.ClassName "button--pure button--on-dark gray ml1 align-middle")
-          , HP.title "Delete project"
-          , HE.onClick (HE.input_ DeleteProject)
-          ]
-          [ faIcon_ "times" ]
-        ]
-      _, Just name ->
-        [ HH.input
-          [ HP.value name
-          , HP.class_ (H.ClassName "header-input")
-          , HP.ref projectNameRef
-          , HE.onValueInput (HE.input SetName)
-          , HE.onKeyDown \e -> case code e of
-              "Enter"  -> Just (H.action SaveName)
-              "Escape" -> Just (H.action CancelEditName)
-              _        -> Nothing
-          , HE.onBlur (HE.input_ CancelEditName)
-          ]
-        ]
-      _, _ -> []
-
   in
     app
     [ case st.disconnected of
@@ -213,10 +158,12 @@ render st =
                case _ of
                  Command c -> Just (H.action (RunCommand c))
                  SelectTable t -> Just (H.action (OpenTable t))
-    , projectName
-    , HH.slot' cp5 unit Modal.comp deleteConfirmInput $ case _ of
-        true  -> Just $ H.action ReallyDeleteProject
-        false -> Nothing
+    , case st._project of
+        Nothing -> HH.text ""
+        Just p -> HH.slot' cp5 unit Settings.comp { name: p ^. projectName } $
+                    case _ of
+                      Settings.SaveName name -> Just (H.action $ SaveName name)
+                      Settings.Delete -> Just (H.action Delete)
     ]
     body
 
@@ -234,42 +181,6 @@ eval (OpenTable i next) = do
   { projId } <- H.get
   gotoRoute $
     R.LoggedIn $ R.ProjectDetail $ R.Project projId (Just i)
-  pure next
-
-eval (StartEditName next) = do
-  p <- H.gets _._project
-  modify _
-    { tmpProjectName = view projectName <$> p
-    }
-  focusElement projectNameRef
-  pure next
-
-eval (CancelEditName next) = do
-  modify _{ tmpProjectName = Nothing }
-  pure next
-
-eval (SetName name next) = do
-  modify _{ tmpProjectName = Just name }
-  pure next
-
-eval (SaveName next) = do
-  { projId, tmpProjectName } <- H.get
-  case tmpProjectName of
-    Nothing -> pure unit
-    Just name -> when (length name > 0) $
-      withApi (Api.postProjectSetNameByProjectId name projId) \_ -> do
-        project <<< _Just <<< projectName .= name
-        modify _{ tmpProjectName = Nothing }
-  pure next
-
-eval (DeleteProject next) = do
-  H.query' cp5 unit $ H.action Modal.Open
-  pure next
-
-eval (ReallyDeleteProject next) = do
-  { projId } <- H.get
-  withApi (Api.deleteProjectDeleteByProjectId projId) \_ ->
-    gotoRoute $ R.LoggedIn R.ProjectOverview
   pure next
 
 eval (ToOverview next) = do
@@ -312,6 +223,18 @@ eval (HandleWebSocket output next) = do
 eval (RunCommand cmd next) = do
   p <- H.gets _.projId
   withApi (Api.postProjectRunCommandByProjectId cmd p) (const $ pure unit)
+  pure next
+
+eval (SaveName name next) = do
+  { projId } <- get
+  withApi (Api.postProjectSetNameByProjectId name projId) \_ -> do
+    project <<< _Just <<< projectName .= name
+  pure next
+
+eval (Delete next) = do
+  { projId } <- H.get
+  withApi (Api.deleteProjectDeleteByProjectId projId) \_ ->
+    gotoRoute $ R.LoggedIn R.ProjectOverview
   pure next
 
 eval (ResizeColumn colId size next) = do

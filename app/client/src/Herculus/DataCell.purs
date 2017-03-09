@@ -285,11 +285,13 @@ render st = case st.input.content of
   editTime
     :: SlotPath -> ValTime -> Path ValTime
     -> H.ParentHTML Query Child Slot Herc
-  editTime slot val@(ValTime str) path =
-    HH.slot' cp3 slot Date.comp { date: val }
-             case _ of
-               Date.DateChanged val' -> setValue path Nothing val'
-               Date.Closed -> Just $ H.action CancelEdit
+  editTime slot val@(ValTime str) path = HH.div
+    [ HE.onMouseDown $ HE.input StopPropagation ]
+    [ HH.slot' cp3 slot Date.comp { date: val }
+               case _ of
+                 Date.DateChanged val' -> setValue path Nothing val'
+                 Date.Closed -> Just $ H.action CancelEdit
+    ]
 
   showTime (ValTime str) = cldiv_ "cell-plain"
     [ HH.text str ]
