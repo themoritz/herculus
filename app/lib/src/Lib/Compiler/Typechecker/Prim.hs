@@ -204,6 +204,22 @@ primPrelude =
     , ForAll [] [] $
         Type tyString `tyArr` (Type tyTime `tyArr` Type tyString)
     )
+  , ( "year"
+    , ForAll [] [] $
+        Type tyTime `tyArr` Type tyNumber
+    )
+  , ( "month"
+    , ForAll [] [] $
+        Type tyTime `tyArr` Type tyNumber
+    )
+  , ( "day"
+    , ForAll [] [] $
+        Type tyTime `tyArr` Type tyNumber
+    )
+  , ( "roundTo"
+    , ForAll [] [] $
+        Type tyNumber `tyArr` (Type tyNumber `tyArr` Type tyNumber)
+    )
   , ( "map"
     , ForAll [typeVar 1, typeVar 2, typeVar 3] [IsIn (ClassName "Functor") (tyVar 3)] $
         (tyVar 1 `tyArr` tyVar 2) `tyArr` (tyApp (tyVar 3) (tyVar 1) `tyArr` tyApp (tyVar 3) (tyVar 2))

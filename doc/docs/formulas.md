@@ -481,6 +481,14 @@ formatNumber : String -> Number -> String
 
 A call like `formatNumber s x` formats the number `x` according to the format string `s`. For a list of formatting characters, see [here](https://hackage.haskell.org/package/base-4.9.0.0/docs/Text-Printf.html#v:printf).
 
+### roundTo
+
+``` haskell
+roundTo : Number -> Number -> Number
+```
+
+For example, the expression `roundTo 2 n` rounds the number `n` to a precision of `2`.
+
 ### formatTime
 
 ```haskell
@@ -488,6 +496,30 @@ formatTime : String -> Time -> String
 ```
 
 `formatTime s t` formats time `t` according to the format string `s`. For a list of formatting characters see [here](https://hackage.haskell.org/package/time-1.6.0.1/docs/Data-Time-Format.html#v:formatTime).
+
+### year
+
+``` haskell
+year : Time -> Number
+```
+
+Returns the year of a given time.
+
+### month
+
+``` haskell
+month : Time -> Number
+```
+
+Returns the month of the year (1-12) of a given time.
+
+### day
+
+``` haskell
+day : Time -> Number
+```
+
+Returns the day of the month (1-31) of a given time.
 
 ### filter
 

@@ -286,7 +286,10 @@ render st = case st.input.content of
     :: SlotPath -> ValTime -> Path ValTime
     -> H.ParentHTML Query Child Slot Herc
   editTime slot val@(ValTime str) path = HH.div
-    [ HE.onMouseDown $ HE.input StopPropagation ]
+    [ HE.onMouseDown $ HE.input StopPropagation
+    , HE.onMouseUp $ HE.input StopPropagation
+    , HE.onDoubleClick $ HE.input StopPropagation
+    ]
     [ HH.slot' cp3 slot Date.comp { date: val }
                case _ of
                  Date.DateChanged val' -> setValue path Nothing val'

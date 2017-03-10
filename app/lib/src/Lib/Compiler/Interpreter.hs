@@ -12,6 +12,8 @@ import qualified Data.Map                       as Map
 import           Data.Maybe                     (fromMaybe)
 import           Data.Monoid                    ((<>))
 import           Data.Text                      (Text, pack)
+import           Data.Time.Calendar             (toGregorian)
+import           Data.Time.Clock                (utctDay)
 import           Data.Traversable
 
 import           Lib.Model.Cell
@@ -240,6 +242,24 @@ prelude = Map.fromList
   , ( "formatTime"
     , RPrelude $ \_ (RValue (VString f)) -> pure $ RPrelude $ \_ (RValue (VTime t)) ->
         pure $ RValue $ VString $ formatTime f t
+    )
+  , ( "year"
+    , RPrelude $ \_ (RValue (VTime (Time t))) -> pure $ RValue $ VNumber $
+        let (y, _, _) = toGregorian $ utctDay t in Number $ fromIntegral y
+    )
+  , ( "month"
+    , RPrelude $ \_ (RValue (VTime (Time t))) -> pure $ RValue $ VNumber $
+        let (_, m, _) = toGregorian $ utctDay t in Number $ fromIntegral m
+    )
+  , ( "day"
+    , RPrelude $ \_ (RValue (VTime (Time t))) -> pure $ RValue $ VNumber $
+        let (_, _, d) = toGregorian $ utctDay t in Number $ fromIntegral d
+    )
+  , ( "roundTo"
+    , RPrelude $ \_ (RValue (VNumber (Number p))) ->
+        pure $ RPrelude $ \_ (RValue (VNumber (Number n))) ->
+          pure $ RValue $ VNumber $ Number $
+            let p' = round p in (fromInteger $ round $ n * (10^p')) / (10.0^^p')
     )
   , ( "filter"
     , RPrelude $ \env arg -> pure $ RPrelude $ \_ (RValue (VList xs)) -> do

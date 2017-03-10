@@ -9,7 +9,8 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Herculus.Ace as Ace
 import Herculus.EditBox as Edit
-import DOM.Event.Event (stopPropagation)
+import DOM.Event.Event (Event, stopPropagation)
+import DOM.Event.KeyboardEvent (keyboardEventToEvent)
 import DOM.Event.MouseEvent (MouseEvent, mouseEventToEvent)
 import Data.Array (cons, find)
 import Halogen.Component.ChildPath (cp1, cp2, type (\/), type (<\/>))
@@ -26,7 +27,7 @@ data Query a
   | ConfigOpen a
   | ConfigCancel a
   | ConfigSave a
-  | StopPropagation MouseEvent a
+  | StopPropagation Event a
   | SetReportLang (Maybe ReportLanguage) a
   | SetReportFormat ReportFormat a
   | SetReportTemplate String a
@@ -237,8 +238,9 @@ render st = cldiv_ "flex items-center"
     DataMaybe  d -> "Maybe (" <> dataTypeInfo d <> ")"
 
   columnConfig = HH.div
-    [ HE.onMouseDown $ HE.input StopPropagation
-    , HE.onMouseUp $ HE.input StopPropagation
+    [ HE.onMouseDown $ HE.input (StopPropagation <<< mouseEventToEvent)
+    , HE.onMouseUp $ HE.input (StopPropagation <<< mouseEventToEvent)
+    , HE.onDoubleClick $ HE.input (StopPropagation <<< mouseEventToEvent)
     ]
     [ HH.button
       [ HP.classes
@@ -443,7 +445,7 @@ eval = case _ of
     pure next
 
   StopPropagation ev next -> do
-    liftEff $ stopPropagation $ mouseEventToEvent ev
+    liftEff $ stopPropagation ev
     pure next
 
   SetReportLang lang next -> do
