@@ -61,6 +61,7 @@ library
                      , mtl
                      , parsec
                      , pwstore-fast
+                     , recursion-schemes
                      , scientific
                      , servant
                      , text

@@ -1,5 +1,7 @@
 {-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DeriveFunctor      #-}
 {-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE LambdaCase         #-}
@@ -12,6 +14,7 @@ module Lib.Compiler.Types where
 import           Control.Monad.Except
 
 import           Data.Aeson
+import           Data.Functor.Foldable
 import           Data.List                    (intercalate)
 import           Data.Map                     (Map)
 import qualified Data.Map                     as Map
@@ -142,22 +145,25 @@ data PExpr
   | PTableRef (Ref Table)
   deriving (Eq, Show)
 
-data TExpr
-  = TLam Name TExpr
-  | TApp TExpr TExpr
-  | TLet Name TExpr TExpr
+data TExprF a
+  = TLam Name a
+  | TApp a a
+  | TLet Name a a
   -- | Fix Expr
-  | TIf TExpr TExpr TExpr
+  | TIf a a a
   | TVar Name
   | TLit Lit
-  | TPrjRecord TExpr (Ref Column)
+  | TPrjRecord a (Ref Column)
   -- For type classes:
-  | TWithPredicates [Predicate Point] TExpr
+  | TWithPredicates [Predicate Point] a
   | TTypeClassDict (Predicate Point)
   --
   | TColumnRef (Id Column)
   | TWholeColumnRef (Id Table) (Id Column)
   | TTableRef (Id Table)
+  deriving (Functor, Foldable, Traversable)
+
+type TExpr = Fix TExprF
 
 -- Core language
 data CExpr
@@ -177,15 +183,21 @@ data CExpr
 instance ToJSON CExpr
 instance FromJSON CExpr
 
+cataM
+  :: (Recursive t, Monad m, Traversable (Base t))
+  => (Base t a -> m a) -> t -> m a
+cataM f = go where
+  go t = f =<< traverse go (project t)
+
 toCoreExpr :: MonadError TypeError m => TExpr -> m CExpr
-toCoreExpr = \case
-  TLam x e            -> CLam x <$> toCoreExpr e
-  TApp f arg          -> CApp <$> toCoreExpr f <*> toCoreExpr arg
-  TLet x e body       -> CLet x <$> toCoreExpr e <*> toCoreExpr body
-  TIf c t e           -> CIf <$> toCoreExpr c <*> toCoreExpr t <*> toCoreExpr e
+toCoreExpr = cataM $ \case
+  TLam x e            -> pure $ CLam x e
+  TApp f arg          -> pure $ CApp f arg
+  TLet x e body       -> pure $ CLet x e body
+  TIf c t e           -> pure $ CIf c t e
   TVar x              -> pure $ CVar x
   TLit l              -> pure $ CLit l
-  TPrjRecord e r      -> CPrjRecord <$> toCoreExpr e <*> pure r
+  TPrjRecord e r      -> pure $ CPrjRecord e r
   TWithPredicates _ _ -> throwError "TWithRetainedPredicates should have been eliminated before converting to core"
   TTypeClassDict _    -> throwError "TTypeClassDict should have been eliminated before converting to core"
   TColumnRef c        -> pure $ CColumnRef c

@@ -150,38 +150,33 @@ debugPoint p = do
 debugTExpr :: MonadState InferState m => TExpr -> m ()
 debugTExpr expr = debugTExpr' expr >>= mapM_ traceM
   where
-    debugTExpr' = \case
-      TLam x e -> do
-        eLines <- debugTExpr' e
-        pure $ ["\\" <> unpack x <> " ->"] <> indent eLines
-      TApp f arg -> do
-        fLines <- debugTExpr' f
-        argLines <- debugTExpr' arg
-        pure $ fLines <> argLines
-      TLet x e rest -> do
-        eLines <- debugTExpr' e
-        restLines <- debugTExpr' rest
-        pure $ ["let " <> unpack x <> " ="] <> indent eLines <> [";"] <> indent restLines
-      TIf c t e -> do
-        cLines <- debugTExpr' c
-        tLines <- debugTExpr' t
-        eLines <- debugTExpr' e
-        pure $ ["if"] <> indent cLines <> ["then"] <> indent tLines <> ["else"] <> indent eLines
-      TVar x -> pure [unpack x]
-      TLit l -> pure [show l]
+    debugTExpr' = cataM $ \case
+      TLam x e ->
+        pure $ ["\\" <> unpack x <> " ->"] <> indent e
+      TApp f arg ->
+        pure $ f <> arg
+      TLet x e rest ->
+        pure $ ["let " <> unpack x <> " ="] <> indent e <> [";"] <> indent rest
+      TIf c t e ->
+        pure $ ["if"] <> indent c <> ["then"] <> indent t <> ["else"] <> indent e
+      TVar x ->
+        pure [unpack x]
+      TLit l ->
+        pure [show l]
       TPrjRecord e c -> do
-        eLines <- debugTExpr' e
-        pure $ ["Access " <> show c <> " of:"] <> indent eLines
+        pure $ ["Access " <> show c <> " of:"] <> indent e
       TWithPredicates preds e -> do
         preds' <- mapM predicateFromPoint preds
-        eLines <- debugTExpr' e
-        pure $ ["With:"] <> indent (map show preds') <> ["=>"] <> indent eLines
+        pure $ ["With:"] <> indent (map show preds') <> ["=>"] <> indent e
       TTypeClassDict predicate -> do
         predicate' <- predicateFromPoint predicate
         pure ["Dict: " <> show predicate']
-      TColumnRef c -> pure ["Column: " <> show c]
-      TWholeColumnRef _ c -> pure ["Whole Column: " <> show c]
-      TTableRef t -> pure ["Table: " <> show t]
+      TColumnRef c ->
+        pure ["Column: " <> show c]
+      TWholeColumnRef _ c ->
+        pure ["Whole Column: " <> show c]
+      TTableRef t ->
+        pure ["Table: " <> show t]
     indent = map ("  " <>)
 
 pointToType :: MonadState InferState m => Point -> m Type

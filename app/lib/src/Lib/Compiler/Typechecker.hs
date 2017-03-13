@@ -52,19 +52,17 @@ runInfer env expr =
 --
 
 replaceTypeClassDicts :: Monad m => TExpr -> InferT m TExpr
-replaceTypeClassDicts expr = case expr of
-  TLam x e -> TLam x <$> replaceTypeClassDicts e
-  TApp f e -> TApp <$> replaceTypeClassDicts f <*> replaceTypeClassDicts e
-  TLet x e body -> TLet x <$> replaceTypeClassDicts e <*> replaceTypeClassDicts body
-  TIf c t e -> TIf <$> replaceTypeClassDicts c <*> replaceTypeClassDicts t <*> replaceTypeClassDicts e
+replaceTypeClassDicts = cataM $ \case
+  TLam x e -> pure $ TLam x e
+  TApp f e -> pure $ TApp f e
+  TLet x e body -> pure $ TLet x e body
+  TIf c t e -> pure $ TIf c t e
   TVar n -> pure $ TVar n
   TLit l -> pure $ TLit l
-  TPrjRecord e r -> do
-    e' <- replaceTypeClassDicts e
-    pure $ TPrjRecord e' r
+  TPrjRecord e r -> pure $ TPrjRecord e r
   TWithPredicates preds e -> do
     dicts <- mapM (\predicate@(IsIn c _) -> (predicate,) <$> freshDictName c) preds
-    e' <- withInstanceDicts dicts $ replaceTypeClassDicts e
+    e' <- withInstanceDicts dicts replaceTypeClassDicts e
     pure $ foldr (TLam . snd) e' dicts
   TTypeClassDict predicate -> lookupInstanceDict predicate >>= \case
     Just n -> pure $ TVar n
