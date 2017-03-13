@@ -109,17 +109,6 @@ needsExpand dt derived = case dt, derived of
   DataList _,    _          -> true
   DataMaybe sub, _          -> needsExpand sub derived
 
--- TODO: delete in favor of ajax calls to the server version of defaultContent
-defaultValue :: DataType -> Value
-defaultValue = case _ of
-  DataBool     -> VBool false
-  DataString   -> VString ""
-  DataNumber   -> VNumber (ValNumber "0")
-  DataTime     -> VTime (ValTime "2017-01-01T00:00:00Z")
-  DataRowRef _ -> VRowRef Nothing
-  DataList   _ -> VList []
-  DataMaybe  _ -> VMaybe Nothing
-
 --------------------------------------------------------------------------------
 
 comp :: H.Component HH.HTML Query Input Output Herc

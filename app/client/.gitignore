@@ -1,5 +1,7 @@
 output/
 .pulp-cache/
 
-src/Lib/
+src/Lib/*
+!src/Lib/Custom.purs
+!src/Lib/Custom.js
 src/Api/
