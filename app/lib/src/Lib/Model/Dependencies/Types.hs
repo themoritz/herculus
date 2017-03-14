@@ -4,7 +4,7 @@
 module Lib.Model.Dependencies.Types where
 
 import           Data.Foldable    (for_)
-import           Data.Monoid
+import           Data.Semigroup
 import           Data.Serialize
 import           Data.Set         (Set)
 import qualified Data.Set         as Set
@@ -49,10 +49,13 @@ data CodeDependencies = CodeDependencies
   , codeDepTableRefs       :: Set (Id Table)
   }
 
+instance Semigroup CodeDependencies where
+  CodeDependencies c1 w1 t1 <> CodeDependencies c2 w2 t2 =
+    CodeDependencies (c1 <> c2) (w1 <> w2) (t1 <> t2)
+
 instance Monoid CodeDependencies where
   mempty = CodeDependencies Set.empty Set.empty Set.empty
-  mappend (CodeDependencies c1 w1 t1) (CodeDependencies c2 w2 t2) =
-    CodeDependencies (c1 <> c2) (w1 <> w2) (t1 <> t2)
+  mappend = (<>)
 
 columnsOfCodeDeps :: CodeDependencies -> Set (Id Column)
 columnsOfCodeDeps CodeDependencies{..} =

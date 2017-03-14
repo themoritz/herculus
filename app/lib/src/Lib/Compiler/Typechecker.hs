@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE NoImplicitPrelude   #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
@@ -13,15 +14,13 @@ module Lib.Compiler.Typechecker
   , Type (..)
   ) where
 
-import           Control.Lens                   hiding (Context, op)
-import           Control.Monad.Except
-import           Control.Monad.Reader
-import           Control.Monad.State
+import           Lib.Prelude
 
+import           Control.Lens                   hiding (Context, op, para)
+
+import           Data.Functor.Foldable
 import qualified Data.Map                       as Map
-import           Data.Monoid
 import qualified Data.Set                       as Set
-import           Data.Text                      (pack)
 import qualified Data.UnionFind.IntMap          as UF
 
 import           Lib.Compiler.Typechecker.Prim
@@ -38,47 +37,50 @@ newInferState = InferState
   , _inferPointSupply = UF.newPointSupply
   }
 
-runInfer :: Monad m => TypecheckEnv m -> PExpr -> m (Either TypeError (CExpr, Type))
+runInfer
+  :: Monad m
+  => TypecheckEnv m
+  -> PExpr
+  -> m (Either TypeError (CExpr, Type))
 runInfer env expr =
-  let action = do
-        loadPrelude
-        e ::: (_, poly) <- infer expr
-        t <- pointToType poly
-        e' <- replaceTypeClassDicts e
-        c <- toCoreExpr e'
-        pure (c, t)
-  in  runExceptT $ evalStateT (runReaderT (unInferT action) env) newInferState
+  let
+    action = do
+      loadPrelude
+      e ::: (_, poly) <- infer expr
+      t <- pointToType poly
+      e' <- replaceTypeClassDicts e
+      c <- toCoreExpr e'
+      pure (c, t)
+  in
+    runExceptT $
+    flip evalStateT newInferState $
+    flip runReaderT env $
+    unInferT action
 
 --
 
 replaceTypeClassDicts :: Monad m => TExpr -> InferT m TExpr
-replaceTypeClassDicts = cataM $ \case
-  TLam x e -> pure $ TLam x e
-  TApp f e -> pure $ TApp f e
-  TLet x e body -> pure $ TLet x e body
-  TIf c t e -> pure $ TIf c t e
-  TVar n -> pure $ TVar n
-  TLit l -> pure $ TLit l
-  TPrjRecord e r -> pure $ TPrjRecord e r
-  TWithPredicates preds e -> do
+replaceTypeClassDicts = para $ \case
+  TWithPredicates preds (e, _) -> do
     dicts <- mapM (\predicate@(IsIn c _) -> (predicate,) <$> freshDictName c) preds
-    e' <- withInstanceDicts dicts replaceTypeClassDicts e
-    pure $ foldr (TLam . snd) e' dicts
+    e' <- withInstanceDicts dicts $ replaceTypeClassDicts e
+    pure $ foldr (tLam . snd) e' dicts
   TTypeClassDict predicate -> lookupInstanceDict predicate >>= \case
-    Just n -> pure $ TVar n
+    Just n -> pure $ tVar n
     Nothing -> do
       IsIn cls typ <- predicateFromPoint predicate
-      throwError $ "Type `" <> (pack . show) typ <> "` does not implement the `"
-                            <> (pack . show) cls <> "` interface."
-  TColumnRef c -> pure $ TColumnRef c
-  TWholeColumnRef t c -> pure $ TWholeColumnRef t c
-  TTableRef t -> pure $ TTableRef t
+      throwError $ "Type `" <> show typ <> "` does not implement the `"
+                            <> show cls <> "` interface."
+  e -> pure $ Fix $ fst <$> e
 
-inferAndGeneralize :: Monad m => PExpr -> InferT m (TExpr, [Predicate Point], PolyType Point)
+inferAndGeneralize
+  :: Monad m
+  => PExpr
+  -> InferT m (TExpr, [Predicate Point], PolyType Point)
 inferAndGeneralize e = do
   e' ::: (ePreds, ePoint) <- infer e
   (deferred, poly@(ForAll _ retained _)) <- generalize ePreds ePoint
-  let e'' = TWithPredicates retained e'
+  let e'' = tWithPredicates retained e'
   pure (e'', deferred, poly)
 
 infer :: Monad m => PExpr -> InferT m TypedExpr
@@ -87,18 +89,18 @@ infer expr = case expr of
     xPoint <- freshPoint
     e' ::: (bodyPreds, bodyPoint) <- inLocalContext (x, ForAll [] [] xPoint) (infer e)
     arrPoint <- arr xPoint bodyPoint
-    pure $ TLam x e' ::: (bodyPreds, arrPoint)
+    pure $ tLam x e' ::: (bodyPreds, arrPoint)
   PApp f arg -> do
     f' ::: (fPreds, fPoint) <- infer f
     arg' ::: (argPreds, argPoint) <- infer arg
     resultPoint <- freshPoint
     arrPoint <- arr argPoint resultPoint
     unify fPoint arrPoint
-    pure $ TApp f' arg' ::: (fPreds <> argPreds, resultPoint)
+    pure $ tApp f' arg' ::: (fPreds <> argPreds, resultPoint)
   PLet x e rest -> do
     (e', deferred, poly) <- inferAndGeneralize e
     rest' ::: (restPreds, restPoint) <- inLocalContext (x, poly) $ infer rest
-    pure $ TLet x e' rest' ::: (restPreds <> deferred, restPoint)
+    pure $ Fix (TLet x e' rest') ::: (restPreds <> deferred, restPoint)
   PIf cond e1 e2 -> do
     cond' ::: (condPreds, condPoint) <- infer cond
     e1' ::: (e1Preds, e1Point) <- infer e1
@@ -106,20 +108,20 @@ infer expr = case expr of
     boolPoint <- mkPoint tyBool
     unify condPoint boolPoint
     unify e1Point e2Point
-    pure $ TIf cond' e1' e2' ::: (condPreds <> e1Preds <> e2Preds, e1Point)
+    pure $ Fix (TIf cond' e1' e2') ::: (condPreds <> e1Preds <> e2Preds, e1Point)
   PVar x -> do
     poly <- lookupPolyType x
     (xPreds, xPoint) <- instantiate poly
     -- For every predicate, insert instance dictionary node
     -- (which includes the predicate for later lookup)
-    let varWithDicts = foldl TApp (TVar x) (map TTypeClassDict xPreds)
+    let varWithDicts = foldl tApp (tVar x) (map tTypeClassDict xPreds)
     pure $ varWithDicts ::: (xPreds, xPoint)
   PLit l -> do
     t <- case l of
       LNumber _ -> mkPoint tyNumber
       LBool _   -> mkPoint tyBool
       LString _ -> mkPoint tyString
-    pure $ TLit l ::: ([], t)
+    pure $ Fix (TLit l) ::: ([], t)
   PPrjRecord e name -> do
     e' ::: (ePreds, ePoint) <- infer e
     resultPoint <- freshPoint
@@ -127,35 +129,35 @@ infer expr = case expr of
     consPoint <- mkPoint $ TyRecordCons name resultPoint tailPoint
     recordPoint <- mkPoint $ TyRecord consPoint
     unify ePoint recordPoint
-    pure $ TPrjRecord e' name ::: (ePreds, resultPoint)
+    pure $ Fix (TPrjRecord e' name) ::: (ePreds, resultPoint)
   PColumnRef colRef -> do
     f <- asks envResolveColumnRef
     lift (f colRef) >>= \case
-      Nothing -> throwError $ pack $ "Column not found: " <> show colRef
+      Nothing -> throwError $ "Column not found: " <> show colRef
       Just (i, dataCol) -> do
         getRowType <- asks envGetTableRowType
         refPoint <- lift (typeOfDataType getRowType $ _dataColType dataCol) >>= typeToPoint
-        pure $ TColumnRef i ::: ([], refPoint)
+        pure $ Fix (TColumnRef i) ::: ([], refPoint)
   PColumnOfTableRef tblRef colRef -> do
     f <- asks envResolveColumnOfTableRef
     lift (f tblRef colRef) >>= \case
-      Nothing -> throwError $ pack $ "Column not found: " <>
-                                     show colRef <> " on table " <>
-                                     show tblRef
+      Nothing -> throwError $ "Column not found: " <>
+                              show colRef <> " on table " <>
+                              show tblRef
       Just (tblId, colId, dataCol) -> do
         getRowType <- asks envGetTableRowType
         refPoint <- lift (typeOfDataType getRowType $ _dataColType dataCol) >>= typeToPoint
         listPoint <- mkList refPoint
-        pure $ TWholeColumnRef tblId colId ::: ([], listPoint)
+        pure $ Fix (TWholeColumnRef tblId colId) ::: ([], listPoint)
   PTableRef tblRef -> do
     f <- asks envResolveTableRef
     lift (f tblRef) >>= \case
-      Nothing -> throwError $ pack $ "Table not found: " <> show tblRef
+      Nothing -> throwError $ "Table not found: " <> show tblRef
       Just i -> do
         getRowType <- asks envGetTableRowType
         tblRows <- lift (getRowType i) >>= typeToPoint . Type . TyRecord
         listPoint <- mkList tblRows
-        pure $ TTableRef i ::: ([], listPoint)
+        pure $ Fix (TTableRef i) ::: ([], listPoint)
 
 -- Entailment
 
@@ -211,7 +213,7 @@ instantiate (ForAll as predicates p) = do
   let replace p' = do
         t <- findType p'
         case t of
-          TyVar a -> case lookup a pool of
+          TyVar a -> case Map.lookup a (Map.fromList pool) of
             Nothing    -> pure p'
             Just fresh -> pure fresh
           TyConst _  -> pure p'
@@ -248,7 +250,7 @@ unify a b = do
       _ -> do
         typeA <- pointToType a
         typeB <- pointToType b
-        throwError $ "Types do not match: " <> (pack . show) typeA <> ", " <> (pack . show) typeB
+        throwError $ "Types do not match: " <> show typeA <> ", " <> show typeB
 
   where
     -- TODO: check kinds are the same
@@ -261,5 +263,5 @@ unify a b = do
           True -> do
             typeOfX <- pointToType pointOfX
             otherType <- pointToType otherPoint
-            throwError $ "Infinite type: " <> (pack . show) typeOfX <> ", " <> (pack . show) otherType
+            throwError $ "Infinite type: " <> show typeOfX <> ", " <> show otherType
           False -> pointOfX `union` otherPoint

@@ -5,26 +5,25 @@
 {-# LANGUAGE FlexibleContexts   #-}
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE NoImplicitPrelude  #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections      #-}
 
 module Lib.Compiler.Types where
 
-import           Control.Monad.Except
+import           Lib.Prelude                  hiding (show)
 
 import           Data.Aeson
 import           Data.Functor.Foldable
-import           Data.List                    (intercalate)
-import           Data.Map                     (Map)
+import           Data.List                    (intercalate, unwords)
 import qualified Data.Map                     as Map
-import           Data.Monoid
 import qualified Data.Set                     as Set
 import           Data.Text                    (Text, unpack)
-
-import           GHC.Generics
-
 import qualified Data.UnionFind.IntMap        as UF
+
+import           GHC.Show                     (Show (..))
+
 import {-# SOURCE #-} Lib.Model.Column
 import           Lib.Model.Dependencies.Types
 import           Lib.Model.Table
@@ -165,6 +164,21 @@ data TExprF a
 
 type TExpr = Fix TExprF
 
+tLam :: Name -> TExpr -> TExpr
+tLam n e = Fix (TLam n e)
+
+tApp :: TExpr -> TExpr -> TExpr
+tApp f arg = Fix (TApp f arg)
+
+tVar :: Name -> TExpr
+tVar = Fix . TVar
+
+tWithPredicates :: [Predicate Point] -> TExpr -> TExpr
+tWithPredicates p e = Fix (TWithPredicates p e)
+
+tTypeClassDict :: Predicate Point -> TExpr
+tTypeClassDict = Fix . TTypeClassDict
+
 -- Core language
 data CExpr
   = CLam Name CExpr
@@ -198,7 +212,7 @@ toCoreExpr = cataM $ \case
   TVar x              -> pure $ CVar x
   TLit l              -> pure $ CLit l
   TPrjRecord e r      -> pure $ CPrjRecord e r
-  TWithPredicates _ _ -> throwError "TWithRetainedPredicates should have been eliminated before converting to core"
+  TWithPredicates _ _ -> throwError "TWithPredicates should have been eliminated before converting to core"
   TTypeClassDict _    -> throwError "TTypeClassDict should have been eliminated before converting to core"
   TColumnRef c        -> pure $ CColumnRef c
   TWholeColumnRef t c -> pure $ CWholeColumnRef t c

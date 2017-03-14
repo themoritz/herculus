@@ -38,6 +38,7 @@ library
                      , Lib.Model.Dependencies
                      , Lib.Model.Dependencies.Types
                      , Lib.Model.ViewState
+                     , Lib.Prelude
                      , Lib.Template
                      , Lib.Template.Parser
                      , Lib.Template.Typechecker
@@ -60,6 +61,7 @@ library
                      , lens
                      , mtl
                      , parsec
+                     , protolude
                      , pwstore-fast
                      , recursion-schemes
                      , scientific
