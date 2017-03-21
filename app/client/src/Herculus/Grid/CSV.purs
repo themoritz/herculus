@@ -60,10 +60,10 @@ parseCSV sep types input = case runParser input pCSV of
       pure $ VList $ fromFoldable xs
     DataMaybe dt -> fail "not implemented"
 
-showCSV :: Char -> CSV Value -> String
+showCSV :: Char -> CSV (Maybe Value) -> String
 showCSV sep table =
   intercalate "\n" $
-  map (intercalate (singleton sep) <<< map showValue) table
+  map (intercalate (singleton sep) <<< map (maybe "" showValue)) table
 
   where
 

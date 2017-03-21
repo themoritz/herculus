@@ -9,21 +9,18 @@ import Halogen.HTML.CSS as HC
 import Halogen.HTML.Elements.Keyed as HK
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Control.Monad.Eff.Console (log)
 import DOM (DOM)
 import DOM.Classy.Event (currentTarget, preventDefault)
 import DOM.Classy.HTMLElement (focus, getBoundingClientRect, scrollLeft, scrollTop, setContentEditable)
-import DOM.Event.ClipboardEvent (ClipboardEvent, clipboardData, clipboardEventToEvent)
+import DOM.Event.ClipboardEvent (ClipboardEvent, clipboardEventToEvent)
 import DOM.Event.KeyboardEvent (altKey, code, ctrlKey, key, metaKey, shiftKey)
 import DOM.Event.MouseEvent (clientX, clientY)
 import DOM.Event.Types (KeyboardEvent, MouseEvent, keyboardEventToEvent, mouseEventToEvent)
-import DOM.HTML.Event.DragEvent.DataTransfer (getData, setData)
 import DOM.HTML.Types (HTMLElement)
 import DOM.Node.Types (Node)
-import Data.Array (catMaybes, length, toUnfoldable, (!!))
+import Data.Array (catMaybes, length, toUnfoldable, (!!), (..))
 import Data.Int (round, toNumber)
 import Data.List (List(..))
-import Data.MediaType.Common (textPlain)
 import Data.Traversable (mapAccumL)
 import Herculus.Grid.Geometry (Direction(..), Point, Rect, gutterWidth, headHeight, lowerRight, pointEq, projectOntoRect, rowHeight, singletonRect, upperLeft)
 import Herculus.Monad (Herc)
@@ -33,7 +30,15 @@ import Herculus.Utils.Drag (DragEvent(..), dragEventSource, mouseEventToPageCoor
 import Herculus.Utils.Ordering (Relative(..), RelativeTo(..), getRelativeTarget, reorder)
 import Lib.Custom (ColumnTag, Id)
 import Lib.Model.Row (Row)
+import Partial.Unsafe (unsafePartial)
 import Unsafe.Coerce (unsafeCoerce)
+
+type CellSubset = Tuple (Array (Id ColumnTag)) (Array (Id Row))
+
+data ClipboardAction
+  = Cut
+  | Copy
+  | Paste
 
 data Query a
   = Initialize a
@@ -51,9 +56,7 @@ data Query a
   | Reordering Index Int DragEvent a
   | EditCell' a
   | KeyDown KeyboardEvent a
-  | Cut ClipboardEvent a
-  | Copy ClipboardEvent a
-  | Paste ClipboardEvent a
+  | Clipboard' ClipboardAction ClipboardEvent a
 
 type Input =
   { cols :: Array (Tuple (Id ColumnTag) Int)
@@ -64,6 +67,7 @@ data Output
   = ResizeColumn (Id ColumnTag) Int
   | ReorderColumns (Array (Id ColumnTag))
   | EditCell Coords (Maybe String)
+  | Clipboard ClipboardAction ClipboardEvent CellSubset
 
 data Action
   = Idle
@@ -179,9 +183,9 @@ render st = HK.div
             , HP.ref selectedCellRef
             , HP.tabIndex (-1)
             , HE.onKeyDown $ HE.input KeyDown
-            , HE.onCut $ HE.input Cut
-            , HE.onCopy $ HE.input Copy
-            , HE.onPaste $ HE.input Paste
+            , HE.onCut $ HE.input $ Clipboard' Cut
+            , HE.onCopy $ HE.input $ Clipboard' Copy
+            , HE.onPaste $ HE.input $ Clipboard' Paste
             ]
             [ ]
           ]
@@ -395,25 +399,10 @@ eval = case _ of
         unless skip $ prevDef *> editCell (Just char)
     pure next
 
-  Cut ev next -> do
-    liftEff do
-      preventDefault $ clipboardEventToEvent ev
-      setData textPlain "Bar" (clipboardData ev)
-      log "Cut"
-    pure next
-
-  Copy ev next -> do
-    liftEff do
-      preventDefault $ clipboardEventToEvent ev
-      setData textPlain "Foo" (clipboardData ev)
-      log "Copied"
-    pure next
-
-  Paste ev next -> do
-    liftEff do
-      preventDefault $ clipboardEventToEvent ev
-      dat <- getData textPlain (clipboardData ev)
-      log dat
+  Clipboard' action ev next -> do
+    liftEff $ preventDefault $ clipboardEventToEvent ev
+    subset <- genCellSubset
+    H.raise $ Clipboard action ev subset
     pure next
 
 move :: forall f o. Direction -> H.ComponentDSL State f o Herc Unit
@@ -540,3 +529,16 @@ getMouseCoords ev = do
     { x: clientX ev - round (rect.left - sLeft)
     , y: clientY ev - round (rect.top - sTop)
     }
+
+genCellSubset :: H.ComponentDSL State Query Output Herc CellSubset
+genCellSubset = do
+  i <- gets _.input
+  r <- gets _.selection
+  let
+    ul = upperLeft r
+    lr = lowerRight r
+    colSubset = map (\ix -> fst $ unsafePartial $ fromJust $ i.cols !! ix)
+                    (ul.x .. lr.x)
+    rowSubset = map (\ix -> unsafePartial $ fromJust $ i.rows !! ix)
+                    (ul.y .. lr.y)
+  pure $ Tuple colSubset rowSubset

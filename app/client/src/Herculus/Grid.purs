@@ -6,20 +6,24 @@ import Data.Map as Map
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.CSS as HC
+import Halogen.HTML.Elements.Keyed as HK
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Halogen.HTML.Elements.Keyed as HK
 import Herculus.Column as Col
 import Herculus.DataCell as DataCell
 import Herculus.Grid.Control as Control
 import Herculus.PopupMenu as Popup
 import Herculus.ReportCell as ReportCell
 import Herculus.Row as Row
+import DOM.Event.ClipboardEvent (ClipboardEvent, clipboardData)
 import DOM.Event.MouseEvent (MouseEvent)
+import DOM.HTML.Event.DataTransfer (getData, setData)
 import Data.Array (length, (!!))
 import Data.Int (toNumber)
 import Data.Map (Map)
+import Data.MediaType.Common (textPlain)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5, cp6)
+import Herculus.Grid.CSV (showCSV)
 import Herculus.Grid.Geometry (Direction, addRowHeight, gutterWidth, headHeight, rowHeight)
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (Coords(..), RowCache)
@@ -28,7 +32,7 @@ import Herculus.Utils.Ordering (orderMap)
 import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), columnId, columnKind)
 import Lib.Api.Schema.Project (Command(..))
 import Lib.Custom (ColumnTag, Id, ProjectTag)
-import Lib.Model.Cell (CellContent, Value)
+import Lib.Model.Cell (CellContent(..), Value)
 import Lib.Model.Row (Row)
 import Lib.Model.Table (Table)
 
@@ -41,6 +45,7 @@ data Query a
   | ResizeColumn' (Id ColumnTag) Int a
   | ReorderColumns' (Array (Id ColumnTag)) a
   | EditCell Coords (Maybe String) a
+  | Clipboard Control.ClipboardAction ClipboardEvent Control.CellSubset a
   | SaveValue (Id ColumnTag) (Id Row) Value (Maybe Direction) a
   | YieldFocus a
   | MouseDown MouseEvent a
@@ -158,6 +163,8 @@ render st = HK.div
                  Just $ H.action $ ReorderColumns' orders
                Control.EditCell coords mChar ->
                  Just $ H.action $ EditCell coords mChar
+               Control.Clipboard action ev subset ->
+                 Just $ H.action $ Clipboard action ev subset
   ]
 
   where
@@ -290,6 +297,26 @@ eval = case _ of
 
   EditCell coords mChar next -> do
     H.query' cp3 coords $ H.action $ DataCell.StartEdit mChar
+    pure next
+
+  Clipboard action ev (Tuple subsetCols subsetRows) next -> do
+    cells <- gets _.input.cells
+    case action of
+      Control.Cut -> do
+        pure unit
+      Control.Paste -> do
+        dat <- liftEff $ getData textPlain (clipboardData ev)
+        pure unit
+      Control.Copy -> do
+        let
+          table = subsetRows <#> \r ->
+            subsetCols <#> \c -> case Map.lookup (Coords c r) cells of
+              Nothing -> Nothing
+              Just content -> case content of
+                CellError _ -> Nothing
+                CellValue val -> Just val
+          csv = showCSV '\t' table
+        liftEff $ setData textPlain csv (clipboardData ev)
     pure next
 
   SaveValue colId rowId val mDir next -> do
