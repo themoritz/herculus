@@ -10,8 +10,7 @@ import Halogen.HTML.Properties as HP
 import Herculus.Ace as Ace
 import Herculus.EditBox as Edit
 import DOM.Event.Event (Event, stopPropagation)
-import DOM.Event.KeyboardEvent (keyboardEventToEvent)
-import DOM.Event.MouseEvent (MouseEvent, mouseEventToEvent)
+import DOM.Event.MouseEvent (mouseEventToEvent)
 import Data.Array (cons, find)
 import Halogen.Component.ChildPath (cp1, cp2, type (\/), type (<\/>))
 import Herculus.Monad (Herc)

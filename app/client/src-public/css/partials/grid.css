@@ -37,10 +37,13 @@ $gridBlue: #4285F4;
 
 .selection--start {
   outline: none;
-  border: 2px solid color($gridBlue saturation(0));
-  &:focus {
-    border: 2px solid $gridBlue;
-  }
+  border: 2px solid $gridBlue;
+}
+
+.selection__hidden {
+  color: transparent;
+  background-color: transparent;
+  outline: none;
 }
 
 .selection--border {

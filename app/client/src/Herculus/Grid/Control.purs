@@ -9,22 +9,26 @@ import Halogen.HTML.CSS as HC
 import Halogen.HTML.Elements.Keyed as HK
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import Control.Monad.Eff.Console (log)
 import DOM (DOM)
 import DOM.Classy.Event (currentTarget, preventDefault)
-import DOM.Classy.HTMLElement (getBoundingClientRect, scrollLeft, scrollTop)
+import DOM.Classy.HTMLElement (focus, getBoundingClientRect, scrollLeft, scrollTop, setContentEditable)
+import DOM.Event.ClipboardEvent (ClipboardEvent, clipboardData, clipboardEventToEvent)
 import DOM.Event.KeyboardEvent (altKey, code, ctrlKey, key, metaKey, shiftKey)
 import DOM.Event.MouseEvent (clientX, clientY)
 import DOM.Event.Types (KeyboardEvent, MouseEvent, keyboardEventToEvent, mouseEventToEvent)
+import DOM.HTML.Event.DragEvent.DataTransfer (getData, setData)
 import DOM.HTML.Types (HTMLElement)
 import DOM.Node.Types (Node)
 import Data.Array (catMaybes, length, toUnfoldable, (!!))
 import Data.Int (round, toNumber)
 import Data.List (List(..))
+import Data.MediaType.Common (textPlain)
 import Data.Traversable (mapAccumL)
 import Herculus.Grid.Geometry (Direction(..), Point, Rect, gutterWidth, headHeight, lowerRight, pointEq, projectOntoRect, rowHeight, singletonRect, upperLeft)
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (Coords(..))
-import Herculus.Utils (cldiv, conditionalClasses, faIcon_, focusElement, mkIndexed)
+import Herculus.Utils (cldiv, conditionalClasses, faIcon_, mkIndexed)
 import Herculus.Utils.Drag (DragEvent(..), dragEventSource, mouseEventToPageCoord)
 import Herculus.Utils.Ordering (Relative(..), RelativeTo(..), getRelativeTarget, reorder)
 import Lib.Custom (ColumnTag, Id)
@@ -47,6 +51,9 @@ data Query a
   | Reordering Index Int DragEvent a
   | EditCell' a
   | KeyDown KeyboardEvent a
+  | Cut ClipboardEvent a
+  | Copy ClipboardEvent a
+  | Paste ClipboardEvent a
 
 type Input =
   { cols :: Array (Tuple (Id ColumnTag) Int)
@@ -166,11 +173,18 @@ render st = HK.div
               CSS.top    $ CSS.px $ toNumber (top - 1)
               CSS.width  $ CSS.px $ toNumber (width + 1)
               CSS.height $ CSS.px $ toNumber (height + 1)
-          , HP.ref selectedCellRef
-          , HP.tabIndex (-1)
-          , HE.onKeyDown $ HE.input KeyDown
           ]
-          [ ]
+          [ HH.div
+            [ HP.class_ (H.ClassName "selection__hidden")
+            , HP.ref selectedCellRef
+            , HP.tabIndex (-1)
+            , HE.onKeyDown $ HE.input KeyDown
+            , HE.onCut $ HE.input Cut
+            , HE.onCopy $ HE.input Copy
+            , HE.onPaste $ HE.input Paste
+            ]
+            [ ]
+          ]
       ]
     ]
 
@@ -381,6 +395,27 @@ eval = case _ of
         unless skip $ prevDef *> editCell (Just char)
     pure next
 
+  Cut ev next -> do
+    liftEff do
+      preventDefault $ clipboardEventToEvent ev
+      setData textPlain "Bar" (clipboardData ev)
+      log "Cut"
+    pure next
+
+  Copy ev next -> do
+    liftEff do
+      preventDefault $ clipboardEventToEvent ev
+      setData textPlain "Foo" (clipboardData ev)
+      log "Copied"
+    pure next
+
+  Paste ev next -> do
+    liftEff do
+      preventDefault $ clipboardEventToEvent ev
+      dat <- getData textPlain (clipboardData ev)
+      log dat
+    pure next
+
 move :: forall f o. Direction -> H.ComponentDSL State f o Herc Unit
 move dir = do
   st <- get
@@ -400,7 +435,12 @@ move dir = do
 focusCell :: forall f o. H.ComponentDSL State f o Herc Unit
 focusCell = do
   i <- gets _.input
-  when (length i.cols > 0 && length i.rows > 0) $ focusElement selectedCellRef
+  when (length i.cols > 0 && length i.rows > 0) $
+    H.getHTMLElementRef selectedCellRef >>= case _ of
+      Nothing -> pure unit
+      Just el -> liftEff do
+        focus el
+        setContentEditable "true" el
 
 editCell :: Maybe String -> H.ComponentDSL State Query Output Herc Unit
 editCell mChar = do
@@ -500,4 +540,3 @@ getMouseCoords ev = do
     { x: clientX ev - round (rect.left - sLeft)
     , y: clientY ev - round (rect.top - sTop)
     }
-

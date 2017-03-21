@@ -8,7 +8,6 @@ import Data.Generic (class Generic, gCompare, gEq)
 import Data.JSDate (JSDate, LOCALE, parse)
 import Data.Maybe (Maybe(Just, Nothing), maybe)
 import Data.String (fromCharArray, singleton, toCharArray)
-import Lib.Model.Column (DataType)
 import Text.Parsing.Parser (Parser, runParser)
 import Text.Parsing.Parser.Combinators (optionMaybe)
 import Text.Parsing.Parser.String (char, oneOf)
@@ -60,16 +59,3 @@ fromJSDate jsdate = ValTime <$> fromJSDateImpl jsdate
 
 toJSDate :: forall eff. ValTime -> Eff (locale :: LOCALE | eff) JSDate
 toJSDate (ValTime str) = parse str
-
---------------------------------------------------------------------------------
-
--- TODO: delete in favor of ajax calls to the server version of defaultContent
-defaultValue :: DataType -> Value
-defaultValue = case _ of
-  DataBool     -> VBool false
-  DataString   -> VString ""
-  DataNumber   -> VNumber (ValNumber "0")
-  DataTime     -> VTime (ValTime "2017-01-01T00:00:00Z")
-  DataRowRef _ -> VRowRef Nothing
-  DataList   _ -> VList []
-  DataMaybe  _ -> VMaybe Nothing

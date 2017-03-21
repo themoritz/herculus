@@ -5,7 +5,6 @@ import Control.Monad.Eff.Unsafe (unsafePerformEff)
 import Data.Array (fromFoldable, intercalate, many, zipWith)
 import Data.JSDate (isValid, parse)
 import Data.String (fromCharArray, singleton)
-import Herculus.DataCell (defaultValue)
 import Lib.Custom (ValNumber(..), ValTime(..), fromJSDate, pValNumber)
 import Lib.Model.Cell (Value(..))
 import Lib.Model.Column (DataType(..))
@@ -16,7 +15,7 @@ import Text.Parsing.Parser.String (char, noneOf, string, whiteSpace)
 -- Array of rows, which are arrays of elements
 type CSV a = Array (Array a)
 
-parseCSV :: Char -> Array DataType -> String -> CSV Value
+parseCSV :: Char -> Array DataType -> String -> CSV (Maybe Value)
 parseCSV sep types input = case runParser input pCSV of
   Left _ -> []
   Right table -> map goRow table
@@ -25,8 +24,8 @@ parseCSV sep types input = case runParser input pCSV of
 
   goRow = zipWith goCell types
   goCell dt cell = case runParser cell (pValue dt) of
-    Left _ -> defaultValue dt
-    Right v -> v
+    Left _ -> Nothing
+    Right v -> Just v
 
   pCSV = fromFoldable <$> sepBy pRow (char '\n')
   pRow   = fromFoldable <$> sepBy pField (char sep)
@@ -53,13 +52,13 @@ parseCSV sep types input = case runParser input pCSV of
       if isValid jsdate
         then pure $ VTime $ unsafePerformEff $ fromJSDate jsdate
         else fail "could not parse date"
-    DataRowRef _ -> pure $ VRowRef Nothing
+    DataRowRef _ -> fail "not implemented"
     DataList dt -> do
       string "["
       xs <- sepBy (pValue dt) (whiteSpace *> string "," <* whiteSpace)
       string "]"
       pure $ VList $ fromFoldable xs
-    DataMaybe dt -> pure $ VMaybe Nothing
+    DataMaybe dt -> fail "not implemented"
 
 showCSV :: Char -> CSV Value -> String
 showCSV sep table =

@@ -9,7 +9,7 @@
   ],
   "dependencies": {
     "purescript-websocket-simple": "^1.0.1",
-    "purescript-halogen": "^1.1.0",
+    "purescript-halogen": "^1.2.0",
     "purescript-profunctor-lenses": "^2.6.0",
     "purescript-servant-support": "^7.0.0",
     "purescript-argonaut-generic-codecs": "^5.0.0",
