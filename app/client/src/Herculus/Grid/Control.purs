@@ -379,11 +379,14 @@ eval = case _ of
     st <- get
     let
       prevDef = liftEff $ preventDefault $ keyboardEventToEvent ev
+      move' dir = case shiftKey ev of
+        true -> moveEnd dir
+        false -> move dir
     case code ev of
-      "ArrowLeft"         -> prevDef *> move DirLeft
-      "ArrowRight"        -> prevDef *> move DirRight
-      "ArrowUp"           -> prevDef *> move DirUp
-      "ArrowDown"         -> prevDef *> move DirDown
+      "ArrowLeft"         -> prevDef *> move' DirLeft
+      "ArrowRight"        -> prevDef *> move' DirRight
+      "ArrowUp"           -> prevDef *> move' DirUp
+      "ArrowDown"         -> prevDef *> move' DirDown
       "Tab" | shiftKey ev -> prevDef *> move DirLeft
       "Tab"               -> prevDef *> move DirRight
       "Enter"             -> prevDef *> editCell Nothing
@@ -431,18 +434,28 @@ confineSelection input rect =
 
 move :: forall f o. Direction -> H.ComponentDSL State f o Herc Unit
 move dir = do
-  st <- get
+  sel <- gets _.selection
+  inp <- gets _.input
   let
-    modifySelection f = modify \st' -> st' { selection = f st'.selection }
-  case dir of
-    DirLeft -> modifySelection \r -> singletonRect $ r.start
-      { x = max 0 (r.start.x - 1) }
-    DirRight -> modifySelection \r -> singletonRect $ r.start
-      { x = min (length st.input.cols - 1) (r.start.x + 1) }
-    DirUp -> modifySelection \r -> singletonRect $ r.start
-      { y = max 0 (r.start.y - 1) }
-    DirDown -> modifySelection \r -> singletonRect $ r.start
-      { y = min (length st.input.rows - 1) (r.start.y + 1) }
+    sel' = singletonRect $ case dir of
+      DirLeft ->  sel.start { x = sel.start.x - 1 }
+      DirRight -> sel.start { x = sel.start.x + 1 }
+      DirUp    -> sel.start { y = sel.start.y - 1 }
+      DirDown  -> sel.start { y = sel.start.y + 1 }
+  modify _{ selection = confineSelection inp sel' }
+  focusCell
+
+moveEnd :: forall f o. Direction -> H.ComponentDSL State f o Herc Unit
+moveEnd dir = do
+  sel <- gets _.selection
+  inp <- gets _.input
+  let
+    sel' = case dir of
+      DirLeft ->  sel { end { x = sel.end.x - 1 } }
+      DirRight -> sel { end { x = sel.end.x + 1 } }
+      DirUp    -> sel { end { y = sel.end.y - 1 } }
+      DirDown  -> sel { end { y = sel.end.y + 1 } }
+  modify _{ selection = confineSelection inp sel' }
   focusCell
 
 focusCell :: forall f o. H.ComponentDSL State f o Herc Unit
