@@ -52,21 +52,21 @@ prolongSession session = do
 lookUpSession :: (MonadIO m, MonadDB m)
               => SessionKey -> m (Either Text UserInfo)
 lookUpSession sessionKey =
-    getOneByQuery [ "sessionKey" =: sessionKey ]
-        >>= either (pure . Left) getUserId
-  where
-    getUserId (Entity sessionId session) = do
+  getOneByQuery [ "sessionKey" =: sessionKey ] >>= \case
+    Left _ -> pure $ Left "Session not found."
+    Right (Entity sessionId session) -> do
       now <- getCurrentTime
       if now > session ^. sessionExpDate
-        then delete sessionId $> Left "Session expired."
-        else do session' <- prolongSession session
-                update sessionId (\_ -> session')
-                let userId = session' ^. sessionUserId
-                user <- getById' userId
-                pure $ Right $ UserInfo userId
-                                        (user ^. userName)
-                                        (user ^. userEmail)
-                                        sessionKey
+        then pure $ Left "Session expired."
+        else do
+          session' <- prolongSession session
+          update sessionId (const session')
+          let userId = session' ^. sessionUserId
+          user <- getById' userId
+          pure $ Right $ UserInfo userId
+                                  (user ^. userName)
+                                  (user ^. userEmail)
+                                  sessionKey
 
 getUserInfo :: (MonadIO m, MonadDB m) => Maybe SessionKey -> m UserInfo
 getUserInfo = \case

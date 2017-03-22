@@ -20,7 +20,7 @@ import           Control.Monad.Reader
 import qualified Data.ByteString.Base64.URL     as Base64URL
 import qualified Data.ByteString.Lazy           as BL
 import qualified Data.ByteString.Lazy.Char8     as BL8
-import           Data.Foldable                  (traverse_)
+import           Data.Foldable                  (for_)
 import           Data.Functor                   (($>))
 import           Data.Monoid
 import           Data.Text                      (Text, pack, unlines, unpack)
@@ -102,6 +102,13 @@ handleAuthLogin (Api.LoginData email pwd) =
   getOneByQuery [ "email" =: email ] >>= \case
     Left _ -> pure failMessage
     Right (Entity userId user) -> do
+      -- Delete expired sessions of that user
+      now <- getCurrentTime
+      sessions <- listByQuery [ "userId" =: toObjectId userId ]
+      for_ sessions $ \(Entity sessionId session) ->
+        when (now > session ^. sessionExpDate) $
+          delete sessionId
+      -- Check password and login
       if verifyPassword pwd (user ^. userPwHash)
         then do
           session <- getSession userId
@@ -141,17 +148,12 @@ handleAuthSignup (Api.SignupData uName email pwd intention) =
         else pure $ Api.SignupFailed "Please enter a valid email address."
 
 handleAuthGetUserInfo
-  :: MonadHexl m
+  :: (MonadHexl m, MonadIO m)
   => Maybe SessionKey -> m Api.GetUserInfoResponse
-handleAuthGetUserInfo mSKey = do
-  eUser <- runExceptT $ do
-    sKey <- case mSKey of
-      Nothing -> throwError "No auth header found"
-      Just s  -> pure s
-    Entity _ session <- ExceptT $ getOneByQuery [ "sessionKey" =: sKey ]
-    let userId = session ^. sessionUserId
-    user <- ExceptT $ getById userId
-    pure $ Api.UserInfo userId (user ^. userName) (user ^. userEmail) sKey
+handleAuthGetUserInfo mSessKey = do
+  eUser <- runExceptT $ case mSessKey of
+    Nothing -> throwError "No auth header found"
+    Just s  -> ExceptT $ lookUpSession s
   pure $ case eUser of
     Left err       -> Api.GetUserInfoFailed err
     Right userInfo -> Api.GetUserInfoSuccess userInfo

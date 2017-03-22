@@ -3,16 +3,21 @@
 
 module Handler.WebSocket where
 
-import           Auth.Permission
-import           Data.Monoid         ((<>))
-import qualified Lib.Api.Schema.Auth as Api
+import           Control.Monad.IO.Class (MonadIO)
+
+import           Data.Monoid            ((<>))
+
+import qualified Lib.Api.Schema.Auth    as Api
 import           Lib.Api.WebSocket
+
+import           Auth.Permission
+import qualified ConnectionManager      as Mgr
+import           Handler.Rest
 import           Monads
 
-import qualified ConnectionManager   as Mgr
-import           Handler.Rest
-
-handleClientMessage :: MonadHexl m => Mgr.ConnectionId -> WsUpMessage -> m ()
+handleClientMessage
+  :: (MonadHexl m, MonadIO m)
+  => Mgr.ConnectionId -> WsUpMessage -> m ()
 handleClientMessage connection = \case
 
   WsUpSubscribe sKey projectId -> do
