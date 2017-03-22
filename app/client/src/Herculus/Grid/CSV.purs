@@ -15,7 +15,7 @@ import Text.Parsing.Parser.String (char, noneOf, string, whiteSpace)
 -- Array of rows, which are arrays of elements
 type CSV a = Array (Array a)
 
-parseCSV :: Char -> Array DataType -> String -> CSV (Maybe Value)
+parseCSV :: Char -> Array (Maybe DataType) -> String -> CSV (Maybe Value)
 parseCSV sep types input = case runParser input pCSV of
   Left _ -> []
   Right table -> map goRow table
@@ -23,11 +23,13 @@ parseCSV sep types input = case runParser input pCSV of
   where
 
   goRow = zipWith goCell types
-  goCell dt cell = case runParser cell (pValue dt) of
-    Left _ -> Nothing
-    Right v -> Just v
+  goCell mDt cell = case mDt of
+    Nothing -> Nothing
+    Just dt -> case runParser cell (pValue dt) of
+      Left e -> Nothing
+      Right v -> Just v
 
-  pCSV = fromFoldable <$> sepBy pRow (char '\n')
+  pCSV   = fromFoldable <$> sepBy pRow (char '\n')
   pRow   = fromFoldable <$> sepBy pField (char sep)
   pField = fromCharArray <$> many (noneOf [sep, '\n'])
 
@@ -47,16 +49,18 @@ parseCSV sep types input = case runParser input pCSV of
     DataNumber ->
       VNumber <$> pValNumber
     DataTime -> do
-      str <- pField
+      str <- fromCharArray <$> many (noneOf [sep, '\n', '[', ']', ',', ' '])
       let jsdate = unsafePerformEff (parse str)
       if isValid jsdate
         then pure $ VTime $ unsafePerformEff $ fromJSDate jsdate
         else fail "could not parse date"
     DataRowRef _ -> fail "not implemented"
     DataList dt -> do
+      whiteSpace
       string "["
-      xs <- sepBy (pValue dt) (whiteSpace *> string "," <* whiteSpace)
+      xs <- sepBy (whiteSpace *> pValue dt <* whiteSpace) (string ",")
       string "]"
+      whiteSpace
       pure $ VList $ fromFoldable xs
     DataMaybe dt -> fail "not implemented"
 

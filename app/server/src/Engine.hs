@@ -4,7 +4,7 @@
 
 module Engine
   ( Command (..)
-  , runCommand
+  , runCommands
   ) where
 
 import           Control.Lens                 hiding (op)
@@ -38,12 +38,12 @@ import           Monads
 
 --------------------------------------------------------------------------------
 
-runCommand :: MonadHexl m => Id Project -> Command -> m ()
-runCommand projectId cmd = do
+runCommands :: MonadHexl m => Id Project -> [Command] -> m ()
+runCommands projectId cmds = do
   graph <- _projectDependencyGraph <$> getById' projectId
   -- Run command in engine, compile, and propagate
   (_ , state) <- runEngineT projectId graph $ do
-    executeCommand cmd
+    mapM_ executeCommand cmds
     getCompileTargets >>= mapM_ compileColumn
     propagate
   -- Commit changes
@@ -237,9 +237,16 @@ executeCommand = \case
 
   CmdCellSet columnId rowId value -> do
     column <- getColumn columnId
-    setAndPropagateCellContent
-      (column ^. columnTableId) columnId rowId
-      (CellValue value)
+    case column ^. columnKind of
+      ColumnReport _ -> throwError $
+        ErrUser "Cannot set content of report cell."
+      ColumnData dataCol -> case dataCol ^. dataColIsDerived of
+        Derived -> throwError $
+          ErrUser "Cannot set cell content of a derived cell."
+        NotDerived ->
+          setAndPropagateCellContent
+            (column ^. columnTableId) columnId rowId
+            (CellValue value)
 
 --------------------------------------------------------------------------------
 

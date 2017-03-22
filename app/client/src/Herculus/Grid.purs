@@ -18,21 +18,24 @@ import Herculus.Row as Row
 import DOM.Event.ClipboardEvent (ClipboardEvent, clipboardData)
 import DOM.Event.MouseEvent (MouseEvent)
 import DOM.HTML.Event.DataTransfer (getData, setData)
-import Data.Array (length, (!!))
+import Data.Array (drop, length, singleton, zipWith, (!!))
+import Data.Foldable (maximum)
 import Data.Int (toNumber)
 import Data.Map (Map)
 import Data.MediaType.Common (textPlain)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5, cp6)
-import Herculus.Grid.CSV (showCSV)
-import Herculus.Grid.Geometry (Direction, addRowHeight, gutterWidth, headHeight, rowHeight)
+import Herculus.DataCell (defaultValue)
+import Herculus.Grid.CSV (parseCSV, showCSV)
+import Herculus.Grid.Geometry (Direction, Point, addRowHeight, gutterWidth, headHeight, rowHeight)
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (Coords(..), RowCache)
 import Herculus.Utils (Options, cldiv_, faButton_, mkIndexed)
 import Herculus.Utils.Ordering (orderMap)
-import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), columnId, columnKind)
+import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), columnId, columnKind, dataColIsDerived, dataColType)
 import Lib.Api.Schema.Project (Command(..))
 import Lib.Custom (ColumnTag, Id, ProjectTag)
 import Lib.Model.Cell (CellContent(..), Value)
+import Lib.Model.Column (IsDerived(..))
 import Lib.Model.Row (Row)
 import Lib.Model.Table (Table)
 
@@ -45,7 +48,9 @@ data Query a
   | ResizeColumn' (Id ColumnTag) Int a
   | ReorderColumns' (Array (Id ColumnTag)) a
   | EditCell Coords (Maybe String) a
-  | Clipboard Control.ClipboardAction ClipboardEvent Control.CellSubset a
+  | Cut ClipboardEvent Control.CellSubset a
+  | Copy ClipboardEvent Control.CellSubset a
+  | Paste ClipboardEvent Point a
   | SaveValue (Id ColumnTag) (Id Row) Value (Maybe Direction) a
   | YieldFocus a
   | MouseDown MouseEvent a
@@ -66,7 +71,7 @@ type Input =
   }
 
 data Output
-  = Command Command
+  = Commands (Array Command)
   | ResizeColumn (Id ColumnTag) Int
   | ReorderColumns (Array (Id ColumnTag))
 
@@ -163,8 +168,12 @@ render st = HK.div
                  Just $ H.action $ ReorderColumns' orders
                Control.EditCell coords mChar ->
                  Just $ H.action $ EditCell coords mChar
-               Control.Clipboard action ev subset ->
-                 Just $ H.action $ Clipboard action ev subset
+               Control.Cut ev subset ->
+                 Just $ H.action $ Cut ev subset
+               Control.Copy ev subset ->
+                 Just $ H.action $ Copy ev subset
+               Control.Paste ev start ->
+                 Just $ H.action $ Paste ev start
   ]
 
   where
@@ -268,17 +277,17 @@ eval = case _ of
     pure next
 
   SendCommand cmd next -> do
-    H.raise $ Command cmd
+    H.raise $ Commands [cmd]
     pure next
 
   AddRow next -> do
     st <- H.get
-    H.raise $ Command $ CmdRowCreate st.input.tableId
+    H.raise $ Commands [CmdRowCreate st.input.tableId]
     pure next
 
   AddCol colType next -> do
     st <- H.get
-    H.raise $ Command $ case colType of
+    H.raise $ Commands $ singleton $ case colType of
       DataCol -> CmdDataColCreate st.input.tableId
       ReportCol -> CmdReportColCreate st.input.tableId
     pure next
@@ -299,29 +308,64 @@ eval = case _ of
     H.query' cp3 coords $ H.action $ DataCell.StartEdit mChar
     pure next
 
-  Clipboard action ev (Tuple subsetCols subsetRows) next -> do
-    cells <- gets _.input.cells
-    case action of
-      Control.Cut -> do
-        pure unit
-      Control.Paste -> do
-        dat <- liftEff $ getData textPlain (clipboardData ev)
-        pure unit
-      Control.Copy -> do
-        let
-          table = subsetRows <#> \r ->
-            subsetCols <#> \c -> case Map.lookup (Coords c r) cells of
-              Nothing -> Nothing
-              Just content -> case content of
-                CellError _ -> Nothing
-                CellValue val -> Just val
-          csv = showCSV '\t' table
-        liftEff $ setData textPlain csv (clipboardData ev)
+  Cut ev subset@(Tuple subsetCols subsetRows) next -> do
+    writeClipboard subset ev
+    cols <- gets _.input.cols
+
+    H.raise $ Commands do
+      c <- subsetCols
+      case Map.lookup c cols of
+        Nothing -> []
+        Just col -> case col ^. columnKind of
+          ColumnReport _ -> []
+          ColumnData dataCol -> case dataCol ^. dataColIsDerived of
+            Derived -> []
+            NotDerived -> do
+              r <- subsetRows
+              let val = defaultValue (dataCol ^. dataColType)
+              [CmdCellSet c r val]
+    pure next
+
+  Copy ev subset next -> do
+    writeClipboard subset ev
+    pure next
+
+  Paste ev start next -> do
+    { input } <- get
+    dat <- liftEff $ getData textPlain (clipboardData ev)
+    let
+      orderedCols = orderMap input.colOrder input.cols
+      availableCols = drop start.x orderedCols
+      availableRows = drop start.y input.rows
+      types = availableCols <#> \(Tuple _ col) -> case col ^. columnKind of
+        ColumnReport _ -> Nothing
+        ColumnData dataCol -> case dataCol ^. dataColIsDerived of
+          Derived -> Nothing
+          NotDerived -> Just (dataCol ^. dataColType)
+      csv = parseCSV '\t' types dat
+      cmds = join $ join $ zipWith goRow availableRows csv
+        where
+        goRow (Tuple r _) csvRow = zipWith goCell availableCols csvRow
+          where
+          goCell (Tuple c _) mVal = case mVal of
+            Just val -> [CmdCellSet c r val]
+            Nothing -> []
+      pastedRows = max 0 $ min (length availableRows) (length csv) - 1
+      pastedCols = max 0 $ min (length availableCols) maxWidth - 1
+        where maxWidth = fromMaybe 0 $ maximum $ map length csv
+    H.query' cp6 unit $ H.action $ Control.SetSelection
+      { start
+      , end:
+        { x: start.x + pastedCols
+        , y: start.y + pastedRows
+        }
+      }
+    H.raise $ Commands cmds
     pure next
 
   SaveValue colId rowId val mDir next -> do
     H.query' cp6 unit $ H.action $ Control.Focus mDir
-    H.raise $ Command $ CmdCellSet colId rowId val
+    H.raise $ Commands [CmdCellSet colId rowId val]
     pure next
 
   YieldFocus next -> do
@@ -343,3 +387,18 @@ eval = case _ of
   DoubleClick ev next -> do
     H.query' cp6 unit $ H.action $ Control.DoubleClick ev
     pure next
+
+writeClipboard
+  :: Control.CellSubset
+  -> ClipboardEvent
+  -> H.ParentDSL State Query Child Slot Output Herc Unit
+writeClipboard (Tuple subsetCols subsetRows) ev = do
+  cells <- gets _.input.cells
+  let
+    csv = showCSV '\t' $ subsetRows <#> \r ->
+      subsetCols <#> \c -> case Map.lookup (Coords c r) cells of
+        Nothing -> Nothing
+        Just content -> case content of
+          CellError _ -> Nothing
+          CellValue val -> Just val
+  liftEff $ setData textPlain csv (clipboardData ev)

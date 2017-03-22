@@ -8,6 +8,7 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Herculus.Grid as Grid
 import Herculus.Notifications.Types as N
+import Herculus.Project.Settings as Settings
 import Herculus.Project.TableList as TL
 import Herculus.Router as R
 import Herculus.UserMenu as UserMenu
@@ -15,7 +16,7 @@ import Herculus.WebSocket as WS
 import Lib.Api.Rest as Api
 import Control.Monad.State (execState, runState)
 import Control.Monad.Writer (execWriterT)
-import Data.Array (head)
+import Data.Array (head, singleton)
 import Data.Lens (Lens', _Just, lens, view, (.=))
 import Data.Map (Map)
 import Data.Maybe.First (First(..))
@@ -23,7 +24,6 @@ import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, 
 import Herculus.Monad (Herc, getAuthToken, gotoRoute, notify, withApi)
 import Herculus.Project.Data (ProjectData, applyDiff, descTable, mkProjectData, prepare)
 import Herculus.Project.TableList (Output(..))
-import Herculus.Project.Settings as Settings
 import Herculus.Utils (clspan_, faIcon_)
 import Herculus.Utils.Templates (app)
 import Lib.Api.Schema.Auth (UserInfo)
@@ -39,7 +39,7 @@ data Query a
   | Update Input a
   | OpenTable (Id Table) a
   | ToOverview a
-  | RunCommand Command a
+  | RunCommands (Array Command) a
   | SaveName String a
   | Delete a
   | ResizeColumn (Id ColumnTag) Int a
@@ -134,7 +134,7 @@ render st =
           Just input -> 
             HH.slot' cp4 unit Grid.comp input \o ->
               Just $ H.action $ case o of
-                Grid.Command cmd -> RunCommand cmd
+                Grid.Commands cmds -> RunCommands cmds
                 Grid.ResizeColumn colId size -> ResizeColumn colId size
                 Grid.ReorderColumns order -> ReorderColumns order
 
@@ -156,7 +156,7 @@ render st =
                , selected: st.view
                }
                case _ of
-                 Command c -> Just (H.action (RunCommand c))
+                 Command c -> Just (H.action (RunCommands $ singleton c))
                  SelectTable t -> Just (H.action (OpenTable t))
     , case st._project of
         Nothing -> HH.text ""
@@ -220,9 +220,9 @@ eval (HandleWebSocket output next) = do
               }
   pure next
 
-eval (RunCommand cmd next) = do
+eval (RunCommands cmds next) = do
   p <- H.gets _.projId
-  withApi (Api.postProjectRunCommandByProjectId cmd p) (const $ pure unit)
+  withApi (Api.postProjectRunCommandsByProjectId cmds p) (const $ pure unit)
   pure next
 
 eval (SaveName name next) = do

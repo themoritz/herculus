@@ -233,7 +233,7 @@ handleProject =
   :<|> handleProjectColSetWidth
   :<|> handleProjectReorderCols
   :<|> handleProjectLoad
-  :<|> handleProjectRunCommand
+  :<|> handleProjectRunCommands
 
 handleProjectCreate
   :: (MonadHexl m, MonadReader Api.UserInfo m)
@@ -266,9 +266,8 @@ handleProjectDelete projectId = do
   userId <- asks Api._uiUserId
   permissionProject userId projectId
   tables <- listByQuery [ "projectId" =: toObjectId projectId ]
-  traverse_ (handleProjectRunCommand projectId .
-             CmdTableDelete .
-             entityId) tables
+  handleProjectRunCommands projectId $
+    map (CmdTableDelete . entityId) tables
   delete projectId
 
 handleProjectColSetWidth
@@ -322,33 +321,35 @@ handleProjectLoad projectId = do
            (map (\(Entity _ cw) -> (_cwColumnId cw, _cwWidth cw)) colSizes)
            colOrders
 
-handleProjectRunCommand
+handleProjectRunCommands
   :: (MonadHexl m, MonadReader Api.UserInfo m)
-  => Id Project -> Command -> m ()
-handleProjectRunCommand projectId cmd = do
+  => Id Project -> [Command] -> m ()
+handleProjectRunCommands projectId cmds = do
   userId <- asks Api._uiUserId
   permissionProject userId projectId
-  -- Check that project id implied by the command matches `i`.
-  let ofTable t = getById' t >>= \table -> if _tableProjectId table == projectId
-        then pure ()
-        else throwError $ ErrBug $ "Given project id does not match project id "
-                                <> "implied by the command."
-      ofColumn c = _columnTableId <$> getById' c >>= ofTable
-      ofRow r = _rowTableId <$> getById' r >>= ofTable
-  case cmd of
-    CmdTableCreate _           -> pure ()
-    CmdTableSetName t _        -> ofTable t
-    CmdTableDelete t           -> ofTable t
-    CmdDataColCreate t         -> ofTable t
-    CmdDataColUpdate c _ _ _   -> ofColumn c
-    CmdReportColCreate t       -> ofTable t
-    CmdReportColUpdate c _ _ _ -> ofColumn c
-    CmdColumnSetName c _       -> ofColumn c
-    CmdColumnDelete c          -> ofColumn c
-    CmdRowCreate t             -> ofTable t
-    CmdRowDelete r             -> ofRow r
-    CmdCellSet c _ _           -> ofColumn c
-  runCommand projectId cmd
+  -- Check that project id implied by the command matches `projectId`.
+  let
+    ofTable t = getById' t >>= \table -> if _tableProjectId table == projectId
+      then pure ()
+      else throwError $ ErrBug $ "Given project id does not match project id "
+                              <> "implied by the command."
+    ofColumn c = _columnTableId <$> getById' c >>= ofTable
+    ofRow r = _rowTableId <$> getById' r >>= ofTable
+    checkCmd = \case
+      CmdTableCreate _           -> pure ()
+      CmdTableSetName t _        -> ofTable t
+      CmdTableDelete t           -> ofTable t
+      CmdDataColCreate t         -> ofTable t
+      CmdDataColUpdate c _ _ _   -> ofColumn c
+      CmdReportColCreate t       -> ofTable t
+      CmdReportColUpdate c _ _ _ -> ofColumn c
+      CmdColumnSetName c _       -> ofColumn c
+      CmdColumnDelete c          -> ofColumn c
+      CmdRowCreate t             -> ofTable t
+      CmdRowDelete r             -> ofRow r
+      CmdCellSet c _ _           -> ofColumn c
+  mapM_ checkCmd cmds
+  runCommands projectId cmds
 
 --------------------------------------------------------------------------------
 

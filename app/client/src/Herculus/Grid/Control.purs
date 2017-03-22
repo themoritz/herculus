@@ -35,16 +35,12 @@ import Unsafe.Coerce (unsafeCoerce)
 
 type CellSubset = Tuple (Array (Id ColumnTag)) (Array (Id Row))
 
-data ClipboardAction
-  = Cut
-  | Copy
-  | Paste
-
 data Query a
   = Initialize a
   | Update Input a
   -- External
   | Focus (Maybe Direction) a
+  | SetSelection Rect a
   | MouseDown MouseEvent a
   | MouseMove MouseEvent a
   | MouseUp MouseEvent a
@@ -56,7 +52,9 @@ data Query a
   | Reordering Index Int DragEvent a
   | EditCell' a
   | KeyDown KeyboardEvent a
-  | Clipboard' ClipboardAction ClipboardEvent a
+  | Cut' ClipboardEvent a
+  | Copy' ClipboardEvent a
+  | Paste' ClipboardEvent a
 
 type Input =
   { cols :: Array (Tuple (Id ColumnTag) Int)
@@ -67,7 +65,9 @@ data Output
   = ResizeColumn (Id ColumnTag) Int
   | ReorderColumns (Array (Id ColumnTag))
   | EditCell Coords (Maybe String)
-  | Clipboard ClipboardAction ClipboardEvent CellSubset
+  | Cut ClipboardEvent CellSubset
+  | Copy ClipboardEvent CellSubset
+  | Paste ClipboardEvent Point
 
 data Action
   = Idle
@@ -183,9 +183,9 @@ render st = HK.div
             , HP.ref selectedCellRef
             , HP.tabIndex (-1)
             , HE.onKeyDown $ HE.input KeyDown
-            , HE.onCut $ HE.input $ Clipboard' Cut
-            , HE.onCopy $ HE.input $ Clipboard' Copy
-            , HE.onPaste $ HE.input $ Clipboard' Paste
+            , HE.onCut $ HE.input Cut'
+            , HE.onCopy $ HE.input Copy'
+            , HE.onPaste $ HE.input Paste'
             ]
             [ ]
           ]
@@ -265,21 +265,19 @@ eval = case _ of
     pure next
 
   Update input next -> do
-    let bounds =
-          { start: { x: 0, y: 0 }
-          , end: { x: length input.cols - 1
-                 , y: length input.rows - 1
-                 }
-          }
     oldSelection <- gets _.selection
     modify _
       { input = input
-      , selection =
-        { start: projectOntoRect bounds oldSelection.start
-        , end: projectOntoRect bounds oldSelection.end
-        }
+      , selection = confineSelection input oldSelection
       }
     focusCell
+    pure next
+
+  SetSelection rect next -> do
+    { input } <- get
+    modify _
+      { selection = confineSelection input rect
+      }
     pure next
 
   ResizeStart ix ev next -> do
@@ -399,11 +397,37 @@ eval = case _ of
         unless skip $ prevDef *> editCell (Just char)
     pure next
 
-  Clipboard' action ev next -> do
+  Cut' ev next -> do
     liftEff $ preventDefault $ clipboardEventToEvent ev
     subset <- genCellSubset
-    H.raise $ Clipboard action ev subset
+    H.raise $ Cut ev subset
     pure next
+
+  Copy' ev next -> do
+    liftEff $ preventDefault $ clipboardEventToEvent ev
+    subset <- genCellSubset
+    H.raise $ Copy ev subset
+    pure next
+
+  Paste' ev next -> do
+    liftEff $ preventDefault $ clipboardEventToEvent ev
+    start <- gets _.selection.start
+    H.raise $ Paste ev start
+    pure next
+
+confineSelection :: Input -> Rect -> Rect
+confineSelection input rect =
+  let
+    bounds =
+      { start: { x: 0, y: 0 }
+      , end: { x: length input.cols - 1
+             , y: length input.rows - 1
+             }
+      }
+  in
+    { start: projectOntoRect bounds rect.start
+    , end: projectOntoRect bounds rect.end
+    }
 
 move :: forall f o. Direction -> H.ComponentDSL State f o Herc Unit
 move dir = do

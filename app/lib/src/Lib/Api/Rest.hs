@@ -59,7 +59,7 @@ type ProjectRoutes =
  :<|> ProjectColSetWidth
  :<|> ProjectReorderCols
  :<|> ProjectLoad
- :<|> ProjectRunCommand
+ :<|> ProjectRunCommands
 
 type ReportCellRoutes =
       ReportCellGetPdf
@@ -81,7 +81,7 @@ type ProjectDelete       = "delete"      :> Capture "projectId" (Id M.Project)  
 type ProjectColSetWidth  = "colSetWidth" :> Capture "columnId" (Id M.Column)   :> ReqBody '[JSON] Int         :> Post '[JSON] ()
 type ProjectReorderCols  = "reorderCols" :> Capture "tableId" (Id M.Table)   :> ReqBody '[JSON] [Id M.Column] :> Post '[JSON] ()
 type ProjectLoad         = "load"        :> Capture "projectId" (Id M.Project)                                :> Get '[JSON] ProjectData
-type ProjectRunCommand   = "runCommand"  :> Capture "projectId" (Id M.Project) :> ReqBody '[JSON] Command     :> Post '[JSON] ()
+type ProjectRunCommands  = "runCommands" :> Capture "projectId" (Id M.Project) :> ReqBody '[JSON] [Command]   :> Post '[JSON] ()
 
 type ReportCellGetPdf    = "pdf"   :> Capture "columnId" (Id M.Column) :> Capture "rowId" (Id M.Row) :> Get '[PDF] LBS.ByteString
 type ReportCellGetHtml   = "html"  :> Capture "columnId" (Id M.Column) :> Capture "rowId" (Id M.Row) :> Get '[HTML] Text
