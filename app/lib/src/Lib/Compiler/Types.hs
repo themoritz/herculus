@@ -184,10 +184,10 @@ data CExpr
   = CLam Name CExpr
   | CApp CExpr CExpr
   | CLet Name CExpr CExpr
-  | CIf CExpr CExpr CExpr
+  | CIf CExpr CExpr CExpr -- desugar
   | CVar Name
   | CLit Lit
-  | CPrjRecord CExpr (Ref Column)
+  | CPrjRecord CExpr (Ref Column) -- desugar
   --
   | CColumnRef (Id Column)
   | CWholeColumnRef (Id Table) (Id Column)

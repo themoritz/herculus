@@ -60,7 +60,7 @@ library
                      , http-media
                      , lens
                      , mtl
-                     , parsec
+                     , megaparsec
                      , protolude
                      , pwstore-fast
                      , recursion-schemes

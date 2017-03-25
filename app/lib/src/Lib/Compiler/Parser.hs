@@ -1,158 +1,144 @@
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE ViewPatterns      #-}
+
 module Lib.Compiler.Parser
   ( parseExpr
-  , expr
+  , parse
   ) where
 
-import           Control.Monad.Identity
+import           Lib.Prelude
 
-import           Data.Foldable          (foldl')
-import           Data.Functor           (($>))
-import           Data.Monoid            ((<>))
-import           Data.Text              (Text, pack, unpack)
+import           Data.Foldable             (foldl')
+import           Data.Functor              (($>))
+import           Data.Functor.Foldable
+import           Data.List                 (groupBy)
+import           Data.Text                 (Text, pack)
 
-import           Text.Read              (readMaybe)
+import qualified Text.Megaparsec           as P
+import           Text.Megaparsec.Expr
 
-import           Text.Parsec            hiding (Column)
-import           Text.Parsec.Expr
-import           Text.Parsec.Language   (emptyDef)
-import           Text.Parsec.String     (Parser)
-import qualified Text.Parsec.Token      as P
-
-import           Lib.Compiler.Types
+import           Lib.Compiler.AST
+import           Lib.Compiler.Parser.Lexer
+import           Lib.Compiler.Parser.State
 import           Lib.Types
 
 --
 
-lexer :: P.TokenParser ()
-lexer = P.makeTokenParser emptyDef
-  { P.reservedOpNames = ["+", "-", "*", "/", "==", "=", "<=", ">=", "<", ">", "&&", "||"]
-  , P.reservedNames = ["if", "then", "else", "True", "False", "let"]
-  , P.identStart = letter
-  , P.identLetter = alphaNum <|> oneOf "_"
-  }
-
-binary :: String -> Assoc -> Operator String () Identity PExpr
-binary name assoc =
-  Infix (P.reservedOp lexer name *> pure (\l r -> PApp (PApp (PVar $ pack name) l) r)) assoc
-
-expr :: Parser PExpr
-expr = buildExpressionParser table terms
+mkOpTable :: [OpSpec] -> [[Operator Parser Expr]]
+mkOpTable = (map.map) binary . groupBy f . sortBy g
   where
-    table =
-      [ [ binary "*" AssocLeft
-        , binary "/" AssocLeft
-        ] -- 7
-      , [ binary "+" AssocLeft
-        , binary "-" AssocLeft
-        ] -- 6
-      , [ binary "<>" AssocRight
-        ] -- 5
-      , [ binary "<=" AssocLeft
-        , binary ">=" AssocLeft
-        , binary "<" AssocLeft
-        , binary ">" AssocLeft
-        , binary "==" AssocNone
-        , binary "/=" AssocNone
-        ] -- 4
-      , [ binary "&&" AssocRight
-        ] -- 3
-      , [ binary "||" AssocRight
-        ] -- 2
+  g (opFixity -> Infix _ x) (opFixity -> Infix _ y) = compare y x
+  f (opFixity -> Infix _ x) (opFixity -> Infix _ y) = x == y
+  binary :: OpSpec -> Operator Parser Expr
+  binary (OpSpec (Infix assoc _) name) =
+    let
+      p = symbol name $> (\l r -> mkApp (mkApp (Fix $ Var name) l) r)
+    in
+      case assoc of
+        AssocL -> InfixL p
+        AssocN -> InfixN p
+        AssocR -> InfixR p
+
+parseExpr :: Parser Expr
+parseExpr = do
+  opSpecs <- gets parserOperators
+  makeExprParser terms (mkOpTable opSpecs)
+  where
+    terms = P.choice
+      [ parseIfThenElse
+      , parseLet
+      , parseAbs
+      , parseApp
+      , parseExpr'
       ]
-    terms =
-          try ifThenElse
-      <|> try let'
-      <|> try lam
-      <|> try app
-      <|> try aExpr
-      <?> "expression"
 
-aExpr :: Parser PExpr
-aExpr =
-      try prjRecord
-  <|> try bExpr
-  <?> "a-expression"
+parseExpr' :: Parser Expr
+parseExpr' = P.choice
+  [ P.try parseAccessor
+  , P.try parseExpr''
+  ]
 
-bExpr :: Parser PExpr
-bExpr =
-      try var
-  <|> try colOfTblRef
-  <|> try tblRef
-  <|> try colRef
-  <|> try lit
-  <|> try (P.parens lexer expr)
-  <?> "b-expression"
+parseExpr'' :: Parser Expr
+parseExpr'' = P.choice
+  [ parseVar
+  , parseColOfTblRef
+  , parseTblRef
+  , parseColRef
+  , parseLit
+  , (parens parseExpr)
+  ]
 
-app :: Parser PExpr
-app = do
-  start <- aExpr
-  args <- many1 aExpr
-  pure $ foldl' PApp start args
+parseApp :: Parser Expr
+parseApp = do
+  start <- parseExpr'
+  args <- some parseExpr'
+  pure $ foldl' mkApp start args
 
-prjRecord :: Parser PExpr
-prjRecord = do
-  e <- bExpr
-  refs <- many1 $ char '.' *> ((Ref . pack) <$> P.identifier lexer)
-  pure $ foldl' PPrjRecord e refs
+parseAccessor :: Parser Expr
+parseAccessor = do
+  e <- parseExpr''
+  refs <- some $ dot *> (Ref <$> identifier)
+  pure $ foldl' mkAccessor e refs
 
-let' :: Parser PExpr
-let' = do
-  _ <- P.reserved lexer "let"
-  name <- P.identifier lexer
-  args <- many $ P.identifier lexer
-  _ <- P.reservedOp lexer "="
-  e <- expr
-  _ <- P.lexeme lexer (char ';')
-  body <- expr
-  pure $ PLet (pack name) (foldr PLam e (map pack args)) body
+parseLet :: Parser Expr
+parseLet = do
+  _ <- reserved "let"
+  name <- identifier
+  args <- many parseBinder
+  equals
+  e <- parseExpr
+  semicolon
+  body <- parseExpr
+  pure $ Fix $ Let name (foldr mkAbs e args) body
 
-lam :: Parser PExpr
-lam = do
-  _ <- P.lexeme lexer $ char '\\'
-  vars <- many1 $ P.identifier lexer
-  _ <- P.lexeme lexer $ string "->"
-  body <- expr
-  pure $ foldr PLam body (map pack vars)
+parseAbs :: Parser Expr
+parseAbs = do
+  backslash
+  binders <- some parseBinder
+  rArrow
+  body <- parseExpr
+  pure $ foldr mkAbs body binders
 
-var :: Parser PExpr
-var = PVar . pack <$> P.identifier lexer
+parseBinder :: Parser Binder
+parseBinder = VarBinder <$> identifier
 
-lit :: Parser PExpr
-lit = PLit <$> (stringLit <|> numberLit <|> boolLit)
+parseVar :: Parser Expr
+parseVar = Fix . Var <$> identifier
+
+parseLit :: Parser Expr
+parseLit = Fix . Literal <$> (parseString <|> parseNumber <|> parseBool)
   where
-    stringLit = P.lexeme lexer $ LString . pack <$>
-                  P.lexeme lexer (char '"' *> many (noneOf "\"") <* char '"')
-    numberLit = P.lexeme lexer $ do
-      pref <- many $ oneOf "+-"
-      raw <- many $ oneOf "0123456789."
-      case readMaybe (pref <> raw) of
-        Nothing  -> fail "expected number"
-        Just dec -> pure $ LNumber $ Number dec
-    boolLit =
-          try (P.reserved lexer "True"  $> LBool True)
-      <|> try (P.reserved lexer "False" $> LBool False)
-      <?> "True or False"
+    parseString = StringLit <$> stringLit
+    parseNumber = NumberLit <$> numberLit
+    parseBool =
+          P.try (reserved "True"  $> BoolLit True)
+      <|> P.try (reserved "False" $> BoolLit False)
+      P.<?> "True or False"
 
-ifThenElse :: Parser PExpr
-ifThenElse = PIf
-  <$> (P.reserved lexer "if"   *> expr)
-  <*> (P.reserved lexer "then" *> expr)
-  <*> (P.reserved lexer "else" *> expr)
+parseIfThenElse :: Parser Expr
+parseIfThenElse = do
+  cond <- reserved "if"   *> parseExpr
+  true <- reserved "then" *> parseExpr
+  false <- reserved "else" *> parseExpr
+  pure $ Fix $ Case cond
+    [ (ConstructorBinder "True" [], true)
+    , (ConstructorBinder "False" [], false)
+    ]
 
-tblRef :: Parser PExpr
-tblRef = PTableRef . Ref . pack <$> (char '#' *> P.identifier lexer)
+parseTblRef :: Parser Expr
+parseTblRef = Fix . TableRef . Ref <$> (hashSign *> identifier)
 
-colRef :: Parser PExpr
-colRef = PColumnRef . Ref . pack <$> (char '$' *> P.identifier lexer)
+parseColRef :: Parser Expr
+parseColRef = Fix . ColumnRef . Ref <$> (dollarSign *> identifier)
 
-colOfTblRef :: Parser PExpr
-colOfTblRef = do
-  tbl <- char '#' *> P.identifier lexer
-  col <- char '.' *> P.identifier lexer
-  pure $ PColumnOfTableRef (Ref $ pack tbl) (Ref $ pack col)
+parseColOfTblRef :: Parser Expr
+parseColOfTblRef = do
+  tbl <- hashSign *> identifier
+  col <- dot *> identifier
+  pure $ Fix $ ColumnOfTableRef (Ref tbl) (Ref col)
 
-parseExpr :: Text -> Either Text PExpr
-parseExpr e =
-  case parse (P.whiteSpace lexer *> expr <* eof) "" $ unpack e of
-    Left msg -> Left $ pack $ show msg
-    Right x  -> Right x
+parse :: Text -> Either Text Expr
+parse e = flip evalState initialParseState $
+  P.runParserT (spaceConsumer *> parseExpr <* P.eof) "" e >>= \case
+    Left msg -> pure $ Left $ pack $ show msg
+    Right x  -> pure $ Right x
