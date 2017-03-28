@@ -4,12 +4,12 @@
 module Lib.Compiler.Parser
   ( parseExpr
   , parse
+  , testParse
   ) where
 
 import           Lib.Prelude
 
 import           Data.Foldable             (foldl')
-import           Data.Functor              (($>))
 import           Data.Functor.Foldable
 import           Data.List                 (groupBy)
 import           Data.Text                 (Text, pack)
@@ -28,11 +28,13 @@ mkOpTable :: [OpSpec] -> [[Operator Parser Expr]]
 mkOpTable = (map.map) binary . groupBy f . sortBy g
   where
   g (opFixity -> Infix _ x) (opFixity -> Infix _ y) = compare y x
+
   f (opFixity -> Infix _ x) (opFixity -> Infix _ y) = x == y
+
   binary :: OpSpec -> Operator Parser Expr
   binary (OpSpec (Infix assoc _) name) =
     let
-      p = symbol name $> (\l r -> mkApp (mkApp (Fix $ Var name) l) r)
+      p = P.try (symbol name) $> (\l r -> mkApp (mkApp (Fix $ Var name) l) r)
     in
       case assoc of
         AssocL -> InfixL p
@@ -45,12 +47,13 @@ parseExpr = do
   makeExprParser terms (mkOpTable opSpecs)
   where
     terms = P.choice
-      [ parseIfThenElse
-      , parseLet
-      , parseAbs
-      , parseApp
-      , parseExpr'
+      [ P.try parseIfThenElse
+      , P.try parseLet
+      , P.try parseAbs
+      , P.try parseApp
+      , P.try parseExpr'
       ]
+      P.<?> "expression"
 
 parseExpr' :: Parser Expr
 parseExpr' = P.choice
@@ -60,12 +63,12 @@ parseExpr' = P.choice
 
 parseExpr'' :: Parser Expr
 parseExpr'' = P.choice
-  [ parseVar
-  , parseColOfTblRef
-  , parseTblRef
-  , parseColRef
-  , parseLit
-  , (parens parseExpr)
+  [ P.try parseVar
+  , P.try parseColOfTblRef
+  , P.try parseTblRef
+  , P.try parseColRef
+  , P.try parseLit
+  , P.try (parens parseExpr)
   ]
 
 parseApp :: Parser Expr
@@ -82,12 +85,12 @@ parseAccessor = do
 
 parseLet :: Parser Expr
 parseLet = do
-  _ <- reserved "let"
+  reserved "let"
   name <- identifier
   args <- many parseBinder
   equals
   e <- parseExpr
-  semicolon
+  reserved "in"
   body <- parseExpr
   pure $ Fix $ Let name (foldr mkAbs e args) body
 
@@ -106,13 +109,19 @@ parseVar :: Parser Expr
 parseVar = Fix . Var <$> identifier
 
 parseLit :: Parser Expr
-parseLit = Fix . Literal <$> (parseString <|> parseNumber <|> parseBool)
+parseLit = Fix . Literal <$> P.choice
+    [ P.try parseString
+    , P.try parseNumber
+    , P.try parseInteger
+    , P.try parseBool
+    ]
   where
-    parseString = StringLit <$> stringLit
-    parseNumber = NumberLit <$> numberLit
+    parseString = StringLit <$> (lexeme stringLit)
+    parseNumber = NumberLit <$> (lexeme numberLit)
+    parseInteger = IntegerLit <$> (lexeme integerLit)
     parseBool =
-          P.try (reserved "True"  $> BoolLit True)
-      <|> P.try (reserved "False" $> BoolLit False)
+          P.try (dconsname' "True"  $> BoolLit True)
+      <|> P.try (dconsname' "False" $> BoolLit False)
       P.<?> "True or False"
 
 parseIfThenElse :: Parser Expr
@@ -137,8 +146,15 @@ parseColOfTblRef = do
   col <- dot *> identifier
   pure $ Fix $ ColumnOfTableRef (Ref tbl) (Ref col)
 
+--------------------------------------------------------------------------------
+
 parse :: Text -> Either Text Expr
 parse e = flip evalState initialParseState $
   P.runParserT (spaceConsumer *> parseExpr <* P.eof) "" e >>= \case
-    Left msg -> pure $ Left $ pack $ show msg
+    Left msg -> pure $ Left $ pack $ P.parseErrorPretty msg
     Right x  -> pure $ Right x
+
+testParse :: Text -> IO ()
+testParse e = case parse e of
+  Left msg -> putStrLn msg
+  Right x  -> putStrLn $ prettyExpr x

@@ -15,6 +15,14 @@ import           Lib.Compiler.Parser.State
 
 type Parser = P.ParsecT P.Dec Text (State ParseState)
 
+testParser :: Show a => Parser a -> Text -> IO ()
+testParser p s =
+  case flip evalState initialParseState $ P.runParserT (p <* P.eof) "" s of
+    Left msg -> putStrLn $ P.parseErrorPretty msg
+    Right a  -> print a
+
+--------------------------------------------------------------------------------
+
 spaceConsumer :: Parser ()
 spaceConsumer = L.space
   (void $ P.oneOf (" \t" :: [Char]))
@@ -89,6 +97,11 @@ tyname = uname P.<?> "type name"
 dconsname :: Parser Text
 dconsname = uname P.<?> "data constructor name"
 
+dconsname' :: Text -> Parser ()
+dconsname' c = do
+  c' <- dconsname
+  guard (c == c')
+
 identifier :: Parser Text
 identifier = go P.<?> "identifier" where
   go = do
@@ -97,7 +110,7 @@ identifier = go P.<?> "identifier" where
     pure s
 
 anySymbol :: Parser Text
-anySymbol = T.pack <$> some (P.satisfy isSymbolChar) P.<?> "symbol"
+anySymbol = lexeme (T.pack <$> some (P.satisfy isSymbolChar) P.<?> "symbol")
   where
     isSymbolChar c = (c `elem` (":!#$%&*+./<=>?@\\^|-~" :: [Char])) ||
                      (not (C.isAscii c) && C.isSymbol c)
@@ -114,10 +127,13 @@ stringLit = go P.<?> "string" where
 numberLit :: Parser Double
 numberLit = L.float P.<?> "number"
 
+integerLit :: Parser Integer
+integerLit = L.integer P.<?> "integer"
+
 --------------------------------------------------------------------------------
 
 lname :: Parser Text
-lname = T.cons <$> identStart <*> (T.pack <$> many identLetter)
+lname = lexeme (T.cons <$> identStart <*> (T.pack <$> many identLetter))
 
 identStart :: Parser Char
 identStart = P.lowerChar <|> P.oneOf ("_" :: [Char])
@@ -126,7 +142,7 @@ identLetter :: Parser Char
 identLetter = P.alphaNumChar <|> P.oneOf ("_'" :: [Char])
 
 uname :: Parser Text
-uname = T.cons <$> P.upperChar <*> (T.pack <$> many identLetter)
+uname = lexeme (T.cons <$> P.upperChar <*> (T.pack <$> many identLetter))
 
 reservedNames :: [Text]
 reservedNames =
