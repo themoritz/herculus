@@ -47,10 +47,7 @@ parseExpr = do
   makeExprParser terms (mkOpTable opSpecs)
   where
     terms = P.choice
-      [ P.try parseIfThenElse
-      , P.try parseLet
-      , P.try parseAbs
-      , P.try parseApp
+      [ P.try parseApp
       , P.try parseExpr'
       ]
       P.<?> "expression"
@@ -63,18 +60,23 @@ parseExpr' = P.choice
 
 parseExpr'' :: Parser Expr
 parseExpr'' = P.choice
-  [ P.try parseVar
+  [ P.try parseLit
+  , P.try parseAbs
+  , P.try parseConstructor
+  , P.try parseVar
+  , P.try parseCase
+  , P.try parseIfThenElse
+  , P.try parseLet
   , P.try parseColOfTblRef
   , P.try parseTblRef
   , P.try parseColRef
-  , P.try parseLit
   , P.try (parens parseExpr)
   ]
 
 parseApp :: Parser Expr
 parseApp = do
   start <- parseExpr'
-  args <- some parseExpr'
+  args <- some (indented *> parseExpr')
   pure $ foldl' mkApp start args
 
 parseAccessor :: Parser Expr
@@ -83,13 +85,32 @@ parseAccessor = do
   refs <- some $ dot *> (Ref <$> identifier)
   pure $ foldl' mkAccessor e refs
 
+parseConstructor :: Parser Expr
+parseConstructor = Fix . Constructor <$> dconsname
+
+parseCase :: Parser Expr
+parseCase = do
+  reserved "case"
+  scrut <- parseExpr
+  indented *> reserved "of"
+  alts <- indented *> mark (some (same *> parseAlternative))
+  pure $ Fix $ Case scrut alts
+  where
+  parseAlternative =
+    (,) <$> parseBinder <*> (indented *> rArrow *> parseExpr)
+    P.<?> "case alternative"
+
 parseLet :: Parser Expr
 parseLet = do
   reserved "let"
-  name <- identifier
-  args <- many parseBinder
-  equals
-  e <- parseExpr
+  indented
+  (name, args, e) <- mark $ do
+    name <- identifier
+    args <- many parseBinder
+    equals
+    e <- parseExpr
+    pure (name, args, e)
+  indented
   reserved "in"
   body <- parseExpr
   pure $ Fix $ Let name (foldr mkAbs e args) body
@@ -97,13 +118,17 @@ parseLet = do
 parseAbs :: Parser Expr
 parseAbs = do
   backslash
-  binders <- some parseBinder
-  rArrow
+  binders <- some (indented *> parseBinder)
+  indented *> rArrow
   body <- parseExpr
   pure $ foldr mkAbs body binders
 
 parseBinder :: Parser Binder
-parseBinder = VarBinder <$> identifier
+parseBinder = P.choice
+  [ VarBinder <$> P.try identifier
+  , ConstructorBinder <$> P.try dconsname <*> pure []
+  ]
+  P.<?> "binder"
 
 parseVar :: Parser Expr
 parseVar = Fix . Var <$> identifier
@@ -126,9 +151,9 @@ parseLit = Fix . Literal <$> P.choice
 
 parseIfThenElse :: Parser Expr
 parseIfThenElse = do
-  cond <- reserved "if"   *> parseExpr
-  true <- reserved "then" *> parseExpr
-  false <- reserved "else" *> parseExpr
+  cond <-              reserved "if"   *> indented *> parseExpr
+  true <-  indented *> reserved "then" *> indented *> parseExpr
+  false <- indented *> reserved "else" *> indented *> parseExpr
   pure $ Fix $ Case cond
     [ (ConstructorBinder "True" [], true)
     , (ConstructorBinder "False" [], false)
@@ -149,8 +174,9 @@ parseColOfTblRef = do
 --------------------------------------------------------------------------------
 
 parse :: Text -> Either Text Expr
-parse e = flip evalState initialParseState $
-  P.runParserT (spaceConsumer *> parseExpr <* P.eof) "" e >>= \case
+parse e =
+  flip evalState initialParseState $
+  P.runParserT (scn *> parseExpr <* P.eof) "" e >>= \case
     Left msg -> pure $ Left $ pack $ P.parseErrorPretty msg
     Right x  -> pure $ Right x
 

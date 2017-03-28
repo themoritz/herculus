@@ -6,7 +6,8 @@ module Lib.Compiler.Parser.State where
 import           Lib.Prelude
 
 data ParseState = ParseState
-  { parserOperators :: [OpSpec]
+  { parserOperators   :: [OpSpec]
+  , parserIndentation :: Word
   }
 
 initialParseState :: ParseState
@@ -25,6 +26,7 @@ initialParseState = ParseState
   , OpSpec (Infix AssocR 3) "&&"
   , OpSpec (Infix AssocR 2) "||"
   ]
+  0
 
 data OpSpec = OpSpec
   { opFixity :: Fixity

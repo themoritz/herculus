@@ -17,73 +17,96 @@ type Parser = P.ParsecT P.Dec Text (State ParseState)
 
 testParser :: Show a => Parser a -> Text -> IO ()
 testParser p s =
-  case flip evalState initialParseState $ P.runParserT (p <* P.eof) "" s of
+  case evalState (P.runParserT (p <* P.eof) "" s) initialParseState of
     Left msg -> putStrLn $ P.parseErrorPretty msg
     Right a  -> print a
 
 --------------------------------------------------------------------------------
 
-spaceConsumer :: Parser ()
-spaceConsumer = L.space
-  (void $ P.oneOf (" \t" :: [Char]))
+scn :: Parser ()
+scn = L.space
+  (void P.spaceChar)
   (L.skipLineComment "-- ")
   (L.skipBlockComment "{-" "-}")
 
 lexeme :: Parser a -> Parser a
-lexeme = L.lexeme spaceConsumer
+lexeme p = p <* scn
 
-match :: Text -> Parser Text
-match s = T.pack <$> L.symbol spaceConsumer (T.unpack s)
+text :: Text -> Parser ()
+text s = void $ lexeme $ P.string (T.unpack s)
+
+--------------------------------------------------------------------------------
+
+mark :: Parser a -> Parser a
+mark p = do
+  current <- gets parserIndentation
+  pos <- P.unPos . P.sourceColumn <$> P.getPosition
+  modify $ \st -> st { parserIndentation = pos }
+  a <- p
+  modify $ \st -> st { parserIndentation = current }
+  pure a
+
+checkIndentation :: (Word -> Text) -> (Word -> Word -> Bool) -> Parser ()
+checkIndentation mkMsg rel = do
+  pos <- P.unPos . P.sourceColumn <$> P.getPosition
+  current <- gets parserIndentation
+  guard (pos `rel` current) P.<?> T.unpack (mkMsg current)
+
+indented :: Parser ()
+indented = checkIndentation (\c -> "indentation past column " <> show c) (>)
+
+same :: Parser ()
+same = checkIndentation (\c -> "indentation at column " <> show c) (==)
 
 --------------------------------------------------------------------------------
 
 lparen :: Parser ()
-lparen = void $ match "("
+lparen = text "("
 
 rparen :: Parser ()
-rparen = void $ match ")"
+rparen = text ")"
 
 parens :: Parser a -> Parser a
 parens = P.between lparen rparen
 
 lbrace :: Parser ()
-lbrace = void $ match "{"
+lbrace = text "{"
 
 rbrace :: Parser ()
-rbrace = void $ match "}"
+rbrace = text "}"
 
 braces :: Parser a -> Parser a
 braces = P.between lbrace rbrace
 
 rArrow :: Parser ()
-rArrow = void $ match "->"
+rArrow = text "->"
 
 rfatArrow :: Parser ()
-rfatArrow = void $ match "=>"
+rfatArrow = text "=>"
 
 doubleColon :: Parser ()
-doubleColon = void $ match "::"
+doubleColon = text "::"
 
 dollarSign :: Parser ()
-dollarSign = void $ match "$"
+dollarSign = text "$"
 
 hashSign :: Parser ()
-hashSign = void $ match "#"
+hashSign = text "#"
 
 equals :: Parser ()
-equals = void $ match "="
+equals = text "="
 
 dot :: Parser ()
-dot = void $ match "."
+dot = text "."
 
 comma :: Parser ()
-comma = void $ match ","
+comma = text ","
 
 semicolon :: Parser ()
-semicolon = void $ match ";"
+semicolon = text ";"
 
 backslash :: Parser ()
-backslash = void $ match "\\"
+backslash = text "\\"
 
 reserved :: Text -> Parser ()
 reserved s = go P.<?> show s where
@@ -110,8 +133,9 @@ identifier = go P.<?> "identifier" where
     pure s
 
 anySymbol :: Parser Text
-anySymbol = lexeme (T.pack <$> some (P.satisfy isSymbolChar) P.<?> "symbol")
+anySymbol = lexeme go P.<?> "symbol"
   where
+    go = T.pack <$> some (P.satisfy isSymbolChar)
     isSymbolChar c = (c `elem` (":!#$%&*+./<=>?@\\^|-~" :: [Char])) ||
                      (not (C.isAscii c) && C.isSymbol c)
 
@@ -121,14 +145,14 @@ symbol s = do
   guard (s == s')
 
 stringLit :: Parser Text
-stringLit = go P.<?> "string" where
+stringLit = lexeme go P.<?> "string" where
   go = T.pack <$> (P.char '"' *> P.manyTill L.charLiteral (P.char '"'))
 
 numberLit :: Parser Double
-numberLit = L.float P.<?> "number"
+numberLit = lexeme L.float P.<?> "number"
 
 integerLit :: Parser Integer
-integerLit = L.integer P.<?> "integer"
+integerLit = lexeme L.integer P.<?> "integer"
 
 --------------------------------------------------------------------------------
 
