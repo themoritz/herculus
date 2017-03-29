@@ -1,8 +1,11 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE ViewPatterns      #-}
+{-# LANGUAGE NoImplicitPrelude   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns        #-}
 
 module Lib.Compiler.Parser
   ( parseExpr
+  , parseModule
+  , parseFormula
   , parse
   , testParse
   ) where
@@ -18,33 +21,57 @@ import qualified Text.Megaparsec           as P
 import           Text.Megaparsec.Expr
 
 import           Lib.Compiler.AST
+import           Lib.Compiler.Env
 import           Lib.Compiler.Parser.Lexer
 import           Lib.Compiler.Parser.State
+import           Lib.Compiler.Type
 import           Lib.Types
 
---
+--------------------------------------------------------------------------------
 
-mkOpTable :: [OpSpec] -> [[Operator Parser Expr]]
-mkOpTable = (map.map) binary . groupBy f . sortBy g
-  where
-  g (opFixity -> Infix _ x) (opFixity -> Infix _ y) = compare y x
+parseModule :: Parser Module
+parseModule = Module <$> many (same *> parseDeclaration)
 
-  f (opFixity -> Infix _ x) (opFixity -> Infix _ y) = x == y
+parseFormula :: Parser Formula
+parseFormula = Formula
+  <$> many (same *> parseDeclaration)
+  <*> (same *> parseExpr)
 
-  binary :: OpSpec -> Operator Parser Expr
-  binary (OpSpec (Infix assoc _) name) =
+parseDeclaration :: Parser Declaration
+parseDeclaration = P.choice
+  [ P.try parseDataDecl
+  , P.try parseTypeDecl
+  , P.try parseValueDecl
+  ]
+  P.<?> "declaration"
+
+parseDataDecl :: Parser Declaration
+parseDataDecl = do
+  reserved "data"
+  name <- indented *> tyname
+  tyArgs <- many (indented *> identifier)
+  constructors <- P.option [] $ do
+    indented *> equals
     let
-      p = P.try (symbol name) $> (\l r -> mkApp (mkApp (Fix $ Var name) l) r)
-    in
-      case assoc of
-        AssocL -> InfixL p
-        AssocN -> InfixN p
-        AssocR -> InfixR p
+      constructor = (,) <$> dconsname <*> many (indented *> parseType)
+    P.sepBy1 constructor pipe
+  pure $ DataDecl name tyArgs constructors
+
+parseTypeDecl :: Parser Declaration
+parseTypeDecl = TypeDecl <$> (identifier <* doubleColon) <*> parsePolyType
+
+parseValueDecl :: Parser Declaration
+parseValueDecl = ValueDecl
+  <$> identifier
+  <*> (many parseBinder <* equals)
+  <*> parseExpr
+
+--------------------------------------------------------------------------------
 
 parseExpr :: Parser Expr
 parseExpr = do
   opSpecs <- gets parserOperators
-  makeExprParser terms (mkOpTable opSpecs)
+  makeExprParser terms (mkOpTable (Fix . Var) mkApp opSpecs)
   where
     terms = P.choice
       [ P.try parseApp
@@ -126,7 +153,8 @@ parseAbs = do
 parseBinder :: Parser Binder
 parseBinder = P.choice
   [ VarBinder <$> P.try identifier
-  , ConstructorBinder <$> P.try dconsname <*> pure []
+  , ConstructorBinder <$> P.try dconsname <*> many parseBinder
+  , parens parseBinder
   ]
   P.<?> "binder"
 
@@ -139,6 +167,7 @@ parseLit = Fix . Literal <$> P.choice
     , P.try parseNumber
     , P.try parseInteger
     , P.try parseBool
+    , P.try parseRecord
     ]
   where
     parseString = StringLit <$> (lexeme stringLit)
@@ -148,6 +177,9 @@ parseLit = Fix . Literal <$> P.choice
           P.try (dconsname' "True"  $> BoolLit True)
       <|> P.try (dconsname' "False" $> BoolLit False)
       P.<?> "True or False"
+    parseRecord = braces $ do
+      fields <- P.sepBy1 ((,) <$> identifier <* doubleColon <*> parseExpr) comma
+      pure $ RecordLit fields
 
 parseIfThenElse :: Parser Expr
 parseIfThenElse = do
@@ -173,14 +205,84 @@ parseColOfTblRef = do
 
 --------------------------------------------------------------------------------
 
-parse :: Text -> Either Text Expr
+parse :: Text -> Either Text Module
 parse e =
   flip evalState initialParseState $
-  P.runParserT (scn *> parseExpr <* P.eof) "" e >>= \case
+  P.runParserT (scn *> parseModule <* P.eof) "" e >>= \case
     Left msg -> pure $ Left $ pack $ P.parseErrorPretty msg
     Right x  -> pure $ Right x
 
 testParse :: Text -> IO ()
 testParse e = case parse e of
   Left msg -> putStrLn msg
-  Right x  -> putStrLn $ prettyExpr x
+  Right x  -> putStrLn $ prettyModule x
+
+--------------------------------------------------------------------------------
+
+parseType :: Parser Type
+parseType = do
+  opSpecs <- gets parserTypeOperators
+  makeExprParser terms (mkOpTable (Fix . TypeConstructor) mkTypeApp opSpecs)
+  where
+    terms = P.choice
+      [ P.try parseTypeApp
+      , P.try parseType'
+      ]
+      P.<?> "type"
+
+parseTypeApp :: Parser Type
+parseTypeApp = do
+  start <- parseType'
+  args <- some (indented *> parseType')
+  pure $ foldl' mkTypeApp start args
+
+parseType' :: Parser Type
+parseType' = P.choice
+  [ Fix . TypeVar <$> identifier
+  , Fix . TypeConstructor <$> tyname
+  , parseRecordType
+  ]
+
+parseRecordType :: Parser Type
+parseRecordType = braces $ mkTypeApp tyRecord <$> parseRows
+  where
+  parseRows = do
+    rows <- P.sepBy1 ((,) <$> identifier <* doubleColon <*> parseType) comma
+    end <- P.option (Fix RecordNil) $ indented *> pipe *> indented *> parseType
+    pure $ foldr (\(ref, ty) rest -> mkRecordCons ref ty rest) end rows
+
+parsePolyType :: Parser PolyType
+parsePolyType = do
+  (vars, preds) <- P.option ([], []) $ P.try $ do
+    vs <- reserved "forall" *> some (indented *> identifier) <* indented <* dot
+    ps <- many (P.try parsePredicate)
+    pure (vs, ps)
+  ty <- parseType
+  pure $ ForAll vars preds ty
+
+parsePredicate :: Parser Predicate
+parsePredicate =
+  (IsIn <$> (indented *> tyname) <*> parseType) <* indented <* rfatArrow
+
+--------------------------------------------------------------------------------
+
+mkOpTable
+  :: forall a
+   . (Text -> a)
+  -> (a -> a -> a)
+  -> [OpSpec] -> [[Operator Parser a]]
+mkOpTable embedOp combine = (map.map) binary . groupBy f . sortBy g
+  where
+  g (opFixity -> Infix _ x) (opFixity -> Infix _ y) = compare y x
+
+  f (opFixity -> Infix _ x) (opFixity -> Infix _ y) = x == y
+
+  binary :: OpSpec -> Operator Parser a
+  binary (OpSpec (Infix assoc _) name) =
+    let
+      p = P.try (symbol name) $> (\l r -> combine (combine (embedOp name) l) r)
+    in
+      case assoc of
+        AssocL -> InfixL p
+        AssocN -> InfixN p
+        AssocR -> InfixR p

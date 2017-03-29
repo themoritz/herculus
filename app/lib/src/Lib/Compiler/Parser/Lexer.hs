@@ -108,6 +108,9 @@ semicolon = text ";"
 backslash :: Parser ()
 backslash = text "\\"
 
+pipe :: Parser ()
+pipe = text "|"
+
 reserved :: Text -> Parser ()
 reserved s = go P.<?> show s where
   go = do

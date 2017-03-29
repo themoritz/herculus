@@ -16,14 +16,37 @@ import           Lib.Model.Column
 import           Lib.Model.Table
 import           Lib.Types
 
-data Module a = Module (Maybe Text) [Declaration a]
+data Module = Module [Declaration]
 
-data Declaration a
+moduleDoc :: Module -> Doc
+moduleDoc (Module ds) = vsep (map declarationDoc ds)
+
+prettyModule :: Module -> Text
+prettyModule = show . moduleDoc
+
+data Formula = Formula [Declaration] Expr
+
+data Declaration
   -- | Name, type arguments, constructors (name, arguments)
   = DataDecl Text [Text] [(Text, [Type])]
+  -- | Name, type
+  | TypeDecl Text PolyType
   -- | Name, binder, expression
-  | ValueDecl Text Binder a
-  deriving (Eq, Ord, Show, Functor)
+  | ValueDecl Text [Binder] Expr
+
+declarationDoc :: Declaration -> Doc
+declarationDoc = \case
+  DataDecl name args constrs ->
+    textStrict "data" <+> textStrict name <+> hsep (map textStrict args) <$$>
+    indent 2 (vsep (map goConstr (zip prefixes constrs))) <> line
+    where
+      prefixes = '=' : repeat '|'
+      goConstr (p, (n, as)) = char p <+> textStrict n <+> hsep (map typeDoc as)
+  TypeDecl name poly ->
+    textStrict name <+> textStrict "::" <+> polyTypeDoc poly
+  ValueDecl name binders expr ->
+    textStrict name <+> hsep (map binderDoc binders) <+> equals <$$>
+    indent 2 (exprDoc expr) <> line
 
 data ExprF a
   = Literal (LiteralF a)
@@ -37,7 +60,7 @@ data ExprF a
   | TableRef (Ref Table)
   | ColumnRef (Ref Column)
   | ColumnOfTableRef (Ref Table) (Ref Column)
-  deriving (Eq, Ord, Show, Functor)
+  deriving (Functor)
 
 type Expr = Fix ExprF
 

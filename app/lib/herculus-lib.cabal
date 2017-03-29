@@ -11,8 +11,13 @@ library
   hs-source-dirs:      src
   exposed-modules:     Lib
                      , Lib.Compiler
+                     , Lib.Compiler.AST
+                     , Lib.Compiler.Env
+                     , Lib.Compiler.Type
                      , Lib.Compiler.Types
                      , Lib.Compiler.Parser
+                     , Lib.Compiler.Parser.Lexer
+                     , Lib.Compiler.Parser.State
                      , Lib.Compiler.Interpreter
                      , Lib.Compiler.Interpreter.Types
                      , Lib.Compiler.Typechecker
@@ -53,8 +58,10 @@ library
                      , bytestring
                      , case-insensitive
                      , cereal
+                     , comonad
                      , containers
                      , email-validate
+                     , free
                      , http-api-data
                      , http-types
                      , http-media
