@@ -1,6 +1,4 @@
-{-# LANGUAGE NoImplicitPrelude   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Lib.Compiler.Parser
   ( parseExpr
@@ -12,32 +10,52 @@ module Lib.Compiler.Parser
 
 import           Lib.Prelude
 
-import           Data.Foldable             (foldl')
-import           Data.Functor.Foldable
-import           Data.List                 (groupBy)
-import           Data.Text                 (Text, pack)
+import           Control.Comonad.Cofree
 
-import qualified Text.Megaparsec           as P
+import           Data.Foldable              (foldl')
+import           Data.Text                  (Text, pack)
+
+import qualified Text.Megaparsec            as P
 import           Text.Megaparsec.Expr
 
 import           Lib.Compiler.AST
+import           Lib.Compiler.AST.Common
+import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Env
+import           Lib.Compiler.Parser.Common
 import           Lib.Compiler.Parser.Lexer
 import           Lib.Compiler.Parser.State
+import           Lib.Compiler.Pretty
 import           Lib.Compiler.Type
 import           Lib.Types
 
 --------------------------------------------------------------------------------
 
-parseModule :: Parser Module
-parseModule = Module <$> many (same *> parseDeclaration)
+parse :: Text -> Either Text [Ast]
+parse e =
+  flip evalState initialParseState $
+  P.runParserT (scn *> parseModule <* P.eof) "" e >>= \case
+    Left msg -> pure $ Left $ pack $ P.parseErrorPretty msg
+    Right x  -> pure $ Right (map stripAnn x)
 
-parseFormula :: Parser Formula
-parseFormula = Formula
+testParse :: Text -> IO ()
+testParse e = case parse e of
+  Left msg    -> putStrLn msg
+  Right decls -> mapM_ (putStrLn . prettyAst) decls
+
+--------------------------------------------------------------------------------
+
+parseModule :: Parser [SourceAst]
+parseModule = many (same *> parseDeclaration)
+
+parseFormula :: Parser ([SourceAst], SourceAst)
+parseFormula = (,)
   <$> many (same *> parseDeclaration)
   <*> (same *> parseExpr)
 
-parseDeclaration :: Parser Declaration
+--------------------------------------------------------------------------------
+
+parseDeclaration :: Parser SourceAst
 parseDeclaration = P.choice
   [ P.try parseDataDecl
   , P.try parseTypeDecl
@@ -45,33 +63,39 @@ parseDeclaration = P.choice
   ]
   P.<?> "declaration"
 
-parseDataDecl :: Parser Declaration
-parseDataDecl = do
+parseDataDecl :: Parser SourceAst
+parseDataDecl = withSource $ do
   reserved "data"
   name <- indented *> tyname
   tyArgs <- many (indented *> identifier)
   constructors <- P.option [] $ do
     indented *> equals
     let
-      constructor = (,) <$> dconsname <*> many (indented *> parseType)
+      constructor = (,)
+        <$> dconsname
+        <*> many (indented *> (mapCofree InjType <$> parseType))
     P.sepBy1 constructor pipe
-  pure $ DataDecl name tyArgs constructors
+  pure $ InjDecl (DataDecl name tyArgs constructors)
 
-parseTypeDecl :: Parser Declaration
-parseTypeDecl = TypeDecl <$> (identifier <* doubleColon) <*> parsePolyType
+parseTypeDecl :: Parser SourceAst
+parseTypeDecl = withSource $ InjDecl <$> (TypeDecl
+  <$> (identifier <* doubleColon)
+  <*> (map (mapCofree InjType) <$> parsePolyType)
+                                         )
 
-parseValueDecl :: Parser Declaration
-parseValueDecl = ValueDecl
+parseValueDecl :: Parser SourceAst
+parseValueDecl = withSource $ InjDecl <$> (ValueDecl
   <$> identifier
-  <*> (many parseBinder <* equals)
+  <*> (many (mapCofree InjBinder <$> parseBinder) <* equals)
   <*> parseExpr
+                                          )
 
 --------------------------------------------------------------------------------
 
-parseExpr :: Parser Expr
+parseExpr :: Parser SourceAst
 parseExpr = do
   opSpecs <- gets parserOperators
-  makeExprParser terms (mkOpTable (Fix . Var) mkApp opSpecs)
+  makeExprParser terms (mkOpTable mkSourceVar mkSourceApp opSpecs)
   where
     terms = P.choice
       [ P.try parseApp
@@ -79,13 +103,13 @@ parseExpr = do
       ]
       P.<?> "expression"
 
-parseExpr' :: Parser Expr
+parseExpr' :: Parser SourceAst
 parseExpr' = P.choice
   [ P.try parseAccessor
   , P.try parseExpr''
   ]
 
-parseExpr'' :: Parser Expr
+parseExpr'' :: Parser SourceAst
 parseExpr'' = P.choice
   [ P.try parseLit
   , P.try parseAbs
@@ -100,35 +124,36 @@ parseExpr'' = P.choice
   , P.try (parens parseExpr)
   ]
 
-parseApp :: Parser Expr
+parseApp :: Parser SourceAst
 parseApp = do
   start <- parseExpr'
   args <- some (indented *> parseExpr')
-  pure $ foldl' mkApp start args
+  pure $ foldl' mkSourceApp start args
 
-parseAccessor :: Parser Expr
+parseAccessor :: Parser SourceAst
 parseAccessor = do
   e <- parseExpr''
-  refs <- some $ dot *> (Ref <$> identifier)
-  pure $ foldl' mkAccessor e refs
+  refs <- some $ withSpan $ dot *> (Ref <$> identifier)
+  pure $ foldl' mkSourceAccessor e refs
 
-parseConstructor :: Parser Expr
-parseConstructor = Fix . Constructor <$> dconsname
+parseConstructor :: Parser SourceAst
+parseConstructor = withSource $ InjExpr . Constructor <$> dconsname
 
-parseCase :: Parser Expr
-parseCase = do
+parseCase :: Parser SourceAst
+parseCase = withSource $ do
   reserved "case"
   scrut <- parseExpr
   indented *> reserved "of"
   alts <- indented *> mark (some (same *> parseAlternative))
-  pure $ Fix $ Case scrut alts
+  pure $ InjExpr $ Case scrut alts
   where
+  parseAlternative :: Parser (SourceAst, SourceAst)
   parseAlternative =
-    (,) <$> parseBinder <*> (indented *> rArrow *> parseExpr)
+    (,) <$> (mapCofree InjBinder <$> parseBinder) <*> (indented *> rArrow *> parseExpr)
     P.<?> "case alternative"
 
-parseLet :: Parser Expr
-parseLet = do
+parseLet :: Parser SourceAst
+parseLet = withSource $ do
   reserved "let"
   indented
   (name, args, e) <- mark $ do
@@ -140,29 +165,22 @@ parseLet = do
   indented
   reserved "in"
   body <- parseExpr
-  pure $ Fix $ Let name (foldr mkAbs e args) body
+  pure $ InjExpr $
+    Let name (foldr mkSourceAbs e (map (mapCofree InjBinder) args)) body
 
-parseAbs :: Parser Expr
+parseAbs :: Parser SourceAst
 parseAbs = do
   backslash
   binders <- some (indented *> parseBinder)
   indented *> rArrow
   body <- parseExpr
-  pure $ foldr mkAbs body binders
+  pure $ foldr mkSourceAbs body (map (mapCofree InjBinder) binders)
 
-parseBinder :: Parser Binder
-parseBinder = P.choice
-  [ VarBinder <$> P.try identifier
-  , ConstructorBinder <$> P.try dconsname <*> many parseBinder
-  , parens parseBinder
-  ]
-  P.<?> "binder"
+parseVar :: Parser SourceAst
+parseVar = withSource $ InjExpr . Var <$> identifier
 
-parseVar :: Parser Expr
-parseVar = Fix . Var <$> identifier
-
-parseLit :: Parser Expr
-parseLit = Fix . Literal <$> P.choice
+parseLit :: Parser SourceAst
+parseLit = withSource $ InjExpr . Literal <$> P.choice
     [ P.try parseString
     , P.try parseNumber
     , P.try parseInteger
@@ -181,48 +199,48 @@ parseLit = Fix . Literal <$> P.choice
       fields <- P.sepBy1 ((,) <$> identifier <* doubleColon <*> parseExpr) comma
       pure $ RecordLit fields
 
-parseIfThenElse :: Parser Expr
+parseIfThenElse :: Parser SourceAst
 parseIfThenElse = do
+  start <- P.getPosition
   cond <-              reserved "if"   *> indented *> parseExpr
-  true <-  indented *> reserved "then" *> indented *> parseExpr
-  false <- indented *> reserved "else" *> indented *> parseExpr
-  pure $ Fix $ Case cond
-    [ (ConstructorBinder "True" [], true)
-    , (ConstructorBinder "False" [], false)
-    ]
+  true@(tspan :< _) <-  indented *> reserved "then" *> indented *> parseExpr
+  false@(fspan :< _) <- indented *> reserved "else" *> indented *> parseExpr
+  end <- P.getPosition
+  pure $ SourceSpan start end :< InjExpr (Case cond
+    [ (tspan :< InjBinder (ConstructorBinder "True" []), true)
+    , (fspan :< InjBinder (ConstructorBinder "False" []), false)
+    ])
 
-parseTblRef :: Parser Expr
-parseTblRef = Fix . TableRef . Ref <$> (hashSign *> identifier)
+parseTblRef :: Parser SourceAst
+parseTblRef = map (mapCofree InjExpr) $
+  withSource $ TableRef . Ref <$> (hashSign *> identifier)
 
-parseColRef :: Parser Expr
-parseColRef = Fix . ColumnRef . Ref <$> (dollarSign *> identifier)
+parseColRef :: Parser SourceAst
+parseColRef = map (mapCofree InjExpr) $
+  withSource $ ColumnRef . Ref <$> (dollarSign *> identifier)
 
-parseColOfTblRef :: Parser Expr
-parseColOfTblRef = do
+parseColOfTblRef :: Parser SourceAst
+parseColOfTblRef = map (mapCofree InjExpr) $ withSource $ do
   tbl <- hashSign *> identifier
   col <- dot *> identifier
-  pure $ Fix $ ColumnOfTableRef (Ref tbl) (Ref col)
+  pure $ ColumnOfTableRef (Ref tbl) (Ref col)
 
 --------------------------------------------------------------------------------
 
-parse :: Text -> Either Text Module
-parse e =
-  flip evalState initialParseState $
-  P.runParserT (scn *> parseModule <* P.eof) "" e >>= \case
-    Left msg -> pure $ Left $ pack $ P.parseErrorPretty msg
-    Right x  -> pure $ Right x
-
-testParse :: Text -> IO ()
-testParse e = case parse e of
-  Left msg -> putStrLn msg
-  Right x  -> putStrLn $ prettyModule x
+parseBinder :: Parser SourceBinder
+parseBinder = P.choice
+  [ withSource (VarBinder <$> P.try identifier)
+  , withSource (ConstructorBinder <$> P.try dconsname <*> many parseBinder)
+  , parens parseBinder
+  ]
+  P.<?> "binder"
 
 --------------------------------------------------------------------------------
 
-parseType :: Parser Type
+parseType :: Parser SourceType
 parseType = do
   opSpecs <- gets parserTypeOperators
-  makeExprParser terms (mkOpTable (Fix . TypeConstructor) mkTypeApp opSpecs)
+  makeExprParser terms (mkOpTable mkSourceTypeConstructor mkSourceTypeApp opSpecs)
   where
     terms = P.choice
       [ P.try parseTypeApp
@@ -230,28 +248,32 @@ parseType = do
       ]
       P.<?> "type"
 
-parseTypeApp :: Parser Type
+parseTypeApp :: Parser SourceType
 parseTypeApp = do
   start <- parseType'
   args <- some (indented *> parseType')
-  pure $ foldl' mkTypeApp start args
+  pure $ foldl' mkSourceTypeApp start args
 
-parseType' :: Parser Type
+parseType' :: Parser SourceType
 parseType' = P.choice
-  [ Fix . TypeVar <$> identifier
-  , Fix . TypeConstructor <$> tyname
+  [ withSource (TypeVar <$> identifier)
+  , withSource (TypeConstructor <$> tyname)
   , parseRecordType
   ]
 
-parseRecordType :: Parser Type
-parseRecordType = braces $ mkTypeApp tyRecord <$> parseRows
+parseRecordType :: Parser SourceType
+parseRecordType = braces $ do
+  (span, rows) <- withSpan parseRows
+  pure $ mkSourceTypeApp (span :< tyRecord) rows
   where
   parseRows = do
     rows <- P.sepBy1 ((,) <$> identifier <* doubleColon <*> parseType) comma
-    end <- P.option (Fix RecordNil) $ indented *> pipe *> indented *> parseType
-    pure $ foldr (\(ref, ty) rest -> mkRecordCons ref ty rest) end rows
+    (endSpan, end) <- withSpan $ P.option RecordNil $ do
+      _ :< t <- indented *> pipe *> indented *> parseType
+      pure t
+    pure $ foldr (\(ref, ty) rest -> mkRecordCons ref ty rest) (endSpan :< end) rows
 
-parsePolyType :: Parser PolyType
+parsePolyType :: Parser (PolyType SourceType)
 parsePolyType = do
   (vars, preds) <- P.option ([], []) $ P.try $ do
     vs <- reserved "forall" *> some (indented *> identifier) <* indented <* dot
@@ -260,29 +282,6 @@ parsePolyType = do
   ty <- parseType
   pure $ ForAll vars preds ty
 
-parsePredicate :: Parser Predicate
+parsePredicate :: Parser (Predicate SourceType)
 parsePredicate =
   (IsIn <$> (indented *> tyname) <*> parseType) <* indented <* rfatArrow
-
---------------------------------------------------------------------------------
-
-mkOpTable
-  :: forall a
-   . (Text -> a)
-  -> (a -> a -> a)
-  -> [OpSpec] -> [[Operator Parser a]]
-mkOpTable embedOp combine = (map.map) binary . groupBy f . sortBy g
-  where
-  g (opFixity -> Infix _ x) (opFixity -> Infix _ y) = compare y x
-
-  f (opFixity -> Infix _ x) (opFixity -> Infix _ y) = x == y
-
-  binary :: OpSpec -> Operator Parser a
-  binary (OpSpec (Infix assoc _) name) =
-    let
-      p = P.try (symbol name) $> (\l r -> combine (combine (embedOp name) l) r)
-    in
-      case assoc of
-        AssocL -> InfixL p
-        AssocN -> InfixN p
-        AssocR -> InfixR p

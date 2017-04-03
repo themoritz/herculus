@@ -12,12 +12,16 @@ library
   exposed-modules:     Lib
                      , Lib.Compiler
                      , Lib.Compiler.AST
+                     , Lib.Compiler.AST.Common
+                     , Lib.Compiler.AST.Position
                      , Lib.Compiler.Env
                      , Lib.Compiler.Type
                      , Lib.Compiler.Types
                      , Lib.Compiler.Parser
+                     , Lib.Compiler.Parser.Common
                      , Lib.Compiler.Parser.Lexer
                      , Lib.Compiler.Parser.State
+                     , Lib.Compiler.Pretty
                      , Lib.Compiler.Interpreter
                      , Lib.Compiler.Interpreter.Types
                      , Lib.Compiler.Typechecker

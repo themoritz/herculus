@@ -7,5 +7,5 @@ import           Lib.Prelude
 
 import           Lib.Compiler.Type
 
-tyRecord :: Type
-tyRecord = mkTypeConstructor "Record"
+tyRecord :: TypeF a
+tyRecord = TypeConstructor "Record"
