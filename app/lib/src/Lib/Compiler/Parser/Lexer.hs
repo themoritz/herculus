@@ -11,6 +11,7 @@ import qualified Data.Text                 as T
 import qualified Text.Megaparsec           as P
 import qualified Text.Megaparsec.Lexer     as L
 
+import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Parser.State
 
 type Parser = P.ParsecT P.Dec Text (State ParseState)
@@ -30,7 +31,12 @@ scn = L.space
   (L.skipBlockComment "{-" "-}")
 
 lexeme :: Parser a -> Parser a
-lexeme p = p <* scn
+lexeme p = do
+  x <- p
+  pos <- P.getPosition
+  modify $ \st -> st { parserLastTokenEnd = prevColumn pos }
+  scn
+  pure x
 
 text :: Text -> Parser ()
 text s = void $ lexeme $ P.string (T.unpack s)

@@ -5,7 +5,8 @@ module Lib.Compiler.Parser
   , parseModule
   , parseFormula
   , parse
-  , testParse
+  , testParsePretty
+  , testParseSpans
   ) where
 
 import           Lib.Prelude
@@ -17,6 +18,7 @@ import           Data.Text                  (Text, pack)
 
 import qualified Text.Megaparsec            as P
 import           Text.Megaparsec.Expr
+import           Text.Show.Pretty           (ppShow)
 
 import           Lib.Compiler.AST
 import           Lib.Compiler.AST.Common
@@ -31,17 +33,23 @@ import           Lib.Types
 
 --------------------------------------------------------------------------------
 
-parse :: Text -> Either Text [Ast]
+parse :: Text -> Either Text [SourceAst]
 parse e =
   flip evalState initialParseState $
   P.runParserT (scn *> parseModule <* P.eof) "" e >>= \case
     Left msg -> pure $ Left $ pack $ P.parseErrorPretty msg
-    Right x  -> pure $ Right (map stripAnn x)
+    Right x  -> pure $ Right x
 
-testParse :: Text -> IO ()
-testParse e = case parse e of
+testParsePretty :: Text -> IO ()
+testParsePretty e = case parse e of
   Left msg    -> putStrLn msg
-  Right decls -> mapM_ (putStrLn . prettyAst) decls
+  Right decls -> mapM_ (putStrLn . prettyAst) (map stripAnn decls)
+
+testParseSpans :: Text -> IO ()
+testParseSpans e = case parse e of
+  Left msg    -> putStrLn msg
+  Right decls -> mapM_ (putStrLn . ppShow . map (flip highlightSpan e)) decls
+
 
 --------------------------------------------------------------------------------
 

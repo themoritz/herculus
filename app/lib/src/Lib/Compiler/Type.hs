@@ -19,7 +19,7 @@ import           Lib.Types
 data KindF a
   = KindStar
   | KindFun a a
-  deriving (Functor)
+  deriving (Functor, Show)
 
 type Kind = Fix KindF
 
@@ -29,7 +29,7 @@ data TypeF a
   | TypeApp a a
   | RecordCons (Ref Column) a a
   | RecordNil
-  deriving (Functor)
+  deriving (Functor, Show)
 
 type Type = Fix TypeF
 type SourceType = WithSource TypeF
@@ -48,9 +48,9 @@ mkRecordCons f t@(tspan :< _) r@(rspan :< _) =
 -- Type variables and predicates
 data PolyType t
   = ForAll [Text] [Predicate t] t
-  deriving (Functor)
+  deriving (Functor, Show)
 
 -- | Class and type, which should be member of the class
 data Predicate t
   = IsIn Text t
-  deriving (Functor)
+  deriving (Functor, Show)

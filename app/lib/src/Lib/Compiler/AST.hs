@@ -23,7 +23,7 @@ data AstF a
   | InjExpr (ExprF a)
   | InjBinder (BinderF a)
   | InjType (TypeF a)
-  deriving (Functor)
+  deriving (Functor, Show)
 
 type Ast = Fix AstF
 type SourceAst = WithSource AstF
@@ -40,7 +40,7 @@ data DeclarationF a
   | TypeDecl Text (PolyType a)
   -- | Name, binder, expredssion
   | ValueDecl Text [a] a
-  deriving (Functor)
+  deriving (Functor, Show)
 
 type Declaration = Fix DeclarationF
 type SourceDeclaration = WithSource DeclarationF
@@ -61,7 +61,7 @@ data ExprF a
   | TableRef (Ref Table)
   | ColumnRef (Ref Column)
   | ColumnOfTableRef (Ref Table) (Ref Column)
-  deriving (Functor)
+  deriving (Functor, Show)
 
 type Expr = Fix ExprF
 type SourceExpr = WithSource ExprF

@@ -5,10 +5,13 @@ module Lib.Compiler.Parser.State where
 
 import           Lib.Prelude
 
+import           Text.Megaparsec
+
 data ParseState = ParseState
   { parserOperators     :: [OpSpec]
   , parserTypeOperators :: [OpSpec]
   , parserIndentation   :: Word
+  , parserLastTokenEnd  :: SourcePos
   }
 
 initialParseState :: ParseState
@@ -30,6 +33,7 @@ initialParseState = ParseState
   [ OpSpec (Infix AssocR 2) "->"
   ]
   1
+  (initialPos "")
 
 data OpSpec = OpSpec
   { opFixity :: Fixity

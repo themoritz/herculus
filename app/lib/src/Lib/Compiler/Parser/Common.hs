@@ -50,7 +50,7 @@ withSpan :: Parser a -> Parser (SourceSpan, a)
 withSpan p = do
   start <- P.getPosition
   x <- p
-  end <- P.getPosition
+  end <- gets parserLastTokenEnd
   pure (SourceSpan start end, x)
 
 withSource :: Parser (f (WithSource f)) -> Parser (WithSource f)
