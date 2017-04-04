@@ -197,12 +197,6 @@ data CExpr
 instance ToJSON CExpr
 instance FromJSON CExpr
 
-cataM
-  :: (Recursive t, Monad m, Traversable (Base t))
-  => (Base t a -> m a) -> t -> m a
-cataM f = go where
-  go t = f =<< traverse go (project t)
-
 toCoreExpr :: MonadError TypeError m => TExpr -> m CExpr
 toCoreExpr = cataM $ \case
   TLam x e            -> pure $ CLam x e

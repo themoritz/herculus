@@ -23,6 +23,7 @@ import           Text.Show.Pretty           (ppShow)
 import           Lib.Compiler.AST
 import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
+import           Lib.Compiler.Checker
 import           Lib.Compiler.Env
 import           Lib.Compiler.Parser.Common
 import           Lib.Compiler.Parser.Lexer
@@ -49,7 +50,6 @@ testParseSpans :: Text -> IO ()
 testParseSpans e = case parse e of
   Left msg    -> putStrLn msg
   Right decls -> mapM_ (putStrLn . ppShow . map (flip highlightSpan e)) decls
-
 
 --------------------------------------------------------------------------------
 
@@ -81,20 +81,20 @@ parseDataDecl = withSource $ do
     let
       constructor = (,)
         <$> dconsname
-        <*> many (indented *> (mapCofree InjType <$> parseType))
+        <*> many (indented *> (mapCofree inj <$> parseType))
     P.sepBy1 constructor pipe
-  pure $ InjDecl (DataDecl name tyArgs constructors)
+  pure $ inj (DataDecl name tyArgs constructors)
 
 parseTypeDecl :: Parser SourceAst
-parseTypeDecl = withSource $ InjDecl <$> (TypeDecl
+parseTypeDecl = withSource $ inj <$> (TypeDecl
   <$> (identifier <* doubleColon)
-  <*> (map (mapCofree InjType) <$> parsePolyType)
+  <*> (map (mapCofree inj) <$> parsePolyType)
                                          )
 
 parseValueDecl :: Parser SourceAst
-parseValueDecl = withSource $ InjDecl <$> (ValueDecl
+parseValueDecl = withSource $ inj <$> (ValueDecl
   <$> identifier
-  <*> (many (mapCofree InjBinder <$> parseBinder) <* equals)
+  <*> (many (mapCofree inj <$> parseBinder) <* equals)
   <*> parseExpr
                                           )
 
@@ -145,7 +145,7 @@ parseAccessor = do
   pure $ foldl' mkSourceAccessor e refs
 
 parseConstructor :: Parser SourceAst
-parseConstructor = withSource $ InjExpr . Constructor <$> dconsname
+parseConstructor = withSource $ inj . Constructor <$> dconsname
 
 parseCase :: Parser SourceAst
 parseCase = withSource $ do
@@ -153,11 +153,11 @@ parseCase = withSource $ do
   scrut <- parseExpr
   indented *> reserved "of"
   alts <- indented *> mark (some (same *> parseAlternative))
-  pure $ InjExpr $ Case scrut alts
+  pure $ inj $ Case scrut alts
   where
   parseAlternative :: Parser (SourceAst, SourceAst)
   parseAlternative =
-    (,) <$> (mapCofree InjBinder <$> parseBinder) <*> (indented *> rArrow *> parseExpr)
+    (,) <$> (mapCofree inj <$> parseBinder) <*> (indented *> rArrow *> parseExpr)
     P.<?> "case alternative"
 
 parseLet :: Parser SourceAst
@@ -173,8 +173,8 @@ parseLet = withSource $ do
   indented
   reserved "in"
   body <- parseExpr
-  pure $ InjExpr $
-    Let name (foldr mkSourceAbs e (map (mapCofree InjBinder) args)) body
+  pure $ inj $
+    Let name (foldr mkSourceAbs e (map (mapCofree inj) args)) body
 
 parseAbs :: Parser SourceAst
 parseAbs = do
@@ -182,13 +182,13 @@ parseAbs = do
   binders <- some (indented *> parseBinder)
   indented *> rArrow
   body <- parseExpr
-  pure $ foldr mkSourceAbs body (map (mapCofree InjBinder) binders)
+  pure $ foldr mkSourceAbs body (map (mapCofree inj) binders)
 
 parseVar :: Parser SourceAst
-parseVar = withSource $ InjExpr . Var <$> identifier
+parseVar = withSource $ inj . Var <$> identifier
 
 parseLit :: Parser SourceAst
-parseLit = withSource $ InjExpr . Literal <$> P.choice
+parseLit = withSource $ inj . Literal <$> P.choice
     [ P.try parseString
     , P.try parseNumber
     , P.try parseInteger
@@ -204,7 +204,7 @@ parseLit = withSource $ InjExpr . Literal <$> P.choice
       <|> P.try (dconsname' "False" $> BoolLit False)
       P.<?> "True or False"
     parseRecord = braces $ do
-      fields <- P.sepBy1 ((,) <$> identifier <* doubleColon <*> parseExpr) comma
+      fields <- P.sepBy1 ((,) <$> identifier <* equals <*> parseExpr) comma
       pure $ RecordLit fields
 
 parseIfThenElse :: Parser SourceAst
@@ -214,21 +214,20 @@ parseIfThenElse = do
   true@(tspan :< _) <-  indented *> reserved "then" *> indented *> parseExpr
   false@(fspan :< _) <- indented *> reserved "else" *> indented *> parseExpr
   end <- P.getPosition
-  pure $ SourceSpan start end :< InjExpr (Case cond
-    [ (tspan :< InjBinder (ConstructorBinder "True" []), true)
-    , (fspan :< InjBinder (ConstructorBinder "False" []), false)
+  pure $ SourceSpan start end :< inj (Case cond
+    [ (tspan :< inj (ConstructorBinder "True" []), true)
+    , (fspan :< inj (ConstructorBinder "False" []), false)
     ])
 
 parseTblRef :: Parser SourceAst
-parseTblRef = map (mapCofree InjExpr) $
-  withSource $ TableRef . Ref <$> (hashSign *> identifier)
+parseTblRef = withSource $ inj . TableRef . Ref <$> (hashSign *> identifier)
 
 parseColRef :: Parser SourceAst
-parseColRef = map (mapCofree InjExpr) $
+parseColRef = map (mapCofree inj) $
   withSource $ ColumnRef . Ref <$> (dollarSign *> identifier)
 
 parseColOfTblRef :: Parser SourceAst
-parseColOfTblRef = map (mapCofree InjExpr) $ withSource $ do
+parseColOfTblRef = map (mapCofree inj) $ withSource $ do
   tbl <- hashSign *> identifier
   col <- dot *> identifier
   pure $ ColumnOfTableRef (Ref tbl) (Ref col)
@@ -266,11 +265,12 @@ parseType' :: Parser SourceType
 parseType' = P.choice
   [ withSource (TypeVar <$> identifier)
   , withSource (TypeConstructor <$> tyname)
-  , parseRecordType
+  , P.try $ parseRecordType
+  , parens parseType
   ]
 
 parseRecordType :: Parser SourceType
-parseRecordType = braces $ do
+parseRecordType = parens $ do
   (span, rows) <- withSpan parseRows
   pure $ mkSourceTypeApp (span :< tyRecord) rows
   where

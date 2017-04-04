@@ -186,7 +186,11 @@ reduce = go []
 --
 
 -- | Returns a list of deferred predicates and the generalized polytype
-generalize :: MonadState InferState m => [Predicate Point] -> Point -> m ([Predicate Point], PolyType Point)
+generalize
+  :: MonadState InferState m
+  => [Predicate Point]
+  -> Point
+  -> m ([Predicate Point], PolyType Point)
 generalize preds pt = do
     context <- use inferContext
     reducedPreds <- reduce preds

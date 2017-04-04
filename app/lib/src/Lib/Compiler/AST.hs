@@ -1,11 +1,17 @@
-{-# LANGUAGE DeriveFunctor     #-}
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE DeriveFunctor         #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude     #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE TypeSynonymInstances  #-}
 -- |
 
 module Lib.Compiler.AST where
 
 import           Lib.Prelude
+import qualified Prelude as P (show)
 
 import           Control.Comonad.Cofree
 
@@ -18,18 +24,21 @@ import           Lib.Model.Column
 import           Lib.Model.Table
 import           Lib.Types
 
-data AstF a
-  = InjDecl (DeclarationF a)
-  | InjExpr (ExprF a)
-  | InjBinder (BinderF a)
-  | InjType (TypeF a)
-  deriving (Functor, Show)
+type AstF = DeclarationF :+: ExprF :+: BinderF :+: TypeF
+
+instance Show a => Show (AstF a) where
+  show = ast show show show show
+
+ast
+  :: (DeclarationF a -> b)
+  -> (ExprF a -> b)
+  -> (BinderF a -> b)
+  -> (TypeF a -> b)
+  -> (AstF a -> b)
+ast d e b t = coproduct d $ coproduct e $ coproduct b t
 
 type Ast = Fix AstF
 type SourceAst = WithSource AstF
-
-unsafeType :: AstF a -> TypeF a
-unsafeType (InjType t) = t
 
 --------------------------------------------------------------------------------
 
@@ -66,20 +75,30 @@ data ExprF a
 type Expr = Fix ExprF
 type SourceExpr = WithSource ExprF
 
-mkSourceAbs :: SourceAst -> SourceAst -> SourceAst
+type ExprBinderF = ExprF :+: BinderF
+
+mkSourceAbs
+  :: ExprF :<: f
+  => WithSource f -> WithSource f -> WithSource f
 mkSourceAbs b@(bspan :< _) body@(bodyspan :< _) =
-  sourceUnion bspan bodyspan :< InjExpr (Abs b body)
+  sourceUnion bspan bodyspan :< inj (Abs b body)
 
-mkSourceAccessor :: SourceAst -> (SourceSpan, Ref Column) -> SourceAst
+mkSourceAccessor
+  :: ExprF :<: f
+  => WithSource f -> (SourceSpan, Ref Column) -> WithSource f
 mkSourceAccessor e@(espan :< _) (span, ref) =
-  sourceUnion espan span :< InjExpr (Accessor e ref)
+  sourceUnion espan span :< inj (Accessor e ref)
 
-mkSourceApp :: SourceAst -> SourceAst -> SourceAst
+mkSourceApp
+  :: ExprF :<: f
+  => WithSource f -> WithSource f -> WithSource f
 mkSourceApp f@(fspan :< _) arg@(argspan :< _) =
-  sourceUnion fspan argspan :< InjExpr (App f arg)
+  sourceUnion fspan argspan :< inj (App f arg)
 
-mkSourceVar :: (SourceSpan, Text) -> SourceAst
-mkSourceVar (span, v) = span :< InjExpr (Var v)
+mkSourceVar
+  :: ExprF :<: f
+  => (SourceSpan, Text) -> WithSource f
+mkSourceVar (span, v) = span :< inj (Var v)
 
 --------------------------------------------------------------------------------
 

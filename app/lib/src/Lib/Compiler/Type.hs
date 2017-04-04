@@ -1,5 +1,5 @@
-{-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveFunctor     #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 -- |
 
@@ -19,9 +19,23 @@ import           Lib.Types
 data KindF a
   = KindStar
   | KindFun a a
+  | KindRecord a
+  | KindVar Int
   deriving (Functor, Show)
 
 type Kind = Fix KindF
+
+kindStar :: Kind
+kindStar = Fix KindStar
+
+kindFun :: Kind -> Kind -> Kind
+kindFun f arg = Fix (KindFun f arg)
+
+kindRecord :: Kind -> Kind
+kindRecord = Fix . KindRecord
+
+kindVar :: Int -> Kind
+kindVar = Fix . KindVar
 
 data TypeF a
   = TypeVar Text
@@ -29,7 +43,7 @@ data TypeF a
   | TypeApp a a
   | RecordCons (Ref Column) a a
   | RecordNil
-  deriving (Functor, Show)
+  deriving (Functor, Foldable, Traversable, Show)
 
 type Type = Fix TypeF
 type SourceType = WithSource TypeF

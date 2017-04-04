@@ -16,15 +16,26 @@ import           Lib.Compiler.AST.Common
 import           Lib.Compiler.Type
 import           Lib.Types
 
+prettyKind :: Kind -> Text
+prettyKind = show . cata kindDoc
+  where
+  kindDoc = \case
+    KindStar      -> char '*'
+    KindFun f arg -> parens $ f <+> textStrict "->" <+> arg
+    KindRecord t  -> char '#' <+> t
+    KindVar v     -> int v
+
+--------------------------------------------------------------------------------
+
 prettyAst :: Ast -> Text
 prettyAst = show . histo astDoc
 
 astDoc :: AstF (Cofree AstF Doc) -> Doc
-astDoc = \case
-  InjDecl d   -> liftAlg declarationDoc d
-  InjExpr e   -> liftAlg exprDoc e
-  InjBinder b -> liftAlg binderDoc b
-  InjType t   -> typeDoc (map (mapCofree unsafeType) t)
+astDoc = ast
+  (liftAlg declarationDoc)
+  (liftAlg exprDoc)
+  (liftAlg binderDoc)
+  (typeDoc . map (mapCofree unsafePrj))
 
 predicateDoc :: Predicate Doc -> Doc
 predicateDoc (IsIn cls ty) = textStrict cls <+> ty
