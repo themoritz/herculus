@@ -16,6 +16,7 @@ library
                      , Lib.Compiler.AST.Position
                      , Lib.Compiler.Checker
                      , Lib.Compiler.Env
+                     , Lib.Compiler.Error
                      , Lib.Compiler.Type
                      , Lib.Compiler.Types
                      , Lib.Compiler.Parser

@@ -38,7 +38,7 @@ ast
 ast d e b t = coproduct d $ coproduct e $ coproduct b t
 
 type Ast = Fix AstF
-type SourceAst = WithSource AstF
+type SourceAst = WithSpan AstF
 
 --------------------------------------------------------------------------------
 
@@ -52,7 +52,7 @@ data DeclarationF a
   deriving (Functor, Show)
 
 type Declaration = Fix DeclarationF
-type SourceDeclaration = WithSource DeclarationF
+type SourceDeclaration = WithSpan DeclarationF
 
 --------------------------------------------------------------------------------
 
@@ -73,32 +73,32 @@ data ExprF a
   deriving (Functor, Show)
 
 type Expr = Fix ExprF
-type SourceExpr = WithSource ExprF
+type SourceExpr = WithSpan ExprF
 
 type ExprBinderF = ExprF :+: BinderF
 
-mkSourceAbs
+spanAbs
   :: ExprF :<: f
-  => WithSource f -> WithSource f -> WithSource f
-mkSourceAbs b@(bspan :< _) body@(bodyspan :< _) =
-  sourceUnion bspan bodyspan :< inj (Abs b body)
+  => WithSpan f -> WithSpan f -> WithSpan f
+spanAbs b@(bspan :< _) body@(bodyspan :< _) =
+  spanUnion bspan bodyspan :< inj (Abs b body)
 
-mkSourceAccessor
+spanAccessor
   :: ExprF :<: f
-  => WithSource f -> (SourceSpan, Ref Column) -> WithSource f
-mkSourceAccessor e@(espan :< _) (span, ref) =
-  sourceUnion espan span :< inj (Accessor e ref)
+  => WithSpan f -> (Span, Ref Column) -> WithSpan f
+spanAccessor e@(espan :< _) (span, ref) =
+  spanUnion espan span :< inj (Accessor e ref)
 
-mkSourceApp
+spanApp
   :: ExprF :<: f
-  => WithSource f -> WithSource f -> WithSource f
-mkSourceApp f@(fspan :< _) arg@(argspan :< _) =
-  sourceUnion fspan argspan :< inj (App f arg)
+  => WithSpan f -> WithSpan f -> WithSpan f
+spanApp f@(fspan :< _) arg@(argspan :< _) =
+  spanUnion fspan argspan :< inj (App f arg)
 
-mkSourceVar
+spanVar
   :: ExprF :<: f
-  => (SourceSpan, Text) -> WithSource f
-mkSourceVar (span, v) = span :< inj (Var v)
+  => (Span, Text) -> WithSpan f
+spanVar (span, v) = span :< inj (Var v)
 
 --------------------------------------------------------------------------------
 
@@ -108,7 +108,7 @@ data BinderF a
   deriving (Eq, Ord, Show, Functor)
 
 type Binder = Fix BinderF
-type SourceBinder = WithSource BinderF
+type SourceBinder = WithSpan BinderF
 
 --------------------------------------------------------------------------------
 

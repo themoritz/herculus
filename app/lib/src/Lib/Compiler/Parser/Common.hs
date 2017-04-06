@@ -24,16 +24,16 @@ import           Lib.Compiler.Parser.State
 
 mkOpTable
   :: forall f. Functor f
-  => ((SourceSpan, Text) -> WithSource f)
-  -> (WithSource f -> WithSource f -> WithSource f)
-  -> [OpSpec] -> [[Operator Parser (WithSource f)]]
+  => ((Span, Text) -> WithSpan f)
+  -> (WithSpan f -> WithSpan f -> WithSpan f)
+  -> [OpSpec] -> [[Operator Parser (WithSpan f)]]
 mkOpTable embedOp combine = (map.map) binary . groupBy f . sortBy g
   where
   g (opFixity -> Infix _ x) (opFixity -> Infix _ y) = compare y x
 
   f (opFixity -> Infix _ x) (opFixity -> Infix _ y) = x == y
 
-  binary :: OpSpec -> Operator Parser (WithSource f)
+  binary :: OpSpec -> Operator Parser (WithSpan f)
   binary (OpSpec (Infix assoc _) name) =
     let
       p = do
@@ -46,20 +46,20 @@ mkOpTable embedOp combine = (map.map) binary . groupBy f . sortBy g
         AssocN -> InfixN p
         AssocR -> InfixR p
 
-withSpan :: Parser a -> Parser (SourceSpan, a)
+withSpan :: Parser a -> Parser (Span, a)
 withSpan p = do
   start <- P.getPosition
   x <- p
   end <- gets parserLastTokenEnd
-  pure (SourceSpan start end, x)
+  pure (Span start end, x)
 
-withSource :: Parser (f (WithSource f)) -> Parser (WithSource f)
+withSource :: Parser (f (WithSpan f)) -> Parser (WithSpan f)
 withSource p = do
   (span, fa) <- withSpan p
   pure $ span :< fa
 
-singletonSpan :: Parser SourceSpan
+singletonSpan :: Parser Span
 singletonSpan = do
   pos <- P.getPosition
-  pure (SourceSpan pos pos)
+  pure (Span pos pos)
 

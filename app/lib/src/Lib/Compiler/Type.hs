@@ -17,16 +17,16 @@ import           Lib.Model.Column
 import           Lib.Types
 
 data KindF a
-  = KindStar
+  = KindType
   | KindFun a a
   | KindRecord a
   | KindVar Int
-  deriving (Functor, Show)
+  deriving (Functor, Foldable, Traversable, Show)
 
 type Kind = Fix KindF
 
-kindStar :: Kind
-kindStar = Fix KindStar
+kindType :: Kind
+kindType = Fix KindType
 
 kindFun :: Kind -> Kind -> Kind
 kindFun f arg = Fix (KindFun f arg)
@@ -37,6 +37,14 @@ kindRecord = Fix . KindRecord
 kindVar :: Int -> Kind
 kindVar = Fix . KindVar
 
+-- Replace remaining kind variables with `Type`
+tidyKind :: Kind -> Kind
+tidyKind = cata $ \case
+  KindVar _ -> kindType
+  other -> Fix other
+
+--------------------------------------------------------------------------------
+
 data TypeF a
   = TypeVar Text
   | TypeConstructor Text
@@ -46,18 +54,24 @@ data TypeF a
   deriving (Functor, Foldable, Traversable, Show)
 
 type Type = Fix TypeF
-type SourceType = WithSource TypeF
+type SourceType = WithSpan TypeF
 
-mkSourceTypeConstructor :: (SourceSpan, Text) -> SourceType
-mkSourceTypeConstructor (span, t) = span :< TypeConstructor t
+typeConstructor :: Text -> Type
+typeConstructor = Fix . TypeConstructor
 
-mkSourceTypeApp :: SourceType -> SourceType -> SourceType
-mkSourceTypeApp f@(fspan :< _) arg@(argspan :< _) =
-  sourceUnion fspan argspan :< TypeApp f arg
+typeApp :: Type -> Type -> Type
+typeApp a b = Fix (TypeApp a b)
 
-mkRecordCons :: Text -> SourceType -> SourceType -> SourceType
-mkRecordCons f t@(tspan :< _) r@(rspan :< _) =
-  sourceUnion tspan rspan :< RecordCons (Ref f) t r
+spanTypeConstructor :: (Span, Text) -> SourceType
+spanTypeConstructor (span, t) = span :< TypeConstructor t
+
+spanTypeApp :: SourceType -> SourceType -> SourceType
+spanTypeApp f@(fspan :< _) arg@(argspan :< _) =
+  spanUnion fspan argspan :< TypeApp f arg
+
+spanRecordCons :: Text -> SourceType -> SourceType -> SourceType
+spanRecordCons f t@(tspan :< _) r@(rspan :< _) =
+  spanUnion tspan rspan :< RecordCons (Ref f) t r
 
 -- Type variables and predicates
 data PolyType t

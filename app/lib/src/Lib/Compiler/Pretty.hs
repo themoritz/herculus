@@ -20,7 +20,7 @@ prettyKind :: Kind -> Text
 prettyKind = show . cata kindDoc
   where
   kindDoc = \case
-    KindStar      -> char '*'
+    KindType      -> textStrict "Type"
     KindFun f arg -> parens $ f <+> textStrict "->" <+> arg
     KindRecord t  -> char '#' <+> t
     KindVar v     -> int v

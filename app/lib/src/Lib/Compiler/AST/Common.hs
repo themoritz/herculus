@@ -14,7 +14,7 @@ import           Control.Comonad.Cofree
 import           Lib.Compiler.AST.Position
 
 
-type WithSource f = Cofree f SourceSpan
+type WithSpan f = Cofree f Span
 
 --------------------------------------------------------------------------------
 

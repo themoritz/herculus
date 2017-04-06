@@ -1,12 +1,10 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Lib.Compiler.Parser
-  ( parseExpr
+  ( parse
+  , parseExpr
   , parseModule
   , parseFormula
-  , parse
-  , testParsePretty
-  , testParseSpans
   ) where
 
 import           Lib.Prelude
@@ -14,42 +12,28 @@ import           Lib.Prelude
 import           Control.Comonad.Cofree
 
 import           Data.Foldable              (foldl')
-import           Data.Text                  (Text, pack)
 
 import qualified Text.Megaparsec            as P
 import           Text.Megaparsec.Expr
-import           Text.Show.Pretty           (ppShow)
 
 import           Lib.Compiler.AST
 import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
-import           Lib.Compiler.Checker
 import           Lib.Compiler.Env
+import           Lib.Compiler.Error
 import           Lib.Compiler.Parser.Common
 import           Lib.Compiler.Parser.Lexer
 import           Lib.Compiler.Parser.State
-import           Lib.Compiler.Pretty
 import           Lib.Compiler.Type
 import           Lib.Types
 
 --------------------------------------------------------------------------------
 
-parse :: Text -> Either Text [SourceAst]
+parse :: Text -> Either Error [SourceAst]
 parse e =
   flip evalState initialParseState $
-  P.runParserT (scn *> parseModule <* P.eof) "" e >>= \case
-    Left msg -> pure $ Left $ pack $ P.parseErrorPretty msg
-    Right x  -> pure $ Right x
-
-testParsePretty :: Text -> IO ()
-testParsePretty e = case parse e of
-  Left msg    -> putStrLn msg
-  Right decls -> mapM_ (putStrLn . prettyAst) (map stripAnn decls)
-
-testParseSpans :: Text -> IO ()
-testParseSpans e = case parse e of
-  Left msg    -> putStrLn msg
-  Right decls -> mapM_ (putStrLn . ppShow . map (flip highlightSpan e)) decls
+  mapLeft convertParseError <$>
+  P.runParserT (scn *> parseModule <* P.eof) "" e
 
 --------------------------------------------------------------------------------
 
@@ -81,7 +65,7 @@ parseDataDecl = withSource $ do
     let
       constructor = (,)
         <$> dconsname
-        <*> many (indented *> (mapCofree inj <$> parseType))
+        <*> many (indented *> (mapCofree inj <$> parseType'))
     P.sepBy1 constructor pipe
   pure $ inj (DataDecl name tyArgs constructors)
 
@@ -103,7 +87,7 @@ parseValueDecl = withSource $ inj <$> (ValueDecl
 parseExpr :: Parser SourceAst
 parseExpr = do
   opSpecs <- gets parserOperators
-  makeExprParser terms (mkOpTable mkSourceVar mkSourceApp opSpecs)
+  makeExprParser terms (mkOpTable spanVar spanApp opSpecs)
   where
     terms = P.choice
       [ P.try parseApp
@@ -136,13 +120,13 @@ parseApp :: Parser SourceAst
 parseApp = do
   start <- parseExpr'
   args <- some (indented *> parseExpr')
-  pure $ foldl' mkSourceApp start args
+  pure $ foldl' spanApp start args
 
 parseAccessor :: Parser SourceAst
 parseAccessor = do
   e <- parseExpr''
   refs <- some $ withSpan $ dot *> (Ref <$> identifier)
-  pure $ foldl' mkSourceAccessor e refs
+  pure $ foldl' spanAccessor e refs
 
 parseConstructor :: Parser SourceAst
 parseConstructor = withSource $ inj . Constructor <$> dconsname
@@ -174,7 +158,7 @@ parseLet = withSource $ do
   reserved "in"
   body <- parseExpr
   pure $ inj $
-    Let name (foldr mkSourceAbs e (map (mapCofree inj) args)) body
+    Let name (foldr spanAbs e (map (mapCofree inj) args)) body
 
 parseAbs :: Parser SourceAst
 parseAbs = do
@@ -182,7 +166,7 @@ parseAbs = do
   binders <- some (indented *> parseBinder)
   indented *> rArrow
   body <- parseExpr
-  pure $ foldr mkSourceAbs body (map (mapCofree inj) binders)
+  pure $ foldr spanAbs body (map (mapCofree inj) binders)
 
 parseVar :: Parser SourceAst
 parseVar = withSource $ inj . Var <$> identifier
@@ -214,7 +198,7 @@ parseIfThenElse = do
   true@(tspan :< _) <-  indented *> reserved "then" *> indented *> parseExpr
   false@(fspan :< _) <- indented *> reserved "else" *> indented *> parseExpr
   end <- P.getPosition
-  pure $ SourceSpan start end :< inj (Case cond
+  pure $ Span start end :< inj (Case cond
     [ (tspan :< inj (ConstructorBinder "True" []), true)
     , (fspan :< inj (ConstructorBinder "False" []), false)
     ])
@@ -247,7 +231,7 @@ parseBinder = P.choice
 parseType :: Parser SourceType
 parseType = do
   opSpecs <- gets parserTypeOperators
-  makeExprParser terms (mkOpTable mkSourceTypeConstructor mkSourceTypeApp opSpecs)
+  makeExprParser terms (mkOpTable spanTypeConstructor spanTypeApp opSpecs)
   where
     terms = P.choice
       [ P.try parseTypeApp
@@ -259,7 +243,7 @@ parseTypeApp :: Parser SourceType
 parseTypeApp = do
   start <- parseType'
   args <- some (indented *> parseType')
-  pure $ foldl' mkSourceTypeApp start args
+  pure $ foldl' spanTypeApp start args
 
 parseType' :: Parser SourceType
 parseType' = P.choice
@@ -272,14 +256,14 @@ parseType' = P.choice
 parseRecordType :: Parser SourceType
 parseRecordType = parens $ do
   (span, rows) <- withSpan parseRows
-  pure $ mkSourceTypeApp (span :< tyRecord) rows
+  pure $ spanTypeApp (spanTypeConstructor (span, "Record")) rows
   where
   parseRows = do
     rows <- P.sepBy1 ((,) <$> identifier <* doubleColon <*> parseType) comma
     (endSpan, end) <- withSpan $ P.option RecordNil $ do
       _ :< t <- indented *> pipe *> indented *> parseType
       pure t
-    pure $ foldr (\(ref, ty) rest -> mkRecordCons ref ty rest) (endSpan :< end) rows
+    pure $ foldr (\(ref, ty) rest -> spanRecordCons ref ty rest) (endSpan :< end) rows
 
 parsePolyType :: Parser (PolyType SourceType)
 parsePolyType = do

@@ -16,6 +16,8 @@ module Lib.Prelude
   , unsafePrj
   --
   , cataM
+  --
+  , mapLeft
   ) where
 
 import           Protolude as Exports hiding ((:*:), (:+:), Fixity, Infix, Type,
@@ -70,3 +72,9 @@ cataM
   => (Base t a -> m a) -> t -> m a
 cataM f = go where
   go t = f =<< traverse go (project t)
+
+--------------------------------------------------------------------------------
+
+mapLeft :: (a -> a') -> Either a b -> Either a' b
+mapLeft f (Left a) = Left (f a)
+mapLeft _ (Right b) = Right b
