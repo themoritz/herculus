@@ -27,5 +27,6 @@ liftAlg alg = alg . map (\(a :< _) -> a)
 mapAlg :: (f ~> g) -> (g a -> a) -> f a -> a
 mapAlg nat alg = alg . nat
 
-mapCofree :: Functor f => (f ~> g) -> Cofree f a -> Cofree g a
-mapCofree nat (a :< x) = a :< nat (map (mapCofree nat) x)
+-- | Change the base functor of a fixed point
+hoistFix :: Functor f => (f ~> g) -> Fix f -> Fix g
+hoistFix nat (Fix f) = Fix $ nat $ map (hoistFix nat) f

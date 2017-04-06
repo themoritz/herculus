@@ -21,7 +21,7 @@ module Lib.Prelude
   ) where
 
 import           Protolude as Exports hiding ((:*:), (:+:), Fixity, Infix, Type,
-                                       TypeError, reduce)
+                                       TypeError, reduce, Constraint)
 
 import           Data.Functor.Foldable
 

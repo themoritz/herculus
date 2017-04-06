@@ -17,9 +17,7 @@ import qualified Text.Megaparsec            as P
 import           Text.Megaparsec.Expr
 
 import           Lib.Compiler.AST
-import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
-import           Lib.Compiler.Env
 import           Lib.Compiler.Error
 import           Lib.Compiler.Parser.Common
 import           Lib.Compiler.Parser.Lexer
@@ -65,20 +63,20 @@ parseDataDecl = withSource $ do
     let
       constructor = (,)
         <$> dconsname
-        <*> many (indented *> (mapCofree inj <$> parseType'))
+        <*> many (indented *> (hoistCofree inj <$> parseType'))
     P.sepBy1 constructor pipe
   pure $ inj (DataDecl name tyArgs constructors)
 
 parseTypeDecl :: Parser SourceAst
 parseTypeDecl = withSource $ inj <$> (TypeDecl
   <$> (identifier <* doubleColon)
-  <*> (map (mapCofree inj) <$> parsePolyType)
+  <*> (map (hoistCofree inj) <$> parsePolyType)
                                          )
 
 parseValueDecl :: Parser SourceAst
 parseValueDecl = withSource $ inj <$> (ValueDecl
   <$> identifier
-  <*> (many (mapCofree inj <$> parseBinder) <* equals)
+  <*> (many (hoistCofree inj <$> parseBinder) <* equals)
   <*> parseExpr
                                           )
 
@@ -141,7 +139,7 @@ parseCase = withSource $ do
   where
   parseAlternative :: Parser (SourceAst, SourceAst)
   parseAlternative =
-    (,) <$> (mapCofree inj <$> parseBinder) <*> (indented *> rArrow *> parseExpr)
+    (,) <$> (hoistCofree inj <$> parseBinder) <*> (indented *> rArrow *> parseExpr)
     P.<?> "case alternative"
 
 parseLet :: Parser SourceAst
@@ -158,7 +156,7 @@ parseLet = withSource $ do
   reserved "in"
   body <- parseExpr
   pure $ inj $
-    Let name (foldr spanAbs e (map (mapCofree inj) args)) body
+    Let name (foldr spanAbs e (map (hoistCofree inj) args)) body
 
 parseAbs :: Parser SourceAst
 parseAbs = do
@@ -166,7 +164,7 @@ parseAbs = do
   binders <- some (indented *> parseBinder)
   indented *> rArrow
   body <- parseExpr
-  pure $ foldr spanAbs body (map (mapCofree inj) binders)
+  pure $ foldr spanAbs body (map (hoistCofree inj) binders)
 
 parseVar :: Parser SourceAst
 parseVar = withSource $ inj . Var <$> identifier
@@ -207,11 +205,11 @@ parseTblRef :: Parser SourceAst
 parseTblRef = withSource $ inj . TableRef . Ref <$> (hashSign *> identifier)
 
 parseColRef :: Parser SourceAst
-parseColRef = map (mapCofree inj) $
+parseColRef = map (hoistCofree inj) $
   withSource $ ColumnRef . Ref <$> (dollarSign *> identifier)
 
 parseColOfTblRef :: Parser SourceAst
-parseColOfTblRef = map (mapCofree inj) $ withSource $ do
+parseColOfTblRef = map (hoistCofree inj) $ withSource $ do
   tbl <- hashSign *> identifier
   col <- dot *> identifier
   pure $ ColumnOfTableRef (Ref tbl) (Ref col)
@@ -269,11 +267,11 @@ parsePolyType :: Parser (PolyType SourceType)
 parsePolyType = do
   (vars, preds) <- P.option ([], []) $ P.try $ do
     vs <- reserved "forall" *> some (indented *> identifier) <* indented <* dot
-    ps <- many (P.try parsePredicate)
+    ps <- many (P.try parseConstraint)
     pure (vs, ps)
   ty <- parseType
   pure $ ForAll vars preds ty
 
-parsePredicate :: Parser (Predicate SourceType)
-parsePredicate =
+parseConstraint :: Parser (Constraint SourceType)
+parseConstraint =
   (IsIn <$> (indented *> tyname) <*> parseType) <* indented <* rfatArrow

@@ -85,6 +85,6 @@ testParseSpans src = withParsed src $ \decls ->
 
 testCheck :: Text -> IO ()
 testCheck src = withParsed src $ \decls ->
-  case runCheck (checkDecls decls) of
+  case runCheck primCheckEnv (checkDecls decls) of
     Left err -> putStrLn $ displayError src err
     Right _  -> pure ()

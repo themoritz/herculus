@@ -1,6 +1,10 @@
-{-# LANGUAGE DeriveFunctor     #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE DeriveAnyClass       #-}
+{-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE DeriveTraversable    #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE NoImplicitPrelude    #-}
+{-# LANGUAGE StandaloneDeriving   #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 -- |
 
 module Lib.Compiler.Type where
@@ -10,6 +14,8 @@ import           Lib.Prelude               hiding (empty)
 import           Control.Comonad.Cofree
 
 import           Data.Functor.Foldable
+import qualified Data.Map                  as Map
+import qualified Data.Set                  as Set
 
 import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
@@ -20,7 +26,7 @@ data KindF a
   = KindType
   | KindFun a a
   | KindRecord a
-  | KindVar Int
+  | KindUnknown Int
   deriving (Functor, Foldable, Traversable, Show)
 
 type Kind = Fix KindF
@@ -34,13 +40,13 @@ kindFun f arg = Fix (KindFun f arg)
 kindRecord :: Kind -> Kind
 kindRecord = Fix . KindRecord
 
-kindVar :: Int -> Kind
-kindVar = Fix . KindVar
+kindUnknown :: Int -> Kind
+kindUnknown = Fix . KindUnknown
 
--- Replace remaining kind variables with `Type`
+-- Replace remaining unknown kind variables with `Type`
 tidyKind :: Kind -> Kind
 tidyKind = cata $ \case
-  KindVar _ -> kindType
+  KindUnknown _ -> kindType
   other -> Fix other
 
 --------------------------------------------------------------------------------
@@ -55,6 +61,9 @@ data TypeF a
 
 type Type = Fix TypeF
 type SourceType = WithSpan TypeF
+
+typeVar :: Text -> Type
+typeVar = Fix . TypeVar
 
 typeConstructor :: Text -> Type
 typeConstructor = Fix . TypeConstructor
@@ -73,12 +82,66 @@ spanRecordCons :: Text -> SourceType -> SourceType -> SourceType
 spanRecordCons f t@(tspan :< _) r@(rspan :< _) =
   spanUnion tspan rspan :< RecordCons (Ref f) t r
 
+--------------------------------------------------------------------------------
+
+instance {-# OVERLAPS #-} Eq Type where
+  a == b = toOrdType a == toOrdType b
+
+instance {-# OVERLAPS #-} Ord Type where
+  compare a b = compare (toOrdType a) (toOrdType b)
+
+data OrdType
+  = OTVar Text
+  | OTConstructor Text
+  | OTApp OrdType OrdType
+  | OTRecord (Map (Ref Column) OrdType)
+  deriving (Eq, Ord)
+
+toOrdType :: Type -> OrdType
+toOrdType (Fix t) = case t of
+  TypeVar x -> OTVar x
+  TypeConstructor x -> OTConstructor x
+  TypeApp (Fix (TypeConstructor "Record")) r -> OTRecord $ Map.fromList $ go r
+  _ -> error "toOrdType: encounteres RecordCons or RecordNil"
+  where
+  go (Fix t') = case t' of
+    RecordCons field ty rest -> (field, toOrdType ty) : go rest
+    RecordNil                -> []
+    _ -> error "toOrdType: did not encounter RecordCons or RecordNil"
+
+--------------------------------------------------------------------------------
+
 -- Type variables and predicates
 data PolyType t
-  = ForAll [Text] [Predicate t] t
+  = ForAll [Text] [Constraint t] t
   deriving (Functor, Show)
 
 -- | Class and type, which should be member of the class
-data Predicate t
+data Constraint t
   = IsIn Text t
-  deriving (Functor, Show)
+  deriving (Eq, Ord, Functor, Show)
+
+--------------------------------------------------------------------------------
+
+class HasFreeTypeVars t where
+  getFtvs :: t -> Set Text
+
+instance HasFreeTypeVars Type where
+  getFtvs = cata $ \case
+    TypeVar v        -> Set.singleton v
+    TypeApp f arg    -> f `Set.union` arg
+    RecordCons _ a b -> a `Set.union` b
+    _ -> Set.empty
+
+instance HasFreeTypeVars a => HasFreeTypeVars [a] where
+  getFtvs = foldr Set.union Set.empty . map getFtvs
+
+instance HasFreeTypeVars t => HasFreeTypeVars (PolyType t) where
+  getFtvs (ForAll as cs t) =
+    (getFtvs t `Set.union` getFtvs cs) `Set.difference` Set.fromList as
+
+instance HasFreeTypeVars t => HasFreeTypeVars (Constraint t) where
+  getFtvs (IsIn _ t) = getFtvs t
+
+instance HasFreeTypeVars v => HasFreeTypeVars (Map k v) where
+  getFtvs = getFtvs . Map.elems

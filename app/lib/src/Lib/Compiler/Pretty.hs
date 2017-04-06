@@ -23,7 +23,13 @@ prettyKind = show . cata kindDoc
     KindType      -> textStrict "Type"
     KindFun f arg -> parens $ f <+> textStrict "->" <+> arg
     KindRecord t  -> char '#' <+> t
-    KindVar v     -> int v
+    KindUnknown v -> int v
+
+prettyType :: Type -> Text
+prettyType = show . histo typeDoc
+
+prettyPolyType :: PolyType Type -> Text
+prettyPolyType = show . polyTypeDoc . map (histo typeDoc)
 
 --------------------------------------------------------------------------------
 
@@ -35,10 +41,10 @@ astDoc = ast
   (liftAlg declarationDoc)
   (liftAlg exprDoc)
   (liftAlg binderDoc)
-  (typeDoc . map (mapCofree unsafePrj))
+  (typeDoc . map (hoistCofree unsafePrj))
 
-predicateDoc :: Predicate Doc -> Doc
-predicateDoc (IsIn cls ty) = textStrict cls <+> ty
+constraintDoc :: Constraint Doc -> Doc
+constraintDoc (IsIn cls ty) = textStrict cls <+> ty
 
 polyTypeDoc :: PolyType Doc -> Doc
 polyTypeDoc (ForAll vars preds ty) =
