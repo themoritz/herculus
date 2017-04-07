@@ -93,7 +93,6 @@ literalDoc = \case
   NumberLit n      -> double n
   IntegerLit i     -> integer i
   StringLit s      -> dquotes $ textStrict s
-  BoolLit b        -> textStrict $ if b then "True" else "False"
   RecordLit fields -> braces $ hsep $ punctuate comma (map goField fields)
     where
       goField (k, v) = textStrict k <+> equals <+> v

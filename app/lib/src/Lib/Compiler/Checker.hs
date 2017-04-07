@@ -16,7 +16,7 @@ module Lib.Compiler.Checker where
 
 import           Lib.Prelude
 
-import           Control.Arrow                ((***))
+import           Control.Arrow                ((&&&), (***))
 import           Control.Comonad.Cofree
 import qualified Control.Comonad.Trans.Cofree as T
 import           Control.Lens                 hiding ((:<))
@@ -107,6 +107,7 @@ runKindInfer env m =
           a'@(Fix a) = applyKindSubst subst k1'
           b'@(Fix b) = applyKindSubst subst k2'
         case (a, b) of
+          (KindUnknown x, KindUnknown y) | x == y -> pure ()
           (KindUnknown x, _) -> bind x b'
           (_, KindUnknown x) -> bind x a'
           (KindType, KindType) -> pure ()
@@ -123,10 +124,17 @@ runKindInfer env m =
       bind i k = do
         -- Occurs check
         flip cata k $ \case
-          KindUnknown v | v == i ->
-            compileError span $ "Infinite kind: " <> prettyKind k
+          KindUnknown v | v == i -> do
+            subst <- use kisSubstitution
+            let
+              k1' = applyKindSubst subst k1
+              k2' = applyKindSubst subst k2
+            compileError span $
+              "Infinite kind while trying to unify `" <>
+              prettyKind k1' <> "` with `" <>
+              prettyKind k2' <> "`."
           _ -> pure ()
-        kisSubstitution %= Map.insert i k
+        kisSubstitution %= substAfter (Map.singleton i k)
 
     LookupKind v reply -> do
       res <- use (kisEnv . at v)
@@ -171,10 +179,13 @@ inferKind = cataM $ \case
 
 data CheckF a
   = LookupInstanceDict (Constraint Type) (Maybe Text -> a)
+  | LookupType Text (Maybe (PolyType Type) -> a)
   | GetFreeContextVars (Set Text -> a)
   | forall b. LiftKindInfer (KindInfer b) (b -> a)
   | forall b. InExtendedKindEnv [(Text, Kind)] (Check b) (b -> a)
   | forall b. InExtendedTypeEnv [(Text, PolyType Type)] (Check b) (b -> a)
+  | FreshType (Type -> a)
+  | UnifyTypes Span Type Type a
 
 deriving instance Functor CheckF
 
@@ -182,6 +193,9 @@ type Check = FreeT CheckF (Except Error)
 
 lookupInstanceDict :: Constraint Type -> Check (Maybe Text)
 lookupInstanceDict c = liftF $ LookupInstanceDict c id
+
+lookupType :: Text -> Check (Maybe (PolyType Type))
+lookupType t = liftF $ LookupType t id
 
 getFreeContextVars :: Check (Set Text)
 getFreeContextVars = liftF $ GetFreeContextVars id
@@ -195,11 +209,22 @@ inExtendedKindEnv env m = liftF $ InExtendedKindEnv env m id
 inExtendedTypeEnv :: [(Text, PolyType Type)] -> Check a -> Check a
 inExtendedTypeEnv env m = liftF $ InExtendedTypeEnv env m id
 
+freshType :: Check Type
+freshType = liftF $ FreshType id
+
+unifyTypes :: Span -> Type -> Type -> Check ()
+unifyTypes span t1 t2 = liftF $ UnifyTypes span t1 t2 ()
+
 data CheckEnv = CheckEnv
   { _checkEnvTypes         :: Map Text (PolyType Type)
   , _checkEnvKinds         :: KindEnv
   , _checkEnvInstanceDicts :: Map (Constraint Type) Text
   }
+
+freshTypeDict :: [Text] -> Check [(Text, Type)]
+freshTypeDict = traverse $ \name -> do
+  t <- freshType
+  pure (name, t)
 
 primCheckEnv :: CheckEnv
 primCheckEnv = CheckEnv primTypeEnv primKindEnv Map.empty
@@ -226,6 +251,9 @@ runCheck env =
     LookupInstanceDict c reply -> do
       res <- use (checkEnv . checkEnvInstanceDicts . at c)
       reply res
+    LookupType t reply -> do
+      res <- use (checkEnv . checkEnvTypes . at t)
+      reply res
     GetFreeContextVars reply -> do
       ctx <- use (checkEnv . checkEnvTypes)
       reply $ getFtvs ctx
@@ -245,9 +273,69 @@ runCheck env =
       b <- iterTM go m
       checkEnv . checkEnvTypes .= oldEnv
       reply b
-
+    FreshType reply -> do
+      i <- checkCount <+= 1
+      reply $ typeVar (show i)
+    UnifyTypes span t1 t2 next -> next
 
 --------------------------------------------------------------------------------
+
+inferType :: SourceAst -> Check Type
+inferType (span :< (unsafePrj -> expr)) = case expr of
+  Literal lit -> case lit of
+    NumberLit _  -> pure $ tyNumber
+    IntegerLit _ -> pure $ tyInt
+    StringLit _  -> pure $ tyString
+  Abs (hoistCofree unsafePrj -> binder) e -> do
+    argType <- freshType
+    binderDict <- inferBinder argType binder
+    resultType <- inExtendedTypeEnv binderDict $ inferType e
+    pure $ argType ->: resultType
+  App f arg -> do
+    fType <- inferType f
+    argType <- inferType arg
+    resultType <- freshType
+    unifyTypes span fType (argType ->: resultType)
+    pure resultType
+  Var x -> lookupType x >>= \case
+    Nothing -> compileError span $ "Variable not in scope: " <> x
+    Just poly -> do
+      (constraints, t) <- instantiate poly
+      pure t
+  Constructor x -> lookupType x >>= \case
+    Nothing -> compileError span $ "Type constructor not in scope: " <> x
+    Just poly -> do
+      (constraints, t) <- instantiate poly
+      pure t
+  Case scrutinee alts -> do
+    resultType <- freshType
+    scrutType <- inferType scrutinee
+    for_ alts $ \(hoistCofree unsafePrj -> binder, e) -> do
+      binderDict <- inferBinder scrutType binder
+      eType <- inExtendedTypeEnv binderDict $ inferType e
+      unifyTypes span resultType eType
+    pure resultType
+
+inferBinder :: Type -> SourceBinder -> Check [(Text, PolyType Type)]
+inferBinder expected (span :< b) = case b of
+  VarBinder x -> pure [(x, ForAll [] [] expected)]
+  ConstructorBinder name binders -> lookupType name >>= \case
+    Nothing -> compileError span $ "Type constructor not in scope: " <> name
+    Just poly -> do
+      (_, t) <- instantiate poly
+      let
+        (args, result) = peelArgs t
+      unless (length args == length binders) $ compileError span $
+        "Type constructor `" <> name <>
+        "` expects " <> show (length args) <>
+        "arguments but was given " <> show (length binders) <> "."
+      unifyTypes span expected result
+      join <$> zipWithM inferBinder (reverse args) binders
+  where
+  peelArgs :: Type -> ([Type], Type)
+  peelArgs = go []
+    where go args (Arrow arg rest) = go (arg:args) rest
+          go args rest             = (args, rest)
 
 -- | Generalize a type, reduce and retain some constraints.
 -- 1. Reduce constraints
@@ -281,6 +369,16 @@ generalize constraints t = do
     Just _  -> pure True -- Entailed by an instance that's in scope
     Nothing -> pure $ elem c cs
 
+instantiate :: PolyType Type -> Check ([Constraint Type], Type)
+instantiate (ForAll as cs t) = do
+  pool <- Map.fromList <$> freshTypeDict as
+  let
+    replace :: Type -> Type
+    replace = cata $ \t' -> case t' of
+      TypeVar x -> fromMaybe (Fix t') $ Map.lookup x pool
+      other     -> Fix other
+  pure (map (map replace) cs, replace t)
+
 --------------------------------------------------------------------------------
 
 checkExpr
@@ -300,12 +398,22 @@ checkDecls decls = do
     traceM $ name <> ": " <> prettyPolyType p
     pure (name, p)
   inExtendedTypeEnv polys $ inExtendedKindEnv kinds $ do
-    for_ (getTypeDecls decls) $ \(span, name, poly) -> do
-      liftKindInfer $ goTypeDecl span poly
+    let
+      typeDecls = getTypeDecls decls
+      polys' = map (view _2 &&& map stripAnn . view _3) typeDecls
+    for_ typeDecls $ \(span, _, poly) ->
+      liftKindInfer $ goType span poly
+    inExtendedTypeEnv polys' $ do
+      pure ()
 
   where
-  goTypeDecl :: Span -> PolyType SourceType -> KindInfer ()
-  goTypeDecl span (ForAll as cs t) = do
+  goValues :: Check ()
+  goValues = do
+    let valueDecls = getValueDecls decls
+    pure ()
+
+  goType :: Span -> PolyType SourceType -> KindInfer ()
+  goType span (ForAll as cs t) = do
     -- TODO: Check constraints
     quantifierDict <- freshKindDict as
     withExtendedKindEnv quantifierDict $ do
@@ -357,3 +465,11 @@ checkDecls decls = do
   getTypeDecls = mapMaybe $ \(span :< (unsafePrj -> decl)) -> case decl of
     TypeDecl name poly -> Just (span, name, map (hoistCofree unsafePrj) poly)
     _                  -> Nothing
+
+  getValueDecls
+    :: [SourceAst]
+    -> [(Span, Text, [SourceBinder], SourceAst)]
+  getValueDecls = mapMaybe $ \(span :< (unsafePrj -> decl)) -> case decl of
+    ValueDecl name binders expr -> Just (span, name, binders', expr)
+      where binders' = map (hoistCofree unsafePrj) binders
+    _                           -> Nothing

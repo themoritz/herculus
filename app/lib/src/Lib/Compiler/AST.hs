@@ -116,6 +116,5 @@ data LiteralF a
   = NumberLit Double
   | IntegerLit Integer
   | StringLit Text
-  | BoolLit Bool
   | RecordLit [(Text, a)]
   deriving (Eq, Ord, Show, Functor)

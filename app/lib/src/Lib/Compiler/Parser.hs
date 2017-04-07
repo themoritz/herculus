@@ -174,17 +174,12 @@ parseLit = withSource $ inj . Literal <$> P.choice
     [ P.try parseString
     , P.try parseNumber
     , P.try parseInteger
-    , P.try parseBool
     , P.try parseRecord
     ]
   where
     parseString = StringLit <$> (lexeme stringLit)
     parseNumber = NumberLit <$> (lexeme numberLit)
     parseInteger = IntegerLit <$> (lexeme integerLit)
-    parseBool =
-          P.try (dconsname' "True"  $> BoolLit True)
-      <|> P.try (dconsname' "False" $> BoolLit False)
-      P.<?> "True or False"
     parseRecord = braces $ do
       fields <- P.sepBy1 ((,) <$> identifier <* equals <*> parseExpr) comma
       pure $ RecordLit fields

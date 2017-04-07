@@ -1,11 +1,13 @@
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE PatternSynonyms   #-}
 -- |
 
 module Lib.Compiler.Env where
 
 import           Lib.Prelude
 
-import qualified Data.Map          as Map
+import           Data.Functor.Foldable
+import qualified Data.Map              as Map
 
 import           Lib.Compiler.Type
 
@@ -21,6 +23,9 @@ primKindEnv = Map.fromList
     , kindType
     )
   , ( "Number"
+    , kindType
+    )
+  , ( "Int"
     , kindType
     )
   , ( "->"
@@ -42,12 +47,19 @@ tyString = typeConstructor "String"
 tyNumber :: Type
 tyNumber = typeConstructor "Number"
 
+tyInt :: Type
+tyInt = typeConstructor "Int"
+
 tyFunction :: Type
 tyFunction = typeConstructor "->"
 
 infixr 2 ->:
 (->:) :: Type -> Type -> Type
 (->:) a b = typeApp (typeApp tyFunction a) b
+
+pattern Arrow :: Type -> Type -> Type
+pattern Arrow a b =
+  Fix (TypeApp (Fix (TypeApp (Fix (TypeConstructor "->")) a)) b)
 
 primTypeEnv :: Map Text (PolyType Type)
 primTypeEnv = Map.fromList
