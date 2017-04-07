@@ -16,6 +16,7 @@ module Lib.Compiler.Checker where
 
 import           Lib.Prelude
 
+import           Control.Arrow                ((***))
 import           Control.Comonad.Cofree
 import qualified Control.Comonad.Trans.Cofree as T
 import           Control.Lens                 hiding ((:<))
@@ -53,7 +54,7 @@ data KindInferF a
   = FreshKind (Kind -> a)
   | UnifyKinds Span Kind Kind a
   | LookupKind Text (Maybe Kind -> a)
-  | forall b. WithExtendedKindEnv KindEnv (KindInfer b) (b -> a)
+  | forall b. WithExtendedKindEnv [(Text, Kind)] (KindInfer b) (b -> a)
   | ApplySubst Kind (Kind -> a)
 
 deriving instance Functor KindInferF
@@ -69,7 +70,7 @@ unifyKinds span k1 k2 = liftF $ UnifyKinds span k1 k2 ()
 lookupKind :: Text -> KindInfer (Maybe Kind)
 lookupKind t = liftF $ LookupKind t id
 
-withExtendedKindEnv :: KindEnv -> KindInfer a -> KindInfer a
+withExtendedKindEnv :: [(Text, Kind)] -> KindInfer a -> KindInfer a
 withExtendedKindEnv env m = liftF $ WithExtendedKindEnv env m id
 
 applySubst :: Kind -> KindInfer Kind
@@ -133,7 +134,7 @@ runKindInfer env m =
 
     WithExtendedKindEnv localEnv action reply -> do
       oldEnv <- use kisEnv
-      kisEnv .= localEnv `Map.union` oldEnv
+      kisEnv .= (Map.fromList localEnv) `Map.union` oldEnv
       b <- iterTM go action
       kisEnv .= oldEnv
       reply b
@@ -141,6 +142,11 @@ runKindInfer env m =
     ApplySubst k reply -> do
       subst <- use kisSubstitution
       reply $ applyKindSubst subst k
+
+freshKindDict :: [Text] -> KindInfer [(Text, Kind)]
+freshKindDict as = for as $ \a -> do
+  k <- freshKind
+  pure (a, k)
 
 inferKind :: SourceType -> KindInfer Kind
 inferKind = cataM $ \case
@@ -166,7 +172,11 @@ inferKind = cataM $ \case
 data CheckF a
   = LookupInstanceDict (Constraint Type) (Maybe Text -> a)
   | GetFreeContextVars (Set Text -> a)
-  deriving (Functor)
+  | forall b. LiftKindInfer (KindInfer b) (b -> a)
+  | forall b. InExtendedKindEnv [(Text, Kind)] (Check b) (b -> a)
+  | forall b. InExtendedTypeEnv [(Text, PolyType Type)] (Check b) (b -> a)
+
+deriving instance Functor CheckF
 
 type Check = FreeT CheckF (Except Error)
 
@@ -176,13 +186,23 @@ lookupInstanceDict c = liftF $ LookupInstanceDict c id
 getFreeContextVars :: Check (Set Text)
 getFreeContextVars = liftF $ GetFreeContextVars id
 
+liftKindInfer :: KindInfer a -> Check a
+liftKindInfer m = liftF $ LiftKindInfer m id
+
+inExtendedKindEnv :: [(Text, Kind)] -> Check a -> Check a
+inExtendedKindEnv env m = liftF $ InExtendedKindEnv env m id
+
+inExtendedTypeEnv :: [(Text, PolyType Type)] -> Check a -> Check a
+inExtendedTypeEnv env m = liftF $ InExtendedTypeEnv env m id
+
 data CheckEnv = CheckEnv
   { _checkEnvTypes         :: Map Text (PolyType Type)
+  , _checkEnvKinds         :: KindEnv
   , _checkEnvInstanceDicts :: Map (Constraint Type) Text
   }
 
 primCheckEnv :: CheckEnv
-primCheckEnv = CheckEnv primTypeEnv Map.empty
+primCheckEnv = CheckEnv primTypeEnv primKindEnv Map.empty
 
 makeLenses ''CheckEnv
 
@@ -209,6 +229,23 @@ runCheck env =
     GetFreeContextVars reply -> do
       ctx <- use (checkEnv . checkEnvTypes)
       reply $ getFtvs ctx
+    LiftKindInfer m reply -> do
+      kindEnv <- use (checkEnv . checkEnvKinds)
+      x <- hoistError $ runKindInfer kindEnv m
+      reply x
+    InExtendedKindEnv localEnv m reply -> do
+      oldEnv <- use (checkEnv . checkEnvKinds)
+      checkEnv . checkEnvKinds .= (Map.fromList localEnv) `Map.union` oldEnv
+      b <- iterTM go m
+      checkEnv . checkEnvKinds .= oldEnv
+      reply b
+    InExtendedTypeEnv localEnv m reply -> do
+      oldEnv <- use (checkEnv . checkEnvTypes)
+      checkEnv . checkEnvTypes .= (Map.fromList localEnv) `Map.union` oldEnv
+      b <- iterTM go m
+      checkEnv . checkEnvTypes .= oldEnv
+      reply b
+
 
 --------------------------------------------------------------------------------
 
@@ -227,7 +264,8 @@ generalize constraints t = do
   let
     (deferred, retained) = flip partition reduced $ \c ->
       all (`Set.member` contextVars) (getFtvs c)
-    freeVars = (getFtvs retained `Set.union` getFtvs t) `Set.difference` contextVars
+    freeVars =
+      (getFtvs retained `Set.union` getFtvs t) `Set.difference` contextVars
   pure (deferred, ForAll (Set.toList freeVars) retained t)
   where
   -- | Removes any constraint that is entailed by the others
@@ -253,34 +291,40 @@ checkExpr = undefined
 --------------------------------------------------------------------------------
 
 checkDecls :: [SourceAst] -> Check ()
-checkDecls decls =
-  case runKindInfer primKindEnv goData of
-    Left err    -> throwError err
-    Right (kinds, types) -> do
-      for_ kinds $ \(name, k) ->
-        traceM $ name <> ": " <> prettyKind k
-      for_ types $ \(name, t) -> do
-        (_, p) <- generalize [] t
-        traceM $ name <> ": " <> prettyPolyType p
+checkDecls decls = do
+  (kinds, types) <- liftKindInfer goData
+  for_ kinds $ \(name, k) ->
+    traceM $ name <> ": " <> prettyKind k
+  polys <- for types $ \(name, t) -> do
+    (_, p) <- generalize [] t
+    traceM $ name <> ": " <> prettyPolyType p
+    pure (name, p)
+  inExtendedTypeEnv polys $ inExtendedKindEnv kinds $ do
+    for_ (getTypeDecls decls) $ \(span, name, poly) -> do
+      liftKindInfer $ goTypeDecl span poly
+
   where
+  goTypeDecl :: Span -> PolyType SourceType -> KindInfer ()
+  goTypeDecl span (ForAll as cs t) = do
+    -- TODO: Check constraints
+    quantifierDict <- freshKindDict as
+    withExtendedKindEnv quantifierDict $ do
+      inferred <- inferKind t
+      unifyKinds span inferred kindType
+
   goData :: KindInfer ([(Text, Kind)], [(Text, Type)])
   goData = do
     let dataDecls = getDataDecls decls
     -- TODO: Check for duplicate definitions
-
     -- Kind checking
-    dTypeDict <- for dataDecls $ \(_, name, _, _) -> do
-      k <- freshKind
-      pure (name, k)
-    withExtendedKindEnv (Map.fromList dTypeDict) $
+    dTypeDict <- freshKindDict $ map (view _2) dataDecls
+    withExtendedKindEnv dTypeDict $
       for_ dataDecls $ \(span, name, args, constrs) -> do
-        argTypeDict <- for args $ \arg -> do
-          k <- freshKind
-          pure (arg, k)
-        withExtendedKindEnv (Map.fromList argTypeDict) $ do
+        argTypeDict <- freshKindDict args
+        withExtendedKindEnv argTypeDict $ do
           for_ constrs $ \(_, cargs) ->
             for cargs $ \carg@(cargSpan :< _) -> do
-              argKind <- inferKind (hoistCofree unsafePrj carg)
+              argKind <- inferKind carg
               unifyKinds cargSpan kindType argKind
         k <- fromJust <$> lookupKind name
         let argKinds = map snd argTypeDict
@@ -295,13 +339,21 @@ checkDecls decls =
         (_, name, args, constrs) <- dataDecls
         let result = foldl typeApp (typeConstructor name) (map typeVar args)
         (cname, cargs) <- constrs
-        let ty = foldr (->:) result (hoistFix unsafePrj . stripAnn <$> cargs)
+        let ty = foldr (->:) result (stripAnn <$> cargs)
         pure $ (cname, ty)
     pure (kindEnv, typeEnv)
 
   getDataDecls
     :: [SourceAst]
-    -> [(Span, Text, [Text], [(Text, [SourceAst])])]
+    -> [(Span, Text, [Text], [(Text, [SourceType])])]
   getDataDecls = mapMaybe $ \(span :< (unsafePrj -> decl)) -> case decl of
-    DataDecl name args constrs -> Just (span, name, args, constrs)
+    DataDecl name args constrs -> Just (span, name, args, constrs')
+      where constrs' = map (id *** map (hoistCofree unsafePrj)) constrs
     _                          -> Nothing
+
+  getTypeDecls
+    :: [SourceAst]
+    -> [(Span, Text, PolyType SourceType)]
+  getTypeDecls = mapMaybe $ \(span :< (unsafePrj -> decl)) -> case decl of
+    TypeDecl name poly -> Just (span, name, map (hoistCofree unsafePrj) poly)
+    _                  -> Nothing

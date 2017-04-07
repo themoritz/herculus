@@ -18,6 +18,7 @@ module Lib.Prelude
   , cataM
   --
   , mapLeft
+  , hoistError
   ) where
 
 import           Protolude as Exports hiding ((:*:), (:+:), Fixity, Infix, Type,
@@ -78,3 +79,6 @@ cataM f = go where
 mapLeft :: (a -> a') -> Either a b -> Either a' b
 mapLeft f (Left a) = Left (f a)
 mapLeft _ (Right b) = Right b
+
+hoistError :: MonadError e m => Either e a -> m a
+hoistError = either throwError pure
