@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes       #-}
 
 module Lib.Compiler where
 
@@ -8,6 +9,7 @@ import           Lib.Prelude
 
 import           Data.Text                      (Text, pack, unpack)
 
+import           NeatInterpolation
 import           Text.Show.Pretty
 
 import           Lib.Model.Cell
@@ -19,7 +21,7 @@ import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Checker
 import           Lib.Compiler.Error
-import           Lib.Compiler.Interpreter
+-- import           Lib.Compiler.Interpreter
 import           Lib.Compiler.Interpreter.Types
 import           Lib.Compiler.Parser
 import           Lib.Compiler.Pretty
@@ -69,6 +71,29 @@ import           Lib.Compiler.Pretty
 --       Right val -> putStrLn $ "Val: " ++ show val
 
 --------------------------------------------------------------------------------
+
+prelude :: Text
+prelude = [text|
+data Bool
+  = True
+  | False
+
+data List a
+  = Nil
+  | Cons a (List a)
+
+and a b = if a then b else False
+
+map f xs = case xs of
+  Nil -> Nil
+  Cons a as -> Cons (f a) (map f as)
+
+foldr f a xs = case xs of
+  Nil -> a
+  Cons x xs -> f x (foldr f a xs)
+
+und = foldr and True
+|]
 
 withParsed :: Text -> ([SourceAst] -> IO ()) -> IO ()
 withParsed src m = case parse src of

@@ -74,6 +74,7 @@ library
                      , lens
                      , mtl
                      , megaparsec
+                     , neat-interpolation
                      , pretty-show
                      , protolude
                      , pwstore-fast

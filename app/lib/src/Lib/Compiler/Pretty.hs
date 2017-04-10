@@ -104,7 +104,7 @@ exprDoc = \case
     backslash <+> b <+> textStrict "->" <$$>
     indent 2 body
   App f arg ->
-    parens f <+> arg
+    parens (f <+> arg)
   Var v ->
     textStrict v
   Constructor c ->
@@ -114,11 +114,14 @@ exprDoc = \case
     indent 2 (vsep (map goCase cases))
     where
       goCase (b, e') = b <+> textStrict "->" <+> e'
-  Let v body rest ->
+  Let bindings rest ->
     textStrict "let" <$$>
-    indent 2 (textStrict v <+> equals <$$> indent 2 body) <$$>
+    indent 2 (vsep $ map goBinding bindings) <$$>
     textStrict "in" <$$>
     indent 2 rest
+    where
+      goBinding (v, body) =
+        textStrict v <+> equals <$$> indent 2 body
   Accessor e (Ref field) ->
     parens e <> dot <> textStrict field
   TableRef (Ref t) ->

@@ -146,8 +146,8 @@ parseLet :: Parser SourceAst
 parseLet = withSource $ do
   reserved "let"
   indented
-  (name, args, e) <- mark $ do
-    name <- identifier
+  bindings <- mark $ some $ do
+    name <- same *> identifier
     args <- many parseBinder
     equals
     e <- parseExpr
@@ -155,8 +155,10 @@ parseLet = withSource $ do
   indented
   reserved "in"
   body <- parseExpr
-  pure $ inj $
-    Let name (foldr spanAbs e (map (hoistCofree inj) args)) body
+  let
+    bindings' = flip map bindings $ \(name, args, e) ->
+      (name, foldr spanAbs e (map (hoistCofree inj) args))
+  pure $ inj $ Let bindings' body
 
 parseAbs :: Parser SourceAst
 parseAbs = do

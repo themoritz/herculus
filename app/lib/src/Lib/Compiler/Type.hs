@@ -71,6 +71,9 @@ typeConstructor = Fix . TypeConstructor
 typeApp :: Type -> Type -> Type
 typeApp a b = Fix (TypeApp a b)
 
+recordCons :: Ref Column -> Type -> Type -> Type
+recordCons f t rest = Fix (RecordCons f t rest)
+
 spanTypeConstructor :: (Span, Text) -> SourceType
 spanTypeConstructor (span, t) = span :< TypeConstructor t
 

@@ -65,7 +65,7 @@ data ExprF a
   | Constructor Text
   -- | Scrutinee, list of alternatives (binder, expression)
   | Case a [(a, a)]
-  | Let Text a a
+  | Let [(Text, a)] a
   | Accessor a (Ref Column)
   | TableRef (Ref Table)
   | ColumnRef (Ref Column)
