@@ -42,6 +42,7 @@ astDoc = ast
   (liftAlg exprDoc)
   (liftAlg binderDoc)
   (typeDoc . map (hoistCofree unsafePrj))
+  (liftAlg refDoc)
 
 constraintDoc :: Constraint Doc -> Doc
 constraintDoc (IsIn cls ty) = textStrict cls <+> ty
@@ -122,8 +123,11 @@ exprDoc = \case
     where
       goBinding (v, body) =
         textStrict v <+> equals <$$> indent 2 body
-  Accessor e (Ref field) ->
+  Accessor e field ->
     parens e <> dot <> textStrict field
+
+refDoc :: RefTextF Doc -> Doc
+refDoc = \case
   TableRef (Ref t) ->
     char '#' <> textStrict t
   ColumnRef (Ref c) ->

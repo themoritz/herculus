@@ -82,6 +82,9 @@ data List a
   = Nil
   | Cons a (List a)
 
+id :: forall a. a -> a
+id x = x
+
 and a b = if a then b else False
 
 map f xs = case xs of

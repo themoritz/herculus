@@ -14,7 +14,7 @@
 
 module Lib.Compiler.Checker where
 
-import           Lib.Prelude
+import           Lib.Prelude                  hiding (abs)
 
 import           Control.Arrow                ((&&&), (***))
 import           Control.Comonad.Cofree
@@ -351,60 +351,72 @@ runCheck env =
 
 --------------------------------------------------------------------------------
 
-inferType :: SourceAst -> Check Type
-inferType (span :< (unsafePrj -> expr)) = case expr of
-  Literal lit -> case lit of
-    NumberLit _  -> pure $ tyNumber
-    IntegerLit _ -> pure $ tyInt
-    StringLit _  -> pure $ tyString
+inferExpr :: SourceAst -> Check (Intermed, Type)
+inferExpr (span :< (unsafePrj -> expr)) = case expr of
+  Literal lit -> inferLiteral lit
   Abs (hoistCofree unsafePrj -> binder) e -> do
     argType <- freshType
     binderDict <- inferBinder argType binder
-    resultType <- inExtendedTypeEnv binderDict $ inferType e
-    pure $ argType ->: resultType
+    (e', resultType) <- inExtendedTypeEnv binderDict $ inferExpr e
+    pure (abs (injFix $ stripAnn binder) e', argType ->: resultType)
   App f arg -> do
-    fType <- inferType f
-    argType <- inferType arg
+    (fExpr, fType) <- inferExpr f
+    (argExpr, argType) <- inferExpr arg
     resultType <- freshType
     unifyTypes span fType (argType ->: resultType)
-    pure resultType
+    pure (app fExpr argExpr, resultType)
   Var x -> lookupType x >>= \case
     Nothing -> compileError span $ "Variable not in scope: " <> x
     Just poly -> do
       (constraints, t) <- instantiate poly
-      pure t
-  Constructor x -> lookupType x >>= \case
-    Nothing -> compileError span $ "Type constructor not in scope: " <> x
+      let
+        typeClassDicts = map (typeClassDict . map injFix) constraints
+        varAppliedToDicts = foldl' app (var x) typeClassDicts
+      pure (varAppliedToDicts, t)
+  Constructor c -> lookupType c >>= \case
+    Nothing -> compileError span $ "Type constructor not in scope: " <> c
     Just poly -> do
-      (constraints, t) <- instantiate poly
-      pure t
+      -- Atm type constructors are never constrained
+      (_, t) <- instantiate poly
+      pure (constructor c, t)
   Case scrutinee alts -> do
     resultType <- freshType
-    scrutType <- inferType scrutinee
-    for_ alts $ \(hoistCofree unsafePrj -> binder, e) -> do
+    (scrutExpr, scrutType) <- inferExpr scrutinee
+    alts' <- for alts $ \(hoistCofree unsafePrj -> binder, e) -> do
       binderDict <- inferBinder scrutType binder
-      eType <- inExtendedTypeEnv binderDict $ inferType e
-      eType' <- applyCurrentTypeSubst eType
-      traceM $ prettyType eType'
+      (e', eType) <- inExtendedTypeEnv binderDict $ inferExpr e
       unifyTypes span resultType eType
-    pure resultType
+      pure (injFix $ stripAnn binder, e')
+    pure (case' scrutExpr alts', resultType)
   Let bindings rest -> do
-    polyDict <- inferBindingGroup bindings
-    inExtendedTypeEnv polyDict $ inferType rest
+    dict <- inferBindingGroup (map (\(n, e) -> (n, Nothing, e)) bindings)
+    inExtendedTypeEnv (map (view _1 &&& view _3) dict) $ do
+      (restExpr, restType) <- inferExpr rest
+      pure (let' (map (view _1 &&& view _2) dict) restExpr, restType)
 
-inferBindingGroup :: [(Text, SourceAst)] -> Check [(Text, PolyType Type)]
+inferLiteral :: LiteralF SourceAst -> Check (Intermed, Type)
+inferLiteral lit = case lit of
+  NumberLit n  -> pure (literal $ NumberLit n, tyNumber)
+  IntegerLit i -> pure (literal $ IntegerLit i, tyNumber)
+  StringLit s  -> pure (literal $ StringLit s, tyNumber)
+
+inferBindingGroup
+  :: [(Text, Maybe (PolyType Type), SourceAst)]
+  -> Check [(Text, Intermed, PolyType Type)]
 inferBindingGroup bindings = do
-  freshDict <- for bindings $ \(name, _) -> do
-    t <- freshType
-    pure (name, ForAll [] [] t)
-  inExtendedTypeEnv freshDict $
-    for bindings $ \(name, e@(span :< _)) -> do
-      t <- inferType e
+  dict <- for bindings $ \(name, mPoly, _) -> do
+    p <- case mPoly of
+      Nothing -> ForAll [] [] <$> freshType
+      Just p  -> pure p
+    pure (name, p)
+  inExtendedTypeEnv dict $
+    for bindings $ \(name, _, e@(span :< _)) -> do
+      (e', t) <- inferExpr e
       Just p <- lookupType name
       (_, t') <- instantiate p
       unifyTypes span t t'
       (cs, poly) <- generalize [] t
-      pure (name, poly)
+      pure (name, e', poly)
 
 inferBinder :: Type -> SourceBinder -> Check [(Text, PolyType Type)]
 inferBinder expected (span :< b) = case b of
@@ -475,32 +487,29 @@ instantiate (ForAll as cs t) = do
 checkDecls :: [SourceAst] -> Check ()
 checkDecls decls = do
   (kinds, types) <- liftKindInfer goData
-  for_ kinds $ \(name, k) ->
-    traceM $ name <> ": " <> prettyKind k
   polys <- for types $ \(name, t) -> do
     (_, p) <- generalize [] t
-    traceM $ name <> ": " <> prettyPolyType p
     pure (name, p)
   inExtendedTypeEnv polys $ inExtendedKindEnv kinds $ do
     let
       typeDecls = getTypeDecls decls
       polys' = map (view _2 &&& map stripAnn . view _3) typeDecls
-    for_ typeDecls $ \(span, _, poly) ->
+    declaredTypes <- for typeDecls $ \(span, name, poly) -> do
       liftKindInfer $ goType span poly
-    inExtendedTypeEnv polys' $ do
-      goValues
-
-  where
-  goValues :: Check ()
-  goValues = do
+      pure (name, poly)
+    -- Values
     let
       valueDecls = getValueDecls decls
       binders = flip map valueDecls $ \(_, name, args, e) ->
-        (name, foldr spanAbs e (map (hoistCofree inj) args))
-    polys <- inferBindingGroup binders
-    for_ polys $ \(name, poly) ->
+        ( name
+        , map stripAnn <$> Map.lookup name (Map.fromList declaredTypes)
+        , foldr spanAbs e (map (hoistCofree inj) args)
+        )
+    polys'' <- inferBindingGroup binders
+    for_ polys'' $ \(name, _, poly) ->
       traceM $ name <> ": " <> prettyPolyType poly
 
+  where
   goType :: Span -> PolyType SourceType -> KindInfer ()
   goType span (ForAll as cs t) = do
     -- TODO: Check constraints
@@ -562,3 +571,8 @@ checkDecls decls = do
     ValueDecl name binders expr -> Just (span, name, binders', expr)
       where binders' = map (hoistCofree unsafePrj) binders
     _                           -> Nothing
+
+--------------------------------------------------------------------------------
+
+removeInstanceDicts :: Intermed -> Check Compiled
+removeInstanceDicts = undefined

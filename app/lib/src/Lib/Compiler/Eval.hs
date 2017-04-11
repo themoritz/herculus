@@ -20,7 +20,7 @@ data Value
 
 data Result
   = RValue Value
-  | RClosure Text Expr TermEnv
+  | RClosure Binder Expr TermEnv
   | RContinuation Expr TermEnv
   deriving (Show)
 
@@ -35,11 +35,13 @@ eval env = \case
       RContinuation expr cl -> eval cl expr
       _                     -> pure r
   Constructor c -> pure $ RValue $ VData c []
-  Abs x expr -> pure $ RClosure x expr env
+  Abs b expr -> pure $ RClosure b expr env
   App f arg -> do
     argRes <- eval env arg
     eval env f >>= \case
-      RClosure x body cl -> eval (Map.insert x argRes cl) body
+      RClosure b body cl -> case matchValue argRes b of
+        Just env' -> eval (env' `Map.union` cl) body
+        Nothing   -> throwError "Eval `App`: pattern match failure"
       RValue (VData name args) ->
         pure $ RValue $ VData name (args <> [argRes])
       _ -> throwError "Eval `App`: expected closure"
@@ -72,5 +74,5 @@ matchValue res = \case
 evalLit :: Literal -> Eval Result
 evalLit = \case
   NumberLit n -> pure $ RValue $ VNumber n
-  IntLit i -> pure $ RValue $ VInt i
+  IntegerLit i -> pure $ RValue $ VInt i
   StringLit s -> pure $ RValue $ VString s

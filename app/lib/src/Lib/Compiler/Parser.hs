@@ -123,7 +123,7 @@ parseApp = do
 parseAccessor :: Parser SourceAst
 parseAccessor = do
   e <- parseExpr''
-  refs <- some $ withSpan $ dot *> (Ref <$> identifier)
+  refs <- some $ withSpan $ dot *> identifier
   pure $ foldl' spanAccessor e refs
 
 parseConstructor :: Parser SourceAst
@@ -199,17 +199,20 @@ parseIfThenElse = do
     ])
 
 parseTblRef :: Parser SourceAst
-parseTblRef = withSource $ inj . TableRef . Ref <$> (hashSign *> identifier)
+parseTblRef = withSource $ do
+  ref <- TableRef . Ref <$> (hashSign *> identifier)
+  pure $ inj (ref :: RefTextF SourceAst)
 
 parseColRef :: Parser SourceAst
-parseColRef = map (hoistCofree inj) $
-  withSource $ ColumnRef . Ref <$> (dollarSign *> identifier)
+parseColRef = withSource $ do
+  ref <- ColumnRef . Ref <$> (dollarSign *> identifier)
+  pure $ inj (ref :: RefTextF SourceAst)
 
 parseColOfTblRef :: Parser SourceAst
-parseColOfTblRef = map (hoistCofree inj) $ withSource $ do
+parseColOfTblRef = withSource $ do
   tbl <- hashSign *> identifier
   col <- dot *> identifier
-  pure $ ColumnOfTableRef (Ref tbl) (Ref col)
+  pure $ inj (ColumnOfTableRef (Ref tbl) (Ref col) :: RefTextF SourceAst)
 
 --------------------------------------------------------------------------------
 

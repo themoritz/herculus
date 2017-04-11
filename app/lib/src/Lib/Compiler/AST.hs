@@ -24,21 +24,38 @@ import           Lib.Model.Column
 import           Lib.Model.Table
 import           Lib.Types
 
-type AstF = DeclarationF :+: ExprF :+: BinderF :+: TypeF
+type AstF =
+  DeclarationF :+: ExprF :+: BinderF :+: TypeF :+: RefTextF
 
 instance Show a => Show (AstF a) where
-  show = ast show show show show
+  show = ast show show show show show
 
 ast
   :: (DeclarationF a -> b)
   -> (ExprF a -> b)
   -> (BinderF a -> b)
   -> (TypeF a -> b)
+  -> (RefTextF a -> b)
   -> (AstF a -> b)
-ast d e b t = coproduct d $ coproduct e $ coproduct b t
+ast d e b t r = coproduct d $ coproduct e $ coproduct b $ coproduct t r
 
 type Ast = Fix AstF
 type SourceAst = WithSpan AstF
+
+--------------------------------------------------------------------------------
+
+type IntermedF = ExprF :+: BinderF :+: TypeF :+: ClassF :+: RefIdF
+type Intermed = Fix IntermedF
+
+type CompiledF = ExprF :+: BinderF :+: RefIdF
+type Compiled = Fix CompiledF
+
+compiled
+  :: (ExprF a -> b)
+  -> (BinderF a -> b)
+  -> (RefIdF a -> b)
+  -> (CompiledF a -> b)
+compiled e b r = coproduct e $ coproduct b r
 
 --------------------------------------------------------------------------------
 
@@ -66,16 +83,34 @@ data ExprF a
   -- | Scrutinee, list of alternatives (binder, expression)
   | Case a [(a, a)]
   | Let [(Text, a)] a
-  | Accessor a (Ref Column)
-  | TableRef (Ref Table)
-  | ColumnRef (Ref Column)
-  | ColumnOfTableRef (Ref Table) (Ref Column)
+  | Accessor a Text
   deriving (Functor, Show)
 
 type Expr = Fix ExprF
 type SourceExpr = WithSpan ExprF
 
 type ExprBinderF = ExprF :+: BinderF
+
+literal :: ExprF :<: f => LiteralF (Fix f) -> Fix f
+literal = Fix . inj . Literal
+
+abs :: ExprF :<: f => Fix f -> Fix f -> Fix f
+abs b body = Fix (inj $ Abs b body)
+
+app :: ExprF :<: f => Fix f -> Fix f -> Fix f
+app f arg = Fix (inj (App f arg))
+
+var :: ExprF :<: f => Text -> Fix f
+var = Fix . inj . Var
+
+constructor :: ExprF :<: f => Text -> Fix f
+constructor = Fix . inj . Var
+
+case' :: ExprF :<: f => Fix f -> [(Fix f, Fix f)] -> Fix f
+case' scrut alts = Fix (inj (Case scrut alts))
+
+let' :: ExprF :<: f => [(Text, Fix f)] -> Fix f -> Fix f
+let' defs body = Fix (inj (Let defs body))
 
 spanAbs
   :: ExprF :<: f
@@ -85,7 +120,7 @@ spanAbs b@(bspan :< _) body@(bodyspan :< _) =
 
 spanAccessor
   :: ExprF :<: f
-  => WithSpan f -> (Span, Ref Column) -> WithSpan f
+  => WithSpan f -> (Span, Text) -> WithSpan f
 spanAccessor e@(espan :< _) (span, ref) =
   spanUnion espan span :< inj (Accessor e ref)
 
@@ -112,9 +147,30 @@ type SourceBinder = WithSpan BinderF
 
 --------------------------------------------------------------------------------
 
+data ClassF a
+  = Constrained [Constraint a] a
+  | TypeClassDict (Constraint a)
+  deriving (Eq, Ord, Show, Functor)
+
+typeClassDict :: ClassF :<: f => Constraint (Fix f) -> Fix f
+typeClassDict = Fix . inj . TypeClassDict
+
+--------------------------------------------------------------------------------
+
 data LiteralF a
   = NumberLit Double
   | IntegerLit Integer
   | StringLit Text
   | RecordLit [(Text, a)]
   deriving (Eq, Ord, Show, Functor)
+
+--------------------------------------------------------------------------------
+
+data RefF t c a
+  = TableRef t
+  | ColumnRef c
+  | ColumnOfTableRef t c
+  deriving (Eq, Ord, Show, Functor)
+
+type RefTextF = RefF (Ref Table) (Ref Column)
+type RefIdF = RefF (Id Table) (Id Column)

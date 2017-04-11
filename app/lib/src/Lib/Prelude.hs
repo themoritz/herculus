@@ -13,6 +13,7 @@ module Lib.Prelude
   , coproduct
   , type (~>)
   , (:<:)(..)
+  , injFix
   , unsafePrj
   --
   , cataM
@@ -62,6 +63,9 @@ instance {-# OVERLAPPABLE #-} h :<: g => h :<: (f :+: g) where
 instance {-# OVERLAPS #-} f :<: f where
   inj = id
   prj = Just . id
+
+injFix :: (Functor f, f :<: g) => Fix f -> Fix g
+injFix = Fix . inj . fmap injFix . unfix
 
 unsafePrj :: f :<: g => g a -> f a
 unsafePrj = fromJust . prj
