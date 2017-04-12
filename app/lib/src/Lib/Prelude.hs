@@ -3,6 +3,9 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE TupleSections      #-}
+{-# LANGUAGE DeriveFunctor      #-}
+{-# LANGUAGE DeriveTraversable      #-}
 -- |
 
 module Lib.Prelude
@@ -15,8 +18,10 @@ module Lib.Prelude
   , (:<:)(..)
   , injFix
   , unsafePrj
+  , unsafePrjFix
   --
   , cataM
+  , paraM
   --
   , mapLeft
   , hoistError
@@ -34,15 +39,13 @@ import           Data.Maybe (fromJust)
 data (f :+: g) a
   = InjL (f a)
   | InjR (g a)
+  deriving (Functor, Foldable, Traversable)
 
 infixr 5 :+:
 
 coproduct :: (f a -> b) -> (g a -> b) -> (f :+: g) a -> b
 coproduct fun _ (InjL f) = fun f
 coproduct _ fun (InjR g) = fun g
-
-instance (Functor f, Functor g) => Functor (f :+: g) where
-  fmap f = coproduct (InjL . fmap f) (InjR . fmap f)
 
 type f ~> g = forall a. f a -> g a
 
@@ -70,13 +73,22 @@ injFix = Fix . inj . fmap injFix . unfix
 unsafePrj :: f :<: g => g a -> f a
 unsafePrj = fromJust . prj
 
+unsafePrjFix :: (Functor g, f :<: g) => Fix g -> Fix f
+unsafePrjFix = Fix . unsafePrj . fmap unsafePrjFix . unfix
+
 --------------------------------------------------------------------------------
 
 cataM
   :: (Recursive t, Monad m, Traversable (Base t))
   => (Base t a -> m a) -> t -> m a
-cataM f = go where
-  go t = f =<< traverse go (project t)
+cataM alg = go where
+  go t = alg =<< traverse go (project t)
+
+paraM
+  :: (Recursive t, Monad m, Traversable (Base t))
+  => (Base t (t, a) -> m a) -> t -> m a
+paraM alg = go where
+  go t = alg =<< traverse (fmap (t,) . go) (project t)
 
 --------------------------------------------------------------------------------
 

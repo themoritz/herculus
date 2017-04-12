@@ -11,6 +11,9 @@ import           Lib.Compiler.Core
 
 type TermEnv = Map Text Result
 
+loadModule :: Map Text Expr -> TermEnv
+loadModule = map (flip RContinuation Map.empty)
+
 data Value
   = VInt Integer
   | VNumber Double

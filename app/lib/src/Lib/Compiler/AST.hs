@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveFunctor         #-}
+{-# LANGUAGE DeriveTraversable         #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE TypeFamilies          #-}
@@ -24,6 +25,14 @@ import           Lib.Model.Column
 import           Lib.Model.Table
 import           Lib.Types
 
+-- List of declarations
+type Module = [SourceAst]
+
+-- List of declarations, expression
+type Formula = ([SourceAst], SourceAst)
+
+--------------------------------------------------------------------------------
+
 type AstF =
   DeclarationF :+: ExprF :+: BinderF :+: TypeF :+: RefTextF
 
@@ -46,6 +55,15 @@ type SourceAst = WithSpan AstF
 
 type IntermedF = ExprF :+: BinderF :+: TypeF :+: ClassF :+: RefIdF
 type Intermed = Fix IntermedF
+
+intermed
+  :: (ExprF a -> b)
+  -> (BinderF a -> b)
+  -> (TypeF a -> b)
+  -> (ClassF a -> b)
+  -> (RefIdF a -> b)
+  -> (IntermedF a -> b)
+intermed e b t c r = coproduct e $ coproduct b $ coproduct t $ coproduct c r
 
 type CompiledF = ExprF :+: BinderF :+: RefIdF
 type Compiled = Fix CompiledF
@@ -84,7 +102,7 @@ data ExprF a
   | Case a [(a, a)]
   | Let [(Text, a)] a
   | Accessor a Text
-  deriving (Functor, Show)
+  deriving (Functor, Foldable, Traversable, Show)
 
 type Expr = Fix ExprF
 type SourceExpr = WithSpan ExprF
@@ -140,20 +158,23 @@ spanVar (span, v) = span :< inj (Var v)
 data BinderF a
   = VarBinder Text
   | ConstructorBinder Text [a]
-  deriving (Eq, Ord, Show, Functor)
+  deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 type Binder = Fix BinderF
 type SourceBinder = WithSpan BinderF
+
+varBinder :: (BinderF :<: f) => Text -> Fix f
+varBinder = Fix . inj . VarBinder
 
 --------------------------------------------------------------------------------
 
 data ClassF a
   = Constrained [Constraint a] a
-  | TypeClassDict (Constraint a)
-  deriving (Eq, Ord, Show, Functor)
+  | TypeClassDict Span (Constraint a)
+  deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
-typeClassDict :: ClassF :<: f => Constraint (Fix f) -> Fix f
-typeClassDict = Fix . inj . TypeClassDict
+typeClassDict :: ClassF :<: f => Span -> Constraint (Fix f) -> Fix f
+typeClassDict span c = Fix $ inj $ TypeClassDict span c
 
 --------------------------------------------------------------------------------
 
@@ -162,7 +183,7 @@ data LiteralF a
   | IntegerLit Integer
   | StringLit Text
   | RecordLit [(Text, a)]
-  deriving (Eq, Ord, Show, Functor)
+  deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 --------------------------------------------------------------------------------
 
@@ -170,7 +191,7 @@ data RefF t c a
   = TableRef t
   | ColumnRef c
   | ColumnOfTableRef t c
-  deriving (Eq, Ord, Show, Functor)
+  deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 type RefTextF = RefF (Ref Table) (Ref Column)
 type RefIdF = RefF (Id Table) (Id Column)

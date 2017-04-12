@@ -117,12 +117,12 @@ toOrdType (Fix t) = case t of
 -- Type variables and predicates
 data PolyType t
   = ForAll [Text] [Constraint t] t
-  deriving (Functor, Show)
+  deriving (Functor, Foldable, Traversable, Show)
 
 -- | Class and type, which should be member of the class
 data Constraint t
   = IsIn Text t
-  deriving (Eq, Ord, Functor, Show)
+  deriving (Eq, Ord, Functor, Foldable, Traversable, Show)
 
 --------------------------------------------------------------------------------
 
