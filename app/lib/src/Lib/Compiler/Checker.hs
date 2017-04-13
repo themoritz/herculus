@@ -68,14 +68,14 @@ data CheckF a
   | UnifyKinds Span Kind Kind a
   | UnifyTypes Span Type Type a
   | LookupKind Text (Maybe Kind -> a)
-  | LookupType Text (Maybe (PolyType Type) -> a)
-  | LookupInstanceDict (Constraint Type) (Maybe Text -> a)
+  | LookupType Text (Maybe PolyType -> a)
+  | LookupInstanceDict Constraint (Maybe Text -> a)
   | ApplyCurrentKindSubst Kind (Kind -> a)
   | ApplyCurrentTypeSubst Type (Type -> a)
   | GetFreeContextVars (Set Text -> a)
   | forall b. InExtendedKindEnv (Map Text Kind) (Check b) (b -> a)
-  | forall b. InExtendedTypeEnv (Map Text (PolyType Type)) (Check b) (b -> a)
-  | forall b. InExtendedInstanceEnv (Map (Constraint Type) Text) (Check b) (b -> a)
+  | forall b. InExtendedTypeEnv (Map Text PolyType) (Check b) (b -> a)
+  | forall b. InExtendedInstanceEnv (Map Constraint Text) (Check b) (b -> a)
 
 deriving instance Functor CheckF
 
@@ -99,10 +99,10 @@ unifyTypes span t1 t2 = liftF $ UnifyTypes span t1 t2 ()
 lookupKind :: Text -> Check (Maybe Kind)
 lookupKind t = liftF $ LookupKind t id
 
-lookupType :: Text -> Check (Maybe (PolyType Type))
+lookupType :: Text -> Check (Maybe PolyType)
 lookupType t = liftF $ LookupType t id
 
-lookupInstanceDict :: Constraint Type -> Check (Maybe Text)
+lookupInstanceDict :: Constraint -> Check (Maybe Text)
 lookupInstanceDict c = liftF $ LookupInstanceDict c id
 
 applyCurrentKindSubst :: Kind -> Check Kind
@@ -117,20 +117,21 @@ getFreeContextVars = liftF $ GetFreeContextVars id
 inExtendedKindEnv :: Map Text Kind -> Check a -> Check a
 inExtendedKindEnv env m = liftF $ InExtendedKindEnv env m id
 
-inExtendedTypeEnv :: Map Text (PolyType Type) -> Check a -> Check a
+inExtendedTypeEnv :: Map Text PolyType -> Check a -> Check a
 inExtendedTypeEnv env m = liftF $ InExtendedTypeEnv env m id
 
-inExtendedInstanceEnv :: Map (Constraint Type) Text -> Check a -> Check a
+inExtendedInstanceEnv :: Map Constraint Text -> Check a -> Check a
 inExtendedInstanceEnv env m = liftF $ InExtendedInstanceEnv env m id
 
 data CheckEnv = CheckEnv
-  { _checkEnvTypes         :: Map Text (PolyType Type)
+  { _checkEnvTypes         :: Map Text PolyType
   , _checkEnvKinds         :: Map Text Kind
-  , _checkEnvInstanceDicts :: Map (Constraint Type) Text
+  , _checkEnvInstanceDicts :: Map Constraint Text
+  , _checkEnvClasses       :: Map Text Class
   }
 
 primCheckEnv :: CheckEnv
-primCheckEnv = CheckEnv primTypeEnv primKindEnv Map.empty
+primCheckEnv = CheckEnv primTypeEnv primKindEnv Map.empty Map.empty
 
 makeLenses ''CheckEnv
 
@@ -374,8 +375,8 @@ inferLiteral lit = case lit of
   StringLit s  -> pure (literal $ StringLit s, tyString)
 
 inferDefinitionGroup
-  :: [(Text, Maybe (PolyType Type), SourceAst)]
-  -> Check [(Text, Intermed, PolyType Type)]
+  :: [(Text, Maybe PolyType, SourceAst)]
+  -> Check [(Text, Intermed, PolyType)]
 inferDefinitionGroup bindings = do
   dict <- for bindings $ \(name, mPoly, _) -> do
     p <- case mPoly of
@@ -391,7 +392,7 @@ inferDefinitionGroup bindings = do
       (cs, poly) <- generalize [] t
       pure (name, e', poly)
 
-inferBinder :: Type -> SourceBinder -> Check (Map Text (PolyType Type))
+inferBinder :: Type -> SourceBinder -> Check (Map Text PolyType)
 inferBinder expected (span :< b) = case b of
   VarBinder x -> pure $ Map.singleton x (ForAll [] [] expected)
   ConstructorBinder name binders -> lookupType name >>= \case
@@ -418,9 +419,9 @@ inferBinder expected (span :< b) = case b of
 -- 3. Quantify over (ftv retained + ftv t - ftv context)
 -- 4. Also put retained constraints into the polytype
 generalize
- :: [Constraint Type]
+ :: [Constraint]
  -> Type
- -> Check ([Constraint Type], PolyType Type)
+ -> Check ([Constraint], PolyType)
 generalize constraints (applyCurrentTypeSubst -> mt) = do
   t <- mt
   contextVars <- getFreeContextVars
@@ -433,19 +434,19 @@ generalize constraints (applyCurrentTypeSubst -> mt) = do
   pure (deferred, ForAll (Set.toList freeVars) retained t)
   where
   -- | Removes any constraint that is entailed by the others
-  reduce :: [Constraint Type] -> Check [Constraint Type]
+  reduce :: [Constraint] -> Check [Constraint]
   reduce = go []
     where
       go ds [] = pure ds
       go ds (c:cs) = entailed c (ds <> cs) >>= \case
         True -> go ds cs
         False -> go (c:ds) cs
-  entailed :: Constraint Type -> [Constraint Type] -> Check Bool
+  entailed :: Constraint -> [Constraint] -> Check Bool
   entailed c cs = lookupInstanceDict c >>= \case
     Just _  -> pure True -- Entailed by an instance that's in scope
     Nothing -> pure $ elem c cs
 
-instantiate :: PolyType Type -> Check ([Constraint Type], Type)
+instantiate :: PolyType -> Check ([Constraint], Type)
 instantiate (ForAll as cs t) = do
   pool <- freshTypeDict as
   let
@@ -460,7 +461,7 @@ instantiate (ForAll as cs t) = do
 checkModule
   :: Module
   -> Check ( Map Text Kind
-           , Map Text (PolyType Type)
+           , Map Text PolyType
            , Map Text Core.Expr )
 checkModule decls = do
   -- Check all data declarations and extract the resulting kinds and polytypes
@@ -490,7 +491,7 @@ checkModule decls = do
     pure (moduleKinds, moduleTypes, moduleExprs)
 
   where
-  checkType :: Span -> PolyType SourceType -> Check ()
+  checkType :: Span -> SourcePolyType-> Check ()
   checkType span (ForAll as cs t) = do
     -- TODO: Check constraints
     quantifierDict <- freshKindDict as
@@ -498,7 +499,7 @@ checkModule decls = do
       inferred <- inferKind t
       unifyKinds span inferred kindType
 
-  checkData :: Check (Map Text Kind, Map Text (PolyType Type))
+  checkData :: Check (Map Text Kind, Map Text PolyType)
   checkData = do
     let dataDecls = getDataDecls decls
     -- TODO: Check for duplicate definitions
@@ -540,7 +541,7 @@ checkModule decls = do
 
   getTypeDecls
     :: [SourceAst]
-    -> [(Span, Text, PolyType SourceType)]
+    -> [(Span, Text, SourcePolyType)]
   getTypeDecls = mapMaybe $ \(span :< (unsafePrj -> decl)) -> case decl of
     TypeDecl name poly -> Just (span, name, map (hoistCofree unsafePrj) poly)
     _                  -> Nothing
@@ -553,7 +554,7 @@ checkModule decls = do
       where binders' = map (hoistCofree unsafePrj) binders
     _                           -> Nothing
 
-checkFormula :: Formula -> Check (Core.Expr, PolyType Type)
+checkFormula :: Formula -> Check (Core.Expr, PolyType)
 checkFormula (decls, expr) = do
   (kindEnv, typeEnv, exprs) <- checkModule decls
   inExtendedKindEnv kindEnv $ inExtendedTypeEnv typeEnv $ do

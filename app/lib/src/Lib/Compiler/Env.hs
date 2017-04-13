@@ -62,7 +62,7 @@ pattern Arrow :: Type -> Type -> Type
 pattern Arrow a b =
   Fix (TypeApp (Fix (TypeApp (Fix (TypeConstructor "->")) a)) b)
 
-primTypeEnv :: Map Text (PolyType Type)
+primTypeEnv :: Map Text PolyType
 primTypeEnv = Map.fromList
   [ ( "+"
     , ForAll [] [] $ tyNumber --> tyNumber --> tyNumber

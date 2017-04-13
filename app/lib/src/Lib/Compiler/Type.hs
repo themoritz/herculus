@@ -115,14 +115,25 @@ toOrdType (Fix t) = case t of
 --------------------------------------------------------------------------------
 
 -- Type variables and predicates
-data PolyType t
-  = ForAll [Text] [Constraint t] t
+data PolyTypeF t
+  = ForAll [Text] [ConstraintF t] t
   deriving (Functor, Foldable, Traversable, Show)
 
+type PolyType = PolyTypeF Type
+type SourcePolyType = PolyTypeF SourceType
+
 -- | Class and type, which should be member of the class
-data Constraint t
+data ConstraintF t
   = IsIn Text t
   deriving (Eq, Ord, Functor, Foldable, Traversable, Show)
+
+type Constraint = ConstraintF Type
+type SourceConstraint = ConstraintF SourceType
+
+type Instance = ([Constraint], Type)
+
+-- Superclasses, signature of member functions, instances
+type Class = ([Text], Map Text PolyType, [Instance])
 
 --------------------------------------------------------------------------------
 
@@ -139,11 +150,11 @@ instance HasFreeTypeVars Type where
 instance HasFreeTypeVars a => HasFreeTypeVars [a] where
   getFtvs = foldr Set.union Set.empty . map getFtvs
 
-instance HasFreeTypeVars t => HasFreeTypeVars (PolyType t) where
+instance HasFreeTypeVars t => HasFreeTypeVars (PolyTypeF t) where
   getFtvs (ForAll as cs t) =
     (getFtvs t `Set.union` getFtvs cs) `Set.difference` Set.fromList as
 
-instance HasFreeTypeVars t => HasFreeTypeVars (Constraint t) where
+instance HasFreeTypeVars t => HasFreeTypeVars (ConstraintF t) where
   getFtvs (IsIn _ t) = getFtvs t
 
 instance HasFreeTypeVars v => HasFreeTypeVars (Map k v) where

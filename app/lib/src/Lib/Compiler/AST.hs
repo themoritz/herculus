@@ -20,6 +20,7 @@ import           Data.Functor.Foldable
 
 import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
+import           Lib.Compiler.Parser.State
 import           Lib.Compiler.Type
 import           Lib.Model.Column
 import           Lib.Model.Table
@@ -80,10 +81,17 @@ compiled e b r = coproduct e $ coproduct b r
 data DeclarationF a
   -- | Name, type arguments, constructors (name, arguments)
   = DataDecl Text [Text] [(Text, [a])]
-  -- | Name, type
-  | TypeDecl Text (PolyType a)
-  -- | Name, binder, expredssion
+  -- | (Classname, param), superclasses (name, param), method signatures
+  -- (type declaration)
+  | ClassDecl (Text, Text) [(Text, Text)] [a]
+  -- | (Classname, type), constraints, methods (value declaration)
+  | InstanceDecl (Text, a) [ConstraintF a] [a]
+  -- | Type signature: Name, type
+  | TypeDecl Text (PolyTypeF a)
+  -- | Name, binders, expression
   | ValueDecl Text [a] a
+  -- | Variable, alias, fixity
+  | FixityDecl Text Text Fixity
   deriving (Functor, Show)
 
 type Declaration = Fix DeclarationF
@@ -169,11 +177,11 @@ varBinder = Fix . inj . VarBinder
 --------------------------------------------------------------------------------
 
 data ClassF a
-  = Constrained [Constraint a] a
-  | TypeClassDict Span (Constraint a)
+  = Constrained [ConstraintF a] a
+  | TypeClassDict Span (ConstraintF a)
   deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
-typeClassDict :: ClassF :<: f => Span -> Constraint (Fix f) -> Fix f
+typeClassDict :: ClassF :<: f => Span -> ConstraintF (Fix f) -> Fix f
 typeClassDict span c = Fix $ inj $ TypeClassDict span c
 
 --------------------------------------------------------------------------------

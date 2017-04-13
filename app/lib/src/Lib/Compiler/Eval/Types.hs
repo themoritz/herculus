@@ -30,6 +30,7 @@ data Value
   | VNumber Double
   | VString Text
   | VData Text [Result]
+  | VRecord (Map Text Result)
 
 valueDoc :: Value -> Doc
 valueDoc = \case
@@ -37,6 +38,10 @@ valueDoc = \case
   VNumber n -> double n
   VString s -> textStrict s
   VData n rs -> textStrict n <+> (hsep (map (parens . resultDoc) rs))
+  VRecord m ->
+    semiBraces $
+    map (\(f, r) -> textStrict f <> ":" <+> resultDoc r) $
+    Map.toList m
 
 data Result
   = RValue Value

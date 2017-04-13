@@ -162,7 +162,7 @@ withParsed src p m = case parse src p of
 
 testParsePretty :: Text -> IO ()
 testParsePretty src = withParsed src parseModule $ \decls ->
-  mapM_ (putStrLn . prettyAst) (map stripAnn decls)
+  mapM_ (putStrLn . (<> "\n") . prettyAst) (map stripAnn decls)
 
 testParseSpans :: Text -> IO ()
 testParseSpans src = withParsed src parseFormula $ \decls ->
@@ -179,7 +179,7 @@ testEval src =
   withParsed prelude parseModule $ \decls ->
   withParsed src parseFormula $ \formula ->
   let
-    go :: Check (Expr, PolyType Type, TermEnv)
+    go :: Check (Expr, PolyType, TermEnv)
     go = do
       (kinds, polys, env) <- checkModule decls
       inExtendedKindEnv kinds $ inExtendedTypeEnv polys $ do

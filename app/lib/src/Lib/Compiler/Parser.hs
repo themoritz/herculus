@@ -49,8 +49,11 @@ parseFormula = (,)
 parseDeclaration :: Parser SourceAst
 parseDeclaration = P.choice
   [ P.try parseDataDecl
+  , P.try parseClassDecl
+  , P.try parseInstanceDecl
   , P.try parseTypeDecl
   , P.try parseValueDecl
+  , P.try parseFixityDecl
   ]
   P.<?> "declaration"
 
@@ -68,18 +71,56 @@ parseDataDecl = withSource $ do
     P.sepBy1 constructor pipe
   pure $ inj (DataDecl name tyArgs constructors)
 
+parseClassDecl :: Parser SourceAst
+parseClassDecl = withSource $ do
+  reserved "class"
+  supers <- many (P.try parseSuper)
+  cls <- tyname
+  param <- identifier
+  reserved "where"
+  indented
+  decls <- mark $ many (same *> parseTypeDecl)
+  pure $ inj $ ClassDecl (cls, param) supers decls
+  where
+  parseSuper = (,) <$> (indented *> tyname) <*> identifier <* rfatArrow
+
+parseInstanceDecl :: Parser SourceAst
+parseInstanceDecl = withSource $ do
+  reserved "instance"
+  cs <- many (P.try parseConstraint)
+  cls <- tyname
+  ty <- parseType
+  reserved "where"
+  decls <- mark $ many (same *> parseValueDecl)
+  pure $ inj $ InstanceDecl (cls, hoistCofree inj ty)
+                            (map (map (hoistCofree inj)) cs)
+                            decls
+
 parseTypeDecl :: Parser SourceAst
 parseTypeDecl = withSource $ inj <$> (TypeDecl
   <$> (identifier <* doubleColon)
   <*> (map (hoistCofree inj) <$> parsePolyType)
-                                         )
+                                     )
 
 parseValueDecl :: Parser SourceAst
 parseValueDecl = withSource $ inj <$> (ValueDecl
   <$> identifier
   <*> (many (hoistCofree inj <$> parseBinder) <* equals)
   <*> parseExpr
-                                          )
+                                      )
+
+parseFixityDecl :: Parser SourceAst
+parseFixityDecl = withSource $ do
+  assoc <- P.choice
+    [ P.try (reserved "infixl") $> AssocL
+    , P.try (reserved "infixr") $> AssocR
+    , P.try (reserved "infix") $> AssocN
+    ]
+  fixity <- integerLit
+  x <- identifier
+  reserved "as"
+  op <- anySymbol
+  pure $ inj $ FixityDecl x op (Infix assoc $ fromIntegral fixity)
 
 --------------------------------------------------------------------------------
 
@@ -264,7 +305,7 @@ parseRecordType = parens $ do
       pure t
     pure $ foldr (\(ref, ty) rest -> spanRecordCons ref ty rest) (endSpan :< end) rows
 
-parsePolyType :: Parser (PolyType SourceType)
+parsePolyType :: Parser SourcePolyType
 parsePolyType = do
   (vars, preds) <- P.option ([], []) $ P.try $ do
     vs <- reserved "forall" *> some (indented *> identifier) <* indented <* dot
@@ -273,6 +314,6 @@ parsePolyType = do
   ty <- parseType
   pure $ ForAll vars preds ty
 
-parseConstraint :: Parser (Constraint SourceType)
+parseConstraint :: Parser SourceConstraint
 parseConstraint =
   (IsIn <$> (indented *> tyname) <*> parseType) <* indented <* rfatArrow
