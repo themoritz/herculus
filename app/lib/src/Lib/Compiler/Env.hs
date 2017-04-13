@@ -7,8 +7,9 @@ module Lib.Compiler.Env where
 import           Lib.Prelude
 
 import           Data.Functor.Foldable
-import qualified Data.Map              as Map
+import qualified Data.Map                as Map
 
+import           Lib.Compiler.Eval.Types
 import           Lib.Compiler.Type
 
 kindUnary :: Kind
@@ -47,15 +48,15 @@ tyString = typeConstructor "String"
 tyNumber :: Type
 tyNumber = typeConstructor "Number"
 
-tyInt :: Type
-tyInt = typeConstructor "Int"
+tyInteger :: Type
+tyInteger = typeConstructor "Integer"
 
 tyFunction :: Type
 tyFunction = typeConstructor "->"
 
-infixr 2 ->:
-(->:) :: Type -> Type -> Type
-(->:) a b = typeApp (typeApp tyFunction a) b
+infixr 2 -->
+(-->) :: Type -> Type -> Type
+(-->) a b = typeApp (typeApp tyFunction a) b
 
 pattern Arrow :: Type -> Type -> Type
 pattern Arrow a b =
@@ -64,9 +65,17 @@ pattern Arrow a b =
 primTypeEnv :: Map Text (PolyType Type)
 primTypeEnv = Map.fromList
   [ ( "+"
-    , ForAll [] [] $ tyNumber ->: tyNumber ->: tyNumber
+    , ForAll [] [] $ tyNumber --> tyNumber --> tyNumber
     )
   ]
 
 --------------------------------------------------------------------------------
 
+primTermEnv :: TermEnv
+primTermEnv = Map.fromList
+  [ ( "+"
+    , RPrimFun $ \(RValue (VNumber a)) -> pure $
+      RPrimFun $ \(RValue (VNumber b)) -> pure $
+      RValue $ VNumber $ a + b
+    )
+  ]

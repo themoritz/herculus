@@ -15,7 +15,10 @@ library
                      , Lib.Compiler.AST.Common
                      , Lib.Compiler.AST.Position
                      , Lib.Compiler.Checker
+                     , Lib.Compiler.Core
                      , Lib.Compiler.Env
+                     , Lib.Compiler.Eval
+                     , Lib.Compiler.Eval.Types
                      , Lib.Compiler.Error
                      , Lib.Compiler.Type
                      , Lib.Compiler.Types

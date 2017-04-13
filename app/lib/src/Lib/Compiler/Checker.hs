@@ -331,12 +331,12 @@ inferExpr (span :< (unsafePrj -> expr)) = case expr of
     argType <- freshType
     binderDict <- inferBinder argType binder
     (e', resultType) <- inExtendedTypeEnv binderDict $ inferExpr e
-    pure (abs (injFix $ stripAnn binder) e', argType ->: resultType)
+    pure (abs (injFix $ stripAnn binder) e', argType --> resultType)
   App f arg -> do
     (fExpr, fType) <- inferExpr f
     (argExpr, argType) <- inferExpr arg
     resultType <- freshType
-    unifyTypes span fType (argType ->: resultType)
+    unifyTypes span fType (argType --> resultType)
     pure (app fExpr argExpr, resultType)
   Var x -> lookupType x >>= \case
     Nothing -> compileError span $ "Variable not in scope: " <> x
@@ -370,8 +370,8 @@ inferExpr (span :< (unsafePrj -> expr)) = case expr of
 inferLiteral :: LiteralF SourceAst -> Check (Intermed, Type)
 inferLiteral lit = case lit of
   NumberLit n  -> pure (literal $ NumberLit n, tyNumber)
-  IntegerLit i -> pure (literal $ IntegerLit i, tyNumber)
-  StringLit s  -> pure (literal $ StringLit s, tyNumber)
+  IntegerLit i -> pure (literal $ IntegerLit i, tyInteger)
+  StringLit s  -> pure (literal $ StringLit s, tyString)
 
 inferDefinitionGroup
   :: [(Text, Maybe (PolyType Type), SourceAst)]
@@ -523,7 +523,7 @@ checkModule decls = do
         (_, name, args, constrs) <- dataDecls
         let result = foldl typeApp (typeConstructor name) (map typeVar args)
         (cname, cargs) <- constrs
-        let ty = foldr (->:) result (stripAnn <$> cargs)
+        let ty = foldr (-->) result (stripAnn <$> cargs)
         pure $ (cname, ty)
     polyEnv <- for typeEnv $ \(name, t) -> do
       (_, poly) <- generalize [] t
@@ -553,13 +553,14 @@ checkModule decls = do
       where binders' = map (hoistCofree unsafePrj) binders
     _                           -> Nothing
 
-checkFormula :: Formula -> Check (Core.Expr, Type)
+checkFormula :: Formula -> Check (Core.Expr, PolyType Type)
 checkFormula (decls, expr) = do
   (kindEnv, typeEnv, exprs) <- checkModule decls
   inExtendedKindEnv kindEnv $ inExtendedTypeEnv typeEnv $ do
     (i, t) <- inferExpr expr
     c <- compileIntermed i
-    pure (Core.Let (Map.toList exprs) c, t)
+    (_, p) <- generalize [] t
+    pure (Core.Let (Map.toList exprs) c, p)
 
 --------------------------------------------------------------------------------
 

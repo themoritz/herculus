@@ -5,6 +5,7 @@ module Lib.Compiler.Parser
   , parseExpr
   , parseModule
   , parseFormula
+  , Parser
   ) where
 
 import           Lib.Prelude
@@ -27,18 +28,18 @@ import           Lib.Types
 
 --------------------------------------------------------------------------------
 
-parse :: Text -> Either Error [SourceAst]
-parse e =
+parse :: Text -> Parser a -> Either Error a
+parse e p =
   flip evalState initialParseState $
   mapLeft convertParseError <$>
-  P.runParserT (scn *> parseModule <* P.eof) "" e
+  P.runParserT (scn *> p <* P.eof) "" e
 
 --------------------------------------------------------------------------------
 
-parseModule :: Parser [SourceAst]
+parseModule :: Parser Module
 parseModule = many (same *> parseDeclaration)
 
-parseFormula :: Parser ([SourceAst], SourceAst)
+parseFormula :: Parser Formula
 parseFormula = (,)
   <$> many (same *> parseDeclaration)
   <*> (same *> parseExpr)
@@ -152,7 +153,7 @@ parseLet = withSource $ do
     equals
     e <- parseExpr
     pure (name, args, e)
-  indented
+  same <|> indented
   reserved "in"
   body <- parseExpr
   let

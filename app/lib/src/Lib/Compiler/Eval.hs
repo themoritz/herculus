@@ -5,37 +5,21 @@ module Lib.Compiler.Eval where
 
 import           Lib.Prelude
 
-import qualified Data.Map          as Map
+import qualified Data.Map                as Map
+import           Data.Text               (unlines)
 
 import           Lib.Compiler.Core
-
-type TermEnv = Map Text Result
-
-loadModule :: Map Text Expr -> TermEnv
-loadModule = map (flip RContinuation Map.empty)
-
-data Value
-  = VInt Integer
-  | VNumber Double
-  | VString Text
-  | VData Text [Result]
-  deriving (Show)
-
-data Result
-  = RValue Value
-  | RClosure Binder Expr TermEnv
-  | RContinuation Expr TermEnv
-  deriving (Show)
-
-type Eval = Except Text
+import           Lib.Compiler.Eval.Types
 
 eval :: TermEnv -> Expr -> Eval Result
 eval env = \case
   Literal lit -> evalLit lit
   Var v -> case Map.lookup v env of
-    Nothing -> throwError "Eval `Var`: not found"
+    Nothing -> throwError $ unlines
+      [ "Variable not found: " <> v
+      , termEnvPretty env ]
     Just r -> case r of
-      RContinuation expr cl -> eval cl expr
+      RContinuation expr cl -> eval (env `Map.union` cl) expr
       _                     -> pure r
   Constructor c -> pure $ RValue $ VData c []
   Abs b expr -> pure $ RClosure b expr env
@@ -45,6 +29,7 @@ eval env = \case
       RClosure b body cl -> case matchValue argRes b of
         Just env' -> eval (env' `Map.union` cl) body
         Nothing   -> throwError "Eval `App`: pattern match failure"
+      RPrimFun primF -> primF argRes
       RValue (VData name args) ->
         pure $ RValue $ VData name (args <> [argRes])
       _ -> throwError "Eval `App`: expected closure"
@@ -71,7 +56,7 @@ matchValue res = \case
     Just $ Map.singleton x res
   ConstructorBinder name args
     | RValue (VData label results) <- res
-    , label == name -> Map.unions <$> zipWithM matchValue results args
+    , label == name -> map Map.unions $ zipWithM matchValue results args
     | otherwise -> Nothing
 
 evalLit :: Literal -> Eval Result

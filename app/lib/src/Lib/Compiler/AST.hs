@@ -122,7 +122,7 @@ var :: ExprF :<: f => Text -> Fix f
 var = Fix . inj . Var
 
 constructor :: ExprF :<: f => Text -> Fix f
-constructor = Fix . inj . Var
+constructor = Fix . inj . Constructor
 
 case' :: ExprF :<: f => Fix f -> [(Fix f, Fix f)] -> Fix f
 case' scrut alts = Fix (inj (Case scrut alts))
