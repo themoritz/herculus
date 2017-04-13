@@ -79,28 +79,80 @@ import           Lib.Compiler.Pretty
 
 prelude :: Text
 prelude = [text|
-data Bool
+data Unit = Unit
+
+data Void
+
+data Boolean
   = True
   | False
+
+conj :: Boolean -> Boolean -> Boolean
+conj a b = if a then b else False
+
+disj :: Boolean -> Boolean -> Boolean
+disj a b = if a then True else b
+
+not :: Boolean -> Boolean
+not a = case a of
+  True -> False
+  False -> True
 
 data List a
   = Nil
   | Cons a (List a)
 
-id :: forall a. a -> a
-id x = x
+sum :: List Number -> Number
+sum xs = case xs of
+  Nil -> 0.0
+  Cons h tl -> h + sum tl
 
-and a b = if a then b else False
+length :: forall a. List a -> Number
+length xs = case xs of
+  Nil -> 0.0
+  Cons h tl -> 1.0 + length tl
 
+map :: forall a b. (a -> b) -> List a -> List b
 map f xs = case xs of
   Nil -> Nil
   Cons a as -> Cons (f a) (map f as)
 
+filter :: forall a. (a -> Boolean) -> List a -> List a
+filter p xs = case xs of
+  Nil -> Nil
+  Cons a as -> if p a then Cons a as else filter p as
+
+find :: forall a. (a -> Boolean) -> List a -> Maybe a
+find p xs = case xs of
+  Nil -> Nothing
+  Cons a as -> if p a then Just a else find p as
+
+const :: forall a b. a -> b -> a
+const a b = a
+
+data Maybe a
+  = Nothing
+  | Just a
+
+maybe :: forall a b. b -> (a -> b) -> Maybe a -> b
+maybe def f ma = case ma of
+  Nothing -> def
+  Just a -> f a
+
+fromMaybe :: forall a. a -> Maybe a -> a
+fromMaybe def = maybe def id
+
+data Either a b
+  = Left a
+  | Right b
+
+id :: forall a. a -> a
+id x = x
+
+foldr :: forall a b. (a -> b -> b) -> a -> List b -> b
 foldr f a xs = case xs of
   Nil -> a
   Cons x xs -> f x (foldr f a xs)
-
-und = foldr and True
 |]
 
 withParsed :: Text -> Parser a -> (a -> IO ()) -> IO ()
