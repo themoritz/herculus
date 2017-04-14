@@ -84,8 +84,8 @@ data DeclarationF a
   -- | (Classname, param), superclasses (name, param), method signatures
   -- (type declaration)
   | ClassDecl (Text, Text) [(Text, Text)] [a]
-  -- | (Classname, type), constraints, methods (value declaration)
-  | InstanceDecl (Text, a) [ConstraintF a] [a]
+  -- | Head, constraints, methods (value declaration)
+  | InstanceDecl (ConstraintF a) [ConstraintF a] [a]
   -- | Type signature: Name, type
   | TypeDecl Text (PolyTypeF a)
   -- | Name, binders, expression

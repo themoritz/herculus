@@ -87,7 +87,7 @@ declarationDoc = \case
     where
     goSupers = foldr goSuper empty supers
     goSuper (n, p) rest = textStrict n <+> textStrict p <+> textStrict "=>" <+> rest
-  InstanceDecl (cls, t) cs vals ->
+  InstanceDecl (IsIn cls t) cs vals ->
     textStrict "instance" <+> constraintsDoc cs <+>
       textStrict cls <+> t <+> textStrict "where" <$$>
     indent 2 (vsep vals)

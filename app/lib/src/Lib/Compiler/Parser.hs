@@ -93,7 +93,7 @@ parseInstanceDecl = withSource $ do
   ty <- parseType
   reserved "where"
   decls <- mark $ many (same *> parseValueDecl)
-  pure $ inj $ InstanceDecl (cls, hoistCofree inj ty)
+  pure $ inj $ InstanceDecl (IsIn cls (hoistCofree inj ty))
                             (map (map (hoistCofree inj)) cs)
                             decls
 

@@ -70,12 +70,16 @@ data CheckF a
   | LookupKind Text (Maybe Kind -> a)
   | LookupType Text (Maybe PolyType -> a)
   | LookupInstanceDict Constraint (Maybe Text -> a)
+  | LookupClass Text (Maybe Class -> a)
+  | AddClass Text Class a
+  | AddInstance Text Instance a
   | ApplyCurrentKindSubst Kind (Kind -> a)
   | ApplyCurrentTypeSubst Type (Type -> a)
   | GetFreeContextVars (Set Text -> a)
   | forall b. InExtendedKindEnv (Map Text Kind) (Check b) (b -> a)
   | forall b. InExtendedTypeEnv (Map Text PolyType) (Check b) (b -> a)
   | forall b. InExtendedInstanceEnv (Map Constraint Text) (Check b) (b -> a)
+  | forall b. Retain (Check b) (b -> a)
 
 deriving instance Functor CheckF
 
@@ -105,6 +109,15 @@ lookupType t = liftF $ LookupType t id
 lookupInstanceDict :: Constraint -> Check (Maybe Text)
 lookupInstanceDict c = liftF $ LookupInstanceDict c id
 
+lookupClass :: Text -> Check (Maybe Class)
+lookupClass n = liftF $ LookupClass n id
+
+addClass :: Text -> Class -> Check ()
+addClass n c = liftF $ AddClass n c ()
+
+addInstance :: Text -> Instance -> Check ()
+addInstance c i = liftF $ AddInstance c i ()
+
 applyCurrentKindSubst :: Kind -> Check Kind
 applyCurrentKindSubst k = liftF $ ApplyCurrentKindSubst k id
 
@@ -122,6 +135,9 @@ inExtendedTypeEnv env m = liftF $ InExtendedTypeEnv env m id
 
 inExtendedInstanceEnv :: Map Constraint Text -> Check a -> Check a
 inExtendedInstanceEnv env m = liftF $ InExtendedInstanceEnv env m id
+
+retain :: Check a -> Check a
+retain m = liftF $ Retain m id
 
 data CheckEnv = CheckEnv
   { _checkEnvTypes         :: Map Text PolyType
@@ -264,6 +280,18 @@ runCheck env =
       res <- use (checkEnv . checkEnvInstanceDicts . at c)
       reply res
 
+    LookupClass c reply -> do
+      res <- use (checkEnv . checkEnvClasses . at c)
+      reply res
+
+    AddClass n c next -> do
+      checkEnv . checkEnvClasses . at n .= Just c
+      next
+
+    AddInstance c i next -> do
+      checkEnv . checkEnvClasses . at c . _Just . _3 %= (i :)
+      next
+
     ApplyCurrentKindSubst k reply -> do
       subst <- use checkKindSubst
       reply $ applyKindSubst subst k
@@ -288,6 +316,12 @@ runCheck env =
       checkEnv . checkEnvTypes .= localEnv `Map.union` oldEnv
       b <- iterTM go m
       checkEnv . checkEnvTypes .= oldEnv
+      reply b
+
+    Retain m reply -> do
+      old <- get
+      b <- iterTM go m
+      put old
       reply b
 
 --------------------------------------------------------------------------------
@@ -426,6 +460,8 @@ inferBinder expected (span :< b) = case b of
     where go args (Arrow arg rest) = go (arg:args) rest
           go args rest             = (args, rest)
 
+--------------------------------------------------------------------------------
+
 -- | Generalize a type, reduce and retain some constraints.
 -- 1. Reduce constraints
 -- 2. Let the deferred constraints be those where all ftvs are in the context.
@@ -469,6 +505,32 @@ instantiate (ForAll as cs t) = do
       other     -> Fix other
   pure (map (map replace) cs, replace t)
 
+replaceTypeClassDicts :: Intermed -> Check Compiled
+replaceTypeClassDicts = paraM (intermed goExpr goBinder goType goClass goRef)
+  where
+  nothing
+    :: (Functor f, f :<: CompiledF)
+    => f (Intermed, Compiled) -> Check Compiled
+  nothing = pure . Fix . inj . map snd
+  goExpr = nothing
+  goBinder = nothing
+  goType _ = error "No type expected"
+  goClass = \case
+    Constrained cs (e, _) -> do
+      dicts <- for cs $ \c -> (unsafeConstraint c,) <$> freshName
+      e' <- inExtendedInstanceEnv (Map.fromList dicts) $ replaceTypeClassDicts e
+      pure $ foldr abs e' (map (varBinder . snd) dicts)
+    TypeClassDict span c -> do
+      let c'@(IsIn cls t) = unsafeConstraint c
+      lookupInstanceDict c' >>= \case
+        Just n -> pure $ var n
+        Nothing -> compileError span $
+          "Type `" <> prettyType t <> "` does not implement the `" <>
+          cls <> "` interface."
+    where
+    unsafeConstraint = map (unsafePrjFix . fst)
+  goRef = nothing
+
 --------------------------------------------------------------------------------
 
 checkModule
@@ -480,31 +542,100 @@ checkModule decls = do
   -- Check all data declarations and extract the resulting kinds and polytypes
   (kinds, dataPolys) <- checkData
   inExtendedTypeEnv dataPolys $ inExtendedKindEnv kinds $ do
+
+    -- Check all class declarations
+    for_ (getClassDecls decls) $ \(span, (cls, param), supers, sigs) -> do
+      lookupClass cls >>= \case
+        Nothing -> pure ()
+        Just _ -> compileError span $ "Class already defined"
+      supers' <- for supers $ \(super, param') -> do
+        lookupClass super >>= \case
+          Nothing ->
+            compileError span $ "Superclass `" <> super <> "` not defined."
+          Just _ -> pure ()
+        when (param' /= param) $
+          compileError span $ "Class parameter `" <> param' <> "` not defined."
+        pure super
+      paramKind <- freshKind
+      inExtendedKindEnv (Map.singleton param paramKind) $ do
+        let addConstraint (ForAll as cs t) =
+              ForAll (param:as) ((IsIn cls $ typeVar param):cs) t
+        sigs' <- for (getTypeDecls sigs) $ \(span', name, poly) -> do
+          checkType span' poly
+          pure (name, addConstraint $ map stripAnn poly)
+        addClass cls (supers', Map.fromList sigs', [])
+
+    -- Check all instance declarations
+    instances <- for (getInstanceDecls decls) $ \(span, (IsIn cls (stripAnn -> t)), cs, vals) -> do
+      lookupClass cls >>= \case
+        Nothing ->
+          compileError span $ "Instance class `" <> cls <> "` not defined."
+        Just (supers, sigs, insts) -> do
+          -- Check for overlappint instances
+          for_ insts $ \(_, t') -> do
+            overlap <- unifyConstraints span (IsIn cls t) (IsIn cls t')
+            when overlap $ compileError span "Overlapping instances"
+          -- Check all methods are implemented and no more
+          let implVals = Map.fromList $
+                         map (view _2 &&& view _1) (getValueDecls vals)
+          void $ flip Map.traverseWithKey implVals $ \v span' ->
+            case Map.lookup v sigs of
+              Nothing -> compileError span' $
+                "Method `" <> v <> " is not a method of class `" <> cls <> "`."
+              Just _ -> pure ()
+          void $ flip Map.traverseWithKey sigs $ \s _ ->
+            case Map.lookup s implVals of
+              Nothing -> compileError span $
+                "Class method `" <> s <> "` not implemented."
+              Just _ -> pure ()
+          -- Typecheck the method implementations
+          flip Map.traverseWithKey sigs $ \n sig ->
+            traceM $ n <> ": " <> prettyPolyType sig
+          result <- checkValues sigs vals
+          -- Add to class env
+          addInstance cls (map (map stripAnn) cs, t)
+          -- Build instance dictionaries
+          dict <- compileIntermed $ literal $ RecordLit $
+                  Map.fromList $ map (view _1 &&& view _2) result
+          pure (IsIn cls t, dict)
+    let
+      mkName (IsIn cls t, _) = "$" <> cls <> prettyType t
+      instDicts = Map.fromList $ map (mkName &&& view _2) instances
+      instEnv = Map.fromList $ map (view _1 &&& mkName) instances
+
     -- Check all type signatures
-    let typeDecls = getTypeDecls decls
-    declaredTypes <- for typeDecls $ \(span, name, poly) -> do
+    declaredTypes <- for (getTypeDecls decls) $ \(span, name, poly) -> do
       checkType span poly
       pure (name, poly)
+
     -- Check types of all value declarations
-    let
-      valueDecls = getValueDecls decls
-      defs = flip map valueDecls $ \(_, name, args, e) ->
-        ( name
-        , map stripAnn <$> Map.lookup name (Map.fromList declaredTypes)
-        , foldr spanAbs e (map (hoistCofree inj) args)
-        )
-    result <- inferDefinitionGroup defs
+    result <- inExtendedInstanceEnv instEnv $
+      checkValues (map (map stripAnn) $ Map.fromList declaredTypes) decls
+
     -- Collect exports and compile expressions
     exprs <- for result $ \(name, i, _) -> (name, ) <$> compileIntermed i
     let
       valuePolys = map (view _1 &&& view _3) result
       moduleKinds = kinds
       moduleTypes = dataPolys `Map.union` Map.fromList valuePolys
-      moduleExprs = Map.fromList exprs
+      moduleExprs = Map.fromList exprs `Map.union` instDicts
     pure (moduleKinds, moduleTypes, moduleExprs)
 
   where
-  checkType :: Span -> SourcePolyType-> Check ()
+  checkValues
+    :: Map Text PolyType
+    -> [SourceAst]
+    -> Check [(Text, Intermed, PolyType)]
+  checkValues declaredTypes decls' = do
+    let
+      defs = flip map (getValueDecls decls') $ \(_, name, args, e) ->
+        ( name
+        , Map.lookup name declaredTypes
+        , foldr spanAbs e (map (hoistCofree inj) args)
+        )
+    inferDefinitionGroup defs
+
+  checkType :: Span -> SourcePolyType -> Check ()
   checkType span (ForAll as cs t) = do
     -- TODO: Check constraints
     quantifierDict <- freshKindDict as
@@ -552,6 +683,22 @@ checkModule decls = do
       where constrs' = map (id *** map (hoistCofree unsafePrj)) constrs
     _                          -> Nothing
 
+  getClassDecls
+    :: [SourceAst]
+    -> [(Span, (Text, Text), [(Text, Text)], [SourceAst])]
+  getClassDecls = mapMaybe $ \(span :< (unsafePrj -> decl)) -> case decl of
+    ClassDecl h supers sigs -> Just (span, h, supers, sigs)
+    _                       -> Nothing
+
+  getInstanceDecls
+    :: [SourceAst]
+    -> [(Span, SourceConstraint, [SourceConstraint], [SourceAst])]
+  getInstanceDecls = mapMaybe $ \(span :< (unsafePrj -> decl)) -> case decl of
+    InstanceDecl h cs methods -> Just (span, h', cs', methods)
+      where h' = map (hoistCofree unsafePrj) h
+            cs' = map (map (hoistCofree unsafePrj)) cs
+    _                         -> Nothing
+
   getTypeDecls
     :: [SourceAst]
     -> [(Span, Text, SourcePolyType)]
@@ -578,31 +725,12 @@ checkFormula (decls, expr) = do
 
 --------------------------------------------------------------------------------
 
-replaceTypeClassDicts :: Intermed -> Check Compiled
-replaceTypeClassDicts = paraM (intermed goExpr goBinder goType goClass goRef)
-  where
-  nothing
-    :: (Functor f, f :<: CompiledF)
-    => f (Intermed, Compiled) -> Check Compiled
-  nothing = pure . Fix . inj . map snd
-  goExpr = nothing
-  goBinder = nothing
-  goType _ = error "No type expected"
-  goClass = \case
-    Constrained cs (e, _) -> do
-      dicts <- for cs $ \c -> (unsafeConstraint c,) <$> freshName
-      e' <- inExtendedInstanceEnv (Map.fromList dicts) $ replaceTypeClassDicts e
-      pure $ foldr abs e' (map (varBinder . snd) dicts)
-    TypeClassDict span c -> do
-      let c'@(IsIn cls t) = unsafeConstraint c
-      lookupInstanceDict c' >>= \case
-        Just n -> pure $ var n
-        Nothing -> compileError span $
-          "Type `" <> prettyType t <> "` does not implement the `" <>
-          cls <> "` interface."
-    where
-    unsafeConstraint = map (unsafePrjFix . fst)
-  goRef = nothing
-
 compileIntermed :: Intermed -> Check Core.Expr
 compileIntermed i = Core.toCore <$> replaceTypeClassDicts i
+
+unifyConstraints :: Span -> Constraint -> Constraint -> Check Bool
+unifyConstraints span (IsIn c t) (IsIn c' t')
+  | c == c'   = retain (unifyTypes span t t' $> True)
+                `catchError`
+                \_ -> pure False
+  | otherwise = pure False
