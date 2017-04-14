@@ -6,6 +6,7 @@ module Lib.Compiler.Eval where
 import           Lib.Prelude
 
 import qualified Data.Map                as Map
+import           Data.Maybe              (fromJust)
 import           Data.Text               (unlines)
 
 import           Lib.Compiler.Core
@@ -13,7 +14,7 @@ import           Lib.Compiler.Eval.Types
 
 eval :: TermEnv -> Expr -> Eval Result
 eval env = \case
-  Literal lit -> evalLit lit
+  Literal lit -> evalLit env lit
   Var v -> case Map.lookup v env of
     Nothing -> throwError $ unlines
       [ "Variable not found: " <> v
@@ -49,6 +50,9 @@ eval env = \case
         Nothing   -> tryAlts as
         Just env' -> eval (env' `Map.union` env) expr
     tryAlts alts
+  Accessor e field -> do
+    RValue (VRecord r) <- eval env e
+    pure $ fromJust $ Map.lookup field r
 
 matchValue :: Result -> Binder -> Maybe TermEnv
 matchValue res = \case
@@ -59,8 +63,9 @@ matchValue res = \case
     , label == name -> map Map.unions $ zipWithM matchValue results args
     | otherwise -> Nothing
 
-evalLit :: Literal -> Eval Result
-evalLit = \case
+evalLit :: TermEnv -> Literal -> Eval Result
+evalLit env = \case
   NumberLit n -> pure $ RValue $ VNumber n
   IntegerLit i -> pure $ RValue $ VInt i
   StringLit s -> pure $ RValue $ VString s
+  RecordLit fields -> RValue . VRecord <$> traverse (eval env) fields

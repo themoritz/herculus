@@ -8,6 +8,7 @@ import           Lib.Prelude                  hiding (empty)
 import           Control.Comonad.Cofree
 
 import           Data.Functor.Foldable
+import qualified Data.Map                     as Map
 
 import           Text.PrettyPrint.Leijen.Text
 
@@ -68,8 +69,8 @@ typeDoc = \case
   TypeApp (_ :< TypeApp (arr :< TypeConstructor "->") (a :< _)) (b :< _) ->
     parens (a <+> arr <+> b)
   TypeApp (f :< _) (arg :< _) -> parens (f <+> arg)
-  RecordCons (Ref ref) (t :< _) (rest :< _) ->
-    textStrict ref <+> textStrict "::" <+> t <> comma <+> rest
+  RecordCons field (t :< _) (rest :< _) ->
+    textStrict field <+> textStrict "::" <+> t <> comma <+> rest
   RecordNil -> empty
 
 declarationDoc :: DeclarationF Doc -> Doc
@@ -113,9 +114,9 @@ literalDoc = \case
   NumberLit n      -> double n
   IntegerLit i     -> integer i
   StringLit s      -> dquotes $ textStrict s
-  RecordLit fields -> braces $ hsep $ punctuate comma (map goField fields)
+  RecordLit fields -> braces $ hsep $ punctuate comma (map goField (Map.toList fields))
     where
-      goField (k, v) = textStrict k <+> equals <+> v
+      goField (k, v) = textStrict k <> equals <+> v
 
 exprDoc :: ExprF Doc -> Doc
 exprDoc = \case

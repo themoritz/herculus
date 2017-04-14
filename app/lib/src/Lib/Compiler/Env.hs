@@ -26,7 +26,7 @@ primKindEnv = Map.fromList
   , ( "Number"
     , kindType
     )
-  , ( "Int"
+  , ( "Integer"
     , kindType
     )
   , ( "->"
@@ -34,6 +34,9 @@ primKindEnv = Map.fromList
     )
   , ( "Array"
     , kindUnary
+    )
+  , ( "Record"
+    , kindFun (kindRecord kindType) kindType
     )
   ]
 

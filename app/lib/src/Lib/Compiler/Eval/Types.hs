@@ -39,7 +39,8 @@ valueDoc = \case
   VString s -> textStrict s
   VData n rs -> textStrict n <+> (hsep (map (parens . resultDoc) rs))
   VRecord m ->
-    semiBraces $
+    braces $ hsep $
+    punctuate comma $
     map (\(f, r) -> textStrict f <> ":" <+> resultDoc r) $
     Map.toList m
 

@@ -367,12 +367,25 @@ inferExpr (span :< (unsafePrj -> expr)) = case expr of
     inExtendedTypeEnv (Map.fromList $ map (view _1 &&& view _3) dict) $ do
       (restExpr, restType) <- inferExpr rest
       pure (let' (map (view _1 &&& view _2) dict) restExpr, restType)
+  Accessor e field -> do
+    (e', eType) <- inferExpr e
+    resultType <- freshType
+    tailType <- freshType
+    let recordType = typeApp tyRecord $ recordCons field resultType tailType
+    unifyTypes span eType recordType
+    pure (accessor e' field, resultType)
 
 inferLiteral :: LiteralF SourceAst -> Check (Intermed, Type)
 inferLiteral lit = case lit of
-  NumberLit n  -> pure (literal $ NumberLit n, tyNumber)
-  IntegerLit i -> pure (literal $ IntegerLit i, tyInteger)
-  StringLit s  -> pure (literal $ StringLit s, tyString)
+  NumberLit n      -> pure (literal $ NumberLit n, tyNumber)
+  IntegerLit i     -> pure (literal $ IntegerLit i, tyInteger)
+  StringLit s      -> pure (literal $ StringLit s, tyString)
+  RecordLit fields -> do
+    fields' <- traverse inferExpr fields
+    let ty = typeApp tyRecord $
+             Map.foldrWithKey recordCons recordNil $
+             map snd fields'
+    pure (literal $ RecordLit (map fst fields'), ty)
 
 inferDefinitionGroup
   :: [(Text, Maybe PolyType, SourceAst)]

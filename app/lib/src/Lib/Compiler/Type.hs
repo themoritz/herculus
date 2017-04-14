@@ -55,7 +55,7 @@ data TypeF a
   = TypeVar Text
   | TypeConstructor Text
   | TypeApp a a
-  | RecordCons (Ref Column) a a
+  | RecordCons Text a a
   | RecordNil
   deriving (Functor, Foldable, Traversable, Show)
 
@@ -71,8 +71,11 @@ typeConstructor = Fix . TypeConstructor
 typeApp :: Type -> Type -> Type
 typeApp a b = Fix (TypeApp a b)
 
-recordCons :: Ref Column -> Type -> Type -> Type
+recordCons :: Text -> Type -> Type -> Type
 recordCons f t rest = Fix (RecordCons f t rest)
+
+recordNil :: Type
+recordNil = Fix RecordNil
 
 spanTypeConstructor :: (Span, Text) -> SourceType
 spanTypeConstructor (span, t) = span :< TypeConstructor t
@@ -83,7 +86,7 @@ spanTypeApp f@(fspan :< _) arg@(argspan :< _) =
 
 spanRecordCons :: Text -> SourceType -> SourceType -> SourceType
 spanRecordCons f t@(tspan :< _) r@(rspan :< _) =
-  spanUnion tspan rspan :< RecordCons (Ref f) t r
+  spanUnion tspan rspan :< RecordCons f t r
 
 --------------------------------------------------------------------------------
 
@@ -97,7 +100,7 @@ data OrdType
   = OTVar Text
   | OTConstructor Text
   | OTApp OrdType OrdType
-  | OTRecord (Map (Ref Column) OrdType)
+  | OTRecord (Map Text OrdType)
   deriving (Eq, Ord)
 
 toOrdType :: Type -> OrdType

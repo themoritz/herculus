@@ -19,7 +19,7 @@ data Literal
   = NumberLit Double
   | IntegerLit Integer
   | StringLit Text
-  | RecordLit [(Text, Expr)]
+  | RecordLit (Map Text Expr)
   deriving (Show)
 
 data Reference
@@ -69,7 +69,7 @@ toCore (Fix com) = A.compiled goExpr undefined goRef com
     A.NumberLit n -> NumberLit n
     A.IntegerLit i -> IntegerLit i
     A.StringLit s -> StringLit s
-    A.RecordLit fs -> RecordLit (map (id *** toCore) fs)
+    A.RecordLit fs -> RecordLit (map toCore fs)
   goBinder :: A.Compiled -> Binder
   goBinder (Fix (unsafePrj -> b )) = case b of
     A.VarBinder x               -> VarBinder x

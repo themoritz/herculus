@@ -90,6 +90,9 @@ rArrow = text "->"
 rfatArrow :: Parser ()
 rfatArrow = text "=>"
 
+colon :: Parser ()
+colon = text ":"
+
 doubleColon :: Parser ()
 doubleColon = text "::"
 

@@ -138,6 +138,9 @@ case' scrut alts = Fix (inj (Case scrut alts))
 let' :: ExprF :<: f => [(Text, Fix f)] -> Fix f -> Fix f
 let' defs body = Fix (inj (Let defs body))
 
+accessor :: ExprF :<: f => Fix f -> Text -> Fix f
+accessor e field = Fix (inj (Accessor e field))
+
 spanAbs
   :: ExprF :<: f
   => WithSpan f -> WithSpan f -> WithSpan f
@@ -190,7 +193,7 @@ data LiteralF a
   = NumberLit Double
   | IntegerLit Integer
   | StringLit Text
-  | RecordLit [(Text, a)]
+  | RecordLit (Map Text a)
   deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 --------------------------------------------------------------------------------

@@ -13,6 +13,7 @@ import           Lib.Prelude
 import           Control.Comonad.Cofree
 
 import           Data.Foldable              (foldl')
+import qualified Data.Map                   as Map
 
 import qualified Text.Megaparsec            as P
 import           Text.Megaparsec.Expr
@@ -65,10 +66,10 @@ parseDataDecl = withSource $ do
   constructors <- P.option [] $ do
     indented *> equals
     let
-      constructor = (,)
+      constr = (,)
         <$> dconsname
         <*> many (indented *> (hoistCofree inj <$> parseType'))
-    P.sepBy1 constructor pipe
+    P.sepBy1 constr pipe
   pure $ inj (DataDecl name tyArgs constructors)
 
 parseClassDecl :: Parser SourceAst
@@ -225,8 +226,8 @@ parseLit = withSource $ inj . Literal <$> P.choice
     parseNumber = NumberLit <$> (lexeme numberLit)
     parseInteger = IntegerLit <$> (lexeme integerLit)
     parseRecord = braces $ do
-      fields <- P.sepBy1 ((,) <$> identifier <* equals <*> parseExpr) comma
-      pure $ RecordLit fields
+      fields <- P.sepBy1 ((,) <$> identifier <* colon <*> parseExpr) comma
+      pure $ RecordLit $ Map.fromList fields
 
 parseIfThenElse :: Parser SourceAst
 parseIfThenElse = do
@@ -294,7 +295,7 @@ parseType' = P.choice
   ]
 
 parseRecordType :: Parser SourceType
-parseRecordType = parens $ do
+parseRecordType = braces $ do
   (span, rows) <- withSpan parseRows
   pure $ spanTypeApp (spanTypeConstructor (span, "Record")) rows
   where
