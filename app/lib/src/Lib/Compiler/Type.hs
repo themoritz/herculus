@@ -136,7 +136,7 @@ type SourceConstraint = ConstraintF SourceType
 type Instance = ([Constraint], Type)
 
 -- Superclasses, signature of member functions, instances
-type Class = ([Text], Map Text PolyType, [Instance])
+type Class = ([Text], Text, Kind, Map Text PolyType, [Instance])
 
 --------------------------------------------------------------------------------
 

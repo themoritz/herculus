@@ -289,7 +289,7 @@ runCheck env =
       next
 
     AddInstance c i next -> do
-      checkEnv . checkEnvClasses . at c . _Just . _3 %= (i :)
+      checkEnv . checkEnvClasses . at c . _Just . _5 %= (i :)
       next
 
     ApplyCurrentKindSubst k reply -> do
@@ -316,6 +316,13 @@ runCheck env =
       checkEnv . checkEnvTypes .= localEnv `Map.union` oldEnv
       b <- iterTM go m
       checkEnv . checkEnvTypes .= oldEnv
+      reply b
+
+    InExtendedInstanceEnv localEnv m reply -> do
+      oldEnv <- use (checkEnv . checkEnvInstanceDicts)
+      checkEnv . checkEnvInstanceDicts .= localEnv `Map.union` oldEnv
+      b <- iterTM go m
+      checkEnv . checkEnvInstanceDicts .= oldEnv
       reply b
 
     Retain m reply -> do
@@ -562,15 +569,17 @@ checkModule decls = do
               ForAll (param:as) ((IsIn cls $ typeVar param):cs) t
         sigs' <- for (getTypeDecls sigs) $ \(span', name, poly) -> do
           checkType span' poly
-          pure (name, addConstraint $ map stripAnn poly)
-        addClass cls (supers', Map.fromList sigs', [])
+          pure (name, map stripAnn poly)
+        paramKind' <- applyCurrentKindSubst paramKind
+        addClass cls (supers', param, paramKind', Map.fromList sigs', [])
 
     -- Check all instance declarations
     instances <- for (getInstanceDecls decls) $ \(span, (IsIn cls (stripAnn -> t)), cs, vals) -> do
       lookupClass cls >>= \case
         Nothing ->
           compileError span $ "Instance class `" <> cls <> "` not defined."
-        Just (supers, sigs, insts) -> do
+        Just (supers, param, kind, sigs, insts) -> do
+          -- TODO: check kind of t
           -- Check for overlappint instances
           for_ insts $ \(_, t') -> do
             overlap <- unifyConstraints span (IsIn cls t) (IsIn cls t')
@@ -591,7 +600,8 @@ checkModule decls = do
           -- Typecheck the method implementations
           flip Map.traverseWithKey sigs $ \n sig ->
             traceM $ n <> ": " <> prettyPolyType sig
-          result <- checkValues sigs vals
+          let sigs' = map (map (applyTypeSubst (Map.singleton param t))) sigs
+          result <- checkValues sigs' vals
           -- Add to class env
           addInstance cls (map (map stripAnn) cs, t)
           -- Build instance dictionaries
