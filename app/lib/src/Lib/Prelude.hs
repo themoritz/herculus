@@ -6,6 +6,7 @@
 {-# LANGUAGE TupleSections      #-}
 {-# LANGUAGE DeriveFunctor      #-}
 {-# LANGUAGE DeriveTraversable      #-}
+{-# LANGUAGE NoImplicitPrelude      #-}
 -- |
 
 module Lib.Prelude
@@ -27,6 +28,7 @@ module Lib.Prelude
   , hoistError
   ) where
 
+import           Prelude (id)
 import           Protolude as Exports hiding ((:*:), (:+:), Fixity, Infix, Type,
                                        TypeError, reduce, Constraint)
 

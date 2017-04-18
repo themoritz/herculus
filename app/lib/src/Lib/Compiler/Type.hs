@@ -162,3 +162,22 @@ instance HasFreeTypeVars t => HasFreeTypeVars (ConstraintF t) where
 
 instance HasFreeTypeVars v => HasFreeTypeVars (Map k v) where
   getFtvs = getFtvs . Map.elems
+
+--------------------------------------------------------------------------------
+
+class TypeSubstitutable t where
+  applyTypeSubst :: Map Text Type -> t -> t
+
+instance TypeSubstitutable Type where
+  applyTypeSubst s = cata $ \case
+    TypeVar x -> Map.findWithDefault (typeVar x) x s
+    other     -> Fix other
+
+instance TypeSubstitutable a => TypeSubstitutable [a] where
+  applyTypeSubst s = map (applyTypeSubst s)
+
+instance TypeSubstitutable a => TypeSubstitutable (ConstraintF a) where
+  applyTypeSubst s (IsIn c t) = IsIn c (applyTypeSubst s t)
+
+instance TypeSubstitutable v => TypeSubstitutable (Map k v) where
+  applyTypeSubst s = map (applyTypeSubst s)

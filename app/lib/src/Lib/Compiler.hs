@@ -153,6 +153,18 @@ foldr :: forall a b. (a -> b -> b) -> a -> List b -> b
 foldr f a xs = case xs of
   Nil -> a
   Cons x xs -> f x (foldr f a xs)
+
+class Eq a where
+  eq :: a -> a -> Boolean
+
+instance Eq Boolean where
+  eq a b = case a of
+    True -> case b of
+      True -> True
+      False -> False
+    False -> case b of
+      True -> False
+      False -> True
 |]
 
 withParsed :: Text -> Parser a -> (a -> IO ()) -> IO ()

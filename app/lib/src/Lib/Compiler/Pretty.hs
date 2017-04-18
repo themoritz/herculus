@@ -44,7 +44,20 @@ astDoc = ast
   (liftAlg exprDoc)
   (liftAlg binderDoc)
   (typeDoc . map (hoistCofree unsafePrj))
-  (liftAlg refDoc)
+  (liftAlg refTextDoc)
+
+prettyIntermed :: Intermed -> Text
+prettyIntermed = show . histo intermedDoc
+
+intermedDoc :: IntermedF (Cofree IntermedF Doc) -> Doc
+intermedDoc = intermed
+  (liftAlg exprDoc)
+  (liftAlg binderDoc)
+  (typeDoc . map (hoistCofree unsafePrj))
+  (liftAlg placeholderDoc)
+  (liftAlg refIdDoc)
+
+--------------------------------------------------------------------------------
 
 constraintDoc :: ConstraintF Doc -> Doc
 constraintDoc (IsIn cls ty) = textStrict cls <+> ty
@@ -146,11 +159,29 @@ exprDoc = \case
   Accessor e field ->
     parens e <> dot <> textStrict field
 
-refDoc :: RefTextF Doc -> Doc
-refDoc = \case
+placeholderDoc :: PlaceholderF Doc -> Doc
+placeholderDoc = \case
+  DictionaryPlaceholder _ c ->
+    textStrict "<" <> constraintDoc c <> textStrict ">"
+  MethodPlaceholder _ c name ->
+    textStrict "<" <> constraintDoc c <> textStrict ">." <> textStrict name
+  RecursiveCallPlaceholder _ t ->
+    textStrict "<" <> textStrict t <> textStrict ">"
+
+refTextDoc :: RefTextF Doc -> Doc
+refTextDoc = \case
   TableRef (Ref t) ->
     char '#' <> textStrict t
   ColumnRef (Ref c) ->
     char '$' <> textStrict c
   ColumnOfTableRef (Ref t) (Ref c) ->
     char '#' <> textStrict t <> dot <> textStrict c
+
+refIdDoc :: RefIdF Doc -> Doc
+refIdDoc = \case
+  TableRef (Id t) ->
+    char '#' <> textStrict (show t)
+  ColumnRef (Id c) ->
+    char '$' <> textStrict (show c)
+  ColumnOfTableRef (Id t) (Id c) ->
+    char '#' <> textStrict (show t) <> dot <> textStrict (show c)

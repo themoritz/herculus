@@ -54,14 +54,14 @@ type SourceAst = WithSpan AstF
 
 --------------------------------------------------------------------------------
 
-type IntermedF = ExprF :+: BinderF :+: TypeF :+: ClassF :+: RefIdF
+type IntermedF = ExprF :+: BinderF :+: TypeF :+: PlaceholderF :+: RefIdF
 type Intermed = Fix IntermedF
 
 intermed
   :: (ExprF a -> b)
   -> (BinderF a -> b)
   -> (TypeF a -> b)
-  -> (ClassF a -> b)
+  -> (PlaceholderF a -> b)
   -> (RefIdF a -> b)
   -> (IntermedF a -> b)
 intermed e b t c r = coproduct e $ coproduct b $ coproduct t $ coproduct c r
@@ -179,13 +179,32 @@ varBinder = Fix . inj . VarBinder
 
 --------------------------------------------------------------------------------
 
-data ClassF a
-  = Constrained [ConstraintF a] a
-  | TypeClassDict Span (ConstraintF a)
+data PlaceholderF a
+  -- | Class, type. Translate to dictionary that's in scope for the class and
+  -- type combination. Constrained functions will be applied to these
+  -- placeholders.
+  = DictionaryPlaceholder Span (ConstraintF a)
+  -- | Class, type, method name. Translate to dictionary selection in dictionary
+  -- that's in scope.
+  | MethodPlaceholder Span (ConstraintF a) Text
+  -- | Function name, type. Recursively defined functions. Once the function
+  -- has been generalized, convert this to application of
+  -- `DictionaryPlaceholder`s.
+  | RecursiveCallPlaceholder Span Text
   deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
-typeClassDict :: ClassF :<: f => Span -> ConstraintF (Fix f) -> Fix f
-typeClassDict span c = Fix $ inj $ TypeClassDict span c
+dictionaryPlaceholder
+  :: PlaceholderF :<: f => Span -> ConstraintF (Fix f) -> Fix f
+dictionaryPlaceholder span c = Fix $ inj $ DictionaryPlaceholder span c
+
+methodPlaceholder
+  :: PlaceholderF :<: f => Span -> ConstraintF (Fix f) -> Text -> Fix f
+methodPlaceholder span c m = Fix $ inj $ MethodPlaceholder span c m
+
+recursiveCallPlaceholder
+  :: PlaceholderF :<: f => Span -> Text -> Fix f
+recursiveCallPlaceholder span name =
+  Fix $ inj $ RecursiveCallPlaceholder span name
 
 --------------------------------------------------------------------------------
 
