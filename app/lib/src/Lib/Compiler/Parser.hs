@@ -261,11 +261,17 @@ parseColOfTblRef = withSource $ do
 
 parseBinder :: Parser SourceBinder
 parseBinder = P.choice
-  [ withSource (VarBinder <$> P.try identifier)
-  , withSource (ConstructorBinder <$> P.try dconsname <*> many parseBinder)
-  , parens parseBinder
+  [ withSource (ConstructorBinder <$> P.try dconsname <*> many parseBinder')
+  , parseBinder'
   ]
   P.<?> "binder"
+
+parseBinder' :: Parser SourceBinder
+parseBinder' = P.choice
+  [ withSource (VarBinder <$> P.try identifier)
+  , withSource (ConstructorBinder <$> P.try dconsname <*> pure [])
+  , parens parseBinder
+  ]
 
 --------------------------------------------------------------------------------
 

@@ -126,7 +126,7 @@ declarationDoc = \case
 binderDoc :: BinderF Doc -> Doc
 binderDoc = \case
   VarBinder v            -> textStrict v
-  ConstructorBinder c bs -> textStrict c <+> hsep bs
+  ConstructorBinder c bs -> textStrict c <+> hsep (map parens bs)
 
 literalDoc :: LiteralF Doc -> Doc
 literalDoc = \case
