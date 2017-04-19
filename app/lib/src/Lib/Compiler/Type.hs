@@ -14,6 +14,7 @@ import           Lib.Prelude               hiding (empty)
 import           Control.Comonad.Cofree
 
 import           Data.Functor.Foldable
+import           Data.List                 (nub)
 import qualified Data.Map                  as Map
 import qualified Data.Set                  as Set
 
@@ -108,7 +109,8 @@ toOrdType (Fix t) = case t of
   TypeVar x -> OTVar x
   TypeConstructor x -> OTConstructor x
   TypeApp (Fix (TypeConstructor "Record")) r -> OTRecord $ Map.fromList $ go r
-  _ -> error "toOrdType: encounteres RecordCons or RecordNil"
+  TypeApp f arg -> OTApp (toOrdType f) (toOrdType arg)
+  _ -> error "toOrdType: encountered RecordCons or RecordNil"
   where
   go (Fix t') = case t' of
     RecordCons field ty rest -> (field, toOrdType ty) : go rest
@@ -120,10 +122,32 @@ toOrdType (Fix t) = case t of
 -- Type variables and predicates
 data PolyTypeF t
   = ForAll [Text] [ConstraintF t] t
-  deriving (Functor, Foldable, Traversable, Show)
+  deriving (Eq, Functor, Foldable, Traversable, Show)
 
 type PolyType = PolyTypeF Type
 type SourcePolyType = PolyTypeF SourceType
+
+normalizePoly :: PolyType -> PolyType
+normalizePoly (ForAll as cs t) = ForAll as' cs' t'
+  where
+  getVarsT = cata $ \case
+    TypeVar v -> [v]
+    TypeApp f arg -> f <> arg
+    RecordCons _ a b -> a <> b
+    _ -> []
+  getVarsC (IsIn _ t) = getVarsT t
+  getVarsCS = nub . join . map getVarsC
+  vs = [ v | v <- nub (getVarsCS (sort cs) <> getVarsT t), v `elem` as ]
+  as' = map snd zipped
+  zipped = zip vs (map show [0..])
+  sub = map typeVar $ Map.fromList zipped
+  cs' = applyTypeSubst sub (sort cs)
+  t' = applyTypeSubst sub t
+
+quantify :: [Text] -> [Constraint] -> Type -> PolyType
+quantify as cs t = ForAll as' cs t
+  where
+  as' = [a | a <- as, a `elem` (getFtvs cs <> getFtvs t)]
 
 -- | Class and type, which should be member of the class
 data ConstraintF t
@@ -178,6 +202,9 @@ instance TypeSubstitutable a => TypeSubstitutable [a] where
 
 instance TypeSubstitutable a => TypeSubstitutable (ConstraintF a) where
   applyTypeSubst s (IsIn c t) = IsIn c (applyTypeSubst s t)
+
+instance TypeSubstitutable a => TypeSubstitutable (PolyTypeF a) where
+  applyTypeSubst s = map (applyTypeSubst s)
 
 instance TypeSubstitutable v => TypeSubstitutable (Map k v) where
   applyTypeSubst s = map (applyTypeSubst s)

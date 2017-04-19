@@ -33,6 +33,12 @@ prettyType = show . histo typeDoc
 prettyPolyType :: PolyTypeF Type -> Text
 prettyPolyType = show . polyTypeDoc . map (histo typeDoc)
 
+prettyConstraint :: Constraint -> Text
+prettyConstraint = show . constraintDoc . map (histo typeDoc)
+
+prettyConstraints :: [Constraint] -> Text
+prettyConstraints = show . constraintsDoc . map (map (histo typeDoc))
+
 --------------------------------------------------------------------------------
 
 prettyAst :: Ast -> Text
@@ -135,7 +141,7 @@ exprDoc :: ExprF Doc -> Doc
 exprDoc = \case
   Literal lit -> literalDoc lit
   Abs b body ->
-    backslash <+> b <+> textStrict "->" <$$>
+    backslash <> b <+> textStrict "->" <$$>
     indent 2 body
   App f arg ->
     parens (f <+> arg)
@@ -164,7 +170,7 @@ placeholderDoc = \case
   DictionaryPlaceholder _ c ->
     textStrict "<" <> constraintDoc c <> textStrict ">"
   MethodPlaceholder _ c name ->
-    textStrict "<" <> constraintDoc c <> textStrict ">." <> textStrict name
+    textStrict "<" <> constraintDoc c <+> dot <> textStrict name <> textStrict ">"
   RecursiveCallPlaceholder _ t ->
     textStrict "<" <> textStrict t <> textStrict ">"
 

@@ -25,12 +25,15 @@ prevColumn (SourcePos n line col) = SourcePos n line (subPos col)
 
 highlightSpan :: Bool -> Span -> Text -> [Text]
 highlightSpan doFill (Span start end) =
-  (if doFill then fill else id) . insStart . insEnd . T.lines
+  (if doFill then fill else id) . crop . insStart . insEnd . T.lines
   where
   fill :: [Text] -> [Text]
   fill ts =
     let l = maximum (map T.length ts)
     in  map (\t -> t <> T.replicate (l - T.length t) " ") ts
+
+  crop :: [Text] -> [Text]
+  crop = drop (startLine - 1) . take (endLine + 2)
 
   insStart :: [Text] -> [Text]
   insStart = ins (mkMarker 'v' startCol) (startLine - 1)
