@@ -19,6 +19,7 @@ import           Lib.Prelude                  hiding (abs)
 import           Control.Arrow                ((&&&), (***))
 import           Control.Comonad.Cofree
 import qualified Control.Comonad.Trans.Cofree as T
+import Control.Monad.Trans.Maybe
 import           Control.Lens                 hiding ((:<))
 import           Control.Monad.Trans.Free
 
@@ -54,6 +55,11 @@ type TypeSubst = Map Text Type
 typeSubstAfter :: TypeSubst -> TypeSubst -> TypeSubst
 typeSubstAfter s1 s2 = map (applyTypeSubst s1) s2 `Map.union` s1
 
+typeSubstMerge :: TypeSubst -> TypeSubst -> Maybe TypeSubst
+typeSubstMerge s1 s2 = if agree then pure $ s2 `Map.union` s1 else Nothing
+  where agree = all (\x -> Map.lookup x s1 == Map.lookup x s2) $
+                Map.keys $ s2 `Map.intersection` s1
+
 --------------------------------------------------------------------------------
 
 data CheckF a
@@ -61,7 +67,7 @@ data CheckF a
   | FreshType (Type -> a)
   | FreshName (Text -> a)
   | UnifyKinds Span Kind Kind a
-  | UnifyTypes Span Type Type a
+  | UnifyTypes Span Type Type (Either Error () -> a)
   | LookupKind Text (Maybe Kind -> a)
   | LookupType Text (Maybe EnvType -> a)
   | LookupInstanceDict Constraint (Maybe Text -> a)
@@ -93,8 +99,8 @@ freshName = liftF $ FreshName id
 unifyKinds :: Span -> Kind -> Kind -> Check ()
 unifyKinds span k1 k2 = liftF $ UnifyKinds span k1 k2 ()
 
-unifyTypes :: Span -> Type -> Type -> Check ()
-unifyTypes span t1 t2 = liftF $ UnifyTypes span t1 t2 ()
+unifyTypes :: Span -> Type -> Type -> Check (Either Error ())
+unifyTypes span t1 t2 = liftF $ UnifyTypes span t1 t2 id
 
 lookupKind :: Text -> Check (Maybe Kind)
 lookupKind t = liftF $ LookupKind t id
@@ -235,10 +241,12 @@ runCheck env =
           _ -> pure ()
         checkKindSubst %= kindSubstAfter (Map.singleton i k)
 
-    UnifyTypes span t1 t2 next -> unify t1 t2 *> next
+    UnifyTypes span t1 t2 reply -> do
+      result <- runExceptT $ unify t1 t2
+      reply result
       where
 
-      unify :: Type -> Type -> CheckInterp ()
+      unify :: Type -> Type -> ExceptT Error CheckInterp ()
       unify t1' t2' = do
         subst <- use checkTypeSubst
         let
@@ -257,7 +265,7 @@ runCheck env =
                 unify t t'
                 unify rest rest'
             | otherwise -> do
-                deferredRest <- iterTM go freshType
+                deferredRest <- lift $ iterTM go freshType
                 unify rest (recordCons f' t' deferredRest)
                 unify rest' (recordCons f t deferredRest)
           (RecordNil, RecordNil) -> pure ()
@@ -266,7 +274,7 @@ runCheck env =
             prettyType a' <> "` with `" <>
             prettyType b' <> "`."
 
-      bind :: Text -> Type -> CheckInterp ()
+      bind :: Text -> Type -> ExceptT Error CheckInterp ()
       bind x t = do
         -- Occurs check
         flip cata t $ \case
@@ -307,8 +315,8 @@ runCheck env =
       next
 
     GetCurrentTypeEnv reply -> do
-      env <- use (checkEnv . checkEnvTypes)
-      reply $ map etPoly env
+      te <- use (checkEnv . checkEnvTypes)
+      reply $ map etPoly te
 
     GetKindSubst reply -> do
       s <- use checkKindSubst
@@ -402,7 +410,7 @@ inferExpr (span :< (unsafePrj -> expr)) = case expr of
     (fExpr, fType, fCs) <- inferExpr f
     (argExpr, argType, argCs) <- inferExpr arg
     resultType <- freshType
-    unifyTypes span fType (argType --> resultType)
+    unifyTypes' span fType (argType --> resultType)
     pure (app fExpr argExpr, resultType, fCs <> argCs)
   Var x -> lookupType x >>= \case
     Nothing -> compileError span $ "Variable not in scope: " <> x
@@ -433,7 +441,7 @@ inferExpr (span :< (unsafePrj -> expr)) = case expr of
     alts' <- for alts $ \(hoistCofree unsafePrj -> binder, e) -> do
       binderDict <- inferBinder scrutType binder
       (e', eType, cs) <- inExtendedTypeEnv binderDict $ inferExpr e
-      unifyTypes span resultType eType
+      unifyTypes' span resultType eType
       pure ((injFix $ stripAnn binder, e'), cs)
     pure ( case' scrutExpr $ map fst alts'
          , resultType
@@ -449,7 +457,7 @@ inferExpr (span :< (unsafePrj -> expr)) = case expr of
     resultType <- freshType
     tailType <- freshType
     let recordType = typeApp tyRecord $ recordCons field resultType tailType
-    unifyTypes span eType recordType
+    unifyTypes' span eType recordType
     pure (accessor e' field, resultType, cs)
 
 inferLiteral :: LiteralF SourceAst -> Check (Intermed, Type, [Constraint])
@@ -484,7 +492,7 @@ inferDefinitionGroup bindings = do
     explDict = Map.fromList $ map (view _1 &&& defaultEnvType . view _2) expls
   inExtendedTypeEnv explDict $ do
 
-  -- Check implicit bindings --------------
+  -- Check implicit bindings ---------------------------------------------------
   implDict <- for impls $ \(name, _) -> do
     t <- freshType
     pure (name, EnvType (ForAll [] [] t) Recursive)
@@ -494,7 +502,7 @@ inferDefinitionGroup bindings = do
   result <- for impls $ \(name, e@(span :< _)) -> do
     (e', t, cs) <- inferExpr e
     Just (EnvType (ForAll _ _ t') _) <- lookupType name
-    unifyTypes span t t'
+    unifyTypes' span t t'
     pure (name, e', t, cs)
 
   s <- getTypeSubst
@@ -513,11 +521,11 @@ inferDefinitionGroup bindings = do
                       (applyTypeSubst s t)
     pure (name, e, poly)
 
-  -- Check explicit bindings ---------------
+  -- Check explicit bindings ---------------------------------------------------
   infoExpl <- for expls $ \(name, polyGiven, e@(span :< _)) -> do
     (e', t, cs) <- inferExpr e
     (csGiven, tGiven) <- instantiate polyGiven
-    unifyTypes span t tGiven
+    unifyTypes' span t tGiven
     s <- getTypeSubst
     let
       fs = getFtvs (applyTypeSubst s outerEnv)
@@ -527,12 +535,13 @@ inferDefinitionGroup bindings = do
       tGiven' = applyTypeSubst s tGiven
       gs = getFtvs tGiven' `Set.difference` fs
       poly = quantify (Set.toList gs) csGiven' t'
-    ps' <- filterM (\c -> not <$> entailed c csGiven') cs'
+    ps' <- filterM (\c -> not <$> entail csGiven' c) cs'
     (ds, rs) <- split fs gs ps'
     if normalizePoly polyGiven /= normalizePoly poly then
         compileError span $
-          "The given type signature is too general. The inferred type is `" <>
-          prettyPolyType poly <> "`."
+          "The given type signature is too general. The inferred type is\n`" <>
+          prettyPolyType poly <> "` while the given signature was\n`" <>
+          prettyPolyType polyGiven <> "`."
       else if not (null rs) then
         compileError span $
           "Not enough constraints given in the type signature. " <>
@@ -548,6 +557,7 @@ inferDefinitionGroup bindings = do
   let recConstrs =
         Map.fromList $ map (\(name, _, ForAll _ cs _) -> (name, cs)) allInfo
   resolvedInfo <- for allInfo $ \(name, e, poly@(ForAll _ cs _)) -> do
+    traceM $ name <> " :: " <> prettyPolyType poly
     traceM $ name <> " with placeholders: " <> prettyIntermed e
     s <- getTypeSubst
     let cs' = applyTypeSubst s cs
@@ -574,7 +584,7 @@ inferBinder expected (span :< b) = case b of
         "Type constructor `" <> name <>
         "` expects " <> show (length args) <>
         " arguments but was given " <> show (length binders) <> "."
-      unifyTypes span expected result
+      unifyTypes' span expected result
       Map.unions <$> zipWithM inferBinder (reverse args) binders
   where
   peelArgs :: Type -> ([Type], Type)
@@ -586,12 +596,8 @@ inferBinder expected (span :< b) = case b of
 
 resolvePlaceholders :: Map Text [Constraint] -> Intermed -> Check Intermed
 resolvePlaceholders recConstrs =
-    cataM (intermed goExpr goBinder goType goPlaceholder goRef)
+    cataM (intermed nothing nothing nothing goPlaceholder nothing)
   where
-    goExpr = nothing
-    goBinder = nothing
-    goType = nothing
-    goRef = nothing
     goPlaceholder :: PlaceholderF Intermed -> Check Intermed
     goPlaceholder p = do
       s <- getTypeSubst
@@ -632,14 +638,40 @@ split fixed generic constraints = do
   reduce = go []
     where
       go ds [] = pure ds
-      go ds (c:cs) = entailed c (ds <> cs) >>= \case
+      go ds (c:cs) = entail (ds <> cs) c >>= \case
         True -> go ds cs
         False -> go (c:ds) cs
 
-entailed :: Constraint -> [Constraint] -> Check Bool
-entailed c cs = lookupInstanceDict c >>= \case
-  Just _  -> pure True -- Entailed by an instance that's in scope
-  Nothing -> pure $ elem c cs
+-- | `entail cs c` is True when c is entailed by cs, i.e. c holds whenever
+-- all the constraints in cs hold.
+entail :: [Constraint] -> Constraint -> Check Bool
+entail cs c = do
+    supers <- join <$> traverse bySuper cs
+    if c `elem` supers
+      then pure True
+      else byInst c >>= \case
+        Nothing -> pure False
+        Just cs' -> and <$> traverse (entail cs) cs'
+  where
+    -- If a constraint `IsIn Cls t` holds, then it must also hold for all
+    -- superclasses.
+    bySuper :: Constraint -> Check [Constraint]
+    bySuper c@(IsIn cls t) = lookupClass cls >>= \case
+      Nothing -> pure [c]
+      Just (supers, _, _, _, _) -> do
+        css <- for supers $ \s -> bySuper (IsIn s t)
+        pure (c : join css)
+    -- If c matches an instance, return the instance constraints as subgoals.
+    byInst :: Constraint -> Check (Maybe [Constraint])
+    byInst c@(IsIn cls _) = lookupClass cls >>= \case
+      Nothing -> pure Nothing
+      Just (_, _, _, _, insts) ->
+        msum <$> traverse tryInst insts
+      where
+      tryInst (cs', h) = matchConstraint h c >>= \case
+        Nothing -> pure Nothing
+        Just s -> pure $ Just $ map (applyTypeSubst s) cs'
+
 
 instantiate :: PolyType -> Check ([Constraint], Type)
 instantiate (ForAll as cs t) = do
@@ -679,33 +711,34 @@ checkModule decls = do
       paramKind <- freshKind
 
       inExtendedKindEnv (Map.singleton param paramKind) $ do
-        sigs' <- for (getTypeDecls sigs) $ \(span', name, poly) -> do
-          checkType span' poly
-          pure (name, map stripAnn poly)
+        sigs' <- for (getTypeDecls sigs) $
+          \(span', name, poly@(ForAll as cs t)) -> do
+            when (length cs > 0) $ compileError span' $
+              "Class methods are not allowed to be constrained."
+            checkType span' poly
+            pure ( name
+                 , ForAll (param:as) [IsIn cls $ typeVar param] (stripAnn t) )
         s <- getKindSubst
         addClass cls ( supers'
                      , param
                      , applyKindSubst s paramKind
                      , Map.fromList sigs'
                      , [] )
-        -- By convention we'll add the constraint for the class currently
-        -- defined to the front of the constraint list. This is important
-        -- when constructing placeholders.
-        let addConstraint (ForAll as cs t) =
-              ForAll (param:as) ((IsIn cls $ typeVar param):cs) t
-        pure $ map (id *** (\p -> EnvType (addConstraint p) Method)) sigs'
+        pure $ map (id *** (\p -> EnvType p Method)) sigs'
     let classEnv = Map.fromList $ join sigs
 
+    inExtendedTypeEnv classEnv $ do
+
     -- Check all instance declarations
-    instances <- for (getInstanceDecls decls) $ \(span, (IsIn cls (stripAnn -> t)), cs, vals) -> do
-      lookupClass cls >>= \case
-        Nothing ->
-          compileError span $ "Instance class `" <> cls <> "` not defined."
+    let mkName (IsIn cls t) = "$" <> cls <> prettyType t
+    instances <- for (getInstanceDecls decls) $
+      \(span, (IsIn cls (stripAnn -> t)), cs, vals) -> lookupClass cls >>= \case
+        Nothing -> compileError span $
+          "Instance class `" <> cls <> "` not defined."
         Just (supers, param, kind, sigs, insts) -> do
           -- TODO: check kind of t
-          -- Check for overlapping instances
-          for_ insts $ \(_, t') -> do
-            overlap <- unifyConstraints span (IsIn cls t) (IsIn cls t')
+          for_ insts $ \(_, c) -> do
+            overlap <- unifyConstraints (IsIn cls t) c
             when overlap $ compileError span "Overlapping instances"
           -- Check all methods are implemented and no more
           let implVals = Map.fromList $
@@ -721,18 +754,30 @@ checkModule decls = do
                 "Class method `" <> s <> "` not implemented."
               Just _ -> pure ()
           -- Typecheck the method implementations
-          let sigs' = map (map (applyTypeSubst (Map.singleton param t))) sigs
-          result <- checkValues sigs' vals
+          csDict <- for cs $ \(IsIn cls' (stripAnn -> t')) -> do
+            n <- freshName
+            pure (IsIn cls' t', n)
+          let self = (IsIn cls t, mkName $ IsIn cls t)
+          result <- inExtendedInstanceEnv (Map.fromList $ self : csDict) $ do
+            for (getValueDecls vals) $ \(span, name, args, e) -> do
+              (e', t', cs') <- inferExpr (foldr spanAbs e args)
+              s <- getTypeSubst
+              traceM $ name <> " :: " <> prettyType t'
+              traceM $ name <> " constraints: " <> prettyConstraints cs'
+              -- TODO: make sure `cs` equals the instance constraints
+              traceM $ name <> " before: " <> prettyIntermed e'
+              e'' <- resolvePlaceholders Map.empty e'
+              traceM $ name <> " after: " <> prettyIntermed e''
+              pure (name, e'')
           -- Add to class env
-          addInstance cls (map (map stripAnn) cs, t)
+          addInstance cls (map (map stripAnn) cs, IsIn cls t)
           -- Build instance dictionaries
           dict <- compileIntermed $ literal $ RecordLit $
                   Map.fromList $ map (view _1 &&& view _2) result
           pure (IsIn cls t, dict)
     let
-      mkName (IsIn cls t, _) = "$" <> cls <> prettyType t
-      instDicts = Map.fromList $ map (mkName &&& view _2) instances
-      instEnv = Map.fromList $ map (view _1 &&& mkName) instances
+      instDicts = Map.fromList $ map (mkName . view _1 &&& view _2) instances
+      instEnv = Map.fromList $ map (view _1 &&& mkName . view _1) instances
 
     -- Check all type signatures
     declaredTypes <- for (getTypeDecls decls) $ \(span, name, poly) -> do
@@ -740,7 +785,7 @@ checkModule decls = do
       pure (name, poly)
 
     -- Check types of all value declarations
-    result <- inExtendedTypeEnv classEnv $ inExtendedInstanceEnv instEnv $
+    result <- inExtendedInstanceEnv instEnv $
       checkValues (map (map stripAnn) $ Map.fromList declaredTypes) decls
 
     -- Collect exports and compile expressions
@@ -762,7 +807,7 @@ checkModule decls = do
       defs = flip map (getValueDecls decls') $ \(_, name, args, e) ->
         ( name
         , Map.lookup name declaredTypes
-        , foldr spanAbs e (map (hoistCofree inj) args)
+        , foldr spanAbs e args
         )
     (intermeds, ds) <- inferDefinitionGroup defs
     traceM $ "checkValues deferred: " <> show (length ds)
@@ -840,10 +885,9 @@ checkModule decls = do
 
   getValueDecls
     :: [SourceAst]
-    -> [(Span, Text, [SourceBinder], SourceAst)]
+    -> [(Span, Text, [SourceAst], SourceAst)]
   getValueDecls = mapMaybe $ \(span :< (unsafePrj -> decl)) -> case decl of
-    ValueDecl name binders expr -> Just (span, name, binders', expr)
-      where binders' = map (hoistCofree unsafePrj) binders
+    ValueDecl name binders expr -> Just (span, name, binders, expr)
     _                           -> Nothing
 
 checkFormula :: Formula -> Check (Core.Expr, PolyType)
@@ -876,9 +920,47 @@ cleanUpIntermed = cataM (intermed goExpr goBinder goType goPlaceholder goRef)
 compileIntermed :: Intermed -> Check Core.Expr
 compileIntermed i = Core.toCore <$> cleanUpIntermed i
 
-unifyConstraints :: Span -> Constraint -> Constraint -> Check Bool
-unifyConstraints span (IsIn c t) (IsIn c' t')
-  | c == c'   = retain (unifyTypes span t t' $> True)
-                `catchError`
-                \_ -> pure False
+unifyTypes' :: Span -> Type -> Type -> Check ()
+unifyTypes' s t1 t2 = either throwError pure =<< unifyTypes s t1 t2
+
+unifyConstraints :: Constraint -> Constraint -> Check Bool
+unifyConstraints (IsIn c t) (IsIn c' t')
+  | c == c'   = retain $ unifyTypes voidSpan t t' >>= \case
+      Left _   -> pure False
+      Right () -> pure True
   | otherwise = pure False
+
+--------------------------------------------------------------------------------
+
+-- `matchType t1 t2` tries to find a substitution s such that
+-- `apply s t1 == t2`
+matchType :: Type -> Type -> Check (Maybe TypeSubst)
+matchType t1 t2 = runMaybeT $ match t1 t2
+  where
+  match :: Type -> Type -> MaybeT Check TypeSubst
+  match (Fix a) b'@(Fix b) = case (a, b) of
+    (TypeVar x, _) -> pure $ Map.singleton x b'
+    (TypeConstructor x, TypeConstructor y) | x == y -> pure $ Map.empty
+    (TypeApp f arg, TypeApp f' arg') -> do
+      sf <- match f f'
+      sarg <- match arg arg'
+      hoistMaybe $ typeSubstMerge sf sarg
+    (RecordCons f t rest, RecordCons f' t' rest')
+      | f == f' -> do
+          st <- match t t'
+          srest <- match rest rest'
+          hoistMaybe $ typeSubstMerge st srest
+      | otherwise -> do
+          deferredRest <- lift freshType
+          srest <- match rest (recordCons f' t' deferredRest)
+          srest' <- match rest' (recordCons f t deferredRest)
+          hoistMaybe $ typeSubstMerge  srest srest'
+    (RecordNil, RecordNil) -> pure $ Map.empty
+    _ -> hoistMaybe Nothing
+  hoistMaybe :: Applicative m => Maybe a -> MaybeT m a
+  hoistMaybe = MaybeT . pure
+
+matchConstraint :: Constraint -> Constraint -> Check (Maybe TypeSubst)
+matchConstraint (IsIn c t) (IsIn c' t')
+  | c == c'   = matchType t t'
+  | otherwise = pure Nothing

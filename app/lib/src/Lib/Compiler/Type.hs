@@ -157,7 +157,8 @@ data ConstraintF t
 type Constraint = ConstraintF Type
 type SourceConstraint = ConstraintF SourceType
 
-type Instance = ([Constraint], Type)
+-- Constraints, head constraint
+type Instance = ([Constraint], Constraint)
 
 -- Superclasses, signature of member functions, instances
 type Class = ([Text], Text, Kind, Map Text PolyType, [Instance])

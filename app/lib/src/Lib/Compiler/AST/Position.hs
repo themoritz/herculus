@@ -18,6 +18,9 @@ spanUnion :: Span -> Span -> Span
 spanUnion (Span s1 e1) (Span s2 e2) =
   Span (min s1 s2) (max e1 e2)
 
+voidSpan :: Span
+voidSpan = Span (initialPos "") (initialPos "")
+
 prevColumn :: SourcePos -> SourcePos
 prevColumn (SourcePos n line col) = SourcePos n line (subPos col)
   where
