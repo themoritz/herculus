@@ -133,9 +133,12 @@ literalDoc = \case
   NumberLit n      -> double n
   IntegerLit i     -> integer i
   StringLit s      -> dquotes $ textStrict s
-  RecordLit fields -> braces $ hsep $ punctuate comma (map goField (Map.toList fields))
+  RecordLit fields -> record (map goField (Map.toList fields))
     where
-      goField (k, v) = textStrict k <> equals <+> v
+      goField (k, v) = textStrict k <> char ':' <+> v
+
+record :: [Doc] -> Doc
+record = encloseSep (textStrict "{ ") (textStrict " }") (textStrict ", ")
 
 exprDoc :: ExprF Doc -> Doc
 exprDoc = \case

@@ -24,7 +24,7 @@ import           Control.Lens                 hiding ((:<))
 import           Control.Monad.Trans.Free
 
 import           Data.Functor.Foldable
-import           Data.List                    (partition)
+import           Data.List                    (partition, lookup)
 import qualified Data.Map                     as Map
 import           Data.Maybe                   (fromJust)
 import qualified Data.Set                     as Set
@@ -70,7 +70,7 @@ data CheckF a
   | UnifyTypes Span Type Type (Either Error () -> a)
   | LookupKind Text (Maybe Kind -> a)
   | LookupType Text (Maybe EnvType -> a)
-  | LookupInstanceDict Constraint (Maybe Text -> a)
+  | LookupInstanceDict DictLookup (Maybe Text -> a)
   | LookupClass Text (Maybe Class -> a)
   | AddClass Text Class a
   | AddInstance Text Instance a
@@ -79,9 +79,10 @@ data CheckF a
   | GetCurrentTypeEnv (Map Text PolyType -> a)
   | forall b. InExtendedKindEnv (Map Text Kind) (Check b) (b -> a)
   | forall b. InExtendedTypeEnv (Map Text EnvType) (Check b) (b -> a)
-  | forall b. InExtendedInstanceEnv (Map Constraint Text) (Check b) (b -> a)
+  | forall b. InExtendedInstanceEnv (Map DictLookup Text) (Check b) (b -> a)
   | forall b. Retain (Check b) (b -> a)
   | DebugEnv a
+  | DebugTypeSubst a
 
 deriving instance Functor CheckF
 
@@ -108,7 +109,7 @@ lookupKind t = liftF $ LookupKind t id
 lookupType :: Text -> Check (Maybe EnvType)
 lookupType t = liftF $ LookupType t id
 
-lookupInstanceDict :: Constraint -> Check (Maybe Text)
+lookupInstanceDict :: DictLookup -> Check (Maybe Text)
 lookupInstanceDict c = liftF $ LookupInstanceDict c id
 
 lookupClass :: Text -> Check (Maybe Class)
@@ -135,7 +136,7 @@ inExtendedKindEnv env m = liftF $ InExtendedKindEnv env m id
 inExtendedTypeEnv :: Map Text EnvType -> Check a -> Check a
 inExtendedTypeEnv env m = liftF $ InExtendedTypeEnv env m id
 
-inExtendedInstanceEnv :: Map Constraint Text -> Check a -> Check a
+inExtendedInstanceEnv :: Map DictLookup Text -> Check a -> Check a
 inExtendedInstanceEnv env m = liftF $ InExtendedInstanceEnv env m id
 
 retain :: Check a -> Check a
@@ -143,6 +144,9 @@ retain m = liftF $ Retain m id
 
 debugEnv :: Check ()
 debugEnv = liftF $ DebugEnv ()
+
+debugTypeSubst :: Check ()
+debugTypeSubst = liftF $ DebugTypeSubst ()
 
 data Origin
   = Recursive
@@ -158,10 +162,17 @@ data EnvType = EnvType
 defaultEnvType :: PolyType -> EnvType
 defaultEnvType = flip EnvType Default
 
+data DictLookup
+  -- | Class name, type variable
+  = ByTypeVar Text Text
+  -- | Class name, constructor name
+  | ByConstructor Text Text
+  deriving (Eq, Ord, Show)
+
 data CheckEnv = CheckEnv
   { _checkEnvTypes         :: Map Text EnvType
   , _checkEnvKinds         :: Map Text Kind
-  , _checkEnvInstanceDicts :: Map Constraint Text
+  , _checkEnvInstanceDicts :: Map DictLookup Text
   , _checkEnvClasses       :: Map Text Class
   }
 
@@ -363,6 +374,14 @@ runCheck env =
       traceM "----"
       next
 
+    DebugTypeSubst next -> do
+      subst <- use checkTypeSubst
+      traceM "----"
+      flip Map.traverseWithKey subst $ \k t ->
+        traceM $ k <> " :-> " <> prettyType t
+      traceM "----"
+      next
+
 --------------------------------------------------------------------------------
 
 freshTypeDict :: [Text] -> Check (Map Text Type)
@@ -515,9 +534,10 @@ inferDefinitionGroup bindings = do
            split fixedImpl genericImpl
                  (applyTypeSubst s $ join $ map (view _4) result)
   infoImpl <- for result $ \(name, e, t, cs) -> do
+    cs' <- reduce (applyTypeSubst s cs)
     let
       poly = quantify (Set.toList genericImpl)
-                      [c | c <- retainedImpl, c `elem` applyTypeSubst s cs]
+                      [c | c <- retainedImpl, c `elem` applyTypeSubst s cs']
                       (applyTypeSubst s t)
     pure (name, e, poly)
 
@@ -561,7 +581,12 @@ inferDefinitionGroup bindings = do
     traceM $ name <> " with placeholders: " <> prettyIntermed e
     s <- getTypeSubst
     let cs' = applyTypeSubst s cs
-    dicts <- for cs' $ \p -> (p,) <$> freshName
+    dicts <- for cs' $ \(IsIn cls t) -> do
+      n <- freshName
+      case t of
+        Fix (TypeVar v) -> pure (ByTypeVar cls v, n)
+        _ -> compileError voidSpan $
+          "Internal? Type in retained constraint not a type variable."
     inExtendedInstanceEnv (Map.fromList dicts) $ do
       e' <- resolvePlaceholders recConstrs e
       let e'' = foldr (abs . varBinder . snd) e' dicts
@@ -600,12 +625,11 @@ resolvePlaceholders recConstrs =
   where
     goPlaceholder :: PlaceholderF Intermed -> Check Intermed
     goPlaceholder p = do
-      s <- getTypeSubst
       case p of
-        DictionaryPlaceholder span (IsIn cls (unsafePrjFix -> t)) -> do
-          withInstanceDict span (IsIn cls (applyTypeSubst s t)) pure
-        MethodPlaceholder span (IsIn cls (unsafePrjFix -> t)) name -> do
-          withInstanceDict span (IsIn cls (applyTypeSubst s t)) $ \d ->
+        DictionaryPlaceholder span c -> do
+          withInstanceDict span c pure
+        MethodPlaceholder span c name -> do
+          withInstanceDict span c $ \d ->
             pure $ accessor d name
         RecursiveCallPlaceholder span name -> do
           case Map.lookup name recConstrs of
@@ -615,14 +639,32 @@ resolvePlaceholders recConstrs =
             Nothing -> pure $ Fix $ inj p
 
       where
-      withInstanceDict span c@(IsIn cls t) f = lookupInstanceDict c >>= \case
-        Just dict -> f $ var dict
-        Nothing -> case t of
-          Fix (TypeConstructor con) ->
-            compileError span $
-              "No instance of class `" <> cls <>
-              "` found for type `" <> con <> "`."
-          _ -> pure $ Fix $ inj p
+      withInstanceDict span (IsIn cls (unsafePrjFix -> t)) f = do
+        s <- getTypeSubst
+        f =<< buildDict (applyTypeSubst s t)
+        where
+        buildDict :: Type -> Check Intermed
+        buildDict t' = flip cata t' $ \case
+          TypeVar v -> getDict $ ByTypeVar cls v
+          TypeConstructor c -> do
+            d <- getDict $ ByConstructor cls c
+            byInst (IsIn cls t') >>= \case
+              Nothing -> compileError span $
+                "Cannot find dict for constraint: " <> prettyConstraint (IsIn cls t')
+              Just inst -> do
+                (cs, t'') <- instantiateInstance inst
+                unifyTypes' span t'' t
+                let dictPlaceholders =
+                      map (dictionaryPlaceholder span . map injFix) cs
+                resolvePlaceholders recConstrs $ foldl' app d dictPlaceholders
+          TypeApp f' _ -> f'
+          _ -> compileError span "Found record type when resolving placeholder."
+        getDict :: DictLookup -> Check Intermed
+        getDict key = lookupInstanceDict key >>= \case
+          Just dict -> pure $ var dict
+          Nothing -> 
+              compileError span $
+                "No instance of class `" <> show key <> "`."
 
 split
   :: Set Text -> Set Text -> [Constraint]
@@ -631,16 +673,16 @@ split fixed generic constraints = do
   -- TODO: Use generic for constraint defaulting
   reduced <- reduce constraints
   pure $ flip partition reduced $ \c ->
-      all (`Set.member` fixed) (getFtvs c)
+        all (`Set.member` fixed) (getFtvs c)
+
+-- | Removes any constraint that is entailed by the others
+reduce :: [Constraint] -> Check [Constraint]
+reduce xs = simplify [] =<< join <$> traverse toHeadNormal xs
   where
-  -- | Removes any constraint that is entailed by the others
-  reduce :: [Constraint] -> Check [Constraint]
-  reduce = go []
-    where
-      go ds [] = pure ds
-      go ds (c:cs) = entail (ds <> cs) c >>= \case
-        True -> go ds cs
-        False -> go (c:ds) cs
+    simplify ds [] = pure ds
+    simplify ds (c:cs) = entail (ds <> cs) c >>= \case
+      True -> simplify ds cs
+      False -> simplify (c:ds) cs
 
 -- | `entail cs c` is True when c is entailed by cs, i.e. c holds whenever
 -- all the constraints in cs hold.
@@ -651,27 +693,46 @@ entail cs c = do
       then pure True
       else byInst c >>= \case
         Nothing -> pure False
-        Just cs' -> and <$> traverse (entail cs) cs'
-  where
-    -- If a constraint `IsIn Cls t` holds, then it must also hold for all
-    -- superclasses.
-    bySuper :: Constraint -> Check [Constraint]
-    bySuper c@(IsIn cls t) = lookupClass cls >>= \case
-      Nothing -> pure [c]
-      Just (supers, _, _, _, _) -> do
-        css <- for supers $ \s -> bySuper (IsIn s t)
-        pure (c : join css)
-    -- If c matches an instance, return the instance constraints as subgoals.
-    byInst :: Constraint -> Check (Maybe [Constraint])
-    byInst c@(IsIn cls _) = lookupClass cls >>= \case
-      Nothing -> pure Nothing
-      Just (_, _, _, _, insts) ->
-        msum <$> traverse tryInst insts
-      where
-      tryInst (cs', h) = matchConstraint h c >>= \case
-        Nothing -> pure Nothing
-        Just s -> pure $ Just $ map (applyTypeSubst s) cs'
+        Just (cs', _) -> and <$> traverse (entail cs) cs'
 
+-- If a constraint `IsIn Cls t` holds, then it must also hold for all
+-- superclasses.
+bySuper :: Constraint -> Check [Constraint]
+bySuper c@(IsIn cls t) = lookupClass cls >>= \case
+  Nothing -> pure [c]
+  Just (supers, _, _, _, _) -> do
+    css <- for supers $ \s -> bySuper (IsIn s t)
+    pure (c : join css)
+
+-- If c matches an instance, return the instance constraints as subgoals.
+byInst :: Constraint -> Check (Maybe Instance)
+byInst c@(IsIn cls _) = lookupClass cls >>= \case
+  Nothing -> pure Nothing
+  Just (_, _, _, _, insts) ->
+    msum <$> traverse tryInst insts
+  where
+  tryInst (cs', h) = matchConstraint h c >>= \case
+    Nothing -> pure Nothing
+    Just s -> pure $ Just (map (applyTypeSubst s) cs', applyTypeSubst s h)
+
+inHeadNormal :: Constraint -> Bool
+inHeadNormal (IsIn _ t) = flip cata t $ \case
+  TypeVar _         -> True
+  TypeConstructor _ -> False
+  TypeApp f _       -> f
+  _                 -> False
+
+toHeadNormal :: Constraint -> Check [Constraint]
+toHeadNormal c | inHeadNormal c = pure [c]
+               | otherwise      = byInst c >>= \case
+                   Nothing -> compileError voidSpan $
+                     "Cannot solve the constraint `" <>
+                     prettyConstraint c <> "`."
+                   Just (cs, _) -> join <$> traverse toHeadNormal cs
+
+instantiateInstance :: Instance -> Check ([Constraint], Type)
+instantiateInstance (cs, IsIn _ t) =
+  instantiate (ForAll (Set.toList $ getFtvs t) cs t)
 
 instantiate :: PolyType -> Check ([Constraint], Type)
 instantiate (ForAll as cs t) = do
@@ -730,7 +791,6 @@ checkModule decls = do
     inExtendedTypeEnv classEnv $ do
 
     -- Check all instance declarations
-    let mkName (IsIn cls t) = "$" <> cls <> prettyType t
     instances <- for (getInstanceDecls decls) $
       \(span, (IsIn cls (stripAnn -> t)), cs, vals) -> lookupClass cls >>= \case
         Nothing -> compileError span $
@@ -753,31 +813,52 @@ checkModule decls = do
               Nothing -> compileError span $
                 "Class method `" <> s <> "` not implemented."
               Just _ -> pure ()
-          -- Typecheck the method implementations
+          -- Add to class env
+          addInstance cls (map (map stripAnn) cs, IsIn cls t)
+          -- Check instance head and derive dictionary name for this instance
+          headConstructor <- flip cata t $ \case
+            TypeConstructor c -> pure c
+            TypeApp f _ -> f
+            _ -> compileError span $ "Instance head must be type constructor."
+          let dictName = "$" <> cls <> headConstructor
+          -- Check constraints
           csDict <- for cs $ \(IsIn cls' (stripAnn -> t')) -> do
             n <- freshName
-            pure (IsIn cls' t', n)
-          let self = (IsIn cls t, mkName $ IsIn cls t)
+            v <- flip cata t' $ \case
+              TypeVar v -> pure v
+              _ -> compileError span $
+                "Type of instance constraint must be type variable."
+            pure (ByTypeVar cls' v, n)
+          let self = (ByConstructor cls headConstructor, dictName)
           result <- inExtendedInstanceEnv (Map.fromList $ self : csDict) $ do
             for (getValueDecls vals) $ \(span, name, args, e) -> do
               (e', t', cs') <- inferExpr (foldr spanAbs e args)
+              Just (EnvType (ForAll _ _ givenT) _) <- lookupType name
+              unifyTypes' span t' (applyTypeSubst (Map.singleton param t) givenT)
               s <- getTypeSubst
-              traceM $ name <> " :: " <> prettyType t'
-              traceM $ name <> " constraints: " <> prettyConstraints cs'
+              traceM $ name <> " :: " <> prettyType (applyTypeSubst s t')
+              traceM $ name <> " constraints: " <> prettyConstraints (applyTypeSubst s cs')
               -- TODO: make sure `cs` equals the instance constraints
               traceM $ name <> " before: " <> prettyIntermed e'
               e'' <- resolvePlaceholders Map.empty e'
               traceM $ name <> " after: " <> prettyIntermed e''
               pure (name, e'')
-          -- Add to class env
-          addInstance cls (map (map stripAnn) cs, IsIn cls t)
           -- Build instance dictionaries
-          dict <- compileIntermed $ literal $ RecordLit $
-                  Map.fromList $ map (view _1 &&& view _2) result
-          pure (IsIn cls t, dict)
+          let record = literal $ RecordLit $
+                Map.fromList $ map (view _1 &&& view _2) result
+              vars = flip cata t $ \case
+                TypeVar v -> [v]
+                TypeConstructor _ -> []
+                TypeApp f arg -> f <> arg
+              interm = foldr abs record $ map (varBinder . snd) csDict
+          traceM $ "dict: " <> prettyIntermed interm
+          dict <- compileIntermed interm
+          pure (self, dict)
     let
-      instDicts = Map.fromList $ map (mkName . view _1 &&& view _2) instances
-      instEnv = Map.fromList $ map (view _1 &&& mkName . view _1) instances
+      instDicts =
+        Map.fromList $ map (\((_, name), dict) -> (name, dict)) instances
+      instEnv =
+        Map.fromList $ map fst instances
 
     -- Check all type signatures
     declaredTypes <- for (getTypeDecls decls) $ \(span, name, poly) -> do

@@ -83,24 +83,42 @@ data Boolean
   = True
   | False
 
+data Tuple a b
+  = Tuple a b
+
 data List a
   = Nil
   | Cons a (List a)
 
-foldr :: forall a b. (a -> b -> b) -> b -> List a -> b
-foldr f a xs = case xs of
-  Nil -> a
-  Cons x xs -> f x (foldr f a xs)
-
 class Eq a where
   eq :: a -> a -> Boolean
 
-elem :: forall a b. Eq a => a -> List a -> b
-elem x xs = case xs of
-  Nil -> False
-  Cons a as -> if eq x a
-    then True
-    else elem x as
+instance Eq Boolean where
+  eq a b = case Tuple a b of
+    Tuple True True -> True
+    Tuple False False -> True
+    other -> False
+
+instance Eq a => Eq (List a) where
+  eq xs ys = case Tuple xs ys of
+    Tuple Nil Nil -> True
+    Tuple (Cons a as) (Cons b bs) -> if eq a b
+      then eq as bs
+      else False
+    otherwise -> False
+
+instance Eq b => Eq a => Eq (Tuple a b) where
+  eq (Tuple a b) (Tuple a' b') = if eq a a'
+    then eq b b'
+    else False
+
+class Semigroup a where
+  mappend :: a -> a -> a
+
+instance Semigroup (List a) where
+  mappend xs ys = case xs of
+    Nil -> ys
+    Cons a as -> Cons a (mappend as ys)
 |]
 
 withParsed :: Text -> Parser a -> (a -> IO ()) -> IO ()
@@ -113,7 +131,7 @@ testParsePretty src = withParsed src parseModule $ \decls ->
   mapM_ (putStrLn . (<> "\n") . prettyAst) (map stripAnn decls)
 
 testParseSpans :: Text -> IO ()
-testParseSpans src = withParsed src parseFormula $ \decls ->
+testParseSpans src = withParsed src parseModule $ \decls ->
   mapM_ (putStrLn . ppShow . map (flip (highlightSpan True) src)) decls
 
 testCheck :: Text -> IO ()
