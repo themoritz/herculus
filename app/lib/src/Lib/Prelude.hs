@@ -12,6 +12,7 @@
 module Lib.Prelude
   ( module Exports
   , id
+  , (***), (&&&)
   --
   , (:+:)(..)
   , coproduct
@@ -29,6 +30,7 @@ module Lib.Prelude
   ) where
 
 import           Prelude (id)
+import           Control.Arrow                ((&&&), (***))
 import           Protolude as Exports hiding ((:*:), (:+:), Fixity, Infix, Type,
                                        TypeError, reduce, Constraint)
 

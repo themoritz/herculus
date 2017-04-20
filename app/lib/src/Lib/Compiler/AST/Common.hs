@@ -18,6 +18,11 @@ type WithSpan f = Cofree f Span
 
 --------------------------------------------------------------------------------
 
+nothing
+  :: (Functor f, Applicative m, f :<: g)
+  => f (Fix g) -> m (Fix g)
+nothing = pure . Fix . inj
+
 stripAnn :: Functor f => Cofree f a -> Fix f
 stripAnn (_ :< e) = Fix $ map stripAnn e
 

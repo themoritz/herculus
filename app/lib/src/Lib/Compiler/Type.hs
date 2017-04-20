@@ -190,6 +190,26 @@ instance HasFreeTypeVars v => HasFreeTypeVars (Map k v) where
 
 --------------------------------------------------------------------------------
 
+type KindSubst = Map Int Kind
+
+kindSubstAfter :: KindSubst -> KindSubst -> KindSubst
+kindSubstAfter s1 s2 = map (applyKindSubst s1) s2 `Map.union` s1
+
+applyKindSubst :: KindSubst -> Kind -> Kind
+applyKindSubst sub = cata $ \case
+  KindUnknown i -> Map.findWithDefault (kindUnknown i) i sub
+  other         -> Fix other
+
+type TypeSubst = Map Text Type
+
+typeSubstAfter :: TypeSubst -> TypeSubst -> TypeSubst
+typeSubstAfter s1 s2 = map (applyTypeSubst s1) s2 `Map.union` s1
+
+typeSubstMerge :: TypeSubst -> TypeSubst -> Maybe TypeSubst
+typeSubstMerge s1 s2 = if agree then pure $ s2 `Map.union` s1 else Nothing
+  where agree = all (\x -> Map.lookup x s1 == Map.lookup x s2) $
+                Map.keys $ s2 `Map.intersection` s1
+
 class TypeSubstitutable t where
   applyTypeSubst :: Map Text Type -> t -> t
 

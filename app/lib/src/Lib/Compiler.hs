@@ -7,8 +7,8 @@ module Lib.Compiler where
 
 import           Lib.Prelude
 
-import qualified Data.Map                  as Map
-import           Data.Text                 (Text, pack, unpack)
+import qualified Data.Map                   as Map
+import           Data.Text                  (Text, pack, unpack)
 
 import           NeatInterpolation
 import           Text.Show.Pretty
@@ -20,6 +20,7 @@ import           Lib.Types
 import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Checker
+import           Lib.Compiler.Checker.Monad
 import           Lib.Compiler.Core
 import           Lib.Compiler.Error
 -- import           Lib.Compiler.Interpreter
@@ -90,35 +91,21 @@ data List a
   = Nil
   | Cons a (List a)
 
-class Eq a where
-  eq :: a -> a -> Boolean
+class Print a where
+  print :: a -> List Boolean
 
-instance Eq Boolean where
-  eq a b = case Tuple a b of
-    Tuple True True -> True
-    Tuple False False -> True
-    other -> False
+instance Print Boolean where
+  print x = Cons x Nil
 
-instance Eq a => Eq (List a) where
-  eq xs ys = case Tuple xs ys of
-    Tuple Nil Nil -> True
-    Tuple (Cons a as) (Cons b bs) -> if eq a b
-      then eq as bs
-      else False
-    otherwise -> False
+instance Print a => Print (List a) where
+  print xs = case xs of
+    Nil -> Nil
+    Cons a as -> print a
 
-instance Eq b => Eq a => Eq (Tuple a b) where
-  eq (Tuple a b) (Tuple a' b') = if eq a a'
-    then eq b b'
-    else False
+instance Print a => Print b => Print (Tuple a b) where
+  print (Tuple a b) = print a
 
-class Semigroup a where
-  mappend :: a -> a -> a
-
-instance Semigroup (List a) where
-  mappend xs ys = case xs of
-    Nil -> ys
-    Cons a as -> Cons a (mappend as ys)
+f x = print (Tuple (Cons True Nil) x)
 |]
 
 withParsed :: Text -> Parser a -> (a -> IO ()) -> IO ()
@@ -136,7 +123,7 @@ testParseSpans src = withParsed src parseModule $ \decls ->
 
 testCheck :: Text -> IO ()
 testCheck src = withParsed src parseModule $ \decls ->
-  case runCheck primCheckEnv (checkModule decls) of
+  case checkModule primCheckEnv decls of
     Left err -> putStrLn $ displayError src err
     Right _  -> pure ()
 
@@ -145,14 +132,13 @@ testEval src =
   withParsed prelude parseModule $ \decls ->
   withParsed src parseFormula $ \formula ->
   let
-    go :: Check (Expr, PolyType, TermEnv)
+    go :: Either Error (Expr, PolyType, TermEnv)
     go = do
-      (kinds, polys, env) <- checkModule decls
-      inExtendedKindEnv kinds $ inExtendedTypeEnv polys $ do
-        (code, poly) <- checkFormula formula
-        pure (code, poly, primTermEnv `Map.union` loadModule env)
+      (preludeHeader, preludeCode) <- checkModule primCheckEnv decls
+      (code, poly) <- checkFormula (unionCheckEnv preludeHeader primCheckEnv) formula
+      pure (code, poly, primTermEnv `Map.union` loadModule preludeCode)
   in
-  case runCheck primCheckEnv go of
+  case go of
     Left err -> putStrLn $ displayError src err
     Right (code, poly, env) -> do
       putStrLn $ "Type: " <> prettyPolyType poly
