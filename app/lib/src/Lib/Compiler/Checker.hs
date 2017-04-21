@@ -22,7 +22,7 @@ import Control.Monad.Trans.Maybe
 import           Control.Lens                 hiding ((:<))
 
 import           Data.Functor.Foldable
-import           Data.List                    (partition, lookup)
+import           Data.List                    (partition)
 import qualified Data.Map                     as Map
 import           Data.Maybe                   (fromJust)
 import qualified Data.Set                     as Set
@@ -50,8 +50,9 @@ freshKindDict xs = map Map.fromList $ for xs $ \a -> do
 
 --------------------------------------------------------------------------------
 
-inferKind :: SourceType -> Check Kind
-inferKind = cataM $ \case
+-- | Infer the kind of a given type.
+inferType :: SourceType -> Check Kind
+inferType = cataM $ \case
   span T.:< TypeVar v -> lookupKind v >>= \case
     Nothing -> compileError span $ "Undefined type variable: " <> v
     Just k -> pure k
@@ -71,6 +72,8 @@ inferKind = cataM $ \case
 
 --------------------------------------------------------------------------------
 
+-- | Infer the type of an expression. Also generates a transformed AST that
+-- may contain placeholders, and a list of deferred constraints.
 inferExpr :: SourceAst -> Check (Intermed, Type, [Constraint])
 inferExpr (span :< (unsafePrj -> expr)) = case expr of
   Literal lit -> inferLiteral lit
@@ -91,21 +94,20 @@ inferExpr (span :< (unsafePrj -> expr)) = case expr of
       (constraints, t) <- instantiate poly
       let
         dictPlaceholders cs = map (dictionaryPlaceholder span . map injFix) cs
-        e = case origin of
-          Default -> foldl' app (var x) (dictPlaceholders constraints)
-          Method -> case constraints of
-            c:cs' ->
-              foldl' app (methodPlaceholder span (map injFix c) x)
-                         (dictPlaceholders cs')
-            [] -> error $
-              "Expected at least one constraint while looking up " <>
-              "method variable `" <> x <> "`."
-          Recursive -> recursiveCallPlaceholder span x
+      e <- case origin of
+        Default -> pure $ foldl' app (var x) (dictPlaceholders constraints)
+        Method -> case constraints of
+          [c] -> pure $ methodPlaceholder span (map injFix c) x
+          _ -> internalError (Just span) $
+            "Expected at least one constraint while looking up " <>
+            "method variable `" <> x <> "`."
+        Recursive -> pure $ recursiveCallPlaceholder span x
       pure (e, t, constraints)
   Constructor c -> lookupType c >>= \case
     Nothing -> compileError span $ "Type constructor not in scope: " <> c
     Just (EnvType poly _) -> do
-      -- Atm we assume type constructors are never constrained
+      -- Type constructors are not allowed to be constrained so no need to
+      -- build placeholders.
       (_, t) <- instantiate poly
       pure (constructor c, t, [])
   Case scrutinee alts -> do
@@ -119,12 +121,14 @@ inferExpr (span :< (unsafePrj -> expr)) = case expr of
     pure ( case' scrutExpr $ map fst alts'
          , resultType
          , scrutCs <> join (map snd alts') )
-  Let bindings rest -> do
-    (dict, ds) <- inferDefinitionGroup (map (\(n, e) -> (n, Nothing, e)) bindings)
-    let dict' = Map.fromList $ map (view _1 &&& defaultEnvType . view _3) dict
-    inExtendedTypeEnv dict' $ do
+  Let definitions rest -> do
+    -- No support for user defined signatures in let expression
+    (dict, ds) <- inferDefinitionGroup [] definitions
+    inExtendedTypeEnv (envFromDefinitions dict) $ do
       (restExpr, restType, cs) <- inferExpr rest
-      pure (let' (map (view _1 &&& view _2) dict) restExpr, restType, ds <> cs)
+      pure ( let' (map (view _1 &&& view _2) dict) restExpr
+           , restType
+           , ds <> cs )
   Accessor e field -> do
     (e', eType, cs) <- inferExpr e
     resultType <- freshType
@@ -147,107 +151,112 @@ inferLiteral lit = case lit of
          , ty
          , join $ Map.elems $ map (view _3) fields' )
 
+-- | Infer and generalize the types of a list of definitions. Every definition
+-- can optionally have a type signature that the inferred type will be checked
+-- against.
+--
+-- Returns the list of transformed ASTs and inferred signatures, as well as a
+-- list of deferred constraints.
 inferDefinitionGroup
-  :: [(Text, Maybe PolyType, SourceAst)]
+  :: [(Text, SourceAst, PolyType)]
+  -> [(Text, SourceAst)]
   -> Check ([(Text, Intermed, PolyType)], [Constraint])
-inferDefinitionGroup bindings = do
-  -- Partition into explicit and implicit bindings
-  let
-    (expls, impls) = partitionEithers $ flip map bindings $
-      \(n, mp, e) -> case mp of
-        Nothing -> Right (n, e)
-        Just p  -> Left (n, p, e)
+inferDefinitionGroup expls impls = do
+  -- Put explicit signatures in env
+  inExtendedTypeEnv (envFromDefinitions expls) $ do
 
+  (resultImpl, deferredImpl) <- inferImplicitDefinitions impls
+
+  -- Put inferred signatures in env
+  inExtendedTypeEnv (envFromDefinitions resultImpl) $ do
+
+  resultExpl <- traverse checkExplicitDefinition expls
+
+  pure ( resultImpl <> map fst resultExpl
+       , deferredImpl <> join (map snd resultExpl) )
+
+checkExplicitDefinition
+  :: (Text, SourceAst, PolyType)
+  -> Check ((Text, Intermed, PolyType), [Constraint])
+checkExplicitDefinition (name, e@(span :< _), polyGiven) = do
+  (e', t, cs) <- inferExpr e
+  (csGiven, tGiven) <- instantiate polyGiven
+  unifyTypes' span t tGiven
+
+  s <- getTypeSubst
+  env <- map etPoly . view checkEnvTypes <$> getCheckEnv
+  let
+    fixed = getFtvs (applyTypeSubst s env)
+    cs' = applyTypeSubst s cs
+    t' = applyTypeSubst s t
+    csGiven' = applyTypeSubst s csGiven
+    tGiven' = applyTypeSubst s tGiven
+    generic = getFtvs tGiven' Set.\\ fixed
+    poly = quantify (Set.toList generic) csGiven' t'
+  ps' <- filterM (\c -> not <$> entail csGiven' c) cs'
+  (deferred, retained) <- split fixed generic ps'
+
+  if normalizePoly polyGiven /= normalizePoly poly then
+      compileError span $
+        "The given type signature is too general. The inferred type is\n`" <>
+        prettyPolyType poly <> "` while the given signature was\n`" <>
+        prettyPolyType polyGiven <> "`."
+    else if not (null retained) then
+      compileError span $
+        "Not enough constraints given in the type signature. " <>
+        "Missing constraints that were inferred: `" <>
+        prettyConstraints retained <> "`."
+    else do
+      e'' <- resolveConstraints Map.empty e' csGiven'
+      pure ((name, e'', poly), deferred)
+
+inferImplicitDefinitions
+  :: [(Text, SourceAst)]
+  -> Check ([(Text, Intermed, PolyType)], [Constraint])
+inferImplicitDefinitions defs = do
+  -- Fix the type environment outside of the definition group for computing
+  -- the list of type variables that are "fixed" within te definition group.
   outerEnv <- map etPoly . view checkEnvTypes <$> getCheckEnv
 
-  -- Put explicit signatures in env
-  let
-    explDict = Map.fromList $ map (view _1 &&& defaultEnvType . view _2) expls
-  inExtendedTypeEnv explDict $ do
-
-  -- Check implicit bindings ---------------------------------------------------
-  implDict <- for impls $ \(name, _) -> do
+  -- First, put fresh polytypes into env. These get the `Recursive` tag so
+  -- that we can later insert `RecursiveCallPlaceholder`s for them.
+  dict <- for defs $ \(name, _) -> do
     t <- freshType
     pure (name, EnvType (ForAll [] [] t) Recursive)
-  -- First, put fresh polytypes into env
-  inExtendedTypeEnv (Map.fromList implDict) $ do
+  inExtendedTypeEnv (Map.fromList dict) $ do
 
-  result <- for impls $ \(name, e@(span :< _)) -> do
+  -- Infer
+  inferred <- for defs $ \(name, e@(span :< _)) -> do
     (e', t, cs) <- inferExpr e
+    -- Unify the inferred type with the fresh type to deal with recursion.
     Just (EnvType (ForAll _ _ t') _) <- lookupType name
     unifyTypes' span t t'
     pure (name, e', t, cs)
 
+  -- Calculate deferred and retained constraints.
   s <- getTypeSubst
-
   let
-    fixedImpl = getFtvs (applyTypeSubst s outerEnv)
-    genericImpl = let ts = map (applyTypeSubst s . view _3) result in
-      Set.unions (map getFtvs ts) Set.\\ fixedImpl
-  (deferredImpl, retainedImpl) <-
-           split fixedImpl genericImpl
-                 (applyTypeSubst s $ join $ map (view _4) result)
-  infoImpl <- for result $ \(name, e, t, cs) -> do
+    inferredTypes = map (applyTypeSubst s . view _3) inferred
+    fixed = getFtvs (applyTypeSubst s outerEnv)
+    generic = getFtvs inferredTypes Set.\\ fixed
+    css = applyTypeSubst s $ join $ map (view _4) inferred 
+  (deferred, retained) <- split fixed generic css
+                 
+  -- Quantify over the intersection of retained and the inferred constraints
+  quantified <- for inferred $ \(name, e, t, cs) -> do
     cs' <- reduce (applyTypeSubst s cs)
     let
-      poly = quantify (Set.toList genericImpl)
-                      [c | c <- retainedImpl, c `elem` applyTypeSubst s cs']
-                      (applyTypeSubst s t)
-    pure (name, e, poly)
-
-  -- Check explicit bindings ---------------------------------------------------
-  infoExpl <- for expls $ \(name, polyGiven, e@(span :< _)) -> do
-    (e', t, cs) <- inferExpr e
-    (csGiven, tGiven) <- instantiate polyGiven
-    unifyTypes' span t tGiven
-    s <- getTypeSubst
-    let
-      fs = getFtvs (applyTypeSubst s outerEnv)
-      cs' = applyTypeSubst s cs
-      t' = applyTypeSubst s t
-      csGiven' = applyTypeSubst s csGiven
-      tGiven' = applyTypeSubst s tGiven
-      gs = getFtvs tGiven' `Set.difference` fs
-      poly = quantify (Set.toList gs) csGiven' t'
-    ps' <- filterM (\c -> not <$> entail csGiven' c) cs'
-    (ds, rs) <- split fs gs ps'
-    if normalizePoly polyGiven /= normalizePoly poly then
-        compileError span $
-          "The given type signature is too general. The inferred type is\n`" <>
-          prettyPolyType poly <> "` while the given signature was\n`" <>
-          prettyPolyType polyGiven <> "`."
-      else if not (null rs) then
-        compileError span $
-          "Not enough constraints given in the type signature. " <>
-          "Missing constraints that were inferred: `" <>
-          prettyConstraints rs <> "`."
-      else
-        pure ((name, e', poly), ds)
-    
-  let allDeferred = deferredImpl <> join (map snd infoExpl)
-  let allInfo = infoImpl <> map fst infoExpl
+      rs = [c | c <- retained, c `elem` applyTypeSubst s cs']
+      poly = quantify (Set.toList generic) rs (applyTypeSubst s t)
+    pure (name, e, poly, rs)
 
   -- Resolve placeholders
-  let recConstrs =
-        Map.fromList $ map (\(name, _, ForAll _ cs _) -> (name, cs)) allInfo
-  resolvedInfo <- for allInfo $ \(name, e, poly@(ForAll _ cs _)) -> do
-    traceM $ name <> " :: " <> prettyPolyType poly
-    traceM $ name <> " with placeholders: " <> prettyIntermed e
-    s <- getTypeSubst
-    let cs' = applyTypeSubst s cs
-    dicts <- for cs' $ \(IsIn cls t) -> do
-      n <- freshName
-      case t of
-        Fix (TypeVar v) -> pure (ByTypeVar cls v, n)
-        _ -> compileError voidSpan $
-          "Internal? Type in retained constraint not a type variable."
-    inExtendedInstanceEnv (Map.fromList dicts) $ do
-      e' <- resolvePlaceholders recConstrs e
-      let e'' = foldr (abs . varBinder . snd) e' dicts
-      traceM $ name <> " after resolving: " <> prettyIntermed e''
-      pure (name, e'', poly)
+  let recConstrs = Map.fromList $ map (view _1 &&& view _4) quantified
+  resolved <- for quantified $ \(name, e, poly, cs) -> do
+    e' <- resolveConstraints recConstrs e cs
+    pure (name, e', poly)
 
-  pure (resolvedInfo, allDeferred)
+  pure (resolved, deferred)
 
 inferBinder :: Type -> SourceBinder -> Check (Map Text EnvType)
 inferBinder expected (span :< b) = case b of
@@ -272,6 +281,23 @@ inferBinder expected (span :< b) = case b of
           go args rest             = (args, rest)
 
 --------------------------------------------------------------------------------
+
+-- | Inserts a lambda expression that binds a dictionary for every constraint
+-- and then resolves placeholders in the given transformed expression.
+resolveConstraints
+  :: Map Text [Constraint] -> Intermed -> [Constraint] -> Check Intermed
+resolveConstraints recConstrs e cs = do
+  s <- getTypeSubst
+  dicts <- for (applyTypeSubst s cs) $ \(IsIn cls t) -> do
+    n <- freshName
+    flip cata t $ \case
+      TypeVar v -> pure (ByTypeVar cls v, n)
+      TypeApp f _ -> f
+      _ -> internalError Nothing $
+        "Type in retained constraint not in head-normal form."
+  inExtendedInstanceEnv (Map.fromList dicts) $ do
+    e' <- resolvePlaceholders recConstrs e
+    pure $ foldr (abs . varBinder . snd) e' dicts
 
 resolvePlaceholders :: Map Text [Constraint] -> Intermed -> Check Intermed
 resolvePlaceholders recConstrs =
@@ -324,7 +350,9 @@ resolvePlaceholders recConstrs =
             unifyTypes' span t'' t
             let dictPlaceholders =
                   map (dictionaryPlaceholder span . map injFix) cs
-            Just <$> resolvePlaceholders recConstrs (foldl' app d dictPlaceholders)
+            Just <$> resolvePlaceholders
+                       recConstrs
+                       (foldl' app d dictPlaceholders)
       TypeApp f' _ -> f'
       _ -> compileError span $
         "Internal? Found record type when resolving placeholder."
@@ -453,8 +481,7 @@ checkModule' decls = do
                             (extractValueDecls decls)
 
   -- Put value types into scope
-  let valuePolys = map (view _1 &&& defaultEnvType . view _3) result
-  inExtendedTypeEnv (Map.fromList valuePolys) $ do
+  inExtendedTypeEnv (envFromDefinitions result) $ do
 
   -- Build instance dictionaries
   instDicts <- for instanceDecls buildInstanceDict
@@ -480,6 +507,7 @@ checkFormula' (decls, expr) = do
     i' <- resolvePlaceholders Map.empty i
     c <- compileIntermed i'
     let gs = getFtvs t
+    -- TODO: check that there are no deferred constraints
     -- TODO: check type given by column
     let poly = ForAll (Set.toList gs) [] t
     pure (Core.Let (Map.toList exprs) c, poly)
@@ -489,17 +517,19 @@ checkTypeDecl span (ForAll as cs t) = do
   -- TODO: Check constraints
   quantifierDict <- freshKindDict as
   inExtendedKindEnv quantifierDict $ do
-    inferred <- inferKind t
+    inferred <- inferType t
     unifyKinds span inferred kindType
 
 checkInstanceDecl :: ExInstanceDecl -> Check (DictLookup, Text)
 checkInstanceDecl ExInstanceDecl {..} = do
-  let IsIn cls (stripAnn -> t) = iHead
+  let IsIn cls t'@(stripAnn -> t) = iHead
   lookupClass cls >>= \case
     Nothing -> compileError iSpan $
       "Instance class `" <> cls <> "` not defined."
     Just (supers, param, kind, sigs, insts) -> do
-      -- TODO: check kind of t
+      -- Check kind of instance type
+      k' <- inferType t'
+      let (s :< _) = t' in unifyKinds s k' kind
       -- Check for overlapping instances
       for_ insts $ \(_, c) -> do
         overlap <- unifyConstraints (IsIn cls t) c
@@ -554,23 +584,17 @@ buildInstanceDict ExInstanceDecl {..} = do
         pure (ByTypeVar cls' v, n)
       result <- inExtendedInstanceEnv (Map.fromList csDict) $ do
         for iMethods $ \ExValueDecl {..} -> do
-          (e', t', cs') <- inferExpr vExpr
+          (e', t', cs) <- inferExpr vExpr
           Just (EnvType (ForAll _ _ givenT) _) <- lookupType vName
           unifyTypes' vSpan t' (applyTypeSubst (Map.singleton param t) givenT)
-          s <- getTypeSubst
-          traceM $ vName <> " :: " <> prettyType (applyTypeSubst s t')
-          traceM $ vName <> " constraints: " <> prettyConstraints (applyTypeSubst s cs')
           -- TODO: make sure `cs` equals the instance constraints
-          traceM $ vName <> " before: " <> prettyIntermed e'
           e'' <- resolvePlaceholders Map.empty e'
-          traceM $ vName <> " after: " <> prettyIntermed e''
           pure (vName, e'')
       -- Build instance dictionaries
       let record = literal $ RecordLit $ Map.union
             (Map.fromList superDicts)
             (Map.fromList $ map (view _1 &&& view _2) result)
           interm = foldr abs record $ map (varBinder . snd) csDict
-      traceM $ "dict: " <> prettyIntermed interm
       dict <- compileIntermed interm
       pure ("$" <> cls <> headConstructor, dict)
 
@@ -617,7 +641,7 @@ checkADTs dataDecls = do
       inExtendedKindEnv argTypeDict $ do
         for_ dConstrs $ \(_, cargs) ->
           for cargs $ \carg@(cargSpan :< _) -> do
-            argKind <- inferKind carg
+            argKind <- inferType carg
             unifyKinds cargSpan kindType argKind
       k <- fromJust <$> lookupKind dName
       let argKinds = map (\a -> fromJust $ Map.lookup a argTypeDict) dArgs
@@ -633,7 +657,8 @@ checkADTs dataDecls = do
       (cname, cargs) <- dConstrs
       let ty = foldr (-->) result (stripAnn <$> cargs)
       pure $ (cname, ty)
-    polyEnv = map (\(name, t) -> (name, ForAll (Set.toList $ getFtvs t) [] t)) typeEnv
+    quant t = ForAll (Set.toList $ getFtvs t) [] t
+    polyEnv = map (id *** quant) typeEnv
   pure (kindEnv, map defaultEnvType $ Map.fromList polyEnv)
 
 checkValueDecls
@@ -642,24 +667,33 @@ checkValueDecls
   -> Check [(Text, Intermed, PolyType)]
 checkValueDecls declaredTypes decls = do
   let
-    defs = flip map decls $ \ExValueDecl {..} ->
-      ( vName
-      , Map.lookup vName declaredTypes
-      , vExpr
-      )
-  (intermeds, ds) <- inferDefinitionGroup defs
-  traceM $ "checkValues deferred: " <> show (length ds)
+    (impls, expls) = partitionEithers $ flip map decls $ \ExValueDecl {..} ->
+      case Map.lookup vName declaredTypes of
+        Nothing -> Left (vName, vExpr)
+        Just p -> Right (vName, vExpr, p)
+  (intermeds, ds) <- inferDefinitionGroup expls impls
+  unless (null ds) $ internalError Nothing $
+    "Deferred the following constraints while checking top-level definitions: "
+    <> prettyConstraints ds
   pure intermeds
 
 --------------------------------------------------------------------------------
 
+envFromDefinitions :: [(Text, a, PolyType)] -> Map Text EnvType
+envFromDefinitions = Map.fromList . map (view _1 &&& defaultEnvType . view _3)
+
 cleanUpIntermed :: Intermed -> Check Compiled
-cleanUpIntermed = cataM (intermed goExpr goBinder goType goPlaceholder goRef)
+cleanUpIntermed i =
+  cataM (intermed goExpr goBinder goType goPlaceholder goRef) i
   where
   goExpr          = nothing
   goBinder        = nothing
-  goType _        = error "No type expected"
-  goPlaceholder _ = error "No placeholder expected"
+  goType _        = internalError Nothing $
+    "Encountered type while cleaning up transformed AST:\n" <>
+    prettyIntermed i
+  goPlaceholder _ = internalError Nothing $
+    "Encountered placeholder while cleaning up transformed AST:\n" <>
+    prettyIntermed i
   goRef           = nothing
 
 compileIntermed :: Intermed -> Check Core.Expr

@@ -19,6 +19,10 @@ data Error = Error
   , errSpan :: Span
   } deriving (Show)
 
+internalError :: MonadError Error m => Maybe Span -> Text -> m a
+internalError mSpan msg =
+  compileError (fromMaybe voidSpan mSpan) ("Internal error: " <> msg)
+
 compileError :: MonadError Error m => Span -> Text -> m a
 compileError span msg = throwError (Error (msg <> "\n") span)
 

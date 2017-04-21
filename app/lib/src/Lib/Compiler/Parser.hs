@@ -99,7 +99,7 @@ parseInstanceDecl = withSource $ do
 
 parseTypeDecl :: Parser SourceAst
 parseTypeDecl = withSource $ inj <$> (TypeDecl
-  <$> (identifier <* doubleColon)
+  <$> (identifier <* colon)
   <*> (map (hoistCofree inj) <$> parsePolyType)
                                      )
 

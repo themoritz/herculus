@@ -91,34 +91,48 @@ data List a
   | Cons a (List a)
 
 class Functor f where
-  map :: forall a b. (a -> b) -> f a -> f b
+  map : forall a b. (a -> b) -> f a -> f b
 
 instance Functor List where
   map f xs = case xs of
     Nil -> Nil
     Cons a as -> Cons (f a) (map f as)
 
-conj :: Boolean -> Boolean -> Boolean
+conj : Boolean -> Boolean -> Boolean
 conj x y = if x then False else y
 
-disj :: Boolean -> Boolean -> Boolean
+disj : Boolean -> Boolean -> Boolean
 disj x y = if x then True else y
 
-not :: Boolean -> Boolean
+not : Boolean -> Boolean
 not x = if x then False else True
 
-append :: forall a. List a -> List a -> List a
+append : forall a. List a -> List a -> List a
 append xs ys = case xs of
   Nil -> ys
   Cons a as -> Cons a (append as ys)
 
-join :: forall a. List (List a) -> List a
+join : forall a. List (List a) -> List a
 join xss = case xss of
   Nil -> Nil
   Cons as ass -> append as (join ass)
 
+class Eq a where
+  eq : a -> a -> Boolean
+
+instance Eq Boolean where
+  eq a b = case Tuple a b of
+    Tuple True True -> True
+    Tuple False False -> True
+    other -> False
+
+member : forall a. Eq a => a -> List a -> Boolean
+member x xs = case xs of
+  Nil -> False
+  Cons a as -> if eq x a then True else member x as
+
 class Print a where
-  print :: a -> List Boolean
+  print : a -> List Boolean
 
 instance Print Boolean where
   print x = Cons x Nil
