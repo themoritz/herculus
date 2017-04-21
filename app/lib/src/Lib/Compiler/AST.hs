@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveFunctor         #-}
-{-# LANGUAGE DeriveTraversable         #-}
+{-# LANGUAGE DeriveTraversable     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE TypeFamilies          #-}

@@ -99,6 +99,8 @@ library
                      , LambdaCase
                      , BangPatterns
                      , RecordWildCards
+                     , ViewPatterns
+                     , TupleSections
   ghc-options:         -Wall
 
 executable psc-gen

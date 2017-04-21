@@ -3,7 +3,8 @@
 {-# LANGUAGE NoImplicitPrelude         #-}
 {-# LANGUAGE StandaloneDeriving        #-}
 {-# LANGUAGE TemplateHaskell           #-}
-{-# LANGUAGE ViewPatterns              #-}
+{-# LANGUAGE TypeOperators             #-}
+{-# LANGUAGE FlexibleContexts          #-}
 -- |
 
 module Lib.Compiler.Checker.Monad where
@@ -16,101 +17,141 @@ import           Control.Monad.Trans.Free
 import           Data.Functor.Foldable
 import qualified Data.Map                  as Map
 
+import Lib.Model.Column
+import Lib.Model.Table
+import Lib.Types
 import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Env
 import           Lib.Compiler.Error
 import           Lib.Compiler.Pretty
 import           Lib.Compiler.Type
 
+
+type Check = FreeT Check' (Except Error)
+
+type Check' = CheckF :+: ResolveF
+
+liftCheck :: f :<: Check' => f a -> Check a
+liftCheck = liftF . inj
+
+--------------------------------------------------------------------------------
+
 data CheckF a
   = FreshKind (Kind -> a)
   | FreshType (Type -> a)
   | FreshName (Text -> a)
+  --
   | UnifyKinds Span Kind Kind a
   | UnifyTypes Span Type Type (Either Error () -> a)
+  --
   | LookupKind Text (Maybe Kind -> a)
   | LookupType Text (Maybe EnvType -> a)
   | LookupInstanceDict DictLookup (Maybe Text -> a)
   | LookupClass Text (Maybe Class -> a)
-  | AddClass Text Class a
-  | AddInstance Text Instance a
+  --
   | GetKindSubst (KindSubst -> a)
   | GetTypeSubst (TypeSubst -> a)
   | GetCheckEnv (CheckEnv -> a)
+  --
+  | AddClass Text Class a
+  | AddInstance Text Instance a
   | forall b. InExtendedEnv CheckEnv (Check b) (b -> a)
   | forall b. InExtendedKindEnv (Map Text Kind) (Check b) (b -> a)
   | forall b. InExtendedTypeEnv (Map Text EnvType) (Check b) (b -> a)
   | forall b. InExtendedInstanceEnv (Map DictLookup Text) (Check b) (b -> a)
   | forall b. Retain (Check b) (b -> a)
+  --
   | DebugEnv a
   | DebugTypeSubst a
 
 deriving instance Functor CheckF
 
-type Check = FreeT CheckF (Except Error)
-
 freshKind :: Check Kind
-freshKind = liftF $ FreshKind id
+freshKind = liftCheck $ FreshKind id
 
 freshType :: Check Type
-freshType = liftF $ FreshType id
+freshType = liftCheck $ FreshType id
 
 freshName :: Check Text
-freshName = liftF $ FreshName id
+freshName = liftCheck $ FreshName id
 
 unifyKinds :: Span -> Kind -> Kind -> Check ()
-unifyKinds span k1 k2 = liftF $ UnifyKinds span k1 k2 ()
+unifyKinds span k1 k2 = liftCheck $ UnifyKinds span k1 k2 ()
 
 unifyTypes :: Span -> Type -> Type -> Check (Either Error ())
-unifyTypes span t1 t2 = liftF $ UnifyTypes span t1 t2 id
+unifyTypes span t1 t2 = liftCheck $ UnifyTypes span t1 t2 id
 
 lookupKind :: Text -> Check (Maybe Kind)
-lookupKind t = liftF $ LookupKind t id
+lookupKind t = liftCheck $ LookupKind t id
 
 lookupType :: Text -> Check (Maybe EnvType)
-lookupType t = liftF $ LookupType t id
+lookupType t = liftCheck $ LookupType t id
 
 lookupInstanceDict :: DictLookup -> Check (Maybe Text)
-lookupInstanceDict c = liftF $ LookupInstanceDict c id
+lookupInstanceDict c = liftCheck $ LookupInstanceDict c id
 
 lookupClass :: Text -> Check (Maybe Class)
-lookupClass n = liftF $ LookupClass n id
+lookupClass n = liftCheck $ LookupClass n id
 
 addClass :: Text -> Class -> Check ()
-addClass n c = liftF $ AddClass n c ()
+addClass n c = liftCheck $ AddClass n c ()
 
 addInstance :: Text -> Instance -> Check ()
-addInstance c i = liftF $ AddInstance c i ()
+addInstance c i = liftCheck $ AddInstance c i ()
 
 getKindSubst :: Check KindSubst
-getKindSubst = liftF $ GetKindSubst id
+getKindSubst = liftCheck $ GetKindSubst id
 
 getTypeSubst :: Check TypeSubst
-getTypeSubst = liftF $ GetTypeSubst id
+getTypeSubst = liftCheck $ GetTypeSubst id
 
 getCheckEnv :: Check CheckEnv
-getCheckEnv = liftF $ GetCheckEnv id
+getCheckEnv = liftCheck $ GetCheckEnv id
 
 inExtendedEnv :: CheckEnv -> Check a -> Check a
-inExtendedEnv env m = liftF $ InExtendedEnv env m id
+inExtendedEnv env m = liftCheck $ InExtendedEnv env m id
 
 inExtendedKindEnv :: Map Text Kind -> Check a -> Check a
-inExtendedKindEnv env m = liftF $ InExtendedKindEnv env m id
+inExtendedKindEnv env m = liftCheck $ InExtendedKindEnv env m id
 
 inExtendedTypeEnv :: Map Text EnvType -> Check a -> Check a
-inExtendedTypeEnv env m = liftF $ InExtendedTypeEnv env m id
+inExtendedTypeEnv env m = liftCheck $ InExtendedTypeEnv env m id
 
 inExtendedInstanceEnv :: Map DictLookup Text -> Check a -> Check a
-inExtendedInstanceEnv env m = liftF $ InExtendedInstanceEnv env m id
+inExtendedInstanceEnv env m = liftCheck $ InExtendedInstanceEnv env m id
 
 retain :: Check a -> Check a
-retain m = liftF $ Retain m id
+retain m = liftCheck $ Retain m id
 
 debugEnv :: Check ()
-debugEnv = liftF $ DebugEnv ()
+debugEnv = liftCheck $ DebugEnv ()
 
 debugTypeSubst :: Check ()
-debugTypeSubst = liftF $ DebugTypeSubst ()
+debugTypeSubst = liftCheck $ DebugTypeSubst ()
+
+--------------------------------------------------------------------------------
+
+data ResolveF a
+  = GetTableRowType (Id Table) (Type -> a)
+  | ResolveColumnOfTableRef (Ref Table) (Ref Column) (Maybe (Id Table, Id Column, DataCol) -> a)
+  | ResolveColumnRef (Ref Column) (Maybe (Id Column, DataCol) -> a)
+  | ResolveTableRef (Ref Table) (Maybe (Id Table) -> a)
+  deriving (Functor)
+
+getTableRowType :: Id Table -> Check Type
+getTableRowType t = liftCheck $ GetTableRowType t id
+
+resolveColumnOfTableRef
+  :: Ref Table -> Ref Column -> Check (Maybe (Id Table, Id Column, DataCol))
+resolveColumnOfTableRef t c = liftCheck $ ResolveColumnOfTableRef t c id
+
+resolveColumnRef :: Ref Column -> Check (Maybe (Id Column, DataCol))
+resolveColumnRef c = liftCheck $ ResolveColumnRef c id
+
+resolveTableRef :: Ref Table -> Check (Maybe (Id Table))
+resolveTableRef c = liftCheck $ ResolveTableRef c id
+
+--------------------------------------------------------------------------------
 
 data Origin
   = Recursive
@@ -170,8 +211,9 @@ runCheck env =
   flip evalStateT (CheckState env 0 Map.empty Map.empty) .
   iterTM go
   where
-  go :: CheckF (CheckInterp a) -> CheckInterp a
-  go = \case
+  go :: Check' (CheckInterp a) -> CheckInterp a
+  go = coproduct goCheck undefined
+  goCheck = \case
     FreshKind reply -> do
       i <- checkCount <+= 1
       reply $ kindUnknown i

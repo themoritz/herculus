@@ -1,15 +1,5 @@
-{-# LANGUAGE DeriveFunctor             #-}
-{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE FlexibleInstances         #-}
-{-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE NoImplicitPrelude         #-}
-{-# LANGUAGE StandaloneDeriving        #-}
-{-# LANGUAGE TemplateHaskell           #-}
-{-# LANGUAGE TupleSections             #-}
-{-# LANGUAGE TypeOperators             #-}
-{-# LANGUAGE TypeSynonymInstances      #-}
-{-# LANGUAGE ViewPatterns              #-}
 -- |
 
 module Lib.Compiler.Checker where
@@ -18,7 +8,7 @@ import           Lib.Prelude                  hiding (abs)
 
 import           Control.Comonad.Cofree
 import qualified Control.Comonad.Trans.Cofree as T
-import Control.Monad.Trans.Maybe
+import           Control.Monad.Trans.Maybe
 import           Control.Lens                 hiding ((:<))
 
 import           Data.Functor.Foldable
@@ -75,19 +65,26 @@ inferType = cataM $ \case
 -- | Infer the type of an expression. Also generates a transformed AST that
 -- may contain placeholders, and a list of deferred constraints.
 inferExpr :: SourceAst -> Check (Intermed, Type, [Constraint])
-inferExpr (span :< (unsafePrj -> expr)) = case expr of
-  Literal lit -> inferLiteral lit
+inferExpr (span :< a) =
+  ast undefined (inferExpr' span) undefined undefined (inferRef' span) a
+
+inferExpr' :: Span -> ExprF SourceAst -> Check (Intermed, Type, [Constraint])
+inferExpr' span = \case
+  Literal lit -> inferLiteral' lit
+
   Abs (hoistCofree unsafePrj -> binder) e -> do
     argType <- freshType
     binderDict <- inferBinder argType binder
     (e', resultType, cs) <- inExtendedTypeEnv binderDict $ inferExpr e
     pure (abs (injFix $ stripAnn binder) e', argType --> resultType, cs)
+
   App f arg -> do
     (fExpr, fType, fCs) <- inferExpr f
     (argExpr, argType, argCs) <- inferExpr arg
     resultType <- freshType
     unifyTypes' span fType (argType --> resultType)
     pure (app fExpr argExpr, resultType, fCs <> argCs)
+
   Var x -> lookupType x >>= \case
     Nothing -> compileError span $ "Variable not in scope: " <> x
     Just (EnvType poly origin) -> do
@@ -99,17 +96,18 @@ inferExpr (span :< (unsafePrj -> expr)) = case expr of
         Method -> case constraints of
           [c] -> pure $ methodPlaceholder span (map injFix c) x
           _ -> internalError (Just span) $
-            "Expected at least one constraint while looking up " <>
+            "Expected exactly one constraint while looking up " <>
             "method variable `" <> x <> "`."
         Recursive -> pure $ recursiveCallPlaceholder span x
       pure (e, t, constraints)
+
   Constructor c -> lookupType c >>= \case
     Nothing -> compileError span $ "Type constructor not in scope: " <> c
     Just (EnvType poly _) -> do
-      -- Type constructors are not allowed to be constrained so no need to
-      -- build placeholders.
+      -- Type constructors aren't constrained so no need for placeholders here.
       (_, t) <- instantiate poly
       pure (constructor c, t, [])
+
   Case scrutinee alts -> do
     resultType <- freshType
     (scrutExpr, scrutType, scrutCs) <- inferExpr scrutinee
@@ -121,6 +119,7 @@ inferExpr (span :< (unsafePrj -> expr)) = case expr of
     pure ( case' scrutExpr $ map fst alts'
          , resultType
          , scrutCs <> join (map snd alts') )
+
   Let definitions rest -> do
     -- No support for user defined signatures in let expression
     (dict, ds) <- inferDefinitionGroup [] definitions
@@ -129,6 +128,7 @@ inferExpr (span :< (unsafePrj -> expr)) = case expr of
       pure ( let' (map (view _1 &&& view _2) dict) restExpr
            , restType
            , ds <> cs )
+
   Accessor e field -> do
     (e', eType, cs) <- inferExpr e
     resultType <- freshType
@@ -137,8 +137,8 @@ inferExpr (span :< (unsafePrj -> expr)) = case expr of
     unifyTypes' span eType recordType
     pure (accessor e' field, resultType, cs)
 
-inferLiteral :: LiteralF SourceAst -> Check (Intermed, Type, [Constraint])
-inferLiteral lit = case lit of
+inferLiteral' :: LiteralF SourceAst -> Check (Intermed, Type, [Constraint])
+inferLiteral' lit = case lit of
   NumberLit n      -> pure (literal $ NumberLit n, tyNumber, [])
   IntegerLit i     -> pure (literal $ IntegerLit i, tyInteger, [])
   StringLit s      -> pure (literal $ StringLit s, tyString, [])
@@ -150,6 +150,13 @@ inferLiteral lit = case lit of
     pure ( literal $ RecordLit (map (view _1) fields')
          , ty
          , join $ Map.elems $ map (view _3) fields' )
+
+inferRef' :: Span -> RefTextF SourceAst -> Check (Intermed, Type, [Constraint])
+inferRef' span = \case
+  TableRef t -> resolveTableRef t >>= \case
+    Nothing -> compileError span $ "Cannot find table `" <> show t <> "`."
+  ColumnRef c -> undefined
+  ColumnOfTableRef t c ->  undefined
 
 -- | Infer and generalize the types of a list of definitions. Every definition
 -- can optionally have a type signature that the inferred type will be checked
