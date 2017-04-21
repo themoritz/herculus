@@ -437,15 +437,11 @@ checkModule' decls = do
   inExtendedTypeEnv (Map.unions classEnvs) $ do
 
   -- Check all instance declarations
-  instances <- for (extractInstanceDecls decls) checkInstanceDecl
-  let
-    instDicts =
-      Map.fromList $ map (\((_, name), dict) -> (name, dict)) instances
-    instEnv =
-      Map.fromList $ map fst instances
+  let instanceDecls = extractInstanceDecls decls
+  instEnv <- for instanceDecls checkInstanceDecl
 
   -- Put instance env into scope
-  inExtendedInstanceEnv instEnv $ do
+  inExtendedInstanceEnv (Map.fromList instEnv) $ do
 
   -- Check all type signatures
   declaredTypes <- for (extractTypeDecls decls) $ \ExTypeDecl {..} -> do
@@ -460,11 +456,14 @@ checkModule' decls = do
   let valuePolys = map (view _1 &&& defaultEnvType . view _3) result
   inExtendedTypeEnv (Map.fromList valuePolys) $ do
 
+  -- Build instance dictionaries
+  instDicts <- for instanceDecls buildInstanceDict
+
   debugTypeSubst
 
   -- Collect exports and compile expressions
   exprs <- for result $ \(name, i, _) -> (name, ) <$> compileIntermed i
-  let moduleExprs = Map.fromList exprs `Map.union` instDicts
+  let moduleExprs = Map.fromList exprs `Map.union` Map.fromList instDicts
   env <- getCheckEnv
   pure (env, moduleExprs)
 
@@ -493,7 +492,7 @@ checkTypeDecl span (ForAll as cs t) = do
     inferred <- inferKind t
     unifyKinds span inferred kindType
 
-checkInstanceDecl :: ExInstanceDecl -> Check ((DictLookup, Text), Core.Expr)
+checkInstanceDecl :: ExInstanceDecl -> Check (DictLookup, Text)
 checkInstanceDecl ExInstanceDecl {..} = do
   let IsIn cls (stripAnn -> t) = iHead
   lookupClass cls >>= \case
@@ -521,24 +520,30 @@ checkInstanceDecl ExInstanceDecl {..} = do
       -- Add to class env
       addInstance cls (map (map stripAnn) iConstraints, IsIn cls t)
       -- Check instance head and derive dictionary name for this instance
-      headConstructor <- flip cata t $ \case
-        TypeConstructor c -> pure c
-        TypeApp f _ -> f
-        _ -> compileError iSpan $ "Instance head must be type constructor."
+      headConstructor <- getTypeConstructor iSpan t
       let dictName = "$" <> cls <> headConstructor
+      pure (ByConstructor cls headConstructor, dictName)
+
+getTypeConstructor :: Span -> Type -> Check Text
+getTypeConstructor span = cata $ \case
+  TypeConstructor c -> pure c
+  TypeApp f _ -> f
+  _ -> compileError span $ "Instance head must be type constructor."
+
+buildInstanceDict :: ExInstanceDecl -> Check (Text, Core.Expr)
+buildInstanceDict ExInstanceDecl {..} = do
+  let IsIn cls (stripAnn -> t) = iHead
+  lookupClass cls >>= \case
+    Nothing -> compileError iSpan $
+      "Internal: Instance class `" <> cls <> "` not defined."
+    Just (supers, param, _, _, _) -> do
+      headConstructor <- getTypeConstructor iSpan t
       -- Check instances for all superclasses are defined and build super dict
-      superDicts <- for supers $ \super -> lookupClass super >>= \case
-        Nothing -> compileError iSpan "Internal: superclass not found"
-        Just (_, _, _, _, insts') -> do
-          mEntries <- for insts' $ \(_, c) -> do
-            traceM $ "superinst: " <> prettyConstraint c
-            unifyConstraints (IsIn super t) c >>= \case
-              True -> pure $ Just (super, var $ "$" <> super <> headConstructor)
-              False -> pure $ Nothing
-          case msum mEntries of
-            Nothing -> compileError iSpan $
-              "No instance for superclass `" <> super <> "` implemented."
-            Just entry -> pure entry
+      superDicts <- for supers $ \super ->
+        lookupInstanceDict (ByConstructor super headConstructor) >>= \case
+          Nothing -> compileError iSpan $
+            "No instance for superclass `" <> super <> "` implemented."
+          Just d -> pure (super, var d)
       -- Check constraints
       csDict <- for iConstraints $ \(IsIn cls' (stripAnn -> t')) -> do
         n <- freshName
@@ -547,8 +552,7 @@ checkInstanceDecl ExInstanceDecl {..} = do
           _ -> compileError iSpan $
             "Type of instance constraint must be type variable."
         pure (ByTypeVar cls' v, n)
-      let self = (ByConstructor cls headConstructor, dictName)
-      result <- inExtendedInstanceEnv (Map.fromList $ self : csDict) $ do
+      result <- inExtendedInstanceEnv (Map.fromList csDict) $ do
         for iMethods $ \ExValueDecl {..} -> do
           (e', t', cs') <- inferExpr vExpr
           Just (EnvType (ForAll _ _ givenT) _) <- lookupType vName
@@ -568,7 +572,7 @@ checkInstanceDecl ExInstanceDecl {..} = do
           interm = foldr abs record $ map (varBinder . snd) csDict
       traceM $ "dict: " <> prettyIntermed interm
       dict <- compileIntermed interm
-      pure (self, dict)
+      pure ("$" <> cls <> headConstructor, dict)
 
 checkClassDecl :: ExClassDecl -> Check (Map Text EnvType)
 checkClassDecl ExClassDecl {..} = do
