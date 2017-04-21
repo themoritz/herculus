@@ -1,7 +1,15 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 -- |
 
-module Lib.Compiler.Pretty where
+module Lib.Compiler.Pretty
+  ( prettyKind
+  , prettyType
+  , prettyPolyType
+  , prettyConstraint
+  , prettyConstraints
+  , prettyAst
+  , prettyIntermed
+  ) where
 
 import           Lib.Prelude                  hiding (empty)
 

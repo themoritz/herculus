@@ -8,14 +8,13 @@ module Lib.Compiler where
 import           Lib.Prelude
 
 import qualified Data.Map                   as Map
-import           Data.Text                  (Text, pack, unpack)
 
 import           NeatInterpolation
 import           Text.Show.Pretty
 
-import           Lib.Model.Cell
-import           Lib.Model.Column
-import           Lib.Types
+-- import           Lib.Model.Cell
+-- import           Lib.Model.Column
+-- import           Lib.Types
 
 import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
@@ -97,15 +96,25 @@ class Print a where
 instance Print Boolean where
   print x = Cons x Nil
 
-instance Print a => Print (List a) where
-  print xs = case xs of
-    Nil -> Nil
-    Cons a as -> print a
+class Eq a where
+  eq :: a -> a -> Boolean
 
-instance Print a => Print b => Print (Tuple a b) where
-  print (Tuple a b) = print a
+class Eq a => Ord a where
+  less :: a -> a -> Boolean
 
-f x = print (Tuple (Cons True Nil) x)
+instance Eq Boolean where
+  eq a b = True
+
+instance Ord Boolean where
+  less a b = case Tuple a b of
+    Tuple False True -> True
+    other -> False
+
+more a b = case eq a b of
+  True -> False
+  False -> case less a b of
+    True -> False
+    False -> True
 |]
 
 withParsed :: Text -> Parser a -> (a -> IO ()) -> IO ()

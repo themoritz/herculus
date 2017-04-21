@@ -275,50 +275,59 @@ inferBinder expected (span :< b) = case b of
 
 resolvePlaceholders :: Map Text [Constraint] -> Intermed -> Check Intermed
 resolvePlaceholders recConstrs =
-    cataM (intermed nothing nothing nothing goPlaceholder nothing)
+  cataM (intermed nothing nothing nothing goPlaceholder nothing)
   where
-    goPlaceholder :: PlaceholderF Intermed -> Check Intermed
-    goPlaceholder p = do
-      case p of
-        DictionaryPlaceholder span c -> do
-          withInstanceDict span c pure
-        MethodPlaceholder span c name -> do
-          withInstanceDict span c $ \d ->
-            pure $ accessor d name
-        RecursiveCallPlaceholder span name -> do
-          case Map.lookup name recConstrs of
-            Just cs -> do
-              let ps = map (dictionaryPlaceholder span . map injFix) cs
-              resolvePlaceholders recConstrs $ foldl' app (var name) ps
-            Nothing -> pure $ Fix $ inj p
 
-      where
-      withInstanceDict span (IsIn cls (unsafePrjFix -> t)) f = do
-        s <- getTypeSubst
-        f =<< buildDict (applyTypeSubst s t)
-        where
-        buildDict :: Type -> Check Intermed
-        buildDict t' = flip cata t' $ \case
-          TypeVar v -> getDict $ ByTypeVar cls v
-          TypeConstructor c -> do
-            d <- getDict $ ByConstructor cls c
-            byInst (IsIn cls t') >>= \case
-              Nothing -> compileError span $
-                "Cannot find dict for constraint: " <> prettyConstraint (IsIn cls t')
-              Just inst -> do
-                (cs, t'') <- instantiateInstance inst
-                unifyTypes' span t'' t
-                let dictPlaceholders =
-                      map (dictionaryPlaceholder span . map injFix) cs
-                resolvePlaceholders recConstrs $ foldl' app d dictPlaceholders
-          TypeApp f' _ -> f'
-          _ -> compileError span "Found record type when resolving placeholder."
-        getDict :: DictLookup -> Check Intermed
-        getDict key = lookupInstanceDict key >>= \case
+  goPlaceholder :: PlaceholderF Intermed -> Check Intermed
+  goPlaceholder p = case p of
+    DictionaryPlaceholder span c -> getDict span c >>= \case
+      -- Not found: placeholder will be resolved in surrounding scope
+      Nothing -> pure $ Fix $ inj p
+      Just d -> pure d
+    MethodPlaceholder span c name -> getDict span c >>= \case
+      -- Not found: placeholder will be resolved in surrounding scope
+      Nothing -> pure $ Fix $ inj p
+      Just d -> pure $ accessor d name
+    RecursiveCallPlaceholder span name -> do
+      case Map.lookup name recConstrs of
+        Just cs -> do
+          let ps = map (dictionaryPlaceholder span . map injFix) cs
+          resolvePlaceholders recConstrs $ foldl' app (var name) ps
+        Nothing -> pure $ Fix $ inj p
+
+  getDict :: Span -> ConstraintF Intermed -> Check (Maybe Intermed)
+  getDict span (IsIn cls (unsafePrjFix -> t)) = do
+    s <- getTypeSubst
+    let t' = applyTypeSubst s t
+    flip cata t' $ \case
+      TypeVar v -> do
+        let go :: Text -> Check (Maybe Intermed)
+            go c = lookupInstanceDict (ByTypeVar c v) >>= \case
+              Nothing -> do
+                subs <- getSubClasses cls
+                mp <- msum <$> traverse go subs
+                pure $ map (\p -> accessor p c) mp
+              Just dict -> pure $ Just $ var dict
+        go cls
+      TypeConstructor c -> do
+        d <- lookupInstanceDict (ByConstructor cls c) >>= \case
+          Nothing -> compileError span $
+            "No instance of class `" <> cls <> "` found for type `" <>
+            c <> "`."
           Just dict -> pure $ var dict
-          Nothing -> 
-              compileError span $
-                "No instance of class `" <> show key <> "`."
+        byInst (IsIn cls t') >>= \case
+          Nothing -> compileError span $
+            "Internal? Cannot find dict for constraint: " <>
+            prettyConstraint (IsIn cls t')
+          Just inst -> do
+            (cs, t'') <- instantiateInstance inst
+            unifyTypes' span t'' t
+            let dictPlaceholders =
+                  map (dictionaryPlaceholder span . map injFix) cs
+            Just <$> resolvePlaceholders recConstrs (foldl' app d dictPlaceholders)
+      TypeApp f' _ -> f'
+      _ -> compileError span $
+        "Internal? Found record type when resolving placeholder."
 
 split
   :: Set Text -> Set Text -> [Constraint]
@@ -342,20 +351,19 @@ reduce xs = simplify [] =<< join <$> traverse toHeadNormal xs
 -- all the constraints in cs hold.
 entail :: [Constraint] -> Constraint -> Check Bool
 entail cs c = do
-    supers <- join <$> traverse bySuper cs
+    supers <- join <$> traverse getSupers cs
     if c `elem` supers
-      then pure True
+      then pure True -- Superclasses are always entailed by their subclasses
       else byInst c >>= \case
         Nothing -> pure False
         Just (cs', _) -> and <$> traverse (entail cs) cs'
 
--- If a constraint `IsIn Cls t` holds, then it must also hold for all
--- superclasses.
-bySuper :: Constraint -> Check [Constraint]
-bySuper c@(IsIn cls t) = lookupClass cls >>= \case
+-- | Recursively generate a list of constraints for all superclasses.
+getSupers :: Constraint -> Check [Constraint]
+getSupers c@(IsIn cls t) = lookupClass cls >>= \case
   Nothing -> pure [c]
   Just (supers, _, _, _, _) -> do
-    css <- for supers $ \s -> bySuper (IsIn s t)
+    css <- for supers $ \s -> getSupers (IsIn s t)
     pure (c : join css)
 
 -- If c matches an instance, return the instance constraints as subgoals.
@@ -369,6 +377,14 @@ byInst c@(IsIn cls _) = lookupClass cls >>= \case
     Nothing -> pure Nothing
     Just s -> pure $ Just (map (applyTypeSubst s) cs', applyTypeSubst s h)
 
+-- TODO: make this more efficient
+getSubClasses :: Text -> Check [Text]
+getSubClasses cls = do
+  classes <- view checkEnvClasses <$> getCheckEnv
+  pure $ mapMaybe select $ Map.toList classes
+  where select (c, (supers, _, _, _, _)) =
+          if cls `elem` supers then Just c else Nothing
+
 inHeadNormal :: Constraint -> Bool
 inHeadNormal (IsIn _ t) = flip cata t $ \case
   TypeVar _         -> True
@@ -377,12 +393,13 @@ inHeadNormal (IsIn _ t) = flip cata t $ \case
   _                 -> False
 
 toHeadNormal :: Constraint -> Check [Constraint]
-toHeadNormal c | inHeadNormal c = pure [c]
-               | otherwise      = byInst c >>= \case
-                   Nothing -> compileError voidSpan $
-                     "Cannot solve the constraint `" <>
-                     prettyConstraint c <> "`."
-                   Just (cs, _) -> join <$> traverse toHeadNormal cs
+toHeadNormal c
+  | inHeadNormal c = pure [c]
+  | otherwise      = byInst c >>= \case
+      Nothing -> compileError voidSpan $
+        "Cannot solve the constraint `" <>
+        prettyConstraint c <> "`."
+      Just (cs, _) -> join <$> traverse toHeadNormal cs
 
 instantiateInstance :: Instance -> Check ([Constraint], Type)
 instantiateInstance (cs, IsIn _ t) =
@@ -443,6 +460,8 @@ checkModule' decls = do
   let valuePolys = map (view _1 &&& defaultEnvType . view _3) result
   inExtendedTypeEnv (Map.fromList valuePolys) $ do
 
+  debugTypeSubst
+
   -- Collect exports and compile expressions
   exprs <- for result $ \(name, i, _) -> (name, ) <$> compileIntermed i
   let moduleExprs = Map.fromList exprs `Map.union` instDicts
@@ -456,8 +475,8 @@ checkFormula env f = runCheck env $ checkFormula' f
 
 checkFormula' :: Formula -> Check (Core.Expr, PolyType)
 checkFormula' (decls, expr) = do
-  (checkEnv, exprs) <- checkModule' decls
-  inExtendedEnv checkEnv $ do
+  (env, exprs) <- checkModule' decls
+  inExtendedEnv env $ do
     (i, t, ds) <- inferExpr expr
     i' <- resolvePlaceholders Map.empty i
     c <- compileIntermed i'
@@ -482,6 +501,7 @@ checkInstanceDecl ExInstanceDecl {..} = do
       "Instance class `" <> cls <> "` not defined."
     Just (supers, param, kind, sigs, insts) -> do
       -- TODO: check kind of t
+      -- Check for overlapping instances
       for_ insts $ \(_, c) -> do
         overlap <- unifyConstraints (IsIn cls t) c
         when overlap $ compileError iSpan "Overlapping instances"
@@ -506,6 +526,19 @@ checkInstanceDecl ExInstanceDecl {..} = do
         TypeApp f _ -> f
         _ -> compileError iSpan $ "Instance head must be type constructor."
       let dictName = "$" <> cls <> headConstructor
+      -- Check instances for all superclasses are defined and build super dict
+      superDicts <- for supers $ \super -> lookupClass super >>= \case
+        Nothing -> compileError iSpan "Internal: superclass not found"
+        Just (_, _, _, _, insts') -> do
+          mEntries <- for insts' $ \(_, c) -> do
+            traceM $ "superinst: " <> prettyConstraint c
+            unifyConstraints (IsIn super t) c >>= \case
+              True -> pure $ Just (super, var $ "$" <> super <> headConstructor)
+              False -> pure $ Nothing
+          case msum mEntries of
+            Nothing -> compileError iSpan $
+              "No instance for superclass `" <> super <> "` implemented."
+            Just entry -> pure entry
       -- Check constraints
       csDict <- for iConstraints $ \(IsIn cls' (stripAnn -> t')) -> do
         n <- freshName
@@ -529,12 +562,9 @@ checkInstanceDecl ExInstanceDecl {..} = do
           traceM $ vName <> " after: " <> prettyIntermed e''
           pure (vName, e'')
       -- Build instance dictionaries
-      let record = literal $ RecordLit $
-            Map.fromList $ map (view _1 &&& view _2) result
-          vars = flip cata t $ \case
-            TypeVar v -> [v]
-            TypeConstructor _ -> []
-            TypeApp f arg -> f <> arg
+      let record = literal $ RecordLit $ Map.union
+            (Map.fromList superDicts)
+            (Map.fromList $ map (view _1 &&& view _2) result)
           interm = foldr abs record $ map (varBinder . snd) csDict
       traceM $ "dict: " <> prettyIntermed interm
       dict <- compileIntermed interm
