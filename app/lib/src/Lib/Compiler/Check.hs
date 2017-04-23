@@ -2,7 +2,7 @@
 {-# LANGUAGE NoImplicitPrelude         #-}
 -- |
 
-module Lib.Compiler.Checker where
+module Lib.Compiler.Check where
 
 import           Lib.Prelude                  hiding (abs)
 
@@ -17,12 +17,14 @@ import qualified Data.Map                     as Map
 import           Data.Maybe                   (fromJust)
 import qualified Data.Set                     as Set
 
+import Lib.Model.Column
+
 import           Lib.Compiler.AST
 import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
 import qualified Lib.Compiler.Core            as Core
-import           Lib.Compiler.Checker.Monad
-import           Lib.Compiler.Checker.Extract
+import           Lib.Compiler.Check.Monad
+import           Lib.Compiler.Check.Extract
 import           Lib.Compiler.Env
 import           Lib.Compiler.Error
 import           Lib.Compiler.Pretty
@@ -43,22 +45,23 @@ freshKindDict xs = map Map.fromList $ for xs $ \a -> do
 -- | Infer the kind of a given type.
 inferType :: SourceType -> Check Kind
 inferType = cataM $ \case
-  span T.:< TypeVar v -> lookupKind v >>= \case
-    Nothing -> compileError span $ "Undefined type variable: " <> v
-    Just k -> pure k
-  span T.:< TypeConstructor c -> lookupKind c >>= \case
-    Nothing -> compileError span $ "Undefined type constructor: " <> c
-    Just k -> pure k
-  span T.:< TypeApp kc karg -> do
-    kres <- freshKind
-    unifyKinds span kc (kindFun karg kres)
-    pure kres
-  span T.:< RecordCons _ k r -> do
-    unifyKinds span (kindRecord k) r
-    pure r
-  _ T.:< RecordNil -> do
-    k <- freshKind
-    pure (kindRecord k)
+  span T.:< t -> case t of
+    TypeVar v -> lookupKind v >>= \case
+      Nothing -> compileError span $ "Undefined type variable: " <> v
+      Just k -> pure k
+    TypeConstructor c -> lookupKind c >>= \case
+      Nothing -> compileError span $ "Undefined type constructor: " <> c
+      Just k -> pure k
+    TypeApp kc karg -> do
+      kres <- freshKind
+      unifyKinds span kc (kindFun karg kres)
+      pure kres
+    RecordCons _ k r -> do
+      unifyKinds span (kindRecord k) r
+      pure r
+    RecordNil -> do
+      k <- freshKind
+      pure (kindRecord k)
 
 --------------------------------------------------------------------------------
 
@@ -131,10 +134,14 @@ inferExpr' span = \case
 
   Accessor e field -> do
     (e', eType, cs) <- inferExpr e
+    -- Convert a row type to a record type
+    t <- case eType of
+      Fix (TypeRow t) -> getTableRecordType t
+      other -> pure other
     resultType <- freshType
     tailType <- freshType
     let recordType = typeApp tyRecord $ recordCons field resultType tailType
-    unifyTypes' span eType recordType
+    unifyTypes' span t recordType
     pure (accessor e' field, resultType, cs)
 
 inferLiteral' :: LiteralF SourceAst -> Check (Intermed, Type, [Constraint])
@@ -155,8 +162,24 @@ inferRef' :: Span -> RefTextF SourceAst -> Check (Intermed, Type, [Constraint])
 inferRef' span = \case
   TableRef t -> resolveTableRef t >>= \case
     Nothing -> compileError span $ "Cannot find table `" <> show t <> "`."
-  ColumnRef c -> undefined
-  ColumnOfTableRef t c ->  undefined
+    Just i ->
+      pure ( tableRef i
+           , typeApp tyList (typeRow i)
+           , [] )
+  ColumnRef c -> resolveColumnRef c >>= \case
+    Nothing -> compileError span $ "Cannot find column `" <> show c <> "`."
+    Just (i, dataCol) ->
+      pure ( columnRef i
+           , typeOfDataType (dataCol ^. dataColType)
+           , [] )
+  ColumnOfTableRef t c -> resolveColumnOfTableRef t c >>= \case
+    Nothing -> compileError span $
+      "Table `" <> show t <> "` does not have a column named `" <>
+      show c <> "`."
+    Just (ti, ci, dataCol) ->
+      pure ( columnOfTableRef ti ci
+           , typeApp tyList $ typeOfDataType (dataCol ^. dataColType)
+           , [] )
 
 -- | Infer and generalize the types of a list of definitions. Every definition
 -- can optionally have a type signature that the inferred type will be checked
@@ -535,7 +558,7 @@ checkInstanceDecl ExInstanceDecl {..} = do
       "Instance class `" <> cls <> "` not defined."
     Just (supers, param, kind, sigs, insts) -> do
       -- Check kind of instance type
-      k' <- inferType t'
+      k' <- inExtendedKindEnv constrEnv $ inferType t'
       let (s :< _) = t' in unifyKinds s k' kind
       -- Check for overlapping instances
       for_ insts $ \(_, c) -> do
@@ -726,7 +749,8 @@ matchType t1 t2 = runMaybeT $ match t1 t2
   match :: Type -> Type -> MaybeT Check TypeSubst
   match (Fix a) b'@(Fix b) = case (a, b) of
     (TypeVar x, _) -> pure $ Map.singleton x b'
-    (TypeConstructor x, TypeConstructor y) | x == y -> pure $ Map.empty
+    (TypeConstructor x, TypeConstructor y) | x == y -> pure Map.empty
+    (TypeRow x, TypeRow y) | x == y -> pure Map.empty
     (TypeApp f arg, TypeApp f' arg') -> do
       sf <- match f f'
       sarg <- match arg arg'

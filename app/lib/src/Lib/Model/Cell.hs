@@ -1,22 +1,23 @@
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
 
 module Lib.Model.Cell where
 
+import           Lib.Prelude
+
 import           Control.Lens
 import           Control.Monad.Writer
 
-import           Data.Aeson           (FromJSON, ToJSON)
+import           Data.Aeson                   (FromJSON, ToJSON)
 import           Data.Aeson.Bson
-import           Data.Bson            (Val, (=:))
-import qualified Data.Bson            as Bson
-import           Data.Text            (Text, unpack)
-import           Data.Typeable
+import           Data.Bson                    (Val, (=:))
+import qualified Data.Bson                    as Bson
 
-import           GHC.Generics
+import           Text.PrettyPrint.Leijen.Text hiding ((<$>))
 
 import           Lib.Model.Class
 import           Lib.Model.Column
@@ -27,12 +28,12 @@ import           Lib.Types
 data CellContent
   = CellValue Value
   | CellError Text
-  deriving (Eq, Typeable, Generic)
+  deriving (Eq, Show, Typeable, Generic)
 
-instance Show CellContent where
-  show = \case
-    CellValue v -> show v
-    CellError e -> "Error: " ++ unpack e
+cellContentDoc :: CellContent -> Doc
+cellContentDoc = \case
+  CellValue v -> valueDoc v
+  CellError e -> textStrict "Error:" <+> textStrict e
 
 instance ToJSON CellContent
 instance FromJSON CellContent
@@ -50,24 +51,20 @@ data Value
   = VBool Bool
   | VString Text
   | VNumber Number
+  | VInteger Integer
   | VTime Time
   | VRowRef (Maybe (Id Row))
+  | VData Text [Value]
+  | VRecord (Map Text Value)
   | VList [Value]
   | VMaybe (Maybe Value)
-  deriving (Generic, Typeable, Eq)
-
-instance Show Value where
-  show = \case
-    VBool b   -> show b
-    VString t -> show t
-    VNumber n -> show n
-    VTime t   -> show t
-    VRowRef i -> "RowRef " ++ show i
-    VList vs  -> show vs
-    VMaybe m  -> show m
+  deriving (Show, Generic, Typeable, Eq)
 
 instance ToJSON Value
 instance FromJSON Value
+
+valueDoc :: Value -> Doc
+valueDoc = error "not defined"
 
 -- TODO: delete in favor of ajax calls to the server version of defaultContent
 defaultContentPure :: DataType -> Value
@@ -108,7 +105,7 @@ data Cell = Cell
   , _cellTableId  :: Id Table
   , _cellColumnId :: Id Column
   , _cellRowId    :: Id Row
-  } deriving (Generic, Show)
+  } deriving (Generic)
 
 makeLenses ''Cell
 

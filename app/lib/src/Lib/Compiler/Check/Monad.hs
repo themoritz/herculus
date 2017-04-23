@@ -7,7 +7,7 @@
 {-# LANGUAGE FlexibleContexts          #-}
 -- |
 
-module Lib.Compiler.Checker.Monad where
+module Lib.Compiler.Check.Monad where
 
 import           Lib.Prelude
 
@@ -132,14 +132,15 @@ debugTypeSubst = liftCheck $ DebugTypeSubst ()
 --------------------------------------------------------------------------------
 
 data ResolveF a
-  = GetTableRowType (Id Table) (Type -> a)
-  | ResolveColumnOfTableRef (Ref Table) (Ref Column) (Maybe (Id Table, Id Column, DataCol) -> a)
+  = GetTableRecordType (Id Table) (Type -> a)
+  | ResolveColumnOfTableRef (Ref Table) (Ref Column)
+                            (Maybe (Id Table, Id Column, DataCol) -> a)
   | ResolveColumnRef (Ref Column) (Maybe (Id Column, DataCol) -> a)
   | ResolveTableRef (Ref Table) (Maybe (Id Table) -> a)
   deriving (Functor)
 
-getTableRowType :: Id Table -> Check Type
-getTableRowType t = liftCheck $ GetTableRowType t id
+getTableRecordType :: Id Table -> Check Type
+getTableRecordType t = liftCheck $ GetTableRecordType t id
 
 resolveColumnOfTableRef
   :: Ref Table -> Ref Column -> Check (Maybe (Id Table, Id Column, DataCol))
@@ -281,6 +282,7 @@ runCheck env =
           (TypeVar x, _)         -> bind x b'
           (_, TypeVar y)         -> bind y a'
           (TypeConstructor x, TypeConstructor y) | x == y -> pure ()
+          (TypeRow x, TypeRow y) | x == y -> pure ()
           (TypeApp f arg, TypeApp f' arg') -> do
             unify f f'
             unify arg arg'

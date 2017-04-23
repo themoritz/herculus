@@ -20,11 +20,11 @@ import           Data.Text                    (Text, pack)
 
 import           GHC.Generics
 
-import           Lib.Compiler.Types
+import           Lib.Compiler.Core
 import           Lib.Model.Class
 import           Lib.Model.Dependencies.Types
 import           Lib.Model.Table
-import           Lib.Template.Types
+-- import           Lib.Template.Types
 import           Lib.Types
 
 data DataType
@@ -55,8 +55,11 @@ data CompileResult a
   | CompileResultError Text
   deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
-type DataCompileResult = CompileResult CExpr
-type ReportCompileResult = CompileResult CTemplate
+-- TODO:
+type Template = ()
+
+type DataCompileResult = CompileResult Expr
+type ReportCompileResult = CompileResult Template
 
 data IsDerived
   = Derived

@@ -1,36 +1,40 @@
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 -- |
 
 module Lib.Compiler.Core where
 
 import           Lib.Prelude
 
-import           Control.Arrow         ((***))
-
+import Data.Aeson
 import           Data.Functor.Foldable
+import qualified Data.Map as Map
 
-import qualified Lib.Compiler.AST      as A
-import           Lib.Model.Column
+import {-# SOURCE #-} Lib.Model.Column
+import           Lib.Model.Dependencies.Types
 import           Lib.Model.Table
 import           Lib.Types
+
+import qualified Lib.Compiler.AST      as A
 
 data Literal
   = NumberLit Double
   | IntegerLit Integer
   | StringLit Text
   | RecordLit (Map Text Expr)
-  deriving (Show)
+  deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON)
 
 data Reference
   = TableRef (Id Table)
   | ColumnRef (Id Column)
   | ColumnOfTableRef (Id Table) (Id Column)
-  deriving (Show)
+  deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON)
 
 data Binder
   = VarBinder Text
   | ConstructorBinder Text [Binder]
-  deriving (Show)
+  deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON)
 
 data Expr
   = Literal Literal
@@ -42,7 +46,7 @@ data Expr
   | Let [(Text, Expr)] Expr
   | Case Expr [(Binder, Expr)]
   | Accessor Expr Text
-  deriving (Show)
+  deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON)
 
 toCore :: A.Compiled -> Expr
 toCore (Fix com) = A.compiled goExpr undefined goRef com
@@ -78,3 +82,23 @@ toCore (Fix com) = A.compiled goExpr undefined goRef com
     A.TableRef t -> TableRef t
     A.ColumnRef c -> ColumnRef c
     A.ColumnOfTableRef t c -> ColumnOfTableRef t c
+
+
+collectCodeDependencies :: Expr -> CodeDependencies
+collectCodeDependencies = go
+  where
+  go = \case
+    Literal l              -> case l of
+      RecordLit m          -> mconcat . Map.elems $ map go m
+      _                    -> mempty
+    Reference r            -> case r of
+      ColumnRef c          -> singleColumnRef c
+      TableRef t           -> singleTableRef t
+      ColumnOfTableRef t c -> singleWholeColumnRef t c
+    Var _                  -> mempty
+    Constructor _          -> mempty
+    Abs _ e                -> go e
+    App f arg              -> go f <> go arg
+    Let defs e             -> go e <> mconcat (map (go . snd) defs)
+    Case e alts            -> go e <> mconcat (map (go . snd) alts)
+    Accessor e _           -> go e

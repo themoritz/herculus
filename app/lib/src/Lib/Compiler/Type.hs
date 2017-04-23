@@ -18,10 +18,11 @@ import           Data.List                 (nub)
 import qualified Data.Map                  as Map
 import qualified Data.Set                  as Set
 
+import           Lib.Model.Table
+import           Lib.Types
+
 import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
-import           Lib.Model.Column
-import           Lib.Types
 
 data KindF a
   = KindType
@@ -58,6 +59,7 @@ data TypeF a
   | TypeApp a a
   | RecordCons Text a a
   | RecordNil
+  | TypeRow (Id Table)
   deriving (Functor, Foldable, Traversable, Show)
 
 type Type = Fix TypeF
@@ -77,6 +79,9 @@ recordCons f t rest = Fix (RecordCons f t rest)
 
 recordNil :: Type
 recordNil = Fix RecordNil
+
+typeRow :: Id Table -> Type
+typeRow = Fix . TypeRow
 
 spanTypeConstructor :: (Span, Text) -> SourceType
 spanTypeConstructor (span, t) = span :< TypeConstructor t
@@ -135,11 +140,11 @@ normalizePoly (ForAll as cs t) = ForAll as' cs' t'
     TypeApp f arg -> f <> arg
     RecordCons _ a b -> a <> b
     _ -> []
-  getVarsC (IsIn _ t) = getVarsT t
+  getVarsC (IsIn _ ty) = getVarsT ty
   getVarsCS = nub . join . map getVarsC
   vs = [ v | v <- nub (getVarsCS (sort cs) <> getVarsT t), v `elem` as ]
   as' = map snd zipped
-  zipped = zip vs (map show [0..])
+  zipped = zip vs (map show [0 :: Int ..])
   sub = map typeVar $ Map.fromList zipped
   cs' = applyTypeSubst sub (sort cs)
   t' = applyTypeSubst sub t

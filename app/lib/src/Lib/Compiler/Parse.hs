@@ -1,6 +1,6 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Lib.Compiler.Parser
+module Lib.Compiler.Parse
   ( parse
   , parseExpr
   , parseModule
@@ -12,18 +12,18 @@ import           Lib.Prelude
 
 import           Control.Comonad.Cofree
 
-import           Data.Foldable              (foldl')
-import qualified Data.Map                   as Map
+import           Data.Foldable             (foldl')
+import qualified Data.Map                  as Map
 
-import qualified Text.Megaparsec            as P
+import qualified Text.Megaparsec           as P
 import           Text.Megaparsec.Expr
 
 import           Lib.Compiler.AST
 import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Error
-import           Lib.Compiler.Parser.Common
-import           Lib.Compiler.Parser.Lexer
-import           Lib.Compiler.Parser.State
+import           Lib.Compiler.Parse.Common
+import           Lib.Compiler.Parse.Lexer
+import           Lib.Compiler.Parse.State
 import           Lib.Compiler.Type
 import           Lib.Types
 

@@ -162,3 +162,5 @@ language_extensions:
   - BangPatterns
   - RecordWildCards
   - MultiParamTypeClasses
+  - ViewPatterns
+  - TupleSections

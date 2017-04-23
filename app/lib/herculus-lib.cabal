@@ -14,26 +14,21 @@ library
                      , Lib.Compiler.AST
                      , Lib.Compiler.AST.Common
                      , Lib.Compiler.AST.Position
-                     , Lib.Compiler.Checker
-                     , Lib.Compiler.Checker.Extract
-                     , Lib.Compiler.Checker.Monad
+                     , Lib.Compiler.Check
+                     , Lib.Compiler.Check.Extract
+                     , Lib.Compiler.Check.Monad
                      , Lib.Compiler.Core
                      , Lib.Compiler.Env
                      , Lib.Compiler.Eval
+                     , Lib.Compiler.Eval.Monad
                      , Lib.Compiler.Eval.Types
                      , Lib.Compiler.Error
                      , Lib.Compiler.Type
-                     , Lib.Compiler.Types
-                     , Lib.Compiler.Parser
-                     , Lib.Compiler.Parser.Common
-                     , Lib.Compiler.Parser.Lexer
-                     , Lib.Compiler.Parser.State
+                     , Lib.Compiler.Parse
+                     , Lib.Compiler.Parse.Common
+                     , Lib.Compiler.Parse.Lexer
+                     , Lib.Compiler.Parse.State
                      , Lib.Compiler.Pretty
-                     , Lib.Compiler.Interpreter
-                     , Lib.Compiler.Interpreter.Types
-                     , Lib.Compiler.Typechecker
-                     , Lib.Compiler.Typechecker.Types
-                     , Lib.Compiler.Typechecker.Prim
                      , Lib.NamedMap
                      , Lib.Api.Rest
                      , Lib.Api.Rest.Report

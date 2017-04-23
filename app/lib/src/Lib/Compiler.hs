@@ -7,28 +7,29 @@ module Lib.Compiler where
 
 import           Lib.Prelude
 
-import qualified Data.Map                   as Map
+import qualified Data.Map                  as Map
 
 import           NeatInterpolation
 import           Text.Show.Pretty
 
--- import           Lib.Model.Cell
+import           Lib.Model.Cell
 -- import           Lib.Model.Column
--- import           Lib.Types
+import           Lib.Types
 
 import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
-import           Lib.Compiler.Checker
-import           Lib.Compiler.Checker.Monad
+import           Lib.Compiler.Check
+import           Lib.Compiler.Check.Monad
 import           Lib.Compiler.Core
 import           Lib.Compiler.Error
 -- import           Lib.Compiler.Interpreter
 import           Lib.Compiler.Env
 import           Lib.Compiler.Eval
+import           Lib.Compiler.Eval.Monad
 import           Lib.Compiler.Eval.Types
 import           Lib.Compiler.Type
 -- import           Lib.Compiler.Interpreter.Types
-import           Lib.Compiler.Parser
+import           Lib.Compiler.Parse
 import           Lib.Compiler.Pretty
 
 -- import           Lib.Compiler.Typechecker
@@ -58,13 +59,16 @@ import           Lib.Compiler.Pretty
 --   , envOwnTableId              = nullObjectId
 --   }
 
--- testEvalEnv :: Monad m => EvalEnv m
--- testEvalEnv = EvalEnv
---   { envGetCellValue    = \_ -> pure $ Just $ VNumber 1
---   , envGetColumnValues = \_ -> pure [Just $ VNumber 1]
---   , envGetTableRows    = \_ -> pure [nullObjectId]
---   , envGetRowField     = \_ _ -> pure $ Just $ VNumber 1
---   }
+testGetInterp :: Monad m => GetF a -> m a
+testGetInterp = \case
+  GetCellValue _ reply ->
+    pure $ reply $ Just $ VNumber 1
+  GetColumnValues _ reply ->
+    pure $ reply [Just $ VNumber 1]
+  GetTableRows _  reply ->
+    pure $ reply [nullObjectId]
+  GetRowField _ _ reply ->
+    pure $ reply $ Just $ VNumber 1
 
 -- test :: String -> IO ()
 -- test inp = compile (pack inp) testTypecheckEnv >>= \case
@@ -178,6 +182,6 @@ testEval src =
     Left err -> putStrLn $ displayError src err
     Right (code, poly, env) -> do
       putStrLn $ "Type: " <> prettyPolyType poly
-      case runExcept (eval env code) of
+      runEval 10000 testGetInterp (eval env code) >>= \case
         Left err -> putStrLn err
         Right r  -> putStrLn $ prettyResult r

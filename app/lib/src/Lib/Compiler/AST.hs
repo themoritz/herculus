@@ -7,6 +7,7 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
+{-# LANGUAGE StandaloneDeriving    #-}
 -- |
 
 module Lib.Compiler.AST where
@@ -20,9 +21,9 @@ import           Data.Functor.Foldable
 
 import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
-import           Lib.Compiler.Parser.State
+import           Lib.Compiler.Parse.State
 import           Lib.Compiler.Type
-import           Lib.Model.Column
+import {-# SOURCE #-} Lib.Model.Column
 import           Lib.Model.Table
 import           Lib.Types
 
@@ -217,11 +218,22 @@ data LiteralF a
 
 --------------------------------------------------------------------------------
 
-data RefF t c a
-  = TableRef t
-  | ColumnRef c
-  | ColumnOfTableRef t c
-  deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
+data RefF i a
+  = TableRef (i Table)
+  | ColumnRef (i Column)
+  | ColumnOfTableRef (i Table) (i Column)
+  deriving (Functor, Foldable, Traversable)
 
-type RefTextF = RefF (Ref Table) (Ref Column)
-type RefIdF = RefF (Id Table) (Id Column)
+deriving instance (Show (i Table), Show (i Column)) => Show (RefF i a)
+
+type RefTextF = RefF Ref
+type RefIdF = RefF Id
+
+tableRef :: RefF i :<: f => i Table -> Fix f
+tableRef = Fix . inj . TableRef
+
+columnRef :: RefF i :<: f => i Column -> Fix f
+columnRef = Fix . inj . ColumnRef
+
+columnOfTableRef :: RefF i :<: f => i Table -> i Column -> Fix f
+columnOfTableRef t c = Fix $ inj $ ColumnOfTableRef t c

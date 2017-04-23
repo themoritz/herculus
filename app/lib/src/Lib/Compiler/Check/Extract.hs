@@ -1,7 +1,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 -- |
 
-module Lib.Compiler.Checker.Extract where
+module Lib.Compiler.Check.Extract where
 
 import           Lib.Prelude
 

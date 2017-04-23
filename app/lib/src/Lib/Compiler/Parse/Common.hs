@@ -4,7 +4,7 @@
 {-# LANGUAGE ViewPatterns        #-}
 -- |
 
-module Lib.Compiler.Parser.Common where
+module Lib.Compiler.Parse.Common where
 
 import           Lib.Prelude
 
@@ -17,8 +17,8 @@ import           Text.Megaparsec.Expr
 
 import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
-import           Lib.Compiler.Parser.Lexer
-import           Lib.Compiler.Parser.State
+import           Lib.Compiler.Parse.Lexer
+import           Lib.Compiler.Parse.State
 
 --------------------------------------------------------------------------------
 

@@ -9,31 +9,39 @@ import qualified Data.Map                as Map
 import           Data.Maybe              (fromJust)
 import           Data.Text               (unlines)
 
+import           Lib.Model.Cell
+import           Lib.Types
+
 import           Lib.Compiler.Core
+import           Lib.Compiler.Eval.Monad
 import           Lib.Compiler.Eval.Types
+
+internalError :: Text -> Eval a
+internalError msg = evalError $ "Internal: " <> msg
 
 eval :: TermEnv -> Expr -> Eval Result
 eval env = \case
   Literal lit -> evalLit env lit
   Var v -> case Map.lookup v env of
-    Nothing -> throwError $ unlines
+    Nothing -> internalError $ unlines
       [ "Variable not found: " <> v
       , termEnvPretty env ]
     Just r -> case r of
       RContinuation expr cl -> eval (env `Map.union` cl) expr
       _                     -> pure r
-  Constructor c -> pure $ RValue $ VData c []
+  Reference ref -> evalRef ref
+  Constructor c -> pure $ RData c []
   Abs b expr -> pure $ RClosure b expr env
   App f arg -> do
     argRes <- eval env arg
     eval env f >>= \case
       RClosure b body cl -> case matchValue argRes b of
         Just env' -> eval (env' `Map.union` cl) body
-        Nothing   -> throwError "Eval `App`: pattern match failure"
+        Nothing   -> internalError "Eval `App`: pattern match failure"
       RPrimFun primF -> primF argRes
-      RValue (VData name args) ->
-        pure $ RValue $ VData name (args <> [argRes])
-      _ -> throwError "Eval `App`: expected closure"
+      RData name args ->
+        pure $ RData name (args <> [argRes])
+      _ -> internalError "Eval `App`: expected closure"
   Let bs body -> do
     let
       conts = map (\(name, expr) -> (name, RContinuation expr env)) bs
@@ -45,27 +53,48 @@ eval env = \case
   Case scrut alts -> do
     res <- eval env scrut
     let
-      tryAlts [] = throwError "Eval `Case`: pattern match failure"
+      tryAlts [] = internalError "Eval `Case`: pattern match failure"
       tryAlts ((binder, expr):as) = case matchValue res binder of
         Nothing   -> tryAlts as
         Just env' -> eval (env' `Map.union` env) expr
     tryAlts alts
   Accessor e field -> do
-    RValue (VRecord r) <- eval env e
-    pure $ fromJust $ Map.lookup field r
+    v <- eval env e
+    case v of
+      RRecord r -> pure $ fromJust $ Map.lookup field r
+      -- Row references are automatically dereferenced here.
+      RRowRef mR -> case mR of
+        Nothing -> evalError "Invalid row reference."
+        Just r -> getRowField r (Ref field) >>= \case
+          Nothing -> evalError "Dependent cell not ready."
+          Just val -> pure $ loadValue val
 
 matchValue :: Result -> Binder -> Maybe TermEnv
 matchValue res = \case
   VarBinder x ->
     Just $ Map.singleton x res
   ConstructorBinder name args
-    | RValue (VData label results) <- res
+    | RData label results <- res
     , label == name -> map Map.unions $ zipWithM matchValue results args
     | otherwise -> Nothing
 
 evalLit :: TermEnv -> Literal -> Eval Result
 evalLit env = \case
-  NumberLit n -> pure $ RValue $ VNumber n
-  IntegerLit i -> pure $ RValue $ VInt i
-  StringLit s -> pure $ RValue $ VString s
-  RecordLit fields -> RValue . VRecord <$> traverse (eval env) fields
+  NumberLit n -> pure $ RNumber n
+  IntegerLit i -> pure $ RInteger i
+  StringLit s -> pure $ RString s
+  RecordLit fields -> RRecord <$> traverse (eval env) fields
+
+evalRef :: Reference -> Eval Result
+evalRef = \case
+  ColumnRef c -> getCellValue c >>= \case
+    Nothing -> evalError "Dependent cell not ready."
+    Just v -> pure $ loadValue v
+  TableRef t -> do
+    rows <- getTableRows t
+    pure $ loadValue $ VList $ map (VRowRef . Just) rows
+  ColumnOfTableRef _ c -> do
+    mVals <- getColumnValues c
+    case sequence mVals of
+      Nothing   -> evalError "Dependent cell not ready."
+      Just vals -> pure $ loadValue $ VList vals

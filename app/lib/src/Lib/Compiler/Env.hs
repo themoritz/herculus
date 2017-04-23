@@ -9,6 +9,10 @@ import           Lib.Prelude
 import           Data.Functor.Foldable
 import qualified Data.Map                as Map
 
+import           Lib.Model.Column
+import           Lib.Model.Table
+import           Lib.Types
+
 import           Lib.Compiler.Eval.Types
 import           Lib.Compiler.Type
 
@@ -42,6 +46,12 @@ primKindEnv = Map.fromList
 
 --------------------------------------------------------------------------------
 
+tyBoolean :: Type
+tyBoolean = typeConstructor "Boolean"
+
+tyDateTime :: Type
+tyDateTime = typeConstructor "DateTime"
+
 tyRecord :: Type
 tyRecord = typeConstructor "Record"
 
@@ -57,6 +67,12 @@ tyInteger = typeConstructor "Integer"
 tyFunction :: Type
 tyFunction = typeConstructor "->"
 
+tyList :: Type
+tyList = typeConstructor "List"
+
+tyMaybe :: Type
+tyMaybe = typeConstructor "Maybe"
+
 infixr 2 -->
 (-->) :: Type -> Type -> Type
 (-->) a b = typeApp (typeApp tyFunction a) b
@@ -64,6 +80,16 @@ infixr 2 -->
 pattern Arrow :: Type -> Type -> Type
 pattern Arrow a b =
   Fix (TypeApp (Fix (TypeApp (Fix (TypeConstructor "->")) a)) b)
+
+typeOfDataType :: DataType -> Type
+typeOfDataType = \case
+  DataBool     -> tyBoolean
+  DataString   -> tyString
+  DataNumber   -> tyNumber
+  DataTime     -> tyDateTime
+  DataRowRef t -> typeRow t
+  DataList t   -> typeApp tyList $ typeOfDataType t
+  DataMaybe t  -> typeApp tyMaybe $ typeOfDataType t
 
 primTypeEnv :: Map Text PolyType
 primTypeEnv = Map.fromList
@@ -77,8 +103,8 @@ primTypeEnv = Map.fromList
 primTermEnv :: TermEnv
 primTermEnv = Map.fromList
   [ ( "+"
-    , RPrimFun $ \(RValue (VNumber a)) -> pure $
-      RPrimFun $ \(RValue (VNumber b)) -> pure $
-      RValue $ VNumber $ a + b
+    , RPrimFun $ \(RNumber a) -> pure $
+      RPrimFun $ \(RNumber b) -> pure $
+      RNumber $ a + b
     )
   ]

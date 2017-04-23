@@ -22,7 +22,7 @@ import           Text.PrettyPrint.Leijen.Text
 
 import           Lib.Compiler.AST
 import           Lib.Compiler.AST.Common
-import           Lib.Compiler.Parser.State
+import           Lib.Compiler.Parse.State
 import           Lib.Compiler.Type
 import           Lib.Types
 
@@ -93,6 +93,7 @@ typeDoc :: TypeF (Cofree TypeF Doc) -> Doc
 typeDoc = \case
   TypeVar v -> textStrict v
   TypeConstructor c -> textStrict c
+  TypeRow t -> braces $ textStrict $ show t
   TypeApp (_ :< TypeApp (arr :< TypeConstructor "->") (a :< _)) (b :< _) ->
     parens (a <+> arr <+> b)
   TypeApp (f :< _) (arg :< _) -> parens (f <+> arg)

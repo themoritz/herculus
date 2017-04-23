@@ -1,7 +1,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 -- |
 
-module Lib.Compiler.Parser.State where
+module Lib.Compiler.Parse.State where
 
 import           Lib.Prelude
 

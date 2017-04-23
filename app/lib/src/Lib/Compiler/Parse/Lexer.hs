@@ -1,7 +1,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 -- |
 
-module Lib.Compiler.Parser.Lexer where
+module Lib.Compiler.Parse.Lexer where
 
 import           Lib.Prelude
 
@@ -12,7 +12,7 @@ import qualified Text.Megaparsec           as P
 import qualified Text.Megaparsec.Lexer     as L
 
 import           Lib.Compiler.AST.Position
-import           Lib.Compiler.Parser.State
+import           Lib.Compiler.Parse.State
 
 type Parser = P.ParsecT P.Dec Text (State ParseState)
 
