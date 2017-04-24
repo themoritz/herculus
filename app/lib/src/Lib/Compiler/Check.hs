@@ -443,16 +443,16 @@ getSubClasses cls = do
   where select (c, (supers, _, _, _, _)) =
           if cls `elem` supers then Just c else Nothing
 
-inHeadNormal :: Constraint -> Bool
-inHeadNormal (IsIn _ t) = flip cata t $ \case
+inHeadNormal :: Type -> Bool
+inHeadNormal = cata $ \case
   TypeVar _         -> True
   TypeConstructor _ -> False
   TypeApp f _       -> f
   _                 -> False
 
 toHeadNormal :: Constraint -> Check [Constraint]
-toHeadNormal c
-  | inHeadNormal c = pure [c]
+toHeadNormal c@(IsIn _ t)
+  | inHeadNormal t = pure [c]
   | otherwise      = byInst c >>= \case
       Nothing -> compileError voidSpan $
         "Cannot solve the constraint `" <>
@@ -533,22 +533,40 @@ checkFormula' :: Formula -> Check (Core.Expr, PolyType)
 checkFormula' (decls, expr) = do
   (env, exprs) <- checkModule' decls
   inExtendedEnv env $ do
-    (i, t, ds) <- inferExpr expr
+    (i, t, cs) <- inferExpr expr
+    s <- getTypeSubst
+    let t' = applyTypeSubst s t
+    typeEnv <- map etPoly . view checkEnvTypes <$> getCheckEnv
+    let fixed = getFtvs (applyTypeSubst s typeEnv)
+    let generic = getFtvs t' Set.\\ fixed
+    (ds, rs) <- split fixed generic (applyTypeSubst s cs)
+    let cs' = ds <> rs
+    unless (null cs') $ internalError Nothing $
+      "Formula expression still has the following inferred constraints: " <>
+      prettyConstraints cs'
     i' <- resolvePlaceholders Map.empty i
     c <- compileIntermed i'
-    let gs = getFtvs t
-    -- TODO: check that there are no deferred constraints
     -- TODO: check type given by column
-    let poly = ForAll (Set.toList gs) [] t
+    let poly = ForAll (Set.toList generic) [] t'
     pure (Core.Let (Map.toList exprs) c, poly)
 
 checkTypeDecl :: Span -> SourcePolyType -> Check ()
 checkTypeDecl span (ForAll as cs t) = do
-  -- TODO: Check constraints
   quantifierDict <- freshKindDict as
   inExtendedKindEnv quantifierDict $ do
     inferred <- inferType t
     unifyKinds span inferred kindType
+    traverse_ (checkConstraint span) cs
+
+checkConstraint :: Span -> SourceConstraint -> Check ()
+checkConstraint span (IsIn cls t@(spant :< _)) = lookupClass cls >>= \case
+  Nothing -> compileError span $ "Class `" <> cls <> "` is not defined."
+  Just (_, _, kind, _, _) -> do
+    let t' = stripAnn t
+    unless (inHeadNormal t') $ compileError spant
+      "Constraints must be in head-normal form (starting with a type variable)."
+    k <- inferType t
+    unifyKinds spant k kind
 
 checkInstanceDecl :: ExInstanceDecl -> Check (DictLookup, Text)
 checkInstanceDecl ExInstanceDecl {..} = do
@@ -556,10 +574,14 @@ checkInstanceDecl ExInstanceDecl {..} = do
   lookupClass cls >>= \case
     Nothing -> compileError iSpan $
       "Instance class `" <> cls <> "` not defined."
-    Just (supers, param, kind, sigs, insts) -> do
+    Just (_, _, kind, sigs, insts) -> do
       -- Check kind of instance type
-      k' <- inExtendedKindEnv constrEnv $ inferType t'
-      let (s :< _) = t' in unifyKinds s k' kind
+      constrEnv <- map Map.unions $ for iConstraints $ \(IsIn _ ct) ->
+        freshKindDict $ Set.toList $ getFtvs $ stripAnn ct
+      inExtendedKindEnv constrEnv $ do
+        traverse_ (checkConstraint iSpan) iConstraints
+        k <- inferType t'
+        unifyKinds iSpan k kind
       -- Check for overlapping instances
       for_ insts $ \(_, c) -> do
         overlap <- unifyConstraints (IsIn cls t) c
