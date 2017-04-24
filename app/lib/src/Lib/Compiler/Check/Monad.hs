@@ -42,7 +42,7 @@ type Check' = CheckF :+: ResolveF
 liftCheck :: (f :<: Check') => f a -> Check a
 liftCheck = Check . liftF . inj
 
-foldCheck :: Monad m => (forall b. Check' b -> m b) -> Check a -> m a
+foldCheck :: Monad m => (forall x. Check' x -> m x) -> Check a -> m a
 foldCheck go = foldFree go . unCheck
 
 --------------------------------------------------------------------------------
@@ -149,6 +149,8 @@ debugTypeSubst = liftCheck $ DebugTypeSubst ()
 
 --------------------------------------------------------------------------------
 
+type Resolver m = forall x. ResolveF x -> m x
+
 data ResolveF a
   = GetTableRecordType (Id Table) (Type -> a)
   | ResolveColumnOfTableRef (Ref Table) (Ref Column)
@@ -226,7 +228,7 @@ type CheckInterpT m = StateT CheckState (ExceptT Error m)
 
 runCheck
   :: forall m a. Monad m
-  => CheckEnv -> (forall b. ResolveF b -> m b)
+  => CheckEnv -> Resolver m
   -> Check a -> m (Either Error a)
 runCheck env goResolve =
   runExceptT .

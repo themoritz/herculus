@@ -43,6 +43,8 @@ evalError e = liftEval $ EvalError e id
 
 --------------------------------------------------------------------------------
 
+type Getter m = forall x. GetF x -> m x
+
 data GetF a
   = GetCellValue (Id Column) (Maybe Value -> a)
   | GetColumnValues (Id Column) ([Maybe Value] -> a)
@@ -71,7 +73,7 @@ runEvalInterpT gas m = runExceptT $ evalStateT m gas
 
 runEval
   :: forall m a. Monad m
-  => Integer -> (forall b. GetF b -> m b)
+  => Integer -> Getter m
   -> Eval a -> m (Either Text a)
 runEval gas goGet =
   runEvalInterpT gas .

@@ -1,5 +1,5 @@
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE NoImplicitPrelude         #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 -- |
 
 module Lib.Compiler.Check where
@@ -8,8 +8,8 @@ import           Lib.Prelude                  hiding (abs)
 
 import           Control.Comonad.Cofree
 import qualified Control.Comonad.Trans.Cofree as T
-import           Control.Monad.Trans.Maybe
 import           Control.Lens                 hiding ((:<))
+import           Control.Monad.Trans.Maybe
 
 import           Data.Functor.Foldable
 import           Data.List                    (partition)
@@ -17,14 +17,14 @@ import qualified Data.Map                     as Map
 import           Data.Maybe                   (fromJust)
 import qualified Data.Set                     as Set
 
-import Lib.Model.Column
+import           Lib.Model.Column
 
 import           Lib.Compiler.AST
 import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
-import qualified Lib.Compiler.Core            as Core
-import           Lib.Compiler.Check.Monad
 import           Lib.Compiler.Check.Extract
+import           Lib.Compiler.Check.Monad
+import qualified Lib.Compiler.Core            as Core
 import           Lib.Compiler.Env
 import           Lib.Compiler.Error
 import           Lib.Compiler.Pretty
@@ -137,7 +137,7 @@ inferExpr' span = \case
     -- Convert a row type to a record type
     t <- case eType of
       Fix (TypeRow t) -> getTableRecordType t
-      other -> pure other
+      other           -> pure other
     resultType <- freshType
     tailType <- freshType
     let recordType = typeApp tyRecord $ recordCons field resultType tailType
@@ -195,15 +195,15 @@ inferDefinitionGroup expls impls = do
   -- Put explicit signatures in env
   inExtendedTypeEnv (envFromDefinitions expls) $ do
 
-  (resultImpl, deferredImpl) <- inferImplicitDefinitions impls
+    (resultImpl, deferredImpl) <- inferImplicitDefinitions impls
 
-  -- Put inferred signatures in env
-  inExtendedTypeEnv (envFromDefinitions resultImpl) $ do
+    -- Put inferred signatures in env
+    inExtendedTypeEnv (envFromDefinitions resultImpl) $ do
 
-  resultExpl <- traverse checkExplicitDefinition expls
+      resultExpl <- traverse checkExplicitDefinition expls
 
-  pure ( resultImpl <> map fst resultExpl
-       , deferredImpl <> join (map snd resultExpl) )
+      pure ( resultImpl <> map fst resultExpl
+           , deferredImpl <> join (map snd resultExpl) )
 
 checkExplicitDefinition
   :: (Text, SourceAst, PolyType)
@@ -255,38 +255,38 @@ inferImplicitDefinitions defs = do
     pure (name, EnvType (ForAll [] [] t) Recursive)
   inExtendedTypeEnv (Map.fromList dict) $ do
 
-  -- Infer
-  inferred <- for defs $ \(name, e@(span :< _)) -> do
-    (e', t, cs) <- inferExpr e
-    -- Unify the inferred type with the fresh type to deal with recursion.
-    Just (EnvType (ForAll _ _ t') _) <- lookupType name
-    unifyTypes' span t t'
-    pure (name, e', t, cs)
+    -- Infer
+    inferred <- for defs $ \(name, e@(span :< _)) -> do
+      (e', t, cs) <- inferExpr e
+      -- Unify the inferred type with the fresh type to deal with recursion.
+      Just (EnvType (ForAll _ _ t') _) <- lookupType name
+      unifyTypes' span t t'
+      pure (name, e', t, cs)
 
-  -- Calculate deferred and retained constraints.
-  s <- getTypeSubst
-  let
-    inferredTypes = map (applyTypeSubst s . view _3) inferred
-    fixed = getFtvs (applyTypeSubst s outerEnv)
-    generic = getFtvs inferredTypes Set.\\ fixed
-    css = applyTypeSubst s $ join $ map (view _4) inferred 
-  (deferred, retained) <- split fixed generic css
-                 
-  -- Quantify over the intersection of retained and the inferred constraints
-  quantified <- for inferred $ \(name, e, t, cs) -> do
-    cs' <- reduce (applyTypeSubst s cs)
+    -- Calculate deferred and retained constraints.
+    s <- getTypeSubst
     let
-      rs = [c | c <- retained, c `elem` applyTypeSubst s cs']
-      poly = quantify (Set.toList generic) rs (applyTypeSubst s t)
-    pure (name, e, poly, rs)
+      inferredTypes = map (applyTypeSubst s . view _3) inferred
+      fixed = getFtvs (applyTypeSubst s outerEnv)
+      generic = getFtvs inferredTypes Set.\\ fixed
+      css = applyTypeSubst s $ join $ map (view _4) inferred
+    (deferred, retained) <- split fixed generic css
 
-  -- Resolve placeholders
-  let recConstrs = Map.fromList $ map (view _1 &&& view _4) quantified
-  resolved <- for quantified $ \(name, e, poly, cs) -> do
-    e' <- resolveConstraints recConstrs e cs
-    pure (name, e', poly)
+    -- Quantify over the intersection of retained and the inferred constraints
+    quantified <- for inferred $ \(name, e, t, cs) -> do
+      cs' <- reduce (applyTypeSubst s cs)
+      let
+        rs = [c | c <- retained, c `elem` applyTypeSubst s cs']
+        poly = quantify (Set.toList generic) rs (applyTypeSubst s t)
+      pure (name, e, poly, rs)
 
-  pure (resolved, deferred)
+    -- Resolve placeholders
+    let recConstrs = Map.fromList $ map (view _1 &&& view _4) quantified
+    resolved <- for quantified $ \(name, e, poly, cs) -> do
+      e' <- resolveConstraints recConstrs e cs
+      pure (name, e', poly)
+
+    pure (resolved, deferred)
 
 inferBinder :: Type -> SourceBinder -> Check (Map Text EnvType)
 inferBinder expected (span :< b) = case b of
@@ -483,39 +483,41 @@ checkModule decls = do
   -- Put kinds and data constuctors in scope
   inExtendedTypeEnv dataPolys $ inExtendedKindEnv kinds $ do
 
-  -- Check all class declarations
-  classEnvs <- for (extractClassDecls decls) checkClassDecl
+    -- Check all class declarations
+    classEnvs <- for (extractClassDecls decls) checkClassDecl
 
-  -- Put class methods in scope
-  inExtendedTypeEnv (Map.unions classEnvs) $ do
+    -- Put class methods in scope
+    inExtendedTypeEnv (Map.unions classEnvs) $ do
 
-  -- Check all instance declarations
-  let instanceDecls = extractInstanceDecls decls
-  instEnv <- for instanceDecls checkInstanceDecl
+      -- Check all instance declarations
+      let instanceDecls = extractInstanceDecls decls
+      instEnv <- for instanceDecls checkInstanceDecl
 
-  -- Put instance env into scope
-  inExtendedInstanceEnv (Map.fromList instEnv) $ do
+      -- Put instance env into scope
+      inExtendedInstanceEnv (Map.fromList instEnv) $ do
 
-  -- Check all type signatures
-  declaredTypes <- for (extractTypeDecls decls) $ \ExTypeDecl {..} -> do
-    checkTypeDecl tSpan tPolyType
-    pure (tName, tPolyType)
+        -- Check all type signatures
+        declaredTypes <- for (extractTypeDecls decls) $ \ExTypeDecl {..} -> do
+          checkTypeDecl tSpan tPolyType
+          pure (tName, tPolyType)
 
-  -- Check types of all value declarations
-  result <- checkValueDecls (map (map stripAnn) $ Map.fromList declaredTypes)
-                            (extractValueDecls decls)
+        -- Check types of all value declarations
+        result <- checkValueDecls
+          (map (map stripAnn) $ Map.fromList declaredTypes)
+          (extractValueDecls decls)
 
-  -- Put value types into scope
-  inExtendedTypeEnv (envFromDefinitions result) $ do
+        -- Put value types into scope
+        inExtendedTypeEnv (envFromDefinitions result) $ do
 
-  -- Build instance dictionaries
-  instDicts <- for instanceDecls buildInstanceDict
+          -- Build instance dictionaries
+          instDicts <- for instanceDecls buildInstanceDict
 
-  -- Collect exports and compile expressions
-  exprs <- for result $ \(name, i, _) -> (name, ) <$> compileIntermed i
-  let moduleExprs = Map.fromList exprs `Map.union` Map.fromList instDicts
-  env <- getCheckEnv
-  pure (env, moduleExprs)
+          -- Collect exports and compile expressions
+          exprs <- for result $ \(name, i, _) -> (name, ) <$> compileIntermed i
+          let moduleExprs =
+                Map.fromList exprs `Map.union` Map.fromList instDicts
+          env <- getCheckEnv
+          pure (env, moduleExprs)
 
 checkFormula :: Formula -> Check (Core.Expr, PolyType)
 checkFormula (decls, expr) = do
@@ -710,7 +712,7 @@ checkValueDecls declaredTypes decls = do
     (impls, expls) = partitionEithers $ flip map decls $ \ExValueDecl {..} ->
       case Map.lookup vName declaredTypes of
         Nothing -> Left (vName, vExpr)
-        Just p -> Right (vName, vExpr, p)
+        Just p  -> Right (vName, vExpr, p)
   (intermeds, ds) <- inferDefinitionGroup expls impls
   unless (null ds) $ internalError Nothing $
     "Deferred the following constraints while checking top-level definitions: "

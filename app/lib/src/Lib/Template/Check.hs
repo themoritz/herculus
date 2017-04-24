@@ -2,7 +2,6 @@
 
 module Lib.Template.Check
  ( checkTemplate
- , compileTemplate
  ) where
 
 import           Lib.Prelude
@@ -21,8 +20,8 @@ import           Lib.Compiler.Type
 import           Lib.Template.AST
 import           Lib.Template.Core        (TplChunk, toCore)
 
-compileTemplate :: [TplIntermed] -> Check [TplChunk]
-compileTemplate = map toCore . traverse go
+checkTemplate :: [SourceTplChunk] -> Check [TplChunk]
+checkTemplate tpls = map toCore . traverse go =<< checkTemplate' tpls
   where
     go :: TplIntermed -> Check TplCompiled
     go (Fix i) = case i of
@@ -35,8 +34,8 @@ compileTemplate = map toCore . traverse go
       TplPrint e ->
         tplPrint <$> cleanUpIntermed e
 
-checkTemplate :: [SourceTplChunk] -> Check [TplIntermed]
-checkTemplate = traverse checkTemplateChunk
+checkTemplate' :: [SourceTplChunk] -> Check [TplIntermed]
+checkTemplate' = traverse checkTemplateChunk
 
 checkTemplateChunk :: SourceTplChunk -> Check TplIntermed
 checkTemplateChunk (span :< chunk) = case chunk of
@@ -46,14 +45,14 @@ checkTemplateChunk (span :< chunk) = case chunk of
     -- TODO: Check `cs` is empty
     argType <- freshType
     binderDict <- inferBinder argType binder
-    body' <- inExtendedTypeEnv binderDict $ checkTemplate body
+    body' <- inExtendedTypeEnv binderDict $ checkTemplate' body
     unifyTypes' span (typeApp tyList argType) eType
     pure $ tplFor (injFix $ stripAnn binder) e' body'
   TplIf cond th el -> do
     (cond', condType, cs) <- inferExpr cond
     unifyTypes' span tyBoolean condType
-    th' <- checkTemplate th
-    el' <- checkTemplate el
+    th' <- checkTemplate' th
+    el' <- checkTemplate' el
     pure $ tplIf cond' th' el'
   TplPrint e -> do
     (e', eType, cs) <- inferExpr e

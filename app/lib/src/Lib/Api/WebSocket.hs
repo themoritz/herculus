@@ -31,4 +31,4 @@ data WsDownMessage
                       (Diff Column)
                       (Diff (Entity M.Row))
                       (Diff (Entity M.Table))
-  deriving (Generic, ToJSON, FromJSON, Show)
+  deriving (Generic, ToJSON, FromJSON)

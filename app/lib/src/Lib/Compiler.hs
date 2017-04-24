@@ -2,6 +2,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes       #-}
+{-# LANGUAGE RankNTypes        #-}
 
 module Lib.Compiler where
 
@@ -30,11 +31,21 @@ import           Lib.Compiler.Parse
 import           Lib.Compiler.Pretty
 import           Lib.Compiler.Type
 
--- compile :: Monad m => Text -> TypecheckEnv m
---         -> m (Either Text (CExpr, Type))
--- compile inp env = case parseExpr inp of
---   Left e   -> pure $ Left e
---   Right e' -> runInfer env e'
+compileFormula
+  :: Monad m => Text -> Resolver m -> CheckEnv
+  -> m (Either Error (Expr, PolyType))
+compileFormula src resolver env = runExceptT $ do
+  e <- hoistError $ parse src parseFormula
+  ExceptT $ runCheck env resolver $ checkFormula e
+
+compileModule
+  :: Monad m => Text -> Resolver m -> CheckEnv
+  -> m (Either Error (CheckEnv, Map Text Expr))
+compileModule src resolver env = runExceptT $ do
+  e <- hoistError $ parse src parseModule
+  ExceptT $ runCheck env resolver $ checkModule e
+
+--------------------------------------------------------------------------------
 
 testDataCol :: DataCol
 testDataCol = DataCol
@@ -43,7 +54,7 @@ testDataCol = DataCol
   ""
   CompileResultNone
 
-testResolveInterp :: Monad m => ResolveF a -> m a
+testResolveInterp :: Monad m => Resolver m
 testResolveInterp = \case
   GetTableRecordType _ reply ->
     pure $ reply $ typeApp tyRecord $ recordCons "A" tyNumber recordNil
@@ -54,7 +65,7 @@ testResolveInterp = \case
   ResolveTableRef _ reply ->
     pure $ reply $ Just nullObjectId
 
-testGetInterp :: Monad m => GetF a -> m a
+testGetInterp :: Monad m => Getter m
 testGetInterp = \case
   GetCellValue _ reply ->
     pure $ reply $ Just $ VBool True

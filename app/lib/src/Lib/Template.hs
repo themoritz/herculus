@@ -1,4 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE RankNTypes        #-}
 
 module Lib.Template where
 
@@ -9,23 +10,24 @@ import           Lib.Compiler.Check.Monad
 import           Lib.Compiler.Env
 import           Lib.Compiler.Error
 import           Lib.Compiler.Eval.Monad
+import           Lib.Compiler.Parse
 import           Lib.Template.Check
+import           Lib.Template.Core
 import           Lib.Template.Eval
 import           Lib.Template.Parse
 
--- compileTemplate :: Monad m => Text -> TypecheckEnv m -> m (Either Text CTemplate)
--- compileTemplate inp env = case parseTemplate inp of
---   Left e -> pure $ Left e
---   Right tpl -> do
---     inferResult <- runInferTpl env tpl
---     case inferResult of
---       Left e -> pure $ Left e
---       Right ttpl -> pure $ Right ttpl
+compileTemplate
+  :: Monad m => Text -> Resolver m -> CheckEnv
+  -> m (Either Error [TplChunk])
+compileTemplate src resolver env = runExceptT $ do
+  e <- hoistError $ parse src parseTemplate
+  ExceptT $ runCheck env resolver $ checkTemplate e
+
+--------------------------------------------------------------------------------
 
 testEvalTemplate :: Text -> IO ()
-testEvalTemplate src = withParsed src parseTemplate $ \tpl -> do
-  let go = checkTemplate tpl >>= compileTemplate
-  runCheck primCheckEnv testResolveInterp go >>= \case
+testEvalTemplate src =
+  compileTemplate src testResolveInterp primCheckEnv >>= \case
     Left err -> putStrLn $ displayError src err
     Right code -> do
       runEval 10000 testGetInterp (evalTemplate primTermEnv code) >>= \case
