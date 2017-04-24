@@ -243,18 +243,18 @@ parseIfThenElse = do
 
 parseTblRef :: Parser SourceAst
 parseTblRef = withSource $ do
-  ref <- TableRef . Ref <$> (hashSign *> identifier)
+  ref <- TableRef . Ref <$> (hashSign' *> reference)
   pure $ inj (ref :: RefTextF SourceAst)
 
 parseColRef :: Parser SourceAst
 parseColRef = withSource $ do
-  ref <- ColumnRef . Ref <$> (dollarSign *> identifier)
+  ref <- ColumnRef . Ref <$> (dollarSign' *> reference)
   pure $ inj (ref :: RefTextF SourceAst)
 
 parseColOfTblRef :: Parser SourceAst
 parseColOfTblRef = withSource $ do
-  tbl <- hashSign *> identifier
-  col <- dot *> identifier
+  tbl <- hashSign' *> reference'
+  col <- dot' *> reference
   pure $ inj (ColumnOfTableRef (Ref tbl) (Ref col) :: RefTextF SourceAst)
 
 --------------------------------------------------------------------------------

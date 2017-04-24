@@ -39,7 +39,10 @@ lexeme p = do
   pure x
 
 text :: Text -> Parser ()
-text s = void $ lexeme $ P.string (T.unpack s)
+text = lexeme . text'
+
+text' :: Text -> Parser ()
+text' s = void $ P.string (T.unpack s)
 
 --------------------------------------------------------------------------------
 
@@ -96,17 +99,20 @@ colon = text ":"
 doubleColon :: Parser ()
 doubleColon = text "::"
 
-dollarSign :: Parser ()
-dollarSign = text "$"
+dollarSign' :: Parser ()
+dollarSign' = text' "$"
 
-hashSign :: Parser ()
-hashSign = text "#"
+hashSign' :: Parser ()
+hashSign' = text' "#"
 
 equals :: Parser ()
 equals = text "="
 
 dot :: Parser ()
 dot = text "."
+
+dot' :: Parser ()
+dot' = text' "."
 
 comma :: Parser ()
 comma = text ","
@@ -157,7 +163,10 @@ symbol s = do
   guard (s == s')
 
 stringLit :: Parser Text
-stringLit = lexeme go P.<?> "string" where
+stringLit = lexeme stringLit'
+
+stringLit' :: Parser Text
+stringLit' = go P.<?> "string" where
   go = T.pack <$> (P.char '"' *> P.manyTill L.charLiteral (P.char '"'))
 
 numberLit :: Parser Double
@@ -166,10 +175,23 @@ numberLit = lexeme L.float P.<?> "number"
 integerLit :: Parser Integer
 integerLit = lexeme L.integer P.<?> "integer"
 
+reference :: Parser Text
+reference = lexeme reference'
+
+reference' :: Parser Text
+reference' = P.choice
+  [ stringLit'
+  , uname'
+  , lname'
+  ] P.<?> "reference"
+
 --------------------------------------------------------------------------------
 
 lname :: Parser Text
-lname = lexeme (T.cons <$> identStart <*> (T.pack <$> many identLetter))
+lname = lexeme lname'
+
+lname' :: Parser Text
+lname' = T.cons <$> identStart <*> (T.pack <$> many identLetter)
 
 identStart :: Parser Char
 identStart = P.lowerChar <|> P.oneOf ("_" :: [Char])
@@ -177,8 +199,11 @@ identStart = P.lowerChar <|> P.oneOf ("_" :: [Char])
 identLetter :: Parser Char
 identLetter = P.alphaNumChar <|> P.oneOf ("_'" :: [Char])
 
+uname' :: Parser Text
+uname' = T.cons <$> P.upperChar <*> (T.pack <$> many identLetter)
+
 uname :: Parser Text
-uname = lexeme (T.cons <$> P.upperChar <*> (T.pack <$> many identLetter))
+uname = lexeme uname'
 
 reservedNames :: [Text]
 reservedNames =

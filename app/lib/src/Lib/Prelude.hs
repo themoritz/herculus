@@ -1,18 +1,20 @@
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE DeriveFunctor         #-}
+{-# LANGUAGE DeriveTraversable     #-}
+{-# LANGUAGE ExplicitNamespaces    #-}
 {-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE TupleSections      #-}
-{-# LANGUAGE DeriveFunctor      #-}
-{-# LANGUAGE DeriveTraversable      #-}
-{-# LANGUAGE NoImplicitPrelude      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude     #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE TypeOperators         #-}
 -- |
 
 module Lib.Prelude
   ( module Exports
   , id
   , (***), (&&&)
+  , ExceptT(..)
   --
   , (:+:)(..)
   , coproduct
@@ -29,14 +31,19 @@ module Lib.Prelude
   , hoistError
   ) where
 
-import           Prelude (id)
-import           Control.Arrow                ((&&&), (***))
-import           Protolude as Exports hiding ((:*:), (:+:), Fixity, Infix, Type,
-                                       TypeError, reduce, Constraint)
+import           Prelude                    (id)
+
+import           Control.Arrow              ((&&&), (***))
+import           Control.Monad.Trans.Except (ExceptT (..))
+
+import           Protolude                  as Exports hiding ((:*:), (:+:),
+                                                        Constraint, Fixity,
+                                                        Infix, Type, TypeError,
+                                                        reduce)
 
 import           Data.Functor.Foldable
 
-import           Data.Maybe (fromJust)
+import           Data.Maybe                 (fromJust)
 
 --------------------------------------------------------------------------------
 
@@ -62,7 +69,7 @@ instance f :<: (f :+: g) where
   prj (InjL f) = Just f
   prj _        = Nothing
 
-instance {-# OVERLAPPABLE #-} h :<: g => h :<: (f :+: g) where
+instance {-# OVERLAPPABLE #-} (h :<: g) => h :<: (f :+: g) where
   inj = InjR . inj
   prj (InjR g) = prj g
   prj _        = Nothing
@@ -74,7 +81,7 @@ instance {-# OVERLAPS #-} f :<: f where
 injFix :: (Functor f, f :<: g) => Fix f -> Fix g
 injFix = Fix . inj . fmap injFix . unfix
 
-unsafePrj :: f :<: g => g a -> f a
+unsafePrj :: (f :<: g) => g a -> f a
 unsafePrj = fromJust . prj
 
 unsafePrjFix :: (Functor g, f :<: g) => Fix g -> Fix f
@@ -97,7 +104,7 @@ paraM alg = go where
 --------------------------------------------------------------------------------
 
 mapLeft :: (a -> a') -> Either a b -> Either a' b
-mapLeft f (Left a) = Left (f a)
+mapLeft f (Left a)  = Left (f a)
 mapLeft _ (Right b) = Right b
 
 hoistError :: MonadError e m => Either e a -> m a

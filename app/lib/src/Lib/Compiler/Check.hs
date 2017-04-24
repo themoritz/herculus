@@ -475,13 +475,8 @@ instantiate (ForAll as cs t) = do
 
 --------------------------------------------------------------------------------
 
-checkModule
-  :: CheckEnv -> Module
-  -> Either Error (CheckEnv, Map Text Core.Expr)
-checkModule env decls = runCheck env $ checkModule' decls
-
-checkModule' :: Module -> Check (CheckEnv, Map Text Core.Expr)
-checkModule' decls = do
+checkModule :: Module -> Check (CheckEnv, Map Text Core.Expr)
+checkModule decls = do
   -- Check all data declarations and extract the resulting kinds and polytypes
   (kinds, dataPolys) <- checkADTs (extractDataDecls decls)
 
@@ -524,14 +519,9 @@ checkModule' decls = do
   env <- getCheckEnv
   pure (env, moduleExprs)
 
-checkFormula
-  :: CheckEnv -> Formula
-  -> Either Error (Core.Expr, PolyType)
-checkFormula env f = runCheck env $ checkFormula' f
-
-checkFormula' :: Formula -> Check (Core.Expr, PolyType)
-checkFormula' (decls, expr) = do
-  (env, exprs) <- checkModule' decls
+checkFormula :: Formula -> Check (Core.Expr, PolyType)
+checkFormula (decls, expr) = do
+  (env, exprs) <- checkModule decls
   inExtendedEnv env $ do
     (i, t, cs) <- inferExpr expr
     s <- getTypeSubst

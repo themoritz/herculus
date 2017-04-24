@@ -1,10 +1,16 @@
-{-# LANGUAGE DeriveFunctor             #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE NoImplicitPrelude         #-}
-{-# LANGUAGE StandaloneDeriving        #-}
-{-# LANGUAGE TemplateHaskell           #-}
-{-# LANGUAGE TypeOperators             #-}
-{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE ExistentialQuantification  #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE NoImplicitPrelude          #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TypeOperators              #-}
+{-# LANGUAGE TypeSynonymInstances       #-}
 -- |
 
 module Lib.Compiler.Check.Monad where
@@ -12,27 +18,32 @@ module Lib.Compiler.Check.Monad where
 import           Lib.Prelude
 
 import           Control.Lens              hiding ((:<))
-import           Control.Monad.Trans.Free
+import           Control.Monad.Free
 
 import           Data.Functor.Foldable
 import qualified Data.Map                  as Map
 
-import Lib.Model.Column
-import Lib.Model.Table
-import Lib.Types
 import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Env
 import           Lib.Compiler.Error
 import           Lib.Compiler.Pretty
 import           Lib.Compiler.Type
+import           Lib.Model.Column
+import           Lib.Model.Table
+import           Lib.Types
 
 
-type Check = FreeT Check' (Except Error)
+newtype Check a = Check
+  { unCheck :: Free Check' a
+  } deriving (Functor, Applicative, Monad)
 
 type Check' = CheckF :+: ResolveF
 
-liftCheck :: f :<: Check' => f a -> Check a
-liftCheck = liftF . inj
+liftCheck :: (f :<: Check') => f a -> Check a
+liftCheck = Check . liftF . inj
+
+foldCheck :: Monad m => (forall b. Check' b -> m b) -> Check a -> m a
+foldCheck go = foldFree go . unCheck
 
 --------------------------------------------------------------------------------
 
@@ -63,8 +74,15 @@ data CheckF a
   --
   | DebugEnv a
   | DebugTypeSubst a
+  --
+  | forall b. ThrowError Error (b -> a)
+  | forall b. CatchError (Check b) (Error -> Check b) (b -> a)
 
 deriving instance Functor CheckF
+
+instance MonadError Error Check where
+  throwError e = liftCheck $ ThrowError e id
+  catchError m h = liftCheck $ CatchError m h id
 
 freshKind :: Check Kind
 freshKind = liftCheck $ FreshKind id
@@ -204,33 +222,36 @@ data CheckState = CheckState
 
 makeLenses ''CheckState
 
-type CheckInterp = StateT CheckState (Except Error)
+type CheckInterpT m = StateT CheckState (ExceptT Error m)
 
-runCheck :: CheckEnv -> Check a -> Either Error a
-runCheck env =
-  runExcept .
+runCheck
+  :: forall m a. Monad m
+  => CheckEnv -> (forall b. ResolveF b -> m b)
+  -> Check a -> m (Either Error a)
+runCheck env goResolve =
+  runExceptT .
   flip evalStateT (CheckState env 0 Map.empty Map.empty) .
-  iterTM go
+  foldCheck go
   where
-  go :: Check' (CheckInterp a) -> CheckInterp a
-  go = coproduct goCheck undefined
+  go :: Check' b -> CheckInterpT m b
+  go = coproduct goCheck (lift . lift . goResolve)
   goCheck = \case
     FreshKind reply -> do
       i <- checkCount <+= 1
-      reply $ kindUnknown i
+      pure $ reply $ kindUnknown i
 
     FreshType reply -> do
       i <- checkCount <+= 1
-      reply $ typeVar (show i)
+      pure $ reply $ typeVar (show i)
 
     FreshName reply -> do
       i <- checkCount <+= 1
-      reply $ show i
+      pure $ reply $ show i
 
-    UnifyKinds span k1 k2 next -> unify k1 k2 *> next
+    UnifyKinds span k1 k2 next -> unify k1 k2 $> next
       where
 
-      unify :: Kind -> Kind -> CheckInterp ()
+      unify :: Kind -> Kind -> CheckInterpT m ()
       unify k1' k2' = do
         subst <- use checkKindSubst
         let
@@ -250,7 +271,7 @@ runCheck env =
             prettyKind a' <> "` with `" <>
             prettyKind b' <> "`."
 
-      bind :: Int -> Kind -> CheckInterp ()
+      bind :: Int -> Kind -> CheckInterpT m ()
       bind i k = do
         -- Occurs check
         flip cata k $ \case
@@ -268,10 +289,10 @@ runCheck env =
 
     UnifyTypes span t1 t2 reply -> do
       result <- runExceptT $ unify t1 t2
-      reply result
+      pure $ reply result
       where
 
-      unify :: Type -> Type -> ExceptT Error CheckInterp ()
+      unify :: Type -> Type -> ExceptT Error (CheckInterpT m) ()
       unify t1' t2' = do
         subst <- use checkTypeSubst
         let
@@ -291,7 +312,7 @@ runCheck env =
                 unify t t'
                 unify rest rest'
             | otherwise -> do
-                deferredRest <- lift $ iterTM go freshType
+                deferredRest <- lift $ foldCheck go freshType
                 unify rest (recordCons f' t' deferredRest)
                 unify rest' (recordCons f t deferredRest)
           (RecordNil, RecordNil) -> pure ()
@@ -300,7 +321,7 @@ runCheck env =
             prettyType a' <> "` with `" <>
             prettyType b' <> "`."
 
-      bind :: Text -> Type -> ExceptT Error CheckInterp ()
+      bind :: Text -> Type -> ExceptT Error (CheckInterpT m) ()
       bind x t = do
         -- Occurs check
         flip cata t $ \case
@@ -318,84 +339,92 @@ runCheck env =
 
     LookupKind v reply -> do
       res <- use (checkEnv . checkEnvKinds . at v)
-      reply res
+      pure $ reply res
 
     LookupType t reply -> do
       res <- use (checkEnv . checkEnvTypes . at t)
-      reply res
+      pure $ reply res
 
     LookupInstanceDict c reply -> do
       res <- use (checkEnv . checkEnvInstanceDicts . at c)
-      reply res
+      pure $ reply res
 
-    LookupClass c reply -> use (checkEnv . checkEnvClasses . at c) >>= reply
+    LookupClass c reply ->
+      use (checkEnv . checkEnvClasses . at c) >>= pure . reply
 
     AddClass n c next -> do
       checkEnv . checkEnvClasses . at n .= Just c
-      next
+      pure next
 
     AddInstance c i next -> do
       checkEnv . checkEnvClasses . at c . _Just . _5 %= (i :)
-      next
+      pure next
 
-    GetCheckEnv reply -> use checkEnv >>= reply
+    GetCheckEnv reply -> use checkEnv >>= pure . reply
 
     GetKindSubst reply -> do
       s <- use checkKindSubst
-      reply s
+      pure $ reply s
 
     GetTypeSubst reply -> do
       s <- use checkTypeSubst
-      reply s
+      pure $ reply s
 
     InExtendedEnv localEnv m reply -> do
       oldEnv <- use checkEnv
       checkEnv .= unionCheckEnv localEnv oldEnv
-      b <- iterTM go m
+      b <- foldCheck go m
       checkEnv .= oldEnv
-      reply b
+      pure $ reply b
 
     InExtendedKindEnv localEnv m reply -> do
       oldEnv <- use (checkEnv . checkEnvKinds)
       checkEnv . checkEnvKinds .= localEnv `Map.union` oldEnv
-      b <- iterTM go m
+      b <- foldCheck go m
       checkEnv . checkEnvKinds .= oldEnv
-      reply b
+      pure $ reply b
 
     InExtendedTypeEnv localEnv m reply -> do
       oldEnv <- use (checkEnv . checkEnvTypes)
       checkEnv . checkEnvTypes .= localEnv `Map.union` oldEnv
-      b <- iterTM go m
+      b <- foldCheck go m
       checkEnv . checkEnvTypes .= oldEnv
-      reply b
+      pure $ reply b
 
     InExtendedInstanceEnv localEnv m reply -> do
       oldEnv <- use (checkEnv . checkEnvInstanceDicts)
       checkEnv . checkEnvInstanceDicts .= localEnv `Map.union` oldEnv
-      b <- iterTM go m
+      b <- foldCheck go m
       checkEnv . checkEnvInstanceDicts .= oldEnv
-      reply b
+      pure $ reply b
 
     Retain m reply -> do
       old <- get
-      b <- iterTM go m
+      b <- foldCheck go m
       put old
-      reply b
+      pure $ reply b
 
     DebugEnv next -> do
       typeEnv <- use (checkEnv . checkEnvTypes)
       subst <- use checkTypeSubst
-      traceM "----"
+      traceM "- Type env -"
       for_ (Map.toList typeEnv) $
         \(name, (EnvType (applyTypeSubst subst -> poly) origin)) ->
           traceM $ name <> ": " <> show origin <> " | " <> prettyPolyType poly
-      traceM "----"
-      next
+      traceM "------------"
+      pure next
 
     DebugTypeSubst next -> do
       subst <- use checkTypeSubst
-      traceM "----"
+      traceM "- Type subst -"
       flip Map.traverseWithKey subst $ \k t ->
         traceM $ k <> " :-> " <> prettyType t
-      traceM "----"
-      next
+      traceM "--------------"
+      pure next
+
+    ThrowError e _ -> do
+      throwError e
+
+    CatchError m h reply -> do
+      b <- foldCheck go m `catchError` (foldCheck go . h)
+      pure $ reply b

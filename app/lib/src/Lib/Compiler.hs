@@ -13,7 +13,7 @@ import           NeatInterpolation
 import           Text.Show.Pretty
 
 import           Lib.Model.Cell
--- import           Lib.Model.Column
+import           Lib.Model.Column
 import           Lib.Types
 
 import           Lib.Compiler.AST.Common
@@ -21,21 +21,14 @@ import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Check
 import           Lib.Compiler.Check.Monad
 import           Lib.Compiler.Core
-import           Lib.Compiler.Error
--- import           Lib.Compiler.Interpreter
 import           Lib.Compiler.Env
+import           Lib.Compiler.Error
 import           Lib.Compiler.Eval
 import           Lib.Compiler.Eval.Monad
 import           Lib.Compiler.Eval.Types
-import           Lib.Compiler.Type
--- import           Lib.Compiler.Interpreter.Types
 import           Lib.Compiler.Parse
 import           Lib.Compiler.Pretty
-
--- import           Lib.Compiler.Typechecker
--- import           Lib.Compiler.Typechecker.Prim
--- import           Lib.Compiler.Typechecker.Types
--- import           Lib.Compiler.Types
+import           Lib.Compiler.Type
 
 -- compile :: Monad m => Text -> TypecheckEnv m
 --         -> m (Either Text (CExpr, Type))
@@ -43,21 +36,23 @@ import           Lib.Compiler.Pretty
 --   Left e   -> pure $ Left e
 --   Right e' -> runInfer env e'
 
--- testDataCol :: DataCol
--- testDataCol = DataCol
---   DataNumber
---   NotDerived
---   ""
---   CompileResultNone
+testDataCol :: DataCol
+testDataCol = DataCol
+  DataNumber
+  NotDerived
+  ""
+  CompileResultNone
 
--- testTypecheckEnv :: Monad m => TypecheckEnv m
--- testTypecheckEnv = TypecheckEnv
---   { envResolveColumnRef        = \_ -> pure $ Just (nullObjectId, testDataCol)
---   , envResolveColumnOfTableRef = \_ _ -> pure $ Just (nullObjectId, nullObjectId, testDataCol)
---   , envResolveTableRef         = \_ -> pure $ Just nullObjectId
---   , envGetTableRowType         = \_ -> pure $ Type $ TyRecordCons (Ref "A") (Type tyNumber) (Type TyRecordNil)
---   , envOwnTableId              = nullObjectId
---   }
+testResolveInterp :: Monad m => ResolveF a -> m a
+testResolveInterp = \case
+  GetTableRecordType _ reply ->
+    pure $ reply $ typeApp tyRecord $ recordCons "A" tyNumber recordNil
+  ResolveColumnOfTableRef _ _ reply ->
+    pure $ reply $ Just (nullObjectId, nullObjectId, testDataCol)
+  ResolveColumnRef _ reply ->
+    pure $ reply $ Just (nullObjectId, testDataCol)
+  ResolveTableRef _ reply ->
+    pure $ reply $ Just nullObjectId
 
 testGetInterp :: Monad m => GetF a -> m a
 testGetInterp = \case
@@ -69,15 +64,6 @@ testGetInterp = \case
     pure $ reply [nullObjectId]
   GetRowField _ _ reply ->
     pure $ reply $ Just $ VNumber 1
-
--- test :: String -> IO ()
--- test inp = compile (pack inp) testTypecheckEnv >>= \case
---   Left e -> putStrLn $ unpack e
---   Right (e, typ) -> do
---     putStrLn $ "Type: " ++ show typ
---     case interpret e testEvalEnv of
---       Left e'   -> putStrLn $ unpack e'
---       Right val -> putStrLn $ "Val: " ++ show val
 
 --------------------------------------------------------------------------------
 
@@ -163,7 +149,7 @@ testParseSpans src = withParsed src parseModule $ \decls ->
 
 testCheck :: Text -> IO ()
 testCheck src = withParsed src parseModule $ \decls ->
-  case checkModule primCheckEnv decls of
+  case runCheck primCheckEnv testResolveInterp $ checkModule decls of
     Left err -> putStrLn $ displayError src err
     Right _  -> pure ()
 
@@ -173,9 +159,12 @@ testEval src =
   withParsed src parseFormula $ \formula ->
   let
     go :: Either Error (Expr, PolyType, TermEnv)
-    go = do
-      (preludeHeader, preludeCode) <- checkModule primCheckEnv decls
-      (code, poly) <- checkFormula (unionCheckEnv preludeHeader primCheckEnv) formula
+    go = runIdentity $ runExceptT $ do
+      (preludeHeader, preludeCode) <- ExceptT $
+        runCheck primCheckEnv testResolveInterp $ checkModule decls
+      (code, poly) <- ExceptT $
+        runCheck (unionCheckEnv preludeHeader primCheckEnv) testResolveInterp $
+        checkFormula formula
       pure (code, poly, primTermEnv `Map.union` loadModule preludeCode)
   in
   case go of
