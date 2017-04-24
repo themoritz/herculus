@@ -29,16 +29,54 @@ loadModule :: Map Text Expr -> TermEnv
 loadModule = map (flip RContinuation Map.empty)
 
 loadValue :: Value -> Result
-loadValue = undefined
+loadValue = \case
+  VBool b    -> RData (if b then "True" else "False") []
+  VString s  -> RString s
+  VNumber n  -> RNumber n
+  VInteger i -> RInteger i
+  VTime t    -> RTime t
+  VRowRef mr -> RRowRef mr
+  VData l vs -> RData l (map loadValue vs)
+  VRecord m  -> RRecord (map loadValue m)
+  VList vs   -> go vs
+    where go = \case
+            []   -> RData "Nil" []
+            a:as -> RData "Cons" [loadValue a, go as]
+  VMaybe mv -> case mv of
+    Nothing -> RData "Nothing" []
+    Just v  -> RData "Just" [loadValue v]
 
 storeValue :: Result -> Value
-storeValue = undefined
+storeValue r = case r of
+  RString s -> VString s
+  RNumber n -> VNumber n
+  RInteger i -> VInteger i
+  RTime t -> VTime t
+  RRowRef mr -> VRowRef mr
+  RData l vs -> fromMaybe (VData l (map storeValue vs)) $
+        tryList
+    <|> tryMaybe
+    <|> tryBoolean
+    where
+    tryList = if l `elem` ["Cons", "Nil"]
+      then Just $ VList $ goList r
+      else Nothing
+      where goList = \case
+              RData "Cons" [a, as] -> storeValue a : goList as
+              RData "Nil" [] -> []
+    tryMaybe = case (l, vs) of
+      ("Nothing", []) -> Just $ VMaybe Nothing
+      ("Just", [v])   -> Just $ VMaybe $ Just $ storeValue v
+      _               -> Nothing
+    tryBoolean = case (l, vs) of
+      ("True", [])  -> Just $ VBool True
+      ("False", []) -> Just $ VBool False
+      _             -> Nothing
+  RRecord m -> VRecord (map storeValue m)
 
--- TODO: extend with eval value
 data Result
-  = RBoolean Bool
-  | RString Text
-  | RNumber Double
+  = RString Text
+  | RNumber Number
   | RInteger Integer
   | RTime Time
   | RRowRef (Maybe (Id Row))
@@ -51,9 +89,8 @@ data Result
 
 resultDoc :: Result -> Doc
 resultDoc = \case
-  RBoolean b -> bool b
   RString s -> textStrict s
-  RNumber n -> double n
+  RNumber (Number n) -> double n
   RInteger i -> integer i
   RTime t -> textStrict $ show t
   RRowRef mr -> textStrict $ show mr

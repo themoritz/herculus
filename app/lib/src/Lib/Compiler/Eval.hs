@@ -80,7 +80,7 @@ matchValue res = \case
 
 evalLit :: TermEnv -> Literal -> Eval Result
 evalLit env = \case
-  NumberLit n -> pure $ RNumber n
+  NumberLit n -> pure $ RNumber (Number n)
   IntegerLit i -> pure $ RInteger i
   StringLit s -> pure $ RString s
   RecordLit fields -> RRecord <$> traverse (eval env) fields

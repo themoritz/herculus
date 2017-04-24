@@ -38,7 +38,7 @@ import           Lib.Compiler.Type
 
 testDataCol :: DataCol
 testDataCol = DataCol
-  DataNumber
+  DataBool
   NotDerived
   ""
   CompileResultNone
@@ -57,13 +57,13 @@ testResolveInterp = \case
 testGetInterp :: Monad m => GetF a -> m a
 testGetInterp = \case
   GetCellValue _ reply ->
-    pure $ reply $ Just $ VNumber 1
+    pure $ reply $ Just $ VBool True
   GetColumnValues _ reply ->
-    pure $ reply [Just $ VNumber 1]
+    pure $ reply [Just $ VBool False]
   GetTableRows _  reply ->
     pure $ reply [nullObjectId]
   GetRowField _ _ reply ->
-    pure $ reply $ Just $ VNumber 1
+    pure $ reply $ Just $ VBool True
 
 --------------------------------------------------------------------------------
 

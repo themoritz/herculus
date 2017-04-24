@@ -48,14 +48,15 @@ instance Val CellContent where
 --
 
 data Value
-  = VBool Bool
-  | VString Text
+  = VString Text
   | VNumber Number
   | VInteger Integer
   | VTime Time
   | VRowRef (Maybe (Id Row))
   | VData Text [Value]
   | VRecord (Map Text Value)
+  -- Special support
+  | VBool Bool
   | VList [Value]
   | VMaybe (Maybe Value)
   deriving (Show, Generic, Typeable, Eq)
