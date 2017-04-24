@@ -1,22 +1,22 @@
+{-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveAnyClass #-}
 -- |
 
 module Lib.Compiler.Core where
 
 import           Lib.Prelude
 
-import Data.Aeson
+import           Data.Aeson
 import           Data.Functor.Foldable
-import qualified Data.Map as Map
+import qualified Data.Map                     as Map
 
 import {-# SOURCE #-} Lib.Model.Column
 import           Lib.Model.Dependencies.Types
 import           Lib.Model.Table
 import           Lib.Types
 
-import qualified Lib.Compiler.AST      as A
+import qualified Lib.Compiler.AST             as A
 
 data Literal
   = NumberLit Double
@@ -56,13 +56,13 @@ toCore (Fix com) = A.compiled goExpr undefined goRef com
     A.Literal l ->
       Literal $ goLiteral l
     A.Abs b e ->
-      Abs (goBinder b) (toCore e)
+      Abs (binderToCore b) (toCore e)
     A.App f arg ->
       App (toCore f) (toCore arg)
     A.Var x -> Var x
     A.Constructor c -> Constructor c
     A.Case scrut alts ->
-      Case (toCore scrut) (map (goBinder *** toCore) alts)
+      Case (toCore scrut) (map (binderToCore *** toCore) alts)
     A.Let defs body ->
       Let (map (id *** toCore) defs) (toCore body)
     A.Accessor e field ->
@@ -73,15 +73,16 @@ toCore (Fix com) = A.compiled goExpr undefined goRef com
     A.IntegerLit i -> IntegerLit i
     A.StringLit s -> StringLit s
     A.RecordLit fs -> RecordLit (map toCore fs)
-  goBinder :: A.Compiled -> Binder
-  goBinder (Fix (unsafePrj -> b )) = case b of
-    A.VarBinder x               -> VarBinder x
-    A.ConstructorBinder name bs -> ConstructorBinder name (map goBinder bs)
   goRef :: A.RefIdF A.Compiled -> Expr
   goRef = Reference . \case
     A.TableRef t -> TableRef t
     A.ColumnRef c -> ColumnRef c
     A.ColumnOfTableRef t c -> ColumnOfTableRef t c
+
+binderToCore :: A.Compiled -> Binder
+binderToCore (Fix (unsafePrj -> b )) = case b of
+  A.VarBinder x               -> VarBinder x
+  A.ConstructorBinder name bs -> ConstructorBinder name (map binderToCore bs)
 
 
 collectCodeDependencies :: Expr -> CodeDependencies
@@ -89,8 +90,8 @@ collectCodeDependencies = go
   where
   go = \case
     Literal l              -> case l of
-      RecordLit m          -> mconcat . Map.elems $ map go m
-      _                    -> mempty
+      RecordLit m -> mconcat . Map.elems $ map go m
+      _           -> mempty
     Reference r            -> case r of
       ColumnRef c          -> singleColumnRef c
       TableRef t           -> singleTableRef t

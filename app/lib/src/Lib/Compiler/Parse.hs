@@ -3,6 +3,7 @@
 module Lib.Compiler.Parse
   ( parse
   , parseExpr
+  , parseBinder
   , parseModule
   , parseFormula
   , Parser

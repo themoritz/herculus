@@ -19,16 +19,16 @@ library
                      , Lib.Compiler.Check.Monad
                      , Lib.Compiler.Core
                      , Lib.Compiler.Env
+                     , Lib.Compiler.Error
                      , Lib.Compiler.Eval
                      , Lib.Compiler.Eval.Monad
                      , Lib.Compiler.Eval.Types
-                     , Lib.Compiler.Error
-                     , Lib.Compiler.Type
                      , Lib.Compiler.Parse
                      , Lib.Compiler.Parse.Common
                      , Lib.Compiler.Parse.Lexer
                      , Lib.Compiler.Parse.State
                      , Lib.Compiler.Pretty
+                     , Lib.Compiler.Type
                      , Lib.NamedMap
                      , Lib.Api.Rest
                      , Lib.Api.Rest.Report
@@ -51,10 +51,12 @@ library
                      , Lib.Model.ViewState
                      , Lib.Prelude
                      , Lib.Template
-                     , Lib.Template.Parser
-                     , Lib.Template.Typechecker
-                     , Lib.Template.Interpreter
-                     , Lib.Template.Types
+                     , Lib.Template.AST
+                     , Lib.Template.Check
+                     , Lib.Template.Core
+                     , Lib.Template.Eval
+                     , Lib.Template.Parse
+                     , Lib.Template.Parse.Lexer
                      , Data.Aeson.Bson
   build-depends:       aeson
                      , attoparsec

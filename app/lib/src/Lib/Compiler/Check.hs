@@ -511,8 +511,6 @@ checkModule decls = do
   -- Build instance dictionaries
   instDicts <- for instanceDecls buildInstanceDict
 
-  debugTypeSubst
-
   -- Collect exports and compile expressions
   exprs <- for result $ \(name, i, _) -> (name, ) <$> compileIntermed i
   let moduleExprs = Map.fromList exprs `Map.union` Map.fromList instDicts

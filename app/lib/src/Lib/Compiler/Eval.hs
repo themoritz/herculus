@@ -1,7 +1,10 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 -- |
 
-module Lib.Compiler.Eval where
+module Lib.Compiler.Eval
+  ( matchValue
+  , eval
+  ) where
 
 import           Lib.Prelude
 
@@ -53,7 +56,7 @@ eval env = \case
   Case scrut alts -> do
     res <- eval env scrut
     let
-      tryAlts [] = internalError "Eval `Case`: pattern match failure"
+      tryAlts [] = evalError "Eval `Case`: pattern match failure"
       tryAlts ((binder, expr):as) = case matchValue res binder of
         Nothing   -> tryAlts as
         Just env' -> eval (env' `Map.union` env) expr
