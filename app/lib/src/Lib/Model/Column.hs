@@ -22,6 +22,7 @@ import qualified Data.Bson                    as Bson
 import           Data.Text                    (Text, pack)
 
 import           Lib.Compiler.Core
+import           Lib.Compiler.Error
 import           Lib.Model.Class
 import           Lib.Model.Dependencies.Types
 import           Lib.Model.Table
@@ -53,7 +54,7 @@ getTypeDependencies = \case
 data CompileResult a
   = CompileResultOk a
   | CompileResultNone
-  | CompileResultError Text
+  | CompileResultError [Error]
   deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
 type DataCompileResult = CompileResult Expr
@@ -172,7 +173,7 @@ emptyDataCol i = Column
     }
   }
 
-getColumnError :: Column -> Maybe Text
+getColumnError :: Column -> Maybe [Error]
 getColumnError col = case col ^. columnKind of
   ColumnData dat ->
     case (dat ^. dataColIsDerived, dat ^. dataColCompileResult) of

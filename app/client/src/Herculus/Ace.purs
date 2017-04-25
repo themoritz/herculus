@@ -8,7 +8,7 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 import Ace (ACE)
-import Ace.Types (Editor)
+import Ace.Types (Editor, Range, EditSession)
 import Halogen.Query.HalogenM (halt)
 import Herculus.Monad (Herc)
 
@@ -20,11 +20,24 @@ data Query a
 
 type State =
   { input :: Input
+  , markers :: Array Int
   , editor :: Maybe Editor
+  }
+
+data LintType
+  = LintError
+  | LintWarn
+  | LintInfo
+
+type LintAnnotation =
+  { msg :: String
+  , range :: Range
+  , kind :: LintType
   }
 
 type Input =
   { value :: String
+  , linter :: Array LintAnnotation
   , mode :: String
   }
 
@@ -35,6 +48,7 @@ comp :: H.Component HH.HTML Query Input Output Herc
 comp = H.lifecycleComponent
   { initialState:
       { input: _
+      , markers: []
       , editor: Nothing
       }
   , render
@@ -69,6 +83,9 @@ comp = H.lifecycleComponent
           Editor.setTheme "ace/theme/github" editor
           Editor.setMaxLines 100 editor
           Editor.setHighlightActiveLine false editor
+        -- Update annotations
+        setAnnotations input.linter session
+        -- Subscribe to changes
         H.subscribe $ H.eventSource_
           (Session.onChange session)
           (H.request HandleChange)
@@ -84,16 +101,19 @@ comp = H.lifecycleComponent
     mEditor <- H.gets _.editor
     case mEditor of
       Nothing -> halt "Ace not properly initialized."
-      Just editor -> liftEff do
-        -- Update value
-        current <- Editor.getValue editor
-        when (input.value /= current) do
-          void $ Editor.setValue input.value (Just (-1)) editor
-        -- Update mode
-        session <- Editor.getSession editor
-        Ace.TextMode currentMode <- Session.getMode session
-        when (input.mode /= currentMode) do
-          void $ Session.setMode input.mode session
+      Just editor -> do
+        session <- liftEff $ Editor.getSession editor
+        liftEff do
+          -- Update value
+          current <- Editor.getValue editor
+          when (input.value /= current) do
+            void $ Editor.setValue input.value (Just (-1)) editor
+          -- Update mode
+          Ace.TextMode currentMode <- Session.getMode session
+          when (input.mode /= currentMode) do
+            void $ Session.setMode input.mode session
+        -- Update annotations
+        setAnnotations input.linter session
     pure next
 
   eval (HandleChange reply) = do
@@ -104,6 +124,18 @@ comp = H.lifecycleComponent
         value <- liftEff $ Editor.getValue editor
         H.raise $ TextChanged value
     pure (reply H.Listening)
+
+setAnnotations
+  :: Array LintAnnotation -> EditSession
+  -> H.ComponentDSL State Query Output Herc Unit
+setAnnotations annos session = do
+  { markers } <- get
+  markers' <- liftEff do
+    for markers \i -> Session.removeMarker i session
+    for annos \anno -> do
+      Session.addMarker anno.range "linter-error" "string" false session
+  modify _{ markers = markers' }
+  pure unit
 
 foreign import setBlockScrollingInfinity
   :: forall eff. Editor -> Eff (ace :: ACE | eff) Unit

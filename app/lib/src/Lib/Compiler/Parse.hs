@@ -232,11 +232,11 @@ parseLit = withSource $ inj . Literal <$> P.choice
 
 parseIfThenElse :: Parser SourceAst
 parseIfThenElse = do
-  start <- P.getPosition
+  start <- getPosition
   cond <-              reserved "if"   *> indented *> parseExpr
   true@(tspan :< _) <-  indented *> reserved "then" *> indented *> parseExpr
   false@(fspan :< _) <- indented *> reserved "else" *> indented *> parseExpr
-  end <- P.getPosition
+  end <- getPosition
   pure $ Span start end :< inj (Case cond
     [ (tspan :< inj (ConstructorBinder "True" []), true)
     , (fspan :< inj (ConstructorBinder "False" []), false)

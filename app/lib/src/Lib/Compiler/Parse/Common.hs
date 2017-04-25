@@ -48,7 +48,7 @@ mkOpTable embedOp combine = (map.map) binary . groupBy f . sortBy g
 
 withSpan :: Parser a -> Parser (Span, a)
 withSpan p = do
-  start <- P.getPosition
+  start <- getPosition
   x <- p
   end <- gets parserLastTokenEnd
   pure (Span start end, x)
@@ -60,6 +60,6 @@ withSource p = do
 
 singletonSpan :: Parser Span
 singletonSpan = do
-  pos <- P.getPosition
+  pos <- getPosition
   pure (Span pos pos)
 

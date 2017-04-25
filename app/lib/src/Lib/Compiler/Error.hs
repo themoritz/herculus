@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 -- |
@@ -6,6 +8,7 @@ module Lib.Compiler.Error where
 
 import           Lib.Prelude
 
+import           Data.Aeson                (FromJSON, ToJSON)
 import           Data.List.NonEmpty        (NonEmpty ((:|)))
 import           Data.Text                 as T (pack, unlines)
 
@@ -17,7 +20,7 @@ import           Lib.Compiler.AST.Position
 data Error = Error
   { errMsg  :: Text
   , errSpan :: Span
-  } deriving (Show)
+  } deriving (Eq, Generic, FromJSON, ToJSON, Show)
 
 internalError :: MonadError Error m => Maybe Span -> Text -> m a
 internalError mSpan msg =
@@ -30,7 +33,7 @@ convertParseError :: P.ParseError Char P.Dec -> Error
 convertParseError err = Error msg span
   where msg = pack $ parseErrorTextPretty err
         pos :| _ = P.errorPos err
-        span = Span pos pos
+        span = Span (fromSourcePos pos) (fromSourcePos pos)
 
 displayError :: Text -> Error -> Text
 displayError src (Error msg span) = T.unlines $

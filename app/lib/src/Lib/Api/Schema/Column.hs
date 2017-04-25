@@ -5,22 +5,23 @@
 
 module Lib.Api.Schema.Column where
 
-import           Control.Lens     (makeLenses, makePrisms)
+import           Control.Lens       (makeLenses, makePrisms)
 
-import           Data.Aeson       (FromJSON, ToJSON)
-import           Data.Text        (Text)
+import           Data.Aeson         (FromJSON, ToJSON)
+import           Data.Text          (Text)
 
 import           GHC.Generics
 
+import           Lib.Compiler.Error
 import           Lib.Model
-import qualified Lib.Model.Column as M
-import qualified Lib.Model.Table  as M
+import qualified Lib.Model.Column   as M
+import qualified Lib.Model.Table    as M
 import           Lib.Types
 
 data CompileStatus
   = StatusOk
   | StatusNone
-  | StatusError Text
+  | StatusError [Error]
   deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
 data ReportCol = ReportCol

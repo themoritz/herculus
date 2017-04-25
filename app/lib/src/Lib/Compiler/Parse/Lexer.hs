@@ -33,7 +33,7 @@ scn = L.space
 lexeme :: Parser a -> Parser a
 lexeme p = do
   x <- p
-  pos <- P.getPosition
+  pos <- getPosition
   modify $ \st -> st { parserLastTokenEnd = prevColumn pos }
   scn
   pure x
@@ -45,6 +45,9 @@ text' :: Text -> Parser ()
 text' s = void $ P.string (T.unpack s)
 
 --------------------------------------------------------------------------------
+
+getPosition :: Parser Pos
+getPosition = fromSourcePos <$> P.getPosition
 
 mark :: Parser a -> Parser a
 mark p = do

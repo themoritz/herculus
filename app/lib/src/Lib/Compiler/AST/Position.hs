@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 -- |
 
@@ -5,26 +7,40 @@ module Lib.Compiler.AST.Position where
 
 import           Lib.Prelude
 
+import           Data.Aeson
 import qualified Data.Text       as T
 
-import           Text.Megaparsec as P
+import qualified Text.Megaparsec as P
+
+data Pos = Pos
+  { posLine :: Int
+  , posCol  :: Int
+  } deriving (Eq, Ord, Show, Generic, FromJSON, ToJSON)
+
+fromSourcePos :: P.SourcePos -> Pos
+fromSourcePos p = Pos
+  (fromIntegral $ P.unPos $ P.sourceLine p)
+  (fromIntegral $ P.unPos $ P.sourceColumn p)
+
+voidPos :: Pos
+voidPos = Pos 1 1
 
 data Span = Span
-  { spanStart :: SourcePos
-  , spanEnd   :: SourcePos
-  } deriving (Eq, Ord, Show)
+  { spanStart :: Pos
+  , spanEnd   :: Pos
+  } deriving (Eq, Ord, Show, Generic, FromJSON, ToJSON)
 
 spanUnion :: Span -> Span -> Span
 spanUnion (Span s1 e1) (Span s2 e2) =
   Span (min s1 s2) (max e1 e2)
 
 voidSpan :: Span
-voidSpan = Span (initialPos "") (initialPos "")
+voidSpan = Span voidPos voidPos
 
-prevColumn :: SourcePos -> SourcePos
-prevColumn (SourcePos n line col) = SourcePos n line (subPos col)
+prevColumn :: Pos -> Pos
+prevColumn (Pos line col) = Pos line (subPos col)
   where
-  subPos p = unsafePos $ max 1 (unPos p - 1)
+  subPos p = max 1 (p - 1)
 
 highlightSpan :: Bool -> Span -> Text -> [Text]
 highlightSpan doFill (Span start end) =
@@ -48,7 +64,7 @@ highlightSpan doFill (Span start end) =
   mkMarker :: Char -> Int -> Text
   mkMarker c i = T.snoc (T.replicate (i - 1) " ") c
 
-  startCol  = fromIntegral $ unPos $ P.sourceColumn start
-  startLine = fromIntegral $ unPos $ P.sourceLine start
-  endCol    = fromIntegral $ unPos $ P.sourceColumn end
-  endLine   = fromIntegral $ unPos $ P.sourceLine end
+  startCol  = posCol start
+  startLine = posLine start
+  endCol    = posCol end
+  endLine   = posLine end
