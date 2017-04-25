@@ -20,7 +20,7 @@ import           Lib.Compiler.Eval.Monad
 import           Lib.Compiler.Eval.Types
 
 eval :: TermEnv -> Expr -> Eval Result
-eval env = \case
+eval env e = consumeGas *> case e of
   Literal lit -> evalLit env lit
   Var v -> case Map.lookup v env of
     Nothing -> internalError $ unlines

@@ -49,7 +49,7 @@ compileModule src resolver env = runExceptT $ do
 evalFormula
   :: Monad m => Expr -> Getter m -> TermEnv
   -> m (Either Text Value)
-evalFormula expr getter env = runEval 10000 getter $ do
+evalFormula expr getter env = runEval 5000 getter $ do
   r <- eval env expr
   storeValue r
 
