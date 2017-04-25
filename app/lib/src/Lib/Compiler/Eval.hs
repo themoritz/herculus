@@ -19,9 +19,6 @@ import           Lib.Compiler.Core
 import           Lib.Compiler.Eval.Monad
 import           Lib.Compiler.Eval.Types
 
-internalError :: Text -> Eval a
-internalError msg = evalError $ "Internal: " <> msg
-
 eval :: TermEnv -> Expr -> Eval Result
 eval env = \case
   Literal lit -> evalLit env lit

@@ -41,6 +41,9 @@ consumeGas = liftEval $ ConsumeGas ()
 evalError :: Text -> Eval b
 evalError e = liftEval $ EvalError e id
 
+internalError :: Text -> Eval a
+internalError msg = evalError $ "Internal: " <> msg
+
 --------------------------------------------------------------------------------
 
 type Getter m = forall x. GetF x -> m x

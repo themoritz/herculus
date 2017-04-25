@@ -1,4 +1,5 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE TypeFamilies      #-}
 -- | server-side auth logic, including database queries
 
 module Auth
@@ -8,23 +9,21 @@ module Auth
   , prolongSession
   ) where
 
-import           Control.Lens           ((&), (.~), (^.))
-import           Control.Monad.Except   (throwError)
-import           Control.Monad.IO.Class (MonadIO, liftIO)
-import           Data.Functor           (($>))
-import           Data.Text              (Text)
-import qualified Data.Time.Clock        as Clock
-import           Database.MongoDB       ((=:))
-import           System.Entropy         (getEntropy)
+import           Lib.Prelude
+
+import           Control.Lens        ((.~), (^.))
+import qualified Data.Time.Clock     as Clock
+import           Database.MongoDB    ((=:))
+import           System.Entropy      (getEntropy)
 
 import           Lib.Api.Schema.Auth
-import           Lib.Model              (Entity (..))
-import           Lib.Model.Auth         (Session (..), SessionKey, User,
-                                         sessionExpDate, sessionUserId,
-                                         userEmail, userName)
-import           Lib.Types              (Id, Time (Time), addSeconds)
-import           Lib.Util.Base64        (mkBase64Url)
-import           Monads                 (AppError (..), MonadDB (..))
+import           Lib.Model           (Entity (..))
+import           Lib.Model.Auth      (Session (..), SessionKey, User,
+                                      sessionExpDate, sessionUserId, userEmail,
+                                      userName)
+import           Lib.Types           (Id, Time (Time), addSeconds)
+import           Lib.Util.Base64     (mkBase64Url)
+import           Monads              (AppError (..), MonadDB (..))
 
 -- These two function might as well go in to the shared lib
 -- in Lib.Model.Auth

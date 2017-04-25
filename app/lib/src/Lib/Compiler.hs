@@ -1,17 +1,18 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes       #-}
 {-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
 module Lib.Compiler where
 
 import           Lib.Prelude
 
+import           Data.FileEmbed            (embedStringFile,
+                                            makeRelativeToProject)
 import qualified Data.Map                  as Map
 
-import           NeatInterpolation
-import           Text.Show.Pretty
+import           Text.Show.Pretty          (ppShow)
 
 import           Lib.Model.Cell
 import           Lib.Model.Column
@@ -33,7 +34,7 @@ import           Lib.Compiler.Type
 
 compileFormula
   :: Monad m => Text -> Resolver m -> CheckEnv
-  -> m (Either Error (Expr, PolyType))
+  -> m (Either Error (Expr, Type))
 compileFormula src resolver env = runExceptT $ do
   e <- hoistError $ parse src parseFormula
   ExceptT $ runCheck env resolver $ checkFormula e
@@ -44,6 +45,33 @@ compileModule
 compileModule src resolver env = runExceptT $ do
   e <- hoistError $ parse src parseModule
   ExceptT $ runCheck env resolver $ checkModule e
+
+evalFormula
+  :: Monad m => Expr -> Getter m -> TermEnv
+  -> m (Either Text Value)
+evalFormula expr getter env = runEval 10000 getter $ do
+  r <- eval env expr
+  storeValue r
+
+--------------------------------------------------------------------------------
+
+preludeCheckEnv :: CheckEnv
+preludeCheckEnv = fst prelude
+
+preludeTermEnv :: TermEnv
+preludeTermEnv = snd prelude
+
+prelude :: (CheckEnv, TermEnv)
+prelude =
+  case runIdentity $ compileModule preludeText voidResolver primCheckEnv of
+    Left err -> error $ displayError preludeText err
+    Right (env, code) ->
+      ( primCheckEnv `unionCheckEnv` env
+      , primTermEnv `Map.union` loadModule code )
+
+preludeText :: Text
+preludeText =
+  $(makeRelativeToProject "src/Lib/Compiler/Prelude.hexl" >>= embedStringFile)
 
 --------------------------------------------------------------------------------
 
@@ -76,74 +104,29 @@ testGetInterp = \case
   GetRowField _ _ reply ->
     pure $ reply $ Just $ VBool True
 
+voidResolver :: Monad m => Resolver m
+voidResolver = \case
+  GetTableRecordType _ reply ->
+    pure $ reply $ typeApp tyRecord recordNil
+  ResolveColumnOfTableRef _ _ reply ->
+    pure $ reply Nothing
+  ResolveColumnRef _ reply ->
+    pure $ reply Nothing
+  ResolveTableRef _ reply ->
+    pure $ reply Nothing
+
+voidGetter :: Monad m => Getter m
+voidGetter = \case
+  GetCellValue _ reply ->
+    pure $ reply Nothing
+  GetColumnValues _ reply ->
+    pure $ reply []
+  GetTableRows _  reply ->
+    pure $ reply []
+  GetRowField _ _ reply ->
+    pure $ reply Nothing
+
 --------------------------------------------------------------------------------
-
-prelude :: Text
-prelude = [text|
-data Boolean
-  = True
-  | False
-
-data Tuple a b
-  = Tuple a b
-
-data List a
-  = Nil
-  | Cons a (List a)
-
-class Functor f where
-  map : forall a b. (a -> b) -> f a -> f b
-
-instance Functor List where
-  map f xs = case xs of
-    Nil -> Nil
-    Cons a as -> Cons (f a) (map f as)
-
-conj : Boolean -> Boolean -> Boolean
-conj x y = if x then False else y
-
-disj : Boolean -> Boolean -> Boolean
-disj x y = if x then True else y
-
-not : Boolean -> Boolean
-not x = if x then False else True
-
-append : forall a. List a -> List a -> List a
-append xs ys = case xs of
-  Nil -> ys
-  Cons a as -> Cons a (append as ys)
-
-join : forall a. List (List a) -> List a
-join xss = case xss of
-  Nil -> Nil
-  Cons as ass -> append as (join ass)
-
-class Eq a where
-  eq : a -> a -> Boolean
-
-instance Eq Boolean where
-  eq a b = case Tuple a b of
-    Tuple True True -> True
-    Tuple False False -> True
-    other -> False
-
-member : forall a. Eq a => a -> List a -> Boolean
-member x xs = case xs of
-  Nil -> False
-  Cons a as -> if eq x a then True else member x as
-
-class Print a where
-  print : a -> List Boolean
-
-instance Print Boolean where
-  print x = Cons x Nil
-
-instance Print a => Print (List a) where
-  print xs = join (map print xs)
-
-instance Print a => Print b => Print (Tuple a b) where
-  print (Tuple a b) = append (print a) (print b)
-|]
 
 withParsed :: Text -> Parser a -> (a -> IO ()) -> IO ()
 withParsed src p m = case parse src p of
@@ -166,22 +149,22 @@ testCheck src = withParsed src parseModule $ \decls ->
 
 testEval :: Text -> IO ()
 testEval src =
-  withParsed prelude parseModule $ \decls ->
+  withParsed preludeText parseModule $ \decls ->
   withParsed src parseFormula $ \formula ->
   let
-    go :: Either Error (Expr, PolyType, TermEnv)
+    go :: Either Error (Expr, Type, TermEnv)
     go = runIdentity $ runExceptT $ do
       (preludeHeader, preludeCode) <- ExceptT $
         runCheck primCheckEnv testResolveInterp $ checkModule decls
-      (code, poly) <- ExceptT $
+      (code, t) <- ExceptT $
         runCheck (unionCheckEnv preludeHeader primCheckEnv) testResolveInterp $
         checkFormula formula
-      pure (code, poly, primTermEnv `Map.union` loadModule preludeCode)
+      pure (code, t, primTermEnv `Map.union` loadModule preludeCode)
   in
   case go of
     Left err -> putStrLn $ displayError src err
-    Right (code, poly, env) -> do
-      putStrLn $ "Type: " <> prettyPolyType poly
+    Right (code, t, env) -> do
+      putStrLn $ "Type: " <> prettyType t
       runEval 10000 testGetInterp (eval env code) >>= \case
         Left err -> putStrLn err
         Right r  -> putStrLn $ prettyResult r

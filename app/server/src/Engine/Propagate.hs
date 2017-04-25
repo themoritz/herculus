@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE NoImplicitPrelude   #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -7,15 +8,13 @@ module Engine.Propagate
   ( propagate
   ) where
 
-import           Control.Lens                   hiding (children)
-import           Control.Monad.Except
+import           Lib.Prelude
 
-import           Data.Foldable
-import qualified Data.Text                      as T
+import           Control.Lens                 hiding (children)
 
-import           Lib.Compiler.Interpreter
-import           Lib.Compiler.Interpreter.Types
-import           Lib.Model
+import qualified Data.Text                    as T
+
+import           Lib.Compiler
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
@@ -51,13 +50,7 @@ propagate' ((nextId, children):rest) = do
           doTarget r = do
             result <- case compileResult of
               CompileResultOk expr -> do
-                let env = EvalEnv
-                      { envGetCellValue    = flip getCellValue r
-                      , envGetColumnValues = getColumnValues
-                      , envGetTableRows    = fmap (map entityId) . getTableRows
-                      , envGetRowField     = getRowField
-                      }
-                interpret expr env >>= \case
+                evalFormula expr (mkGetter r) preludeTermEnv >>= \case
                   Left e -> pure $ CellError e
                   Right v -> pure $ CellValue v
               CompileResultError _ -> pure $

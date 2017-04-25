@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE NoImplicitPrelude   #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
@@ -9,36 +10,30 @@
 
 module Handler.Rest where
 
-import           Prelude                        hiding (unlines)
+import           Lib.Prelude
+import           Prelude                    (String)
 
-import           Control.Concurrent             (forkIO)
 import           Control.Lens
-import           Control.Monad.Except           (ExceptT (ExceptT), runExceptT)
-import           Control.Monad.IO.Class         (MonadIO, liftIO)
-import           Control.Monad.Reader
+import           Control.Monad.Except       (ExceptT (..))
 
-import qualified Data.ByteString.Base64.URL     as Base64URL
-import qualified Data.ByteString.Lazy           as BL
-import qualified Data.ByteString.Lazy.Char8     as BL8
-import           Data.Foldable                  (for_)
-import           Data.Functor                   (($>))
-import           Data.Monoid
-import           Data.Text                      (Text, pack, unlines, unpack)
-import qualified Data.Text.Encoding             as Text (decodeUtf8)
-import qualified Data.Text.Lazy                 as TL
-import           Data.Traversable               (for)
+import qualified Data.ByteString.Base64.URL as Base64URL
+import qualified Data.ByteString.Lazy       as BL
+import qualified Data.ByteString.Lazy.Char8 as BL8
+import qualified Data.Text                  as T
+import qualified Data.Text.Encoding         as Text (decodeUtf8)
+import qualified Data.Text.Lazy             as TL
 
-import           Database.MongoDB               ((=:))
-import qualified Network.Mail.Mime              as Mail
+import           Database.MongoDB           ((=:))
+import qualified Network.Mail.Mime          as Mail
 import           Servant
-import           System.Entropy                 (getEntropy)
-import qualified Text.Pandoc                    as Pandoc
+import           System.Entropy             (getEntropy)
+import qualified Text.Pandoc                as Pandoc
 
 import           Lib.Api.Rest
-import qualified Lib.Api.Schema.Auth            as Api
-import qualified Lib.Api.Schema.Column          as Api
-import qualified Lib.Api.Schema.Project         as Api
-import           Lib.Compiler.Interpreter.Types
+import qualified Lib.Api.Schema.Auth        as Api
+import qualified Lib.Api.Schema.Column      as Api
+import qualified Lib.Api.Schema.Project     as Api
+import           Lib.Compiler
 import           Lib.Model
 import           Lib.Model.Auth
 import           Lib.Model.Column
@@ -47,14 +42,13 @@ import           Lib.Model.Project
 import           Lib.Model.Row
 import           Lib.Model.Table
 import           Lib.Model.ViewState
-import           Lib.Template.Interpreter
+import           Lib.Template
 import           Lib.Types
 
-import           Auth                           (getUserInfo, lookUpSession,
-                                                 mkSession)
-import           Auth.Permission                (permissionColumn,
-                                                 permissionProject,
-                                                 permissionTable)
+import           Auth                       (getUserInfo, lookUpSession,
+                                             mkSession)
+import           Auth.Permission            (permissionColumn,
+                                             permissionProject, permissionTable)
 import           Engine
 import           Engine.Monad
 import           Engine.Util
@@ -182,7 +176,7 @@ handleAuthSendResetLink email =
       _ <- create session
       let path = safeLink (Proxy @AuthRoutes) (Proxy @AuthResetPassword)
                           (session ^. sessionKey)
-          link = "https://app.herculus.io/api/auth/" <> show path
+          lnk = "https://app.herculus.io/api/auth/" <> show path
       let recipient = Mail.Address (Just (user ^. userName))
                                    (unEmail $ user ^. userEmail)
           sender = Mail.Address (Just "Herculus Admin") "admin@herculus.io"
@@ -193,7 +187,7 @@ handleAuthSendResetLink email =
             , "Someone requested to reset your Herculus password. If that "
             , "person was you, please go to the following address:"
             , ""
-            , TL.pack link
+            , TL.pack lnk
             , ""
             , "If you did not request this, you can just ignore this email."
             ]
@@ -211,7 +205,7 @@ handleAuthResetPassword sKey =
       newPwHash <- mkPwHash newPassword
       update _uiUserId (userPwHash .~ newPwHash)
       deleteByQuery (Proxy @Session) [ "sessionKey" =: _uiSessionKey ]
-      pure $ unlines
+      pure $ T.unlines
         [ "The Herculus login password for the email address " <>
           unEmail _uiUserEmail <>
           " has been changed to: "
@@ -375,23 +369,23 @@ handleCellGetReportPDF columnId rowId = do
     Just lang -> case getPandocReader lang (repCol ^. reportColFormat) of
       Nothing -> do
         let options = Pandoc.def
-        runLatex options (unpack plain) >>= \case
+        runLatex options plain >>= \case
           Left e -> throwError $ ErrUser $
-            "Error running pdflatex: " <> (pack . BL8.unpack) e <>
+            "Error running pdflatex: " <> (T.pack . BL8.unpack) e <>
             "Source: " <> plain
           Right pdf -> pure pdf
-      Just r -> case r Pandoc.def (unpack plain) of
+      Just r -> case r Pandoc.def (T.unpack plain) of
         Left err -> throwError $
-          ErrUser $ unlines
+          ErrUser $ T.unlines
             [ "Could not read generated code into pandoc document: "
-            , (pack . show) err ]
+            , show err ]
         Right pandoc -> do
           template <- getDefaultTemplate "latex" >>= \case
             Left msg -> throwError $ ErrBug $
-              "Could not load latex template: " <> pack msg
+              "Could not load latex template: " <> msg
             Right template -> pure template
           let options = Pandoc.def
-                { Pandoc.writerTemplate = Just template
+                { Pandoc.writerTemplate = Just $ T.unpack template
                 , Pandoc.writerVariables =
                   [ ("papersize", "A4")
                   , ("fontsize", "12pt")
@@ -402,8 +396,8 @@ handleCellGetReportPDF columnId rowId = do
                 }
           makePDF options pandoc >>= \case
             Left e -> throwError $ ErrUser $
-              "Error generating PDF: " <> (pack . BL8.unpack) e <>
-              "Source: " <> (pack . show) (Pandoc.writeLaTeX options pandoc)
+              "Error generating PDF: " <> (T.pack . BL8.unpack) e <>
+              "Source: " <> show (Pandoc.writeLaTeX options pandoc)
             Right pdf -> pure pdf
 
 handleCellGetReportHTML
@@ -418,21 +412,21 @@ handleCellGetReportHTML columnId rowId = do
     Nothing   -> pure plain
     Just lang -> case getPandocReader lang (repCol ^. reportColFormat) of
       Nothing -> pure plain
-      Just r -> case r Pandoc.def (unpack plain) of
-        Left err -> pure $ pack $ show err
+      Just r -> case r Pandoc.def (T.unpack plain) of
+        Left err -> pure $ show err
         Right pandoc -> do
           template <- getDefaultTemplate "html5" >>= \case
             Left msg -> throwError $
-              ErrBug $ "Could not load html5 template: " <> pack msg
+              ErrBug $ "Could not load html5 template: " <> msg
             Right template -> pure template
           let options = Pandoc.def
-                { Pandoc.writerTemplate = Just template
+                { Pandoc.writerTemplate = Just $ T.unpack template
                 , Pandoc.writerVariables =
-                  [ ("pagetitle", unpack (col ^. columnName))
+                  [ ("pagetitle", T.unpack (col ^. columnName))
                   , ("title-prefix", "Report")
                   ]
                 }
-          pure $ pack $ Pandoc.writeHtmlString options pandoc
+          pure $ T.pack $ Pandoc.writeHtmlString options pandoc
 
 handleCellGetReportPlain
   :: (MonadHexl m, MonadReader Api.UserInfo m)
@@ -442,11 +436,12 @@ handleCellGetReportPlain columnId rowId = do
   permissionColumn userId columnId
   snd <$> evalReport columnId rowId
 
-getPandocReader :: ReportLanguage
-                -> ReportFormat
-                -> Maybe (Pandoc.ReaderOptions
-                -> String
-                -> Either Pandoc.PandocError Pandoc.Pandoc)
+getPandocReader
+  :: ReportLanguage
+  -> ReportFormat
+  -> Maybe (Pandoc.ReaderOptions ->
+            String ->
+            Either Pandoc.PandocError Pandoc.Pandoc)
 getPandocReader lang format = case lang of
   ReportLanguageMarkdown -> Just Pandoc.readMarkdown
   ReportLanguageLatex    -> case format of
@@ -463,13 +458,7 @@ evalReport columnId rowId = do
   withReportCol col $ \repCol -> case repCol ^. reportColCompiledTemplate of
     CompileResultOk ttpl ->
       fmap fst $ runEngineT projectId emptyDependencyGraph $ do
-        let env = EvalEnv
-                    { envGetCellValue = flip getCellValue rowId
-                    , envGetColumnValues = getColumnValues
-                    , envGetTableRows = fmap (map entityId) . getTableRows
-                    , envGetRowField = getRowField
-                    }
-        runEvalTemplate env ttpl >>= \case
+        evalTemplate ttpl (mkGetter rowId) preludeTermEnv >>= \case
           Left e -> pure (repCol, e)
           Right res -> pure (repCol, res)
     _ -> throwError $ ErrBug "Getting report for non compiled template."

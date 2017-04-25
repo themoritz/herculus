@@ -1,3 +1,5 @@
+{-# LANGUAGE NoImplicitPrelude   #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 -- |
@@ -6,23 +8,24 @@ module Engine.Compile
   ( compileColumn
   ) where
 
-import           Control.Lens
-import           Control.Monad
-import           Control.Monad.Except
+import           Lib.Prelude
 
-import           Data.Maybe                     (mapMaybe)
-import           Data.Monoid
-import           Data.Text                      (Text, pack)
+import           Control.Lens
+
+import           Data.Maybe               (mapMaybe)
 
 import           Lib.Compiler
-import           Lib.Compiler.Typechecker.Prim
-import           Lib.Compiler.Typechecker.Types
-import           Lib.Compiler.Types
+import           Lib.Compiler.Check.Monad (ResolveF (..), Resolver)
+import           Lib.Compiler.Core
+import           Lib.Compiler.Env
+import           Lib.Compiler.Error
+import           Lib.Compiler.Pretty
+import           Lib.Compiler.Type
 import           Lib.Model
 import           Lib.Model.Column
 import           Lib.Model.Table
 import           Lib.Template
-import           Lib.Template.Types
+import           Lib.Template.Core
 import           Lib.Types
 
 import           Engine.Monad
@@ -46,17 +49,19 @@ compileColumn columnId = do
         pure $ CompileResultError msg
   case col ^. columnKind of
     ColumnData dataCol -> do
-      res <- compile (dataCol ^. dataColSourceCode)
-                     (mkTypecheckEnv $ col ^. columnTableId)
+      res <- compileFormula
+        (dataCol ^. dataColSourceCode)
+        (resolver $ col ^. columnTableId)
+        preludeCheckEnv
       compileResult <- case res of
-        Left msg -> abort msg
+        Left err -> abort $ errMsg err
         Right (expr, inferredType) -> do
-          colType <- typeOfDataType getTableRowType (dataCol ^. dataColType)
+          let colType = typeOfDataType (dataCol ^. dataColType)
           if inferredType /= colType
-            then abort $ pack $
-                   "Inferred type `" <> show inferredType <>
+            then abort $
+                   "Inferred type `" <> prettyType inferredType <>
                    "` does not match column type `" <>
-                   show colType <> "`."
+                   prettyType colType <> "`."
             else do
               let deps = collectCodeDependencies expr
               cycles <- graphSetCodeDependencies columnId deps
@@ -65,10 +70,12 @@ compileColumn columnId = do
       modifyColumn columnId $
         columnKind . _ColumnData . dataColCompileResult .~ compileResult
     ColumnReport repCol -> do
-      res <- compileTemplate (repCol ^. reportColTemplate)
-                             (mkTypecheckEnv $ col ^. columnTableId)
+      res <- compileTemplate
+        (repCol ^. reportColTemplate)
+        (resolver $ col ^. columnTableId)
+        preludeCheckEnv
       compileResult <- case res of
-        Left msg -> abort msg
+        Left err -> abort $ errMsg err
         Right tTpl -> do
           let deps = collectTplCodeDependencies tTpl
           cycles <- graphSetCodeDependencies columnId deps
@@ -80,45 +87,42 @@ compileColumn columnId = do
 
 --------------------------------------------------------------------------------
 
-mkTypecheckEnv :: forall m. MonadEngine m => Id Table -> TypecheckEnv m
-mkTypecheckEnv ownTblId = TypecheckEnv
-    { envResolveColumnRef = \cRef ->
-        (fmap.fmap) (\(_,i,c) -> (i,c)) $ resolveColumnRef ownTblId cRef
+resolver :: MonadEngine m => Id Table -> Resolver m
+resolver ownTblId = \case
+    ResolveColumnRef cRef reply -> map reply $
+      (map.map) (\(_,i,c) -> (i,c)) $ resolveColumnRef ownTblId cRef
 
-    , envResolveColumnOfTableRef = \tblName colName -> do
-        tableRes <- getTableByName tblName
-        case tableRes of
-          Nothing           -> pure Nothing
-          Just (Entity i _) -> resolveColumnRef i colName
+    ResolveColumnOfTableRef tblName colName reply -> do
+      tableRes <- getTableByName tblName
+      reply <$> case tableRes of
+        Nothing           -> pure Nothing
+        Just (Entity i _) -> resolveColumnRef i colName
 
-    , envResolveTableRef = \tblName -> do
-        tableRes <- getTableByName tblName
-        case tableRes of
-          Nothing               -> pure Nothing
-          Just (Entity tblId _) -> pure $ Just tblId
+    ResolveTableRef tblName reply -> do
+      tableRes <- getTableByName tblName
+      reply <$> case tableRes of
+        Nothing               -> pure Nothing
+        Just (Entity tblId _) -> pure $ Just tblId
 
-    , envGetTableRowType = getTableRowType
+    GetTableRecordType tblId reply -> reply <$> getTableRecordType tblId
 
-    , envOwnTableId = ownTblId
+resolveColumnRef
+  :: MonadEngine m
+  => Id Table -> Ref Column
+  -> m (Maybe (Id Table, Id Column, DataCol))
+resolveColumnRef tableId colName = do
+  columnRes <- getColumnOfTableByName tableId colName
+  pure $ case columnRes of
+    Nothing             -> Nothing
+    Just (Entity i col) -> fmap (tableId,i,)
+                                (col ^? columnKind . _ColumnData)
 
-    }
-  where
-    resolveColumnRef :: Id Table -> Ref Column
-                     -> m (Maybe (Id Table, Id Column, DataCol))
-    resolveColumnRef tableId colName = do
-      columnRes <- getColumnOfTableByName tableId colName
-      pure $ case columnRes of
-        Nothing             -> Nothing
-        Just (Entity i col) -> fmap (tableId,i,)
-                                     (col ^? columnKind . _ColumnData)
-
-getTableRowType :: MonadEngine m => Id Table -> m Type
-getTableRowType t = do
+getTableRecordType :: MonadEngine m => Id Table -> m Type
+getTableRecordType t = do
   cols <- getTableColumns t
-  let toRow [] = pure $ Type TyRecordNil
-      toRow ((name, col):rest) = Type
-        <$> (TyRecordCons (Ref name)
-        <$> typeOfDataType getTableRowType (col ^. dataColType)
-        <*> toRow rest)
-  toRow $ flip mapMaybe cols $ \(Entity _ col) ->
+  pure $ typeApp tyRecord $ go $ flip mapMaybe cols $ \(Entity _ col) ->
     fmap (col ^. columnName,) (col ^? columnKind . _ColumnData)
+  where
+  go [] = recordNil
+  go ((name, col):rest) =
+    recordCons name (typeOfDataType (col ^. dataColType)) (go rest)

@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 -- |
 
@@ -5,6 +7,7 @@ module Lib.Template.Core where
 
 import           Lib.Prelude
 
+import           Data.Aeson
 import           Data.Functor.Foldable
 
 import           Lib.Model.Dependencies.Types
@@ -17,9 +20,10 @@ data TplChunk
   | TplFor Binder Expr [TplChunk]
   | TplIf Expr [TplChunk] [TplChunk]
   | TplPrint Expr
+  deriving (Eq, Generic, ToJSON, FromJSON, Show)
 
-collectCodeDependencies :: [TplChunk] -> CodeDependencies
-collectCodeDependencies = mconcat . map go
+collectTplCodeDependencies :: [TplChunk] -> CodeDependencies
+collectTplCodeDependencies = mconcat . map go
   where
   go :: TplChunk -> CodeDependencies
   go = \case

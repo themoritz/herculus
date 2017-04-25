@@ -24,9 +24,11 @@ evalTemplateChunk env = \case
     rs <- eval env expr
     let
       goList = \case
-        RData "Cons" [a, as] -> a : goList as
-        RData "Nil" [] -> []
-    texts <- for (goList rs) $ \r -> case matchValue r iterator of
+        RData "Cons" [a, as] -> (:) <$> pure a <*> goList as
+        RData "Nil" [] -> pure []
+        _ -> internalError "Inconsistent list data type."
+    rs' <- goList rs
+    texts <- for rs' $ \r -> case matchValue r iterator of
       Nothing   -> evalError "Pattern match failure."
       Just env' -> evalTemplate (env' `Map.union` env) body
     pure $ mconcat texts
@@ -35,6 +37,7 @@ evalTemplateChunk env = \case
     case r of
       RData "True" []  -> evalTemplate env thenTpl
       RData "False" [] -> evalTemplate env elseTpl
+      _ -> internalError "If condition did not evaluate to boolean data type."
   TplPrint expr -> do
     RString str <- eval env expr
     pure str

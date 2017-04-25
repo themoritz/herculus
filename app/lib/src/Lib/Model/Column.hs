@@ -2,12 +2,15 @@
 {-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE NoImplicitPrelude   #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell     #-}
 {-# LANGUAGE TupleSections       #-}
 
 module Lib.Model.Column where
+
+import           Lib.Prelude
 
 import           Control.Lens                 (makeLenses)
 
@@ -18,13 +21,11 @@ import           Data.Bson                    (Val, (=:))
 import qualified Data.Bson                    as Bson
 import           Data.Text                    (Text, pack)
 
-import           GHC.Generics
-
 import           Lib.Compiler.Core
 import           Lib.Model.Class
 import           Lib.Model.Dependencies.Types
 import           Lib.Model.Table
--- import           Lib.Template.Types
+import           Lib.Template.Core
 import           Lib.Types
 
 data DataType
@@ -55,11 +56,8 @@ data CompileResult a
   | CompileResultError Text
   deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
--- TODO:
-type Template = ()
-
 type DataCompileResult = CompileResult Expr
-type ReportCompileResult = CompileResult Template
+type ReportCompileResult = CompileResult [TplChunk]
 
 data IsDerived
   = Derived

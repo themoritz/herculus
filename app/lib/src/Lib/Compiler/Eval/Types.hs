@@ -7,7 +7,7 @@ import           Lib.Prelude                  hiding (bool)
 
 import qualified Data.Map                     as Map
 
-import           Text.PrettyPrint.Leijen.Text
+import           Text.PrettyPrint.Leijen.Text hiding ((<$>))
 
 import           Lib.Model.Cell
 import           Lib.Model.Row
@@ -46,33 +46,37 @@ loadValue = \case
     Nothing -> RData "Nothing" []
     Just v  -> RData "Just" [loadValue v]
 
-storeValue :: Result -> Value
+storeValue :: Result -> Eval Value
 storeValue r = case r of
-  RString s -> VString s
-  RNumber n -> VNumber n
-  RInteger i -> VInteger i
-  RTime t -> VTime t
-  RRowRef mr -> VRowRef mr
-  RData l vs -> fromMaybe (VData l (map storeValue vs)) $
+  RString s  -> pure $ VString s
+  RNumber n  -> pure $ VNumber n
+  RInteger i -> pure $ VInteger i
+  RTime t    -> pure $ VTime t
+  RRowRef mr -> pure $ VRowRef mr
+  RData l vs -> fromMaybe (VData l <$> traverse storeValue vs) $
         tryList
     <|> tryMaybe
     <|> tryBoolean
     where
     tryList = if l `elem` ["Cons", "Nil"]
-      then Just $ VList $ goList r
+      then Just $ map VList $ goList r
       else Nothing
       where goList = \case
-              RData "Cons" [a, as] -> storeValue a : goList as
-              RData "Nil" [] -> []
+              RData "Cons" [a, as] -> (:) <$> storeValue a <*> goList as
+              RData "Nil" [] -> pure []
+              _ -> internalError "Found inconsistent list data type."
     tryMaybe = case (l, vs) of
-      ("Nothing", []) -> Just $ VMaybe Nothing
-      ("Just", [v])   -> Just $ VMaybe $ Just $ storeValue v
+      ("Nothing", []) -> Just $ pure $ VMaybe Nothing
+      ("Just", [v])   -> Just $ map (VMaybe . Just) $ storeValue v
       _               -> Nothing
     tryBoolean = case (l, vs) of
-      ("True", [])  -> Just $ VBool True
-      ("False", []) -> Just $ VBool False
+      ("True", [])  -> Just $ pure $ VBool True
+      ("False", []) -> Just $ pure $ VBool False
       _             -> Nothing
-  RRecord m -> VRecord (map storeValue m)
+  RRecord m -> VRecord <$> traverse storeValue m
+  RClosure _ _ _    -> internalError "Unexpected closure"
+  RContinuation _ _ -> internalError "Unexpected continuation"
+  RPrimFun _        -> internalError "Unexpected prim function"
 
 data Result
   = RString Text

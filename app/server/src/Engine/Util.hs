@@ -1,11 +1,15 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE RankNTypes        #-}
 -- |
 
 module Engine.Util where
 
-import           Control.Lens
-import           Control.Monad.Except
+import           Lib.Prelude
 
+import           Control.Lens            hiding (Getter)
+
+import           Lib.Compiler.Eval.Monad (GetF (..), Getter)
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
@@ -16,6 +20,19 @@ import           Lib.Types
 
 import           Engine.Monad
 import           Monads
+
+mkGetter :: MonadEngine m => Id Row -> Getter m
+mkGetter r = \case
+  GetCellValue c reply ->
+    reply <$> getCellValue c r
+  GetColumnValues c reply ->
+    reply <$> getColumnValues c
+  GetTableRows t reply ->
+    map (reply . map entityId) $ getTableRows t
+  GetRowField r' c reply ->
+    reply <$> getRowField r' c
+
+--------------------------------------------------------------------------------
 
 graphGets :: MonadEngine m => (DependencyGraph -> a) -> m a
 graphGets f = graphGetsM (pure . f)

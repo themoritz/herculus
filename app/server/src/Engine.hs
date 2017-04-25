@@ -1,5 +1,6 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TupleSections    #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE TupleSections     #-}
 -- |
 
 module Engine
@@ -7,10 +8,10 @@ module Engine
   , runCommands
   ) where
 
-import           Control.Lens                 hiding (op)
-import           Control.Monad.Except
+import           Lib.Prelude
 
-import           Data.Foldable                (for_)
+import           Control.Lens                 hiding (Getter, op, (&))
+
 import qualified Data.Map                     as Map
 import           Data.Maybe                   (mapMaybe)
 import qualified Data.Text                    as T (length)
@@ -36,23 +37,21 @@ import           Engine.Propagate
 import           Engine.Util
 import           Monads
 
---------------------------------------------------------------------------------
-
 runCommands :: MonadHexl m => Id Project -> [Command] -> m ()
 runCommands projectId cmds = do
   graph <- _projectDependencyGraph <$> getById' projectId
   -- Run command in engine, compile, and propagate
-  (_ , state) <- runEngineT projectId graph $ do
+  (_ , st) <- runEngineT projectId graph $ do
     mapM_ executeCommand cmds
     getCompileTargets >>= mapM_ compileColumn
     propagate
   -- Commit changes
-  let Store{..} = state ^. engineStore
+  let Store{..} = st ^. engineStore
   commit _storeCells
   commit _storeColumns
   commit _storeRows
   commit _storeTables
-  update projectId (projectDependencyGraph .~ (state ^. engineGraph))
+  update projectId (projectDependencyGraph .~ (st ^. engineGraph))
   -- Send changes to clients
   connections <- withConnectionMgr $ getConnectionsToProject projectId
   sendWS connections $ WsDownProjectDiff

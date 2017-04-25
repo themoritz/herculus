@@ -4,6 +4,7 @@
 {-# LANGUAGE InstanceSigs               #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE NoImplicitPrelude          #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TupleSections              #-}
@@ -21,13 +22,11 @@ module Monads
   , askHexlEnv
   ) where
 
+import           Lib.Prelude
+
 import           Control.Concurrent.STM      as STM
-import           Control.Lens                (over)
-import           Control.Lens.Prism          (_Left)
-import           Control.Monad.Except
 import           Control.Monad.Logger
-import           Control.Monad.Reader
-import           Control.Monad.State
+import           Control.Monad.Trans
 import           Control.Monad.Trans.Control
 
 import           Data.Aeson
@@ -35,9 +34,7 @@ import qualified Data.ByteString.Char8       as B8
 import qualified Data.ByteString.Lazy        as BL
 import           Data.Foldable               (for_)
 import           Data.Maybe                  (catMaybes)
-import           Data.Monoid
-import           Data.Proxy
-import           Data.Text                   (Text, pack)
+import qualified Data.Text                   as T
 import           Data.Time.Clock             as Clock (getCurrentTime)
 import           Data.Traversable            (for)
 
@@ -95,8 +92,8 @@ class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m 
   withConnectionMgr :: State ConnectionManager a -> m a
 
   -- Pandoc stuff
-  getDefaultTemplate :: String -> m (Either String String)
-  runLatex :: Pandoc.WriterOptions -> String
+  getDefaultTemplate :: Text -> m (Either Text Text)
+  runLatex :: Pandoc.WriterOptions -> Text
            -> m (Either BL.ByteString BL.ByteString)
   makePDF :: Pandoc.WriterOptions -> Pandoc.Pandoc
           -> m (Either BL.ByteString BL.ByteString)
@@ -151,7 +148,7 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
     case res of
       Nothing -> pure $ Left $
         "getById: Not found. Collection: " <> collection <>
-        ", id: " <> pack (show i)
+        ", id: " <> show i
       Just doc -> pure $ parseDocument doc
 
   -- -- Throws `ErrBug` in Left case
@@ -167,7 +164,7 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
     case res of
       Nothing -> pure $ Left $
         "getOneByQuery: Not found. Collection: " <> collection <>
-        ", query: " <> pack (show query)
+        ", query: " <> show query
       Just doc -> pure $ parseDocument doc
 
   -- -- Throws `ErrBug` in Left case
@@ -206,7 +203,7 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
       Left _ -> throwError $ ErrBug $
                   "updateByQuery: nothing found. Collection: " <>
                   collection <> ", query: " <>
-                  pack (show query)
+                  show query
       Right (Entity i x) ->
         runMongo $ Mongo.save collection $ toDocument $ Entity i (f x)
 
@@ -256,12 +253,13 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
   --
 
   getDefaultTemplate writer =
-    over _Left show <$>
-      liftIO (Pandoc.getDefaultTemplate Nothing writer)
+    liftIO (Pandoc.getDefaultTemplate Nothing (T.unpack writer)) >>= \case
+      Left e -> pure $ Left $ show e
+      Right t -> pure $ Right $ T.pack t
 
 
   runLatex options source =
-    liftIO $ Latex.makePDF options "pdflatex" source
+    liftIO $ Latex.makePDF options "pdflatex" (T.unpack source)
 
   makePDF options pandoc =
     liftIO $ Pandoc.makePDF "pdflatex" Pandoc.writeLaTeX options pandoc

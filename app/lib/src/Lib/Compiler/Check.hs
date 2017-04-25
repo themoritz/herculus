@@ -519,8 +519,8 @@ checkModule decls = do
           env <- getCheckEnv
           pure (env, moduleExprs)
 
-checkFormula :: Formula -> Check (Core.Expr, PolyType)
-checkFormula (decls, expr) = do
+checkFormula :: Formula -> Check (Core.Expr, Type)
+checkFormula (decls, expr@(span :< _)) = do
   (env, exprs) <- checkModule decls
   inExtendedEnv env $ do
     (i, t, cs) <- inferExpr expr
@@ -531,14 +531,15 @@ checkFormula (decls, expr) = do
     let generic = getFtvs t' Set.\\ fixed
     (ds, rs) <- split fixed generic (applyTypeSubst s cs)
     let cs' = ds <> rs
-    unless (null cs') $ internalError Nothing $
+    unless (null generic) $ compileError span $
+      "Inferred type `" <> prettyType t' <> "` must not be polymorphic."
+    unless (null cs') $ internalError (Just span) $
       "Formula expression still has the following inferred constraints: " <>
       prettyConstraints cs'
     i' <- resolvePlaceholders Map.empty i
     c <- compileIntermed i'
     -- TODO: check type given by column
-    let poly = ForAll (Set.toList generic) [] t'
-    pure (Core.Let (Map.toList exprs) c, poly)
+    pure (Core.Let (Map.toList exprs) c, t')
 
 checkTypeDecl :: Span -> SourcePolyType -> Check ()
 checkTypeDecl span (ForAll as cs t) = do
