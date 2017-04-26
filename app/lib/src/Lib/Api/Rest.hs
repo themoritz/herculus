@@ -15,6 +15,7 @@ import           Servant.API            ((:<|>), (:>), Capture, Delete, Get,
 import           Lib.Api.Rest.Report
 import           Lib.Api.Schema.Auth
 import           Lib.Api.Schema.Project
+import           Lib.Compiler.Error
 import qualified Lib.Model.Auth         as M (SessionKey)
 import qualified Lib.Model.Column       as M
 import qualified Lib.Model.Project      as M
@@ -60,6 +61,8 @@ type ProjectRoutes =
  :<|> ProjectReorderCols
  :<|> ProjectLoad
  :<|> ProjectRunCommands
+ :<|> ProjectLintDataCol
+ :<|> ProjectLintReportCol
 
 type ReportCellRoutes =
       ReportCellGetPdf
@@ -82,6 +85,8 @@ type ProjectColSetWidth  = "colSetWidth" :> Capture "columnId" (Id M.Column)   :
 type ProjectReorderCols  = "reorderCols" :> Capture "tableId" (Id M.Table)   :> ReqBody '[JSON] [Id M.Column] :> Post '[JSON] ()
 type ProjectLoad         = "load"        :> Capture "projectId" (Id M.Project)                                :> Get '[JSON] ProjectData
 type ProjectRunCommands  = "runCommands" :> Capture "projectId" (Id M.Project) :> ReqBody '[JSON] [Command]   :> Post '[JSON] ()
+type ProjectLintDataCol  = "lintDataCol" :> Capture "columnId" (Id M.Column) :> ReqBody '[JSON] (M.DataType, Text) :> Post '[JSON] [Error]
+type ProjectLintReportCol = "lintReportCol" :> Capture "columnId" (Id M.Column) :> ReqBody '[JSON] Text       :> Post '[JSON] [Error]
 
 type ReportCellGetPdf    = "pdf"   :> Capture "columnId" (Id M.Column) :> Capture "rowId" (Id M.Row) :> Get '[PDF] LBS.ByteString
 type ReportCellGetHtml   = "html"  :> Capture "columnId" (Id M.Column) :> Capture "rowId" (Id M.Row) :> Get '[HTML] Text

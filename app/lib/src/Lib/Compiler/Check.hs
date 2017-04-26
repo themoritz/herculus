@@ -89,7 +89,7 @@ inferExpr' span = \case
     pure (app fExpr argExpr, resultType, fCs <> argCs)
 
   Var x -> lookupType x >>= \case
-    Nothing -> compileError span $ "Variable not in scope: " <> x
+    Nothing -> compileError span $ "Variable `" <> x <> "` not in scope."
     Just (EnvType poly origin) -> do
       (constraints, t) <- instantiate poly
       let
@@ -105,7 +105,8 @@ inferExpr' span = \case
       pure (e, t, constraints)
 
   Constructor c -> lookupType c >>= \case
-    Nothing -> compileError span $ "Type constructor not in scope: " <> c
+    Nothing -> compileError span $
+      "Type constructor `" <> c <> "` not in scope."
     Just (EnvType poly _) -> do
       -- Type constructors aren't constrained so no need for placeholders here.
       (_, t) <- instantiate poly
@@ -583,7 +584,7 @@ checkInstanceDecl ExInstanceDecl {..} = do
       void $ flip Map.traverseWithKey implVals $ \v span' ->
         case Map.lookup v sigs of
           Nothing -> compileError span' $
-            "Method `" <> v <> " is not a method of class `" <> cls <> "`."
+            "Method `" <> v <> "` is not a member of class `" <> cls <> "`."
           Just _ -> pure ()
       void $ flip Map.traverseWithKey sigs $ \s _ ->
         case Map.lookup s implVals of

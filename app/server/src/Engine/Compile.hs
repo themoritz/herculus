@@ -6,16 +6,19 @@
 
 module Engine.Compile
   ( compileColumn
+  , checkDataCol
+  , checkReportCol
   ) where
 
 import           Lib.Prelude
 
 import           Control.Lens
 
-import           Data.Maybe               (mapMaybe)
+import           Data.Maybe                (mapMaybe)
 
 import           Lib.Compiler
-import           Lib.Compiler.Check.Monad (ResolveF (..), Resolver)
+import           Lib.Compiler.AST.Position
+import           Lib.Compiler.Check.Monad  (ResolveF (..), Resolver)
 import           Lib.Compiler.Core
 import           Lib.Compiler.Env
 import           Lib.Compiler.Error
@@ -43,52 +46,62 @@ import           Monads
 compileColumn :: forall m. MonadEngine m => Id Column -> m ()
 compileColumn columnId = do
   col <- getColumn columnId
-  let abort :: Text -> m (CompileResult a)
-      abort msg = do
-        void $ graphSetCodeDependencies columnId mempty
-        pure $ CompileResultError msg
   case col ^. columnKind of
     ColumnData dataCol -> do
-      res <- compileFormula
-        (dataCol ^. dataColSourceCode)
-        (resolver $ col ^. columnTableId)
-        preludeCheckEnv
-      compileResult <- case res of
-        Left err -> abort $ errMsg err
-        Right (expr, inferredType) -> do
-          let colType = typeOfDataType (dataCol ^. dataColType)
-          if inferredType /= colType
-            then abort $
-                   "Inferred type `" <> prettyType inferredType <>
-                   "` does not match column type `" <>
-                   prettyType colType <> "`."
-            else do
-              let deps = collectCodeDependencies expr
-              cycles <- graphSetCodeDependencies columnId deps
-              if cycles then abort "Dependency graph has cycles."
-                        else pure $ CompileResultOk expr
+      compileResult <- checkDataCol
+        (col ^. columnTableId) columnId
+        (dataCol ^. dataColType) (dataCol ^. dataColSourceCode)
       modifyColumn columnId $
         columnKind . _ColumnData . dataColCompileResult .~ compileResult
     ColumnReport repCol -> do
-      res <- compileTemplate
-        (repCol ^. reportColTemplate)
-        (resolver $ col ^. columnTableId)
-        preludeCheckEnv
-      compileResult <- case res of
-        Left err -> abort $ errMsg err
-        Right tTpl -> do
-          let deps = collectTplCodeDependencies tTpl
-          cycles <- graphSetCodeDependencies columnId deps
-          when cycles $
-            throwError $ ErrBug "Setting report dependencies generated cycle"
-          pure $ CompileResultOk tTpl
+      compileResult <- checkReportCol
+        (col ^. columnTableId) columnId (repCol ^. reportColTemplate)
       modifyColumn columnId $
         columnKind . _ColumnReport . reportColCompiledTemplate .~ compileResult
 
+abort :: MonadEngine m => Id Column -> [Error] -> m (CompileResult a)
+abort c errs = do
+  void $ graphSetCodeDependencies c mempty
+  pure $ CompileResultError errs
+
+checkDataCol
+  :: MonadEngine m
+  => Id Table -> Id Column -> DataType -> Text -> m DataCompileResult
+checkDataCol t c dt src = do
+  res <- compileFormula src (mkResolver t) preludeCheckEnv
+  case res of
+    Left err -> abort c [err]
+    Right (expr, inferredType) -> do
+      let colType = typeOfDataType dt
+      if inferredType /= colType
+        then let msg = "Inferred type `" <> prettyType inferredType <>
+                       "` does not match column type `" <>
+                       prettyType colType <> "`."
+             in abort c [Error msg voidSpan]
+        else do
+          let deps = collectCodeDependencies expr
+          cycles <- graphSetCodeDependencies c deps
+          if cycles then abort c [Error "Dependency graph has cycles." voidSpan]
+                    else pure $ CompileResultOk expr
+
+checkReportCol
+  :: MonadEngine m
+  => Id Table -> Id Column -> Text -> m ReportCompileResult
+checkReportCol t c src = do
+  res <- compileTemplate src (mkResolver t) preludeCheckEnv
+  case res of
+    Left err -> abort c [err]
+    Right tTpl -> do
+      let deps = collectTplCodeDependencies tTpl
+      cycles <- graphSetCodeDependencies c deps
+      when cycles $
+        throwError $ ErrBug "Setting report dependencies generated cycle"
+      pure $ CompileResultOk tTpl
+
 --------------------------------------------------------------------------------
 
-resolver :: MonadEngine m => Id Table -> Resolver m
-resolver ownTblId = \case
+mkResolver :: MonadEngine m => Id Table -> Resolver m
+mkResolver ownTblId = \case
     ResolveColumnRef cRef reply -> map reply $
       (map.map) (\(_,i,c) -> (i,c)) $ resolveColumnRef ownTblId cRef
 

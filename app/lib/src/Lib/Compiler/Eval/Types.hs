@@ -37,7 +37,7 @@ loadValue = \case
   VTime t    -> RTime t
   VRowRef mr -> RRowRef mr
   VData l vs -> RData l (map loadValue vs)
-  VRecord m  -> RRecord (map loadValue m)
+  VRecord m  -> RRecord (map loadValue $ Map.fromList m)
   VList vs   -> go vs
     where go = \case
             []   -> RData "Nil" []
@@ -73,7 +73,7 @@ storeValue r = case r of
       ("True", [])  -> Just $ pure $ VBool True
       ("False", []) -> Just $ pure $ VBool False
       _             -> Nothing
-  RRecord m -> VRecord <$> traverse storeValue m
+  RRecord m -> VRecord . Map.toList <$> traverse storeValue m
   RClosure _ _ _    -> internalError "Unexpected closure"
   RContinuation _ _ -> internalError "Unexpected continuation"
   RPrimFun _        -> internalError "Unexpected prim function"

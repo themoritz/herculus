@@ -11,11 +11,13 @@ import Herculus.Ace as Ace
 import Herculus.EditBox as Edit
 import DOM.Event.Event (Event, stopPropagation)
 import DOM.Event.MouseEvent (mouseEventToEvent)
-import Data.Array (cons, find)
+import Data.Array (cons, find, null)
 import Halogen.Component.ChildPath (cp1, cp2, type (\/), type (<\/>))
-import Herculus.Monad (Herc)
-import Herculus.Utils (Options, clbutton_, cldiv_, clspan, clspan_, dropdown, faIcon_)
-import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), CompileStatus(StatusError, StatusNone, StatusOk), DataCol, ReportCol, columnKind, columnName, dataColCompileStatus, dataColIsDerived, dataColSourceCode, dataColType, reportColCompileStatus, reportColFormat, reportColLanguage, reportColTemplate)
+import Herculus.Monad (Herc, withApi)
+import Herculus.Utils (Options, clbutton_, cldiv_, clspan, dropdown, faIcon_)
+import Lib.Api.Rest (postProjectLintDataColByColumnId, postProjectLintReportColByColumnId)
+import Lib.Api.Schema.Column (Column, ColumnKind(..), CompileStatus(StatusError, StatusNone, StatusOk), DataCol, ReportCol, columnId, columnKind, columnName, dataColCompileStatus, dataColIsDerived, dataColSourceCode, dataColType, reportColCompileStatus, reportColFormat, reportColLanguage, reportColTemplate)
+import Lib.Compiler.Error (Error(..))
 import Lib.Custom (Id(..))
 import Lib.Model.Column (DataType(..), IsDerived(..), ReportFormat(..), ReportLanguage(..))
 import Lib.Model.Table (Table)
@@ -49,6 +51,7 @@ data Output
 type State =
   { input :: Input
   , open :: Boolean
+  , errors :: Array Error
   , tmp :: Tmp
   }
 
@@ -157,9 +160,10 @@ type Slot =
 
 comp :: H.Component HH.HTML Query Input Output Herc
 comp = H.parentComponent
-  { initialState:
-    { input: _
+  { initialState: \i ->
+    { input: i
     , open: false
+    , errors: getColumnErrors i.column
     , tmp: emptyTmp
     }
   , receiver: Just <<< H.action <<< Update
@@ -245,7 +249,7 @@ render st = cldiv_ "flex items-center"
       [ HP.classes
         [ H.ClassName "button--pure"
         , H.ClassName "pr1"
-        , H.ClassName (if isJust getError then "red" else "")
+        , H.ClassName (if null errors then "" else "red")
         ]
       , HE.onClick (HE.input_ ConfigOpen)
       ]
@@ -259,16 +263,7 @@ render st = cldiv_ "flex items-center"
           ]
     ]
 
-  getError = case st.input.column ^. columnKind of
-    ColumnData dat -> case dat ^. dataColIsDerived of
-      Derived -> getErrorStatus (dat ^. dataColCompileStatus)
-      NotDerived -> Nothing
-    ColumnReport rep -> getErrorStatus (rep ^. reportColCompileStatus)
-
-  getErrorStatus = case _ of
-    StatusOk -> Nothing
-    StatusNone -> Nothing
-    StatusError e -> Just e
+  errors = getColumnErrors st.input.column
 
   dataColConf dat = cldiv_ "column-popup" (
     [ cldiv_ "column-popup__wrapper"
@@ -374,17 +369,10 @@ render st = cldiv_ "flex items-center"
     )
 
   confFooter =
-    [ case getError of
-        Just e -> cldiv_ "bg-lightred m0 p1 font-smaller"
-          [ clspan_ "red bold"
-            [ HH.text "Error"
-            ]
-          , HH.div_
-            [ HH.text e
-            ]
-          ]
-        Nothing -> HH.text ""
-    , cldiv_ "clearfix p1 bg-lightgray"
+    ( st.errors <#> \(Error e) ->
+          cldiv_ "bg-lightred m0 p1"
+            [ HH.text e.errMsg ]
+    ) <> [ cldiv_ "clearfix p1 bg-lightgray"
       [ cldiv_ "left"
         [ clspan "link font-smaller"
           [ HE.onClick (HE.input_ ConfigCancel) ]
@@ -407,7 +395,10 @@ eval :: Query ~> H.ParentDSL State Query Child Slot Output Herc
 eval = case _ of
 
   Update input next -> do
-    modify _{ input = input }
+    modify _
+      { input = input
+      , errors = getColumnErrors input.column
+      }
     pure next
 
   SetName' name next -> do
@@ -457,10 +448,33 @@ eval = case _ of
 
   SetReportTemplate template next -> do
     modify _{ tmp { reportTemplate = Just template } }
+    st <- get
+    let col = st.input.column
+    case col ^. columnKind of
+      ColumnReport repCol -> do
+        let call = postProjectLintReportColByColumnId template (col ^. columnId)
+        withApi call \errs -> do
+          H.query' cp2 unit $ H.action $ Ace.SetAnnotations errs
+          modify _{ errors = errs }
+          pure unit
+      ColumnData _ -> pure unit
+          
     pure next
 
   SetFormula formula next -> do
     modify _{ tmp { formula = Just formula } }
+    st <- get
+    let col = st.input.column
+    case col ^. columnKind of
+      ColumnData dataCol -> do
+        let dt = getDataType dataCol st
+        let call = postProjectLintDataColByColumnId
+                     (Tuple dt formula) (col ^. columnId)
+        withApi call \errs -> do
+          H.query' cp2 unit $ H.action $ Ace.SetAnnotations errs
+          modify _{ errors = errs }
+          pure unit
+      ColumnReport _ -> pure unit
     pure next
 
   SetIsDerived isDerived next -> do
@@ -474,3 +488,16 @@ eval = case _ of
   Delete' next -> do
     H.raise Delete
     pure next
+
+getColumnErrors :: Column -> Array Error
+getColumnErrors c = case c ^. columnKind of
+  ColumnData dat -> case dat ^. dataColIsDerived of
+    Derived -> getErrorStatus (dat ^. dataColCompileStatus)
+    NotDerived -> []
+  ColumnReport rep -> getErrorStatus (rep ^. reportColCompileStatus)
+
+getErrorStatus :: CompileStatus -> Array Error
+getErrorStatus = case _ of
+  StatusOk -> []
+  StatusNone -> []
+  StatusError e -> e

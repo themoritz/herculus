@@ -31,7 +31,7 @@ compileError span msg = throwError (Error (msg <> "\n") span)
 
 convertParseError :: P.ParseError Char P.Dec -> Error
 convertParseError err = Error msg span
-  where msg = pack $ parseErrorTextPretty err
+  where msg = "Parse error: " <> pack (parseErrorTextPretty err)
         pos :| _ = P.errorPos err
         span = Span (fromSourcePos pos) (fromSourcePos pos)
 

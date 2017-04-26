@@ -76,7 +76,12 @@ showCSV sep table =
     VBool b -> show b
     VString s -> s
     VNumber (ValNumber n) -> n
+    VInteger i -> show i
     VTime (ValTime t) -> t
     VRowRef mr -> show mr
+    VData l vs -> let go v = " (" <> showValue v <> ")" in
+      l <> intercalate "" (map go vs)
+    VRecord fields -> let go (Tuple f v) = f <> ": " <> showValue v in
+      "{ " <> intercalate ", " (map go fields) <> " }"
     VList vals -> "[ " <> intercalate ", " (map showValue vals) <> " ]"
     VMaybe mV -> show $ map showValue mV

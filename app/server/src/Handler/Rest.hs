@@ -34,6 +34,7 @@ import qualified Lib.Api.Schema.Auth        as Api
 import qualified Lib.Api.Schema.Column      as Api
 import qualified Lib.Api.Schema.Project     as Api
 import           Lib.Compiler
+import           Lib.Compiler.Error
 import           Lib.Model
 import           Lib.Model.Auth
 import           Lib.Model.Column
@@ -50,6 +51,7 @@ import           Auth                       (getUserInfo, lookUpSession,
 import           Auth.Permission            (permissionColumn,
                                              permissionProject, permissionTable)
 import           Engine
+import           Engine.Compile
 import           Engine.Monad
 import           Engine.Util
 import           Monads
@@ -230,6 +232,8 @@ handleProject =
   :<|> handleProjectReorderCols
   :<|> handleProjectLoad
   :<|> handleProjectRunCommands
+  :<|> handleProjectLintDataCol
+  :<|> handleProjectLintReportCol
 
 handleProjectCreate
   :: (MonadHexl m, MonadReader Api.UserInfo m)
@@ -346,6 +350,40 @@ handleProjectRunCommands projectId cmds = do
       CmdCellSet c _ _           -> ofColumn c
   mapM_ checkCmd cmds
   runCommands projectId cmds
+
+handleProjectLintDataCol
+  :: (MonadHexl m, MonadReader Api.UserInfo m)
+  => Id Column -> (DataType, Text) -> m [Error]
+handleProjectLintDataCol columnId (dataType, src) = do
+  userId <- asks Api._uiUserId
+  permissionColumn userId columnId
+  col <- getById' columnId
+  let tableId = col ^. columnTableId
+  table <- getById' tableId
+  let projectId = table ^. tableProjectId
+  project <- getById' projectId
+  res <- map fst $ runEngineT projectId (project ^. projectDependencyGraph) $
+    checkDataCol tableId columnId dataType src
+  pure $ case res of
+    CompileResultError err -> err
+    _                      -> []
+
+handleProjectLintReportCol
+  :: (MonadHexl m, MonadReader Api.UserInfo m)
+  => Id Column -> Text -> m [Error]
+handleProjectLintReportCol columnId src = do
+  userId <- asks Api._uiUserId
+  permissionColumn userId columnId
+  col <- getById' columnId
+  let tableId = col ^. columnTableId
+  table <- getById' tableId
+  let projectId = table ^. tableProjectId
+  project <- getById' projectId
+  res <- map fst $ runEngineT projectId (project ^. projectDependencyGraph) $
+    checkReportCol tableId columnId src
+  pure $ case res of
+    CompileResultError err -> err
+    _                      -> []
 
 --------------------------------------------------------------------------------
 

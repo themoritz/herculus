@@ -1,15 +1,17 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
 -- |
 
 module Main where
 
-import           Control.Lens
+import           Lib.Prelude
 
-import           Data.Proxy
+import           Control.Lens                              hiding ((&))
+
 import qualified Data.Set                                  as Set
 import           Data.Text                                 (Text)
 
@@ -23,6 +25,8 @@ import           Lib.Api.Schema.Auth
 import           Lib.Api.Schema.Column
 import           Lib.Api.Schema.Project
 import           Lib.Api.WebSocket
+import           Lib.Compiler.AST.Position
+import           Lib.Compiler.Error
 import           Lib.Model
 import qualified Lib.Model.Auth                            as M
 import qualified Lib.Model.Cell                            as M
@@ -45,6 +49,7 @@ bridge =
   <|> dateTimeBridge
   <|> (typeName ^== "Base64" >> pure psString)
   <|> (typeName ^== "Base64Url" >> pure psString)
+  <|> (typeName ^== "Integer" >> pure psInt)
   <|> (idBridge "Lib.Types" "Id" "Id")
   <|> (idBridge "Lib.Types" "Ref" "Ref")
   <|> (idBridge "Lib.Model.Project" "Project" "ProjectTag")
@@ -102,7 +107,6 @@ types =
   , mkSumType (Proxy @M.ReportLanguage)
   , mkSumType (Proxy @M.ReportFormat)
   , mkSumType (Proxy @M.DataType)
-  , mkSumType (Proxy @(M.CompileResult A))
   , mkSumType (Proxy @M.IsDerived)
   -- Lib.Api.Schema.Project
   , mkSumType (Proxy @Command)
@@ -117,6 +121,11 @@ types =
   -- Lib.Api.WebSocket
   , mkSumType (Proxy @WsUpMessage)
   , mkSumType (Proxy @WsDownMessage)
+  -- Lib.Compiler.Error
+  , mkSumType (Proxy @Error)
+  -- Lib.Compiler.AST.Position
+  , mkSumType (Proxy @Pos)
+  , mkSumType (Proxy @Span)
   ]
 
 main :: IO ()

@@ -54,7 +54,7 @@ data Value
   | VTime Time
   | VRowRef (Maybe (Id Row))
   | VData Text [Value]
-  | VRecord (Map Text Value)
+  | VRecord [(Text, Value)] -- List better than Map for serialization
   -- Special support
   | VBool Bool
   | VList [Value]

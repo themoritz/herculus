@@ -184,10 +184,13 @@ render st = case st.input.content of
     VBool b -> editBool b (path <<< _VBool)
     VString s -> editString (SlotSub slot) s (path <<< _VString)
     VNumber n -> editNumber (SlotSub slot) n (path <<< _VNumber)
+    VInteger _ -> HH.text "Integer not supported yet"
     VTime t -> editTime (SlotSub slot) t (path <<< _VTime)
     VRowRef mr -> case dt of
       DataRowRef t -> editRowRef mode t mr (path <<< _VRowRef)
       _            -> HH.div_ []
+    VData _ _ -> HH.text "Data not supported yet"
+    VRecord _ -> HH.text "Record not supported yet"
     VList vs -> case dt of
       DataList sub -> editList (SlotSub slot) mode sub vs (path <<< _VList)
       _            -> HH.div_ []
@@ -202,10 +205,13 @@ render st = case st.input.content of
     VBool b -> showBool b
     VString s -> showString s
     VNumber n -> showNumber n
+    VInteger i -> HH.text "Integer not supported yet"
     VTime t -> showTime t
     VRowRef mr -> case dt of
       DataRowRef t -> showRowRef mode t mr
       _            -> HH.div_ []
+    VData _ _ -> HH.text "Data not supported yet"
+    VRecord _ -> HH.text "Record not supported yet"
     VList vs -> case dt of
       DataList sub -> showList mode sub vs
       _            -> HH.div_ []
@@ -355,9 +361,13 @@ render st = case st.input.content of
     showVal = case _ of
       VBool b -> if b then "True" else "False"
       VNumber (ValNumber str) -> str
+      VInteger i -> show i
       VString str -> str
       VTime (ValTime str) -> str
       VRowRef _ -> "Row .."
+      -- TODO:
+      VData _ _ -> "ADT .."
+      VRecord _ -> "Record .."
       VList _ -> "[..]"
       VMaybe _ -> "Maybe .."
 
