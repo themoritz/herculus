@@ -57,6 +57,7 @@ data Query a
   | MouseMove MouseEvent a
   | MouseUp MouseEvent a
   | DoubleClick MouseEvent a
+  | OpenColumnConfig' (Id ColumnTag) a
 
 type Input =
   { cells :: Map Coords CellContent
@@ -74,6 +75,7 @@ data Output
   = Commands (Array Command)
   | ResizeColumn (Id ColumnTag) Int
   | ReorderColumns (Array (Id ColumnTag))
+  | OpenColumnConfig (Id ColumnTag)
 
 type State =
   { input :: Input
@@ -206,11 +208,9 @@ render st = HK.div
             { column: col
             , tables: st.input.tables
             }
-          handler o = Just $ H.action $ SendCommand case o of
-            Col.SetName name -> CmdColumnSetName colId name
-            Col.Delete -> CmdColumnDelete colId
-            Col.SaveReportCol t f l -> CmdReportColUpdate colId t f l
-            Col.SaveDataCol dt d f -> CmdDataColUpdate colId dt d f
+          handler o = Just $ H.action case o of
+            Col.SetName name -> SendCommand $ CmdColumnSetName colId name
+            Col.OpenConfig -> OpenColumnConfig' colId
         in
           HH.slot' cp2 colId Col.comp input handler
       ]
@@ -386,6 +386,10 @@ eval = case _ of
 
   DoubleClick ev next -> do
     H.query' cp6 unit $ H.action $ Control.DoubleClick ev
+    pure next
+
+  OpenColumnConfig' c next -> do
+    H.raise $ OpenColumnConfig c
     pure next
 
 writeClipboard

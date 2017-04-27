@@ -1,53 +1,9 @@
-$diagLeft: 180px;
-
 .column-info {
   padding-left: 3px;
   overflow: hidden;
   white-space: nowrap;
 }
 
-.column-popup {
-  width: 690px;
-  position: absolute;
-  left: -$diagLeft;
-  top: 10px;
-  z-index: 10;
-  background-color: white;
-  border-radius: 4px;
-  border: 1px solid lightgray;
-  box-shadow: 0px 0px 20px 0px lightgray;
-  &:before {
-    content: "";
-    position: absolute;
-    background-color: white;
-    width: 20px;
-    height: 20px;
-    -webkit-transform: rotate(45deg);
-    border-top: 1px solid lightgray;
-    border-left: 1px solid lightgray;
-    left: calc($diagLeft + 5px);
-    top: -11px;
-    box-shadow: 0px 0px 20px 0px lightgray;
-    z-index: -1;
-  }
-}
-
-.column-popup__wrapper {
-  border-radius: 4px;
-  z-index: 20;
-  max-height: 500px;
-  overflow-y: auto;
-  background-color: white;
-}
-
-.column-popup__datatype {
-  border-right: 1px solid $medium-gray;
-}
-
-.column-popup__editor {
-  border: 1px solid $medium-gray; 
-}
-
-.column-popup__editor--disabled {
+.column-config__editor--disabled {
   opacity: 0.4;
 }

@@ -1,11 +1,14 @@
 module Herculus.Project where
 
 import Herculus.Prelude
+import CSS as CSS
 import Data.Map as Map
 import Halogen as H
 import Halogen.HTML as HH
+import Halogen.HTML.CSS as HC
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import Herculus.Config as Config
 import Herculus.Grid as Grid
 import Herculus.Notifications.Types as N
 import Herculus.Project.Settings as Settings
@@ -17,14 +20,15 @@ import Lib.Api.Rest as Api
 import Control.Monad.State (execState, runState)
 import Control.Monad.Writer (execWriterT)
 import Data.Array (head, singleton)
+import Data.Int (toNumber)
 import Data.Lens (Lens', _Just, lens, view, (.=))
 import Data.Map (Map)
 import Data.Maybe.First (First(..))
-import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5)
+import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5, cp6)
 import Herculus.Monad (Herc, getAuthToken, gotoRoute, notify, withApi)
 import Herculus.Project.Data (ProjectData, applyDiff, descTable, mkProjectData, prepare)
 import Herculus.Project.TableList (Output(..))
-import Herculus.Utils (clspan_, faIcon_)
+import Herculus.Utils (cldiv, cldiv_, clspan_, faIcon_)
 import Herculus.Utils.Templates (app)
 import Lib.Api.Schema.Auth (UserInfo)
 import Lib.Api.Schema.Project (Command, Project, projectId, projectName)
@@ -44,6 +48,8 @@ data Query a
   | Delete a
   | ResizeColumn (Id ColumnTag) Int a
   | ReorderColumns (Array (Id ColumnTag)) a
+  | EditColumn (Id ColumnTag) a
+  | ConfigClose a
   | HandleWebSocket (WS.Output WsDownMessage) a
 
 data Input = Input UserInfo R.Project
@@ -55,6 +61,8 @@ type State =
   , view :: Maybe (Id Table)
   , projId :: Id ProjectTag
   , _project :: Maybe Project
+  , configWidth :: Int
+  , configOpen :: Boolean
   , userInfo :: UserInfo
   , disconnected :: Boolean
   }
@@ -68,9 +76,11 @@ type ChildQuery =
   TL.Query <\/>
   Grid.Query <\/>
   Settings.Query <\/>
+  Config.Query <\/>
   Const Void
 
 type ChildSlot =
+  Unit \/
   Unit \/
   Unit \/
   Unit \/
@@ -96,6 +106,8 @@ initialState (Input ui (R.Project p mT)) =
   , view: mT
   , projId: p
   , _project: Nothing
+  , configWidth: 600
+  , configOpen: false
   , userInfo: ui
   , disconnected: false
   }
@@ -131,12 +143,34 @@ render st =
       in
         case mInput of
           Nothing -> HH.div_ []
-          Just input -> 
-            HH.slot' cp4 unit Grid.comp input \o ->
-              Just $ H.action $ case o of
-                Grid.Commands cmds -> RunCommands cmds
-                Grid.ResizeColumn colId size -> ResizeColumn colId size
-                Grid.ReorderColumns order -> ReorderColumns order
+          Just input -> cldiv_ "absolute top-0 right-0 bottom-0 left-0"
+            [ cldiv "absolute top-0 left-0 bottom-0"
+              [ HC.style do
+                  CSS.right $ CSS.px $ toNumber $
+                    if st.configOpen then st.configWidth else 0
+              ]
+              [ HH.slot' cp4 unit Grid.comp input \o ->
+                  Just $ H.action $ case o of
+                    Grid.Commands cmds -> RunCommands cmds
+                    Grid.OpenColumnConfig c -> EditColumn c
+                    Grid.ResizeColumn colId size -> ResizeColumn colId size
+                    Grid.ReorderColumns order -> ReorderColumns order
+              ]
+            , if st.configOpen
+              then cldiv "absolute top-0 right-0 bottom-0 config"
+                   [ HC.style do
+                       CSS.width $ CSS.px $ toNumber $ st.configWidth
+                   ]
+                   [ HH.slot' cp6 unit Config.comp
+                       { cols: input.cols
+                       , tables: input.tables
+                       , projectId: input.projectId
+                       }
+                       \o -> Just $ H.action $ case o of
+                         Config.Close -> ConfigClose
+                   ]
+              else HH.text ""
+            ]
 
   in
     app
@@ -251,6 +285,15 @@ eval (ReorderColumns order next) = do
       { columnOrders = Map.insert tableId order st.columnOrders }
     withApi (Api.postProjectReorderColsByTableId order tableId)
       (const $ pure unit)
+  pure next
+
+eval (EditColumn c next) = do
+  modify _{ configOpen = true }
+  H.query' cp6 unit $ H.action $ Config.EditColumn c
+  pure next
+
+eval (ConfigClose next) = do
+  modify _{ configOpen = false }
   pure next
 
 update

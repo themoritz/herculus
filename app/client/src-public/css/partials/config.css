@@ -1,0 +1,5 @@
+.config {
+  background-color: white;
+  overflow-y: auto;
+  border-left: 1px solid lightgray;
+}

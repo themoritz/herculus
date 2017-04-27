@@ -15,6 +15,7 @@
 @import "partials/cell";
 @import "partials/grid";
 @import "partials/ace";
+@import "partials/config";
 
 @import "basscss-basic";
 
@@ -102,6 +103,10 @@ body, html {
 
 .bg-lightred {
   background-color: color(red lightness(+40%));
+}
+
+.bg-lightgreen {
+  background-color: color(green lightness(+40%) saturation(-40%));
 }
 
 .lightgray {

@@ -17,7 +17,6 @@
 /* -------------------------------------------------------------------------- */
 
 .select {
-  width: 100%;
   font-size: inherit;
   background: $light-gray;
   border: 1px solid color($medium-gray lightness(-8%));

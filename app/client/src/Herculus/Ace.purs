@@ -23,6 +23,7 @@ data Query a
   = Initialize a
   | Update Input a
   | SetAnnotations (Array Error) a
+  | SetText String a
   | Finalize a
   | HandleChange (H.SubscribeStatus -> a)
 
@@ -38,8 +39,7 @@ data LintType
   | LintInfo
 
 type Input =
-  { value :: String
-  , mode :: String
+  { mode :: String
   }
 
 data Output
@@ -76,7 +76,6 @@ eval = case _ of
         { input } <- H.get
         liftEff do
           setBlockScrollingInfinity editor
-          Editor.setValue input.value (Just (-1)) editor
           Session.setMode input.mode session
           Session.setUseSoftTabs true session
           Session.setTabSize 2 session
@@ -103,14 +102,23 @@ eval = case _ of
       Just editor -> do
         session <- liftEff $ Editor.getSession editor
         liftEff do
-          -- Update value
-          current <- Editor.getValue editor
-          when (input.value /= current) do
-            void $ Editor.setValue input.value (Just (-1)) editor
           -- Update mode
           Ace.TextMode currentMode <- Session.getMode session
           when (input.mode /= currentMode) do
             void $ Session.setMode input.mode session
+    pure next
+
+  SetText text next -> do
+    mEditor <- H.gets _.editor
+    case mEditor of
+      Nothing -> halt "Ace not properly initialized."
+      Just editor -> do
+        session <- liftEff $ Editor.getSession editor
+        liftEff do
+          -- Update value
+          current <- Editor.getValue editor
+          when (text /= current) do
+            void $ Editor.setValue text (Just (-1)) editor
     pure next
 
   SetAnnotations errs next -> do
