@@ -50,18 +50,18 @@ parseFormula = (,)
 
 parseDeclaration :: Parser SourceAst
 parseDeclaration = P.choice
-  [ P.try parseDataDecl
-  , P.try parseClassDecl
-  , P.try parseInstanceDecl
-  , P.try parseTypeDecl
-  , P.try parseValueDecl
-  , P.try parseFixityDecl
+  [ parseDataDecl
+  , parseClassDecl
+  , parseInstanceDecl
+  , parseFixityDecl
+  , parseTypeDecl
+  , parseValueDecl
   ]
   P.<?> "declaration"
 
 parseDataDecl :: Parser SourceAst
 parseDataDecl = withSource $ do
-  reserved "data"
+  P.try $ reserved "type"
   name <- indented *> tyname
   tyArgs <- many (indented *> identifier)
   constructors <- P.option [] $ do
@@ -75,7 +75,7 @@ parseDataDecl = withSource $ do
 
 parseClassDecl :: Parser SourceAst
 parseClassDecl = withSource $ do
-  reserved "class"
+  P.try $ reserved "class"
   supers <- many (P.try parseSuper)
   cls <- tyname
   param <- identifier
@@ -88,7 +88,7 @@ parseClassDecl = withSource $ do
 
 parseInstanceDecl :: Parser SourceAst
 parseInstanceDecl = withSource $ do
-  reserved "instance"
+  P.try $ reserved "instance"
   cs <- many (P.try parseConstraint)
   cls <- tyname
   ty <- parseType
@@ -100,16 +100,17 @@ parseInstanceDecl = withSource $ do
 
 parseTypeDecl :: Parser SourceAst
 parseTypeDecl = withSource $ inj <$> (TypeDecl
-  <$> (identifier <* colon)
+  <$> P.try (identifier <* colon)
   <*> (map (hoistCofree inj) <$> parsePolyType)
                                      )
 
 parseValueDecl :: Parser SourceAst
-parseValueDecl = withSource $ inj <$> (ValueDecl
-  <$> identifier
-  <*> (many (hoistCofree inj <$> parseBinder) <* equals)
-  <*> parseExpr
-                                      )
+parseValueDecl = withSource $ do
+  (name, binders) <- P.try $ (,)
+    <$> identifier
+    <*> (many (hoistCofree inj <$> parseBinder) <* equals)
+  expr <- parseExpr
+  pure $ inj $ ValueDecl name binders expr
 
 parseFixityDecl :: Parser SourceAst
 parseFixityDecl = withSource $ do
@@ -130,32 +131,32 @@ parseExpr :: Parser SourceAst
 parseExpr = do
   opSpecs <- gets parserOperators
   makeExprParser terms (mkOpTable spanVar spanApp opSpecs)
+    P.<?> "expression"
   where
     terms = P.choice
       [ P.try parseApp
-      , P.try parseExpr'
+      , parseExpr'
       ]
-      P.<?> "expression"
 
 parseExpr' :: Parser SourceAst
 parseExpr' = P.choice
-  [ P.try parseAccessor
-  , P.try parseExpr''
+  [ parseAccessor
+  , parseExpr''
   ]
 
 parseExpr'' :: Parser SourceAst
 parseExpr'' = P.choice
-  [ P.try parseLit
-  , P.try parseAbs
-  , P.try parseConstructor
-  , P.try parseVar
-  , P.try parseCase
-  , P.try parseIfThenElse
-  , P.try parseLet
-  , P.try parseColOfTblRef
-  , P.try parseTblRef
-  , P.try parseColRef
-  , P.try (parens parseExpr)
+  [ parseCase
+  , parseIfThenElse
+  , parseLet
+  , parseAbs
+  , parseColOfTblRef
+  , parseTblRef
+  , parseColRef
+  , parseLit
+  , parseConstructor
+  , parseVar
+  , (parens parseExpr)
   ]
 
 parseApp :: Parser SourceAst
@@ -166,16 +167,17 @@ parseApp = do
 
 parseAccessor :: Parser SourceAst
 parseAccessor = do
-  e <- parseExpr''
-  refs <- some $ withSpan $ dot *> identifier
-  pure $ foldl' spanAccessor e refs
+  e <- P.try $ parseExpr'' <* dot
+  ref <- withSpan identifier
+  refs <- many $ withSpan $ dot *> identifier
+  pure $ foldl' spanAccessor e (ref:refs)
 
 parseConstructor :: Parser SourceAst
 parseConstructor = withSource $ inj . Constructor <$> dconsname
 
 parseCase :: Parser SourceAst
 parseCase = withSource $ do
-  reserved "case"
+  P.try $ reserved "case"
   scrut <- parseExpr
   indented *> reserved "of"
   alts <- indented *> mark (some (same *> parseAlternative))
@@ -188,7 +190,7 @@ parseCase = withSource $ do
 
 parseLet :: Parser SourceAst
 parseLet = withSource $ do
-  reserved "let"
+  P.try $ reserved "let"
   indented
   bindings <- mark $ some $ do
     name <- same *> identifier
@@ -206,7 +208,7 @@ parseLet = withSource $ do
 
 parseAbs :: Parser SourceAst
 parseAbs = do
-  backslash
+  P.try backslash
   binders <- some (indented *> parseBinder)
   indented *> rArrow
   body <- parseExpr
@@ -216,12 +218,13 @@ parseVar :: Parser SourceAst
 parseVar = withSource $ inj . Var <$> identifier
 
 parseLit :: Parser SourceAst
-parseLit = withSource $ inj . Literal <$> P.choice
-    [ P.try parseString
+parseLit = withSource $ inj . Literal <$> (P.choice
+    [ parseString
     , P.try parseNumber
-    , P.try parseInteger
-    , P.try parseRecord
+    , parseInteger
+    , parseRecord
     ]
+    P.<?> "literal")
   where
     parseString = StringLit <$> (lexeme stringLit)
     parseNumber = NumberLit <$> (lexeme numberLit)
@@ -233,7 +236,7 @@ parseLit = withSource $ inj . Literal <$> P.choice
 parseIfThenElse :: Parser SourceAst
 parseIfThenElse = do
   start <- getPosition
-  cond <-              reserved "if"   *> indented *> parseExpr
+  cond <-                    P.try (reserved "if")  *> indented *> parseExpr
   true@(tspan :< _) <-  indented *> reserved "then" *> indented *> parseExpr
   false@(fspan :< _) <- indented *> reserved "else" *> indented *> parseExpr
   end <- getPosition
@@ -244,25 +247,25 @@ parseIfThenElse = do
 
 parseTblRef :: Parser SourceAst
 parseTblRef = withSource $ do
-  ref <- TableRef . Ref <$> (hashSign' *> reference)
+  ref <- TableRef . Ref <$> (P.try hashSign' *> reference)
   pure $ inj (ref :: RefTextF SourceAst)
 
 parseColRef :: Parser SourceAst
 parseColRef = withSource $ do
-  ref <- ColumnRef . Ref <$> (dollarSign' *> reference)
+  ref <- ColumnRef . Ref <$> (P.try dollarSign' *> reference)
   pure $ inj (ref :: RefTextF SourceAst)
 
 parseColOfTblRef :: Parser SourceAst
 parseColOfTblRef = withSource $ do
-  tbl <- hashSign' *> reference'
-  col <- dot' *> reference
+  tbl <- P.try (hashSign' *> reference' <* dot')
+  col <- reference
   pure $ inj (ColumnOfTableRef (Ref tbl) (Ref col) :: RefTextF SourceAst)
 
 --------------------------------------------------------------------------------
 
 parseBinder :: Parser SourceBinder
 parseBinder = P.choice
-  [ withSource (ConstructorBinder <$> P.try dconsname <*> many parseBinder')
+  [ withSource (ConstructorBinder <$> dconsname <*> many parseBinder')
   , parseBinder'
   ]
   P.<?> "binder"
@@ -270,7 +273,7 @@ parseBinder = P.choice
 parseBinder' :: Parser SourceBinder
 parseBinder' = P.choice
   [ withSource (VarBinder <$> P.try identifier)
-  , withSource (ConstructorBinder <$> P.try dconsname <*> pure [])
+  , withSource (ConstructorBinder <$> dconsname <*> pure [])
   , parens parseBinder
   ]
 
@@ -297,7 +300,7 @@ parseType' :: Parser SourceType
 parseType' = P.choice
   [ withSource (TypeVar <$> identifier)
   , withSource (TypeConstructor <$> tyname)
-  , P.try $ parseRecordType
+  , parseRecordType
   , parens parseType
   ]
 
@@ -307,7 +310,7 @@ parseRecordType = braces $ do
   pure $ spanTypeApp (spanTypeConstructor (span, "Record")) rows
   where
   parseRows = do
-    rows <- P.sepBy1 ((,) <$> identifier <* doubleColon <*> parseType) comma
+    rows <- P.sepBy1 ((,) <$> identifier <* colon <*> parseType) comma
     (endSpan, end) <- withSpan $ P.option RecordNil $ do
       _ :< t <- indented *> pipe *> indented *> parseType
       pure t

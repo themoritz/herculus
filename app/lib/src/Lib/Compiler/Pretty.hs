@@ -98,7 +98,7 @@ typeDoc = \case
     parens (a <+> arr <+> b)
   TypeApp (f :< _) (arg :< _) -> parens (f <+> arg)
   RecordCons field (t :< _) (rest :< _) ->
-    textStrict field <+> textStrict "::" <+> t <> comma <+> rest
+    textStrict field <+> colon <+> t <> comma <+> rest
   RecordNil -> empty
 
 declarationDoc :: DeclarationF Doc -> Doc
@@ -120,7 +120,7 @@ declarationDoc = \case
       textStrict cls <+> t <+> textStrict "where" <$$>
     indent 2 (vsep vals)
   TypeDecl name poly ->
-    textStrict name <+> textStrict "::" <+> polyTypeDoc poly
+    textStrict name <+> colon <+> polyTypeDoc poly
   ValueDecl name binders expr ->
     textStrict name <+> hsep binders <+> equals <$$>
     indent 2 expr

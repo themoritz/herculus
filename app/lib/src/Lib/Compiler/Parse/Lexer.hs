@@ -130,38 +130,33 @@ pipe :: Parser ()
 pipe = text "|"
 
 reserved :: Text -> Parser ()
-reserved s = go P.<?> show s where
+reserved s = P.try go P.<?> show s where
   go = do
     s' <- lname
     guard (s == s')
 
 tyname :: Parser Text
-tyname = uname P.<?> "type name"
+tyname = P.try uname P.<?> "type name"
 
 dconsname :: Parser Text
-dconsname = uname P.<?> "data constructor name"
-
-dconsname' :: Text -> Parser ()
-dconsname' c = do
-  c' <- dconsname
-  guard (c == c')
+dconsname = P.try uname P.<?> "data constructor name"
 
 identifier :: Parser Text
-identifier = go P.<?> "identifier" where
+identifier = P.try go P.<?> "identifier" where
   go = do
     s <- lname
     guard (s `notElem` reservedNames)
     pure s
 
 anySymbol :: Parser Text
-anySymbol = lexeme go P.<?> "symbol"
+anySymbol = lexeme (P.try go) P.<?> "symbol"
   where
     go = T.pack <$> some (P.satisfy isSymbolChar)
     isSymbolChar c = (c `elem` (":!#$%&*+./<=>?@\\^|-~" :: [Char])) ||
                      (not (C.isAscii c) && C.isSymbol c)
 
 symbol :: Text -> Parser ()
-symbol s = do
+symbol s = P.try $ do
   s' <- anySymbol
   guard (s == s')
 
@@ -169,7 +164,7 @@ stringLit :: Parser Text
 stringLit = lexeme stringLit'
 
 stringLit' :: Parser Text
-stringLit' = go P.<?> "string" where
+stringLit' = P.try go P.<?> "string" where
   go = T.pack <$> (P.char '"' *> P.manyTill L.charLiteral (P.char '"'))
 
 numberLit :: Parser Double
@@ -210,11 +205,8 @@ uname = lexeme uname'
 
 reservedNames :: [Text]
 reservedNames =
-  [ "data"
-  , "newtype"
-  , "type"
+  [ "type"
   , "forall"
-  , "foreign"
   , "import"
   , "infixl"
   , "infixr"
@@ -222,7 +214,6 @@ reservedNames =
   , "class"
   , "instance"
   , "derive"
-  , "module"
   , "case"
   , "of"
   , "if"
