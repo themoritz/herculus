@@ -28,14 +28,14 @@ parseTemplate = many parseChunk
 
 parseChunk :: Parser SourceTplChunk
 parseChunk = P.choice
-  [ P.try parseFor
-  , P.try parseIf
-  , P.try parsePrint
-  , P.try parseText
+  [ parseFor
+  , parseIf
+  , parsePrint
+  , parseText
   ] P.<?> "template chunk"
 
 instr :: Text -> Parser a -> Parser a
-instr i p = startInstr *> reserved i *> p <* endInstr
+instr i p = P.try (startInstr *> reserved i) *> p <* endInstr
 
 parseFor :: Parser SourceTplChunk
 parseFor = withSource $ do

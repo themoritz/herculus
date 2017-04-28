@@ -11,13 +11,13 @@ startInstr :: Parser ()
 startInstr = text "{%"
 
 endInstr :: Parser ()
-endInstr = text "%}" -- no lexeme?
+endInstr = text' "%}"
 
 startPrint :: Parser ()
 startPrint = text "{{"
 
 endPrint :: Parser ()
-endPrint = text "}}"
+endPrint = text' "}}"
 
 reservedNames :: [Text]
 reservedNames = ["for", "in", "endfor", "if", "else", "endif"]

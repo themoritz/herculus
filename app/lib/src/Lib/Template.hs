@@ -7,21 +7,20 @@ import           Lib.Prelude
 
 import           Lib.Compiler
 import           Lib.Compiler.Check.Monad
-import           Lib.Compiler.Env
 import           Lib.Compiler.Error
 import           Lib.Compiler.Eval.Monad
 import           Lib.Compiler.Eval.Types
 import           Lib.Compiler.Parse
 import           Lib.Template.Check
 import           Lib.Template.Core
-import           Lib.Template.Eval        as T
+import qualified Lib.Template.Eval        as T
 import           Lib.Template.Parse
 
 compileTemplate
   :: Monad m => Text -> Resolver m -> CheckEnv
   -> m (Either Error [TplChunk])
 compileTemplate src resolver env = runExceptT $ do
-  e <- hoistError $ parse src parseTemplate
+  e <- hoistError $ parse src (mkCheckEnvOpTable env) parseTemplate
   ExceptT $ runCheck env resolver $ checkTemplate e
 
 evalTemplate
@@ -33,9 +32,9 @@ evalTemplate tpl getter env = runEval 5000 getter $ T.evalTemplate env tpl
 
 testEvalTemplate :: Text -> IO ()
 testEvalTemplate src =
-  compileTemplate src testResolveInterp primCheckEnv >>= \case
+  compileTemplate src testResolveInterp preludeCheckEnv >>= \case
     Left err -> putStrLn $ displayError src err
     Right code -> do
-      runEval 10000 testGetInterp (T.evalTemplate primTermEnv code) >>= \case
+      evalTemplate code testGetInterp preludeTermEnv >>= \case
         Left err -> putStrLn err
         Right t -> putStrLn t

@@ -216,6 +216,14 @@ primEnv = Map.fromList
         dataBool $ a == b
       )
     )
+  -- FIXME: Need to encode "Row of table x" in the type system
+  -- , ( "prim_eqRow"
+  --   , ( ForAll [] [] $ tyRow --> tyRow --> tyBoolean
+  --     , RPrimFun $ \(RRowRef a) -> pure $
+  --       RPrimFun $ \(RRowRef b) -> pure $
+  --       dataBool $ a == b
+  --     )
+  --   )
   -- Ord
   , ( "prim_compareNumber"
     , ( ForAll [] [] $ tyNumber --> tyNumber --> tyOrdering

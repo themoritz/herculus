@@ -21,7 +21,8 @@ import           Lib.Template.AST
 import           Lib.Template.Core        (TplChunk, toCore)
 
 checkTemplate :: [SourceTplChunk] -> Check [TplChunk]
-checkTemplate tpls = map toCore . traverse go =<< checkTemplate' tpls
+checkTemplate tpls =
+  map toCore . traverse go =<< tplResolvePlaceholders =<< checkTemplate' tpls
   where
     go :: TplIntermed -> Check TplCompiled
     go (Fix i) = case i of
@@ -33,6 +34,21 @@ checkTemplate tpls = map toCore . traverse go =<< checkTemplate' tpls
         tplIf <$> cleanUpIntermed c <*> traverse go th <*> traverse go el
       TplPrint e ->
         tplPrint <$> cleanUpIntermed e
+
+tplResolvePlaceholders :: [TplIntermed] -> Check [TplIntermed]
+tplResolvePlaceholders = traverse chunkResolvePlaceholders
+
+chunkResolvePlaceholders :: TplIntermed -> Check TplIntermed
+chunkResolvePlaceholders (Fix i) = case i of
+  TplText t -> pure $ tplText t
+  TplFor b e body -> tplFor b
+    <$> resolvePlaceholders Map.empty e
+    <*> tplResolvePlaceholders body
+  TplIf c th el -> tplIf
+    <$> resolvePlaceholders Map.empty c
+    <*> tplResolvePlaceholders th
+    <*> tplResolvePlaceholders el
+  TplPrint e -> tplPrint <$> resolvePlaceholders Map.empty e
 
 checkTemplate' :: [SourceTplChunk] -> Check [TplIntermed]
 checkTemplate' = traverse checkTemplateChunk
@@ -57,6 +73,4 @@ checkTemplateChunk (span :< chunk) = case chunk of
   TplPrint e -> do
     (e', eType, cs) <- inferExpr e
     let printFn = methodPlaceholder span (IsIn "Print" $ injFix eType) "print"
-    e'' <- resolvePlaceholders Map.empty $ app printFn e'
-    unifyTypes' span eType tyString
-    pure $ tplPrint e''
+    pure $ tplPrint (app printFn e')

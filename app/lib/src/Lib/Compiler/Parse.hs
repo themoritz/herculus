@@ -169,9 +169,9 @@ parseApp = do
 
 parseAccessor :: Parser SourceAst
 parseAccessor = do
-  e <- P.try $ parseExpr'' <* dot
-  ref <- withSpan identifier
-  refs <- many $ withSpan $ dot *> identifier
+  e <- P.try $ parseExpr'' <* dot'
+  ref <- withSpan reference
+  refs <- many $ withSpan $ dot' *> reference
   pure $ foldl' spanAccessor e (ref:refs)
 
 parseConstructor :: Parser SourceAst

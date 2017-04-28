@@ -95,6 +95,9 @@ instance Eq String where
 instance Eq DateTime where
   eq = prim_eqDateTime
 
+-- instance Eq Row where
+--   eq = prim_eqRow
+
 instance Eq Boolean where
   eq x y = case Tuple x y of
     Tuple True True   -> True

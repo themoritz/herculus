@@ -136,6 +136,8 @@ inferExpr' span = \case
   Accessor e field -> do
     (e', eType, cs) <- inferExpr e
     -- Convert a row type to a record type
+    -- FIXME: This does not work because eType might not be unified to be
+    -- TypeRow yet. Maybe use placeholder mechanism or a typeclass for that.
     t <- case eType of
       Fix (TypeRow t) -> getTableRecordType t
       other           -> pure other
