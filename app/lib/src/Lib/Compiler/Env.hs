@@ -218,7 +218,7 @@ primEnv = Map.fromList
     )
   -- Ord
   , ( "prim_compareNumber"
-    , ( ForAll [] [] $ tyNumber --> tyNumber --> tyBoolean
+    , ( ForAll [] [] $ tyNumber --> tyNumber --> tyOrdering
       , RPrimFun $ \(RNumber a) -> pure $
         RPrimFun $ \(RNumber b) -> pure $
         dataOrdering $ compare a b

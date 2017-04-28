@@ -91,7 +91,7 @@ data DeclarationF a
   | TypeDecl Text (PolyTypeF a)
   -- | Name, binders, expression
   | ValueDecl Text [a] a
-  -- | Variable, alias, fixity
+  -- | Alias, operator, fixity
   | FixityDecl Text Text Fixity
   deriving (Functor, Show)
 

@@ -86,5 +86,5 @@ data ExFixityDecl = ExFixityDecl
 
 extractFixityDecls :: [SourceAst] -> [ExFixityDecl]
 extractFixityDecls = mapMaybe $ \(fSpan :< (unsafePrj -> decl)) -> case decl of
-  FixityDecl fOperator fAlias fFixity -> Just $ ExFixityDecl {..}
+  FixityDecl fAlias fOperator fFixity -> Just $ ExFixityDecl {..}
   _                                   -> Nothing

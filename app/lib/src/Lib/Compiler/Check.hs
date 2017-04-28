@@ -573,7 +573,7 @@ checkInstanceDecl ExInstanceDecl {..} = do
       "Instance class `" <> cls <> "` not defined."
     Just (_, _, kind, sigs, insts) -> do
       -- Check kind of instance type
-      constrEnv <- map Map.unions $ for iConstraints $ \(IsIn _ ct) ->
+      constrEnv <- map Map.unions $ for (iHead : iConstraints) $ \(IsIn _ ct) ->
         freshKindDict $ Set.toList $ getFtvs $ stripAnn ct
       inExtendedKindEnv constrEnv $ do
         traverse_ (checkConstraint iSpan) iConstraints

@@ -9,6 +9,7 @@ module Lib.Compiler.Pretty
   , prettyConstraints
   , prettyAst
   , prettyIntermed
+  , record
   ) where
 
 import           Lib.Prelude                  hiding (empty)

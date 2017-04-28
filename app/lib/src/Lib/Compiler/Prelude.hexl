@@ -7,6 +7,19 @@ id x = x
 const : forall a b. b -> a -> b
 const c _ = c
 
+flip : forall a b c. (a -> b -> c) -> b -> a -> c
+flip f b a = f a b
+
+apply : forall a b. (a -> b) -> a -> b
+apply f x = f x
+
+infixr 0 apply as $
+
+applyFlipped : forall a b. a -> (a -> b) -> b
+applyFlipped x f = f x
+
+infixl 1 applyFlipped as #
+
 --------------------------------------------------------------------------------
 -- Boolean
 
@@ -88,8 +101,8 @@ instance Eq Boolean where
     Tuple False False -> True
     _                 -> False
 
-notEq : forall a. a -> a -> Boolean
-notEq a b = not (eq a b)
+notEq : forall a. Eq a => a -> a -> Boolean
+notEq a b = not $ a == b
 
 infix 4 notEq as /=
 
@@ -102,7 +115,7 @@ type Ordering
   | GT
 
 class Eq a => Ord a where
-  compare : a -> Ordering
+  compare : a -> a -> Ordering
 
 instance Ord Number where
   compare = prim_compareNumber

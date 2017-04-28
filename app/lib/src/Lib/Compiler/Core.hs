@@ -11,12 +11,15 @@ import           Data.Aeson
 import           Data.Functor.Foldable
 import qualified Data.Map                     as Map
 
+import           Text.PrettyPrint.Leijen.Text
+
 import {-# SOURCE #-} Lib.Model.Column
 import           Lib.Model.Dependencies.Types
 import           Lib.Model.Table
 import           Lib.Types
 
 import qualified Lib.Compiler.AST             as A
+import           Lib.Compiler.Pretty          (record)
 
 data Literal
   = NumberLit Double
@@ -48,6 +51,66 @@ data Expr
   | Case Expr [(Binder, Expr)]
   | Accessor Expr Text
   deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON)
+
+--------------------------------------------------------------------------------
+
+literalDoc :: Literal -> Doc
+literalDoc = \case
+  NumberLit n      -> double n
+  IntegerLit i     -> integer i
+  StringLit s      -> dquotes $ textStrict s
+  RecordLit fields -> record (map goField (Map.toList $ map exprDoc fields))
+    where
+      goField (k, v) = textStrict k <> char ':' <+> v
+
+refDoc :: Reference -> Doc
+refDoc = \case
+  TableRef (Id t) ->
+    char '#' <> textStrict (show t)
+  ColumnRef (Id c) ->
+    char '$' <> textStrict (show c)
+  ColumnOfTableRef (Id t) (Id c) ->
+    char '#' <> textStrict (show t) <> dot <> textStrict (show c)
+
+binderDoc :: Binder -> Doc
+binderDoc = \case
+  VarBinder v            -> textStrict v
+  WildcardBinder         -> textStrict "_"
+  ConstructorBinder c bs -> textStrict c <+> hsep (map (parens . binderDoc) bs)
+
+exprDoc :: Expr -> Doc
+exprDoc = \case
+  Literal lit -> literalDoc lit
+  Var v ->
+    textStrict v
+  Constructor c ->
+    textStrict c
+  Reference r -> refDoc r
+  Abs b body ->
+    backslash <> binderDoc b <+> textStrict "->" <$$>
+    indent 2 (exprDoc body)
+  App f arg ->
+    parens (exprDoc f <+> exprDoc arg)
+  Let bindings rest ->
+    textStrict "let" <$$>
+    indent 2 (vsep $ map goBinding bindings) <$$>
+    textStrict "in" <$$>
+    indent 2 (exprDoc rest)
+    where
+      goBinding (v, body) =
+        textStrict v <+> equals <$$> indent 2 (exprDoc body)
+  Case e cases ->
+    textStrict "case" <+> exprDoc e <+> textStrict "of" <$$>
+    indent 2 (vsep (map goCase cases))
+    where
+      goCase (b, e') = binderDoc b <+> textStrict "->" <+> exprDoc e'
+  Accessor e field ->
+    parens (exprDoc e) <> dot <> textStrict field
+
+prettyCore :: Expr -> Text
+prettyCore = show . exprDoc
+
+--------------------------------------------------------------------------------
 
 toCore :: A.Compiled -> Expr
 toCore (Fix com) = A.compiled goExpr undefined goRef com

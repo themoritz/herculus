@@ -145,9 +145,9 @@ testParseSpans src = withParsed src testOpTable parseModule $ \decls ->
 testCheck :: Text -> IO ()
 testCheck src = compileModule src testResolveInterp primCheckEnv >>= \case
   Left err -> putStrLn $ displayError src err
-  Right (env, code) -> do
+  Right (_, code) -> do
     void $ flip Map.traverseWithKey code $ \n core -> do
-      putStrLn $ n <> ": " <> show core
+      putStrLn $ n <> ": " <> prettyCore core <> "\n"
 
 testEval :: Text -> IO ()
 testEval src = do
