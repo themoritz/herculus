@@ -73,6 +73,7 @@ matchValue :: Result -> Binder -> Maybe TermEnv
 matchValue res = \case
   VarBinder x ->
     Just $ Map.singleton x res
+  WildcardBinder -> Just Map.empty
   ConstructorBinder name args
     | RData label results <- res
     , label == name -> map Map.unions $ zipWithM matchValue results args

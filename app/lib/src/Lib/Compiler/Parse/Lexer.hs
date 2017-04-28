@@ -18,16 +18,19 @@ type Parser = P.ParsecT P.Dec Text (State ParseState)
 
 testParser :: Show a => Parser a -> Text -> IO ()
 testParser p s =
-  case evalState (P.runParserT (p <* P.eof) "" s) initialParseState of
-    Left msg -> putStrLn $ P.parseErrorPretty msg
-    Right a  -> print a
+  let
+    st = initialParseState testOpTable
+  in
+    case evalState (P.runParserT (p <* P.eof) "" s) st of
+      Left msg -> putStrLn $ P.parseErrorPretty msg
+      Right a  -> print a
 
 --------------------------------------------------------------------------------
 
 scn :: Parser ()
 scn = L.space
   (void P.spaceChar)
-  (L.skipLineComment "-- ")
+  (L.skipLineComment "--")
   (L.skipBlockComment "{-" "-}")
 
 lexeme :: Parser a -> Parser a
@@ -128,6 +131,9 @@ backslash = text "\\"
 
 pipe :: Parser ()
 pipe = text "|"
+
+underscore :: Parser ()
+underscore = text "_"
 
 reserved :: Text -> Parser ()
 reserved s = P.try go P.<?> show s where

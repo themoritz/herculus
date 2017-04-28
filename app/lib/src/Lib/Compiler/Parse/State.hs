@@ -8,37 +8,41 @@ import           Lib.Prelude
 import           Lib.Compiler.AST.Position
 
 data ParseState = ParseState
-  { parserOperators     :: [OpSpec]
-  , parserTypeOperators :: [OpSpec]
+  { parserOperators     :: OpTable
+  , parserTypeOperators :: OpTable
   , parserIndentation   :: Word
   , parserLastTokenEnd  :: Pos
   }
 
-initialParseState :: ParseState
-initialParseState = ParseState
-  [ OpSpec (Infix AssocL 7) "*"
-  , OpSpec (Infix AssocL 7) "/"
-  , OpSpec (Infix AssocL 6) "+"
-  , OpSpec (Infix AssocL 6) "-"
-  , OpSpec (Infix AssocR 5) "<>"
-  , OpSpec (Infix AssocL 4) "<="
-  , OpSpec (Infix AssocL 4) ">="
-  , OpSpec (Infix AssocL 4) "<"
-  , OpSpec (Infix AssocL 4) ">"
-  , OpSpec (Infix AssocN 4) "=="
-  , OpSpec (Infix AssocN 4) "/="
-  , OpSpec (Infix AssocR 3) "&&"
-  , OpSpec (Infix AssocR 2) "||"
+type OpTable = [(Text, Fixity)]
+
+testOpTable :: OpTable
+testOpTable =
+  [ ("*" , Infix AssocL 7)
+  , ("/" , Infix AssocL 7)
+  , ("+" , Infix AssocL 6)
+  , ("-" , Infix AssocL 6)
+  , ("<>", Infix AssocR 5)
+  , ("<=", Infix AssocL 4)
+  , (">=", Infix AssocL 4)
+  , ("<" , Infix AssocL 4)
+  , (">" , Infix AssocL 4)
+  , ("==", Infix AssocN 4)
+  , ("/=", Infix AssocN 4)
+  , ("&&", Infix AssocR 3)
+  , ("||", Infix AssocR 2)
   ]
-  [ OpSpec (Infix AssocR 2) "->"
-  ]
+
+initialParseState :: OpTable -> ParseState
+initialParseState opTable = ParseState
+  opTable
+  [ ("->", Infix AssocR 2) ]
   1
   voidPos
 
-data OpSpec = OpSpec
-  { opFixity :: Fixity
-  , opName   :: Text
-  } deriving (Eq, Ord, Show)
+addOpSpec :: Text -> Fixity -> ParseState -> ParseState
+addOpSpec name fixity st =
+  st { parserOperators = (name, fixity) : parserOperators st }
 
 data Fixity
   = Infix Assoc Int

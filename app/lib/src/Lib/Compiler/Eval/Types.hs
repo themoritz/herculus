@@ -34,7 +34,7 @@ loadValue = \case
   VString s  -> RString s
   VNumber n  -> RNumber n
   VInteger i -> RInteger i
-  VTime t    -> RTime t
+  VTime t    -> RDateTime t
   VRowRef mr -> RRowRef mr
   VData l vs -> RData l (map loadValue vs)
   VRecord m  -> RRecord (map loadValue $ Map.fromList m)
@@ -51,7 +51,7 @@ storeValue r = case r of
   RString s  -> pure $ VString s
   RNumber n  -> pure $ VNumber n
   RInteger i -> pure $ VInteger i
-  RTime t    -> pure $ VTime t
+  RDateTime t    -> pure $ VTime t
   RRowRef mr -> pure $ VRowRef mr
   RData l vs -> fromMaybe (VData l <$> traverse storeValue vs) $
         tryList
@@ -82,7 +82,7 @@ data Result
   = RString Text
   | RNumber Number
   | RInteger Integer
-  | RTime Time
+  | RDateTime Time
   | RRowRef (Maybe (Id Row))
   | RData Text [Result]
   | RRecord (Map Text Result)
@@ -96,7 +96,7 @@ resultDoc = \case
   RString s -> textStrict s
   RNumber (Number n) -> double n
   RInteger i -> integer i
-  RTime t -> textStrict $ show t
+  RDateTime t -> textStrict $ show t
   RRowRef mr -> textStrict $ show mr
   RData n rs -> textStrict n <+> (hsep (map (parens . resultDoc) rs))
   RRecord m ->

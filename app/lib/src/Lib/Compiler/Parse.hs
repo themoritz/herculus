@@ -30,9 +30,9 @@ import           Lib.Types
 
 --------------------------------------------------------------------------------
 
-parse :: Text -> Parser a -> Either Error a
-parse e p =
-  flip evalState initialParseState $
+parse :: Text -> OpTable -> Parser a -> Either Error a
+parse e ops p =
+  flip evalState (initialParseState ops) $
   mapLeft convertParseError <$>
   P.runParserT (scn *> p <* P.eof) "" e
 
@@ -123,7 +123,9 @@ parseFixityDecl = withSource $ do
   x <- identifier
   reserved "as"
   op <- anySymbol
-  pure $ inj $ FixityDecl x op (Infix assoc $ fromIntegral fixity)
+  let opSpec = Infix assoc $ fromIntegral fixity
+  modify $ addOpSpec op opSpec
+  pure $ inj $ FixityDecl x op opSpec
 
 --------------------------------------------------------------------------------
 
@@ -266,6 +268,7 @@ parseColOfTblRef = withSource $ do
 parseBinder :: Parser SourceBinder
 parseBinder = P.choice
   [ withSource (ConstructorBinder <$> dconsname <*> many parseBinder')
+  , withSource (underscore $> WildcardBinder)
   , parseBinder'
   ]
   P.<?> "binder"

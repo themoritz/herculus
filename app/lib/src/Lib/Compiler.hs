@@ -29,6 +29,7 @@ import           Lib.Compiler.Eval
 import           Lib.Compiler.Eval.Monad
 import           Lib.Compiler.Eval.Types
 import           Lib.Compiler.Parse
+import           Lib.Compiler.Parse.State
 import           Lib.Compiler.Pretty
 import           Lib.Compiler.Type
 
@@ -36,14 +37,14 @@ compileFormula
   :: Monad m => Text -> Resolver m -> CheckEnv
   -> m (Either Error (Expr, Type))
 compileFormula src resolver env = runExceptT $ do
-  e <- hoistError $ parse src parseFormula
+  e <- hoistError $ parse src (mkCheckEnvOpTable env) parseFormula
   ExceptT $ runCheck env resolver $ checkFormula e
 
 compileModule
   :: Monad m => Text -> Resolver m -> CheckEnv
   -> m (Either Error (CheckEnv, Map Text Expr))
 compileModule src resolver env = runExceptT $ do
-  e <- hoistError $ parse src parseModule
+  e <- hoistError $ parse src (mkCheckEnvOpTable env) parseModule
   ExceptT $ runCheck env resolver $ checkModule e
 
 evalFormula
@@ -128,43 +129,35 @@ voidGetter = \case
 
 --------------------------------------------------------------------------------
 
-withParsed :: Text -> Parser a -> (a -> IO ()) -> IO ()
-withParsed src p m = case parse src p of
+withParsed :: Text -> OpTable -> Parser a -> (a -> IO ()) -> IO ()
+withParsed src opTable p m = case parse src opTable p of
   Left err    -> putStrLn $ displayError src err
   Right decls -> m decls
 
 testParsePretty :: Text -> IO ()
-testParsePretty src = withParsed src parseModule $ \decls ->
+testParsePretty src = withParsed src testOpTable parseModule $ \decls ->
   mapM_ (putStrLn . (<> "\n") . prettyAst) (map stripAnn decls)
 
 testParseSpans :: Text -> IO ()
-testParseSpans src = withParsed src parseModule $ \decls ->
+testParseSpans src = withParsed src testOpTable parseModule $ \decls ->
   mapM_ (putStrLn . ppShow . map (flip (highlightSpan True) src)) decls
 
 testCheck :: Text -> IO ()
-testCheck src = withParsed src parseModule $ \decls ->
-  case runCheck primCheckEnv testResolveInterp $ checkModule decls of
-    Left err -> putStrLn $ displayError src err
-    Right _  -> pure ()
+testCheck src = compileModule src testResolveInterp primCheckEnv >>= \case
+  Left err -> putStrLn $ displayError src err
+  Right (env, code) -> do
+    void $ flip Map.traverseWithKey code $ \n core -> do
+      putStrLn $ n <> ": " <> show core
 
 testEval :: Text -> IO ()
-testEval src =
-  withParsed preludeText parseModule $ \decls ->
-  withParsed src parseFormula $ \formula ->
-  let
-    go :: Either Error (Expr, Type, TermEnv)
-    go = runIdentity $ runExceptT $ do
-      (preludeHeader, preludeCode) <- ExceptT $
-        runCheck primCheckEnv testResolveInterp $ checkModule decls
-      (code, t) <- ExceptT $
-        runCheck (unionCheckEnv preludeHeader primCheckEnv) testResolveInterp $
-        checkFormula formula
-      pure (code, t, primTermEnv `Map.union` loadModule preludeCode)
-  in
-  case go of
-    Left err -> putStrLn $ displayError src err
-    Right (code, t, env) -> do
+testEval src = do
+  res <- runExceptT $ do
+    (expr, t) <- ExceptT $ (map (mapLeft errMsg)) $
+      compileFormula src testResolveInterp preludeCheckEnv
+    val <- ExceptT $ evalFormula expr testGetInterp preludeTermEnv
+    pure (t, val)
+  case res of
+    Left err -> putStrLn err
+    Right (t, val) -> do
       putStrLn $ "Type: " <> prettyType t
-      runEval 10000 testGetInterp (eval env code) >>= \case
-        Left err -> putStrLn err
-        Right r  -> putStrLn $ prettyResult r
+      print val

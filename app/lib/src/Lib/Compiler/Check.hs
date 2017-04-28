@@ -90,24 +90,24 @@ inferExpr' span = \case
 
   Var x -> lookupType x >>= \case
     Nothing -> compileError span $ "Variable `" <> x <> "` not in scope."
-    Just (EnvType poly origin) -> do
+    Just (EnvType poly origin, x') -> do
       (constraints, t) <- instantiate poly
       let
         dictPlaceholders cs = map (dictionaryPlaceholder span . map injFix) cs
       e <- case origin of
-        Default -> pure $ foldl' app (var x) (dictPlaceholders constraints)
+        Default -> pure $ foldl' app (var x') (dictPlaceholders constraints)
         Method -> case constraints of
-          [c] -> pure $ methodPlaceholder span (map injFix c) x
+          [c] -> pure $ methodPlaceholder span (map injFix c) x'
           _ -> internalError (Just span) $
             "Expected exactly one constraint while looking up " <>
             "method variable `" <> x <> "`."
-        Recursive -> pure $ recursiveCallPlaceholder span x
+        Recursive -> pure $ recursiveCallPlaceholder span x'
       pure (e, t, constraints)
 
   Constructor c -> lookupType c >>= \case
     Nothing -> compileError span $
       "Type constructor `" <> c <> "` not in scope."
-    Just (EnvType poly _) -> do
+    Just (EnvType poly _, _) -> do
       -- Type constructors aren't constrained so no need for placeholders here.
       (_, t) <- instantiate poly
       pure (constructor c, t, [])
@@ -260,7 +260,7 @@ inferImplicitDefinitions defs = do
     inferred <- for defs $ \(name, e@(span :< _)) -> do
       (e', t, cs) <- inferExpr e
       -- Unify the inferred type with the fresh type to deal with recursion.
-      Just (EnvType (ForAll _ _ t') _) <- lookupType name
+      Just (EnvType (ForAll _ _ t') _, _) <- lookupType name
       unifyTypes' span t t'
       pure (name, e', t, cs)
 
@@ -293,9 +293,10 @@ inferBinder :: Type -> SourceBinder -> Check (Map Text EnvType)
 inferBinder expected (span :< b) = case b of
   VarBinder x ->
     pure $ Map.singleton x $ EnvType (ForAll [] [] expected) Default
+  WildcardBinder -> pure $ Map.empty
   ConstructorBinder name binders -> lookupType name >>= \case
     Nothing -> compileError span $ "Type constructor not in scope: " <> name
-    Just (EnvType poly _) -> do
+    Just (EnvType poly _, _) -> do
       (_, t) <- instantiate poly
       let
         (args, result) = peelArgs t
@@ -478,6 +479,10 @@ instantiate (ForAll as cs t) = do
 
 checkModule :: Module -> Check (CheckEnv, Map Text Core.Expr)
 checkModule decls = do
+  -- Extract all fixity declarations
+  for (extractFixityDecls decls) $ \ExFixityDecl{..} ->
+    addOperatorAlias fOperator fAlias fFixity
+
   -- Check all data declarations and extract the resulting kinds and polytypes
   (kinds, dataPolys) <- checkADTs (extractDataDecls decls)
 
@@ -629,7 +634,7 @@ buildInstanceDict ExInstanceDecl {..} = do
       result <- inExtendedInstanceEnv (Map.fromList csDict) $ do
         for iMethods $ \ExValueDecl {..} -> do
           (e', t', cs) <- inferExpr vExpr
-          Just (EnvType (ForAll _ _ givenT) _) <- lookupType vName
+          Just (EnvType (ForAll _ _ givenT) _, _) <- lookupType vName
           unifyTypes' vSpan t' (applyTypeSubst (Map.singleton param t) givenT)
           -- TODO: make sure `cs` equals the instance constraints
           e'' <- resolvePlaceholders Map.empty e'

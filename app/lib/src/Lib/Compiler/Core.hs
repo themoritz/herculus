@@ -33,6 +33,7 @@ data Reference
 
 data Binder
   = VarBinder Text
+  | WildcardBinder
   | ConstructorBinder Text [Binder]
   deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON)
 
@@ -82,8 +83,8 @@ toCore (Fix com) = A.compiled goExpr undefined goRef com
 binderToCore :: A.Compiled -> Binder
 binderToCore (Fix (unsafePrj -> b )) = case b of
   A.VarBinder x               -> VarBinder x
+  A.WildcardBinder            -> WildcardBinder
   A.ConstructorBinder name bs -> ConstructorBinder name (map binderToCore bs)
-
 
 collectCodeDependencies :: Expr -> CodeDependencies
 collectCodeDependencies = go

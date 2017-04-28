@@ -1,13 +1,239 @@
-data Boolean
+--------------------------------------------------------------------------------
+-- Function
+
+id : forall a. a -> a
+id x = x
+
+const : forall a b. b -> a -> b
+const c _ = c
+
+--------------------------------------------------------------------------------
+-- Boolean
+
+type Boolean
   = True
   | False
 
-data Tuple a b
-  = Tuple a b
+conj : Boolean -> Boolean -> Boolean
+conj x y = if x then False else y
 
-data List a
+infixr 3 conj as &&
+
+disj : Boolean -> Boolean -> Boolean
+disj x y = if x then True else y
+
+infixr 2 disj as ||
+
+not : Boolean -> Boolean
+not x = if x then False else True
+
+--------------------------------------------------------------------------------
+-- Num
+
+class Num x where
+  add : x -> x -> x
+  sub : x -> x -> x
+  mul : x -> x -> x
+  div : x -> x -> x
+  one : x
+  zero : x
+
+infixl 6 add as +
+infixl 6 sub as -
+infixl 7 mul as *
+infixl 7 div as /
+
+instance Num Integer where
+  add = prim_addInteger
+  sub = prim_subInteger
+  mul = prim_mulInteger
+  div = prim_divInteger
+  one = 1
+  zero = 0
+
+instance Num Number where
+  add = prim_addNumber
+  sub = prim_subNumber
+  mul = prim_mulNumber
+  div = prim_divNumber
+  one = 1.0
+  zero = 0.0
+
+roundTo : Integer -> Number -> Number
+roundTo = prim_roundTo
+
+--------------------------------------------------------------------------------
+-- Eq
+
+class Eq a where
+  eq : a -> a -> Boolean
+
+infix 4 eq as ==
+
+instance Eq Integer where
+  eq = prim_eqInteger
+
+instance Eq Number where
+  eq = prim_eqNumber
+
+instance Eq String where
+  eq = prim_eqString
+
+instance Eq DateTime where
+  eq = prim_eqDateTime
+
+instance Eq Boolean where
+  eq x y = case Tuple x y of
+    Tuple True True   -> True
+    Tuple False False -> True
+    _                 -> False
+
+notEq : forall a. a -> a -> Boolean
+notEq a b = not (eq a b)
+
+infix 4 notEq as /=
+
+--------------------------------------------------------------------------------
+-- Ordering
+
+type Ordering
+  = EQ
+  | LT
+  | GT
+
+class Eq a => Ord a where
+  compare : a -> Ordering
+
+instance Ord Number where
+  compare = prim_compareNumber
+
+instance Ord Integer where
+  compare = prim_compareInteger
+
+instance Ord DateTime where
+  compare = prim_compareDateTime
+
+lessThan : forall a. Ord a => a -> a -> Boolean
+lessThan a b = case compare a b of
+  LT -> True
+  _  -> False
+
+infixl 4 lessThan as <
+
+greaterThan : forall a. Ord a => a -> a -> Boolean
+greaterThan a b = case compare a b of
+  GT -> True
+  _  -> False
+
+infixl 4 greaterThan as >
+
+lessThanOrEq : forall a. Ord a => a -> a -> Boolean
+lessThanOrEq a b = case compare a b of
+  GT -> False
+  _  -> True
+
+infixl 4 lessThanOrEq as <=
+
+greaterThanOrEq : forall a. Ord a => a -> a -> Boolean
+greaterThanOrEq a b = case compare a b of
+  LT -> False
+  _  -> True
+
+infixl 4 greaterThanOrEq as >=
+
+min : forall a. Ord a => a -> a -> a
+min a b = if a > b then b else a
+
+max : forall a. Ord a => a -> a -> a
+max a b = if a < b then b else a
+
+--------------------------------------------------------------------------------
+-- Data.Tuple
+
+type Tuple a b = Tuple a b
+
+instance Eq a => Eq b => Eq (Tuple a b) where
+  eq (Tuple a b) (Tuple a' b') = a == a' && b == b'
+
+--------------------------------------------------------------------------------
+-- Data.List
+
+type List a
   = Nil
   | Cons a (List a)
+
+instance Eq a => Eq (List a) where
+  eq xs ys = case Tuple xs ys of
+    Tuple Nil Nil                 -> True
+    Tuple (Cons a as) (Cons b bs) -> a == b && as == bs
+    _                             -> False
+
+member : forall a. Eq a => a -> List a -> Boolean
+member x xs = case xs of
+  Nil -> False
+  Cons a as -> if x == a then True else member x as
+
+sum : forall a. Num a => List a -> a
+sum xs = case xs of
+  Nil -> zero
+  Cons a as -> a + sum as
+
+length : forall a. List a -> Integer
+length xs = case xs of
+  Nil -> 0
+  Cons _ as -> 1 + length as
+
+filter : forall a. (a -> Boolean) -> List a -> List a
+filter p xs = case xs of
+  Nil -> Nil
+  Cons a as -> if p a then Cons a as else as
+
+find : forall a. (a -> Boolean) -> List a -> Maybe a
+find p xs = case xs of
+  Nil -> Nothing
+  Cons a as -> if p a then Just a else find p as
+
+--------------------------------------------------------------------------------
+-- Data.Maybe
+
+type Maybe a
+  = Nothing
+  | Just a
+
+instance Eq a => Eq (Maybe a) where
+  eq ma mb = case Tuple ma mb of
+    Tuple Nothing Nothing   -> True
+    Tuple (Just a) (Just b) -> a == b
+    _                       -> False
+
+maybe : forall a b. b -> (a -> b) -> Maybe a -> b
+maybe def f ma = case ma of
+  Nothing -> def
+  Just a -> f a
+
+fromMaybe : forall a. a -> Maybe a -> a
+fromMaybe def = maybe def id
+
+--------------------------------------------------------------------------------
+-- Data.Either
+
+type Either a b
+  = Left a
+  | Right b
+
+instance Eq a => Eq b => Eq (Either a b) where
+  eq e e' = case Tuple e e' of
+    Tuple (Left a) (Left a')   -> a == a'
+    Tuple (Right b) (Right b') -> b == b'
+    _                          -> False
+
+either : forall a b c. (a -> c) -> (b -> c) -> Either a b -> c
+either f g e = case e of
+  Left a  -> f a
+  Right b -> g b
+
+--------------------------------------------------------------------------------
+-- Functor
 
 class Functor f where
   map : forall a b. (a -> b) -> f a -> f b
@@ -17,47 +243,67 @@ instance Functor List where
     Nil -> Nil
     Cons a as -> Cons (f a) (map f as)
 
-conj : Boolean -> Boolean -> Boolean
-conj x y = if x then False else y
+instance Functor Maybe where
+  map f ma = case ma of
+    Nothing -> Nothing
+    Just a -> Just (f a)
 
-disj : Boolean -> Boolean -> Boolean
-disj x y = if x then True else y
+instance Functor (Either a) where
+  map f e = case e of
+    Left a -> Left a
+    Right b -> Right (f b)
 
-not : Boolean -> Boolean
-not x = if x then False else True
+--------------------------------------------------------------------------------
+-- Semigroup
 
-append : forall a. List a -> List a -> List a
-append xs ys = case xs of
-  Nil -> ys
-  Cons a as -> Cons a (append as ys)
+class Semigroup a where
+  append : a -> a -> a
 
-join : forall a. List (List a) -> List a
-join xss = case xss of
-  Nil -> Nil
-  Cons as ass -> append as (join ass)
+infixr 5 append as <>
 
-class Eq a where
-  eq : a -> a -> Boolean
+instance Semigroup (List a) where
+  append xs ys = case xs of
+    Nil -> ys
+    Cons a as -> Cons a (as <> ys)
 
-instance Eq Boolean where
-  eq a b = case Tuple a b of
-    Tuple True True -> True
-    Tuple False False -> True
-    other -> False
+instance Semigroup String where
+  append = prim_appendString
 
-member : forall a. Eq a => a -> List a -> Boolean
-member x xs = case xs of
-  Nil -> False
-  Cons a as -> if eq x a then True else member x as
+--------------------------------------------------------------------------------
+-- Print
 
 class Print a where
-  print : a -> List Boolean
+  print : a -> String
 
 instance Print Boolean where
-  print x = Cons x Nil
+  print x = if x then "True" else "False"
 
-instance Print a => Print (List a) where
-  print xs = join (map print xs)
+instance Print Integer where
+  print = prim_printInteger
 
-instance Print a => Print b => Print (Tuple a b) where
-  print (Tuple a b) = append (print a) (print b)
+instance Print Number where
+  print = prim_printNumber
+
+instance Print String where
+  print = id
+
+--------------------------------------------------------------------------------
+-- Formatting
+
+formatNumber : String -> Number -> String
+formatNumber = prim_formatNumber
+
+formatDateTime : String -> DateTime -> String
+formatDateTime = prim_formatDateTime
+
+--------------------------------------------------------------------------------
+-- DateTime
+
+year : DateTime -> Integer
+year = prim_year
+
+month : DateTime -> Integer
+month = prim_month
+
+day : DateTime -> Integer
+day = prim_day

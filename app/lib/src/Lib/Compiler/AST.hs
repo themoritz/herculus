@@ -170,6 +170,7 @@ spanVar (span, v) = span :< inj (Var v)
 data BinderF a
   = VarBinder Text
   | ConstructorBinder Text [a]
+  | WildcardBinder
   deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 type Binder = Fix BinderF

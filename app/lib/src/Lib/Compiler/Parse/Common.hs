@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NoImplicitPrelude   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ViewPatterns        #-}
 -- |
 
 module Lib.Compiler.Parse.Common where
@@ -26,15 +25,15 @@ mkOpTable
   :: forall f. Functor f
   => ((Span, Text) -> WithSpan f)
   -> (WithSpan f -> WithSpan f -> WithSpan f)
-  -> [OpSpec] -> [[Operator Parser (WithSpan f)]]
+  -> OpTable -> [[Operator Parser (WithSpan f)]]
 mkOpTable embedOp combine = (map.map) binary . groupBy f . sortBy g
   where
-  g (opFixity -> Infix _ x) (opFixity -> Infix _ y) = compare y x
+  g (_, Infix _ x) (_, Infix _ y) = compare y x
 
-  f (opFixity -> Infix _ x) (opFixity -> Infix _ y) = x == y
+  f (_, Infix _ x) (_, Infix _ y) = x == y
 
-  binary :: OpSpec -> Operator Parser (WithSpan f)
-  binary (OpSpec (Infix assoc _) name) =
+  binary :: (Text, Fixity) -> Operator Parser (WithSpan f)
+  binary (name, Infix assoc _) =
     let
       p = do
         (span, _) <- withSpan $ P.try (symbol name)

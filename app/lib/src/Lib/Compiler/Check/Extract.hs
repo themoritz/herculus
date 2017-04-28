@@ -9,6 +9,7 @@ import           Control.Comonad.Cofree
 
 import           Lib.Compiler.AST
 import           Lib.Compiler.AST.Position
+import           Lib.Compiler.Parse.State
 import           Lib.Compiler.Type
 
 data ExDataDecl = ExDataDecl
@@ -62,7 +63,7 @@ extractTypeDecls :: [SourceAst] -> [ExTypeDecl]
 extractTypeDecls = mapMaybe $ \(tSpan :< (unsafePrj -> decl)) -> case decl of
   TypeDecl tName poly -> Just $ ExTypeDecl {..}
     where tPolyType = map (hoistCofree unsafePrj) poly
-  _                  -> Nothing
+  _                   -> Nothing
 
 data ExValueDecl = ExValueDecl
   { vSpan :: Span
@@ -74,4 +75,16 @@ extractValueDecls :: [SourceAst] -> [ExValueDecl]
 extractValueDecls = mapMaybe $ \(vSpan :< (unsafePrj -> decl)) -> case decl of
   ValueDecl vName binders e -> Just $ ExValueDecl {..}
     where vExpr = foldr spanAbs e binders
-  _                           -> Nothing
+  _                         -> Nothing
+
+data ExFixityDecl = ExFixityDecl
+  { fSpan     :: Span
+  , fOperator :: Text
+  , fAlias    :: Text
+  , fFixity   :: Fixity
+  }
+
+extractFixityDecls :: [SourceAst] -> [ExFixityDecl]
+extractFixityDecls = mapMaybe $ \(fSpan :< (unsafePrj -> decl)) -> case decl of
+  FixityDecl fOperator fAlias fFixity -> Just $ ExFixityDecl {..}
+  _                                   -> Nothing

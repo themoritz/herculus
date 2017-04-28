@@ -26,6 +26,7 @@ import qualified Data.Map                  as Map
 import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Env
 import           Lib.Compiler.Error
+import           Lib.Compiler.Parse.State
 import           Lib.Compiler.Pretty
 import           Lib.Compiler.Type
 import           Lib.Model.Column
@@ -56,7 +57,7 @@ data CheckF a
   | UnifyTypes Span Type Type (Either Error () -> a)
   --
   | LookupKind Text (Maybe Kind -> a)
-  | LookupType Text (Maybe EnvType -> a)
+  | LookupType Text (Maybe (EnvType, Text) -> a)
   | LookupInstanceDict DictLookup (Maybe Text -> a)
   | LookupClass Text (Maybe Class -> a)
   --
@@ -66,6 +67,7 @@ data CheckF a
   --
   | AddClass Text Class a
   | AddInstance Text Instance a
+  | AddOperatorAlias Text Text Fixity a
   | forall b. InExtendedEnv CheckEnv (Check b) (b -> a)
   | forall b. InExtendedKindEnv (Map Text Kind) (Check b) (b -> a)
   | forall b. InExtendedTypeEnv (Map Text EnvType) (Check b) (b -> a)
@@ -102,7 +104,7 @@ unifyTypes span t1 t2 = liftCheck $ UnifyTypes span t1 t2 id
 lookupKind :: Text -> Check (Maybe Kind)
 lookupKind t = liftCheck $ LookupKind t id
 
-lookupType :: Text -> Check (Maybe EnvType)
+lookupType :: Text -> Check (Maybe (EnvType, Text))
 lookupType t = liftCheck $ LookupType t id
 
 lookupInstanceDict :: DictLookup -> Check (Maybe Text)
@@ -116,6 +118,9 @@ addClass n c = liftCheck $ AddClass n c ()
 
 addInstance :: Text -> Instance -> Check ()
 addInstance c i = liftCheck $ AddInstance c i ()
+
+addOperatorAlias :: Text -> Text -> Fixity -> Check ()
+addOperatorAlias o a f = liftCheck $ AddOperatorAlias o a f ()
 
 getKindSubst :: Check KindSubst
 getKindSubst = liftCheck $ GetKindSubst id
@@ -196,21 +201,26 @@ data DictLookup
   deriving (Eq, Ord, Show)
 
 data CheckEnv = CheckEnv
-  { _checkEnvTypes         :: Map Text EnvType
-  , _checkEnvKinds         :: Map Text Kind
+  { _checkEnvKinds         :: Map Text Kind
+  , _checkEnvTypes         :: Map Text EnvType
+  , _checkEnvOperators     :: Map Text (Text, Fixity)
   , _checkEnvInstanceDicts :: Map DictLookup Text
   , _checkEnvClasses       :: Map Text Class
   }
 
+mkCheckEnvOpTable :: CheckEnv -> OpTable
+mkCheckEnvOpTable = Map.toList . map snd . _checkEnvOperators
+
 unionCheckEnv :: CheckEnv -> CheckEnv -> CheckEnv
-unionCheckEnv (CheckEnv t k i c) (CheckEnv t' k' i' c') =
-  CheckEnv (Map.union t t')
-           (Map.union k k')
+unionCheckEnv (CheckEnv k t o i c) (CheckEnv k' t' o' i' c') =
+  CheckEnv (Map.union k k')
+           (Map.union t t')
+           (Map.union o o')
            (Map.union i i')
            (Map.union c c')
 
 primCheckEnv :: CheckEnv
-primCheckEnv = CheckEnv primTypeEnv' primKindEnv Map.empty Map.empty
+primCheckEnv = CheckEnv primKindEnv primTypeEnv' Map.empty Map.empty Map.empty
   where primTypeEnv' = map defaultEnvType primTypeEnv
 
 makeLenses ''CheckEnv
@@ -343,9 +353,19 @@ runCheck env goResolve =
       res <- use (checkEnv . checkEnvKinds . at v)
       pure $ reply res
 
-    LookupType t reply -> do
-      res <- use (checkEnv . checkEnvTypes . at t)
-      pure $ reply res
+    LookupType x reply -> do
+      mt <- use (checkEnv . checkEnvTypes . at x)
+      case mt of
+        Just t -> pure $ reply $ Just (t, x)
+        Nothing -> do
+          mOp <- use (checkEnv . checkEnvOperators . at x)
+          case mOp of
+            Nothing -> pure $ reply Nothing
+            Just (alias, _) -> do
+              res <- use (checkEnv . checkEnvTypes . at alias)
+              case res of
+                Nothing -> pure $ reply Nothing
+                Just t  -> pure $ reply $ Just (t, alias)
 
     LookupInstanceDict c reply -> do
       res <- use (checkEnv . checkEnvInstanceDicts . at c)
@@ -360,6 +380,10 @@ runCheck env goResolve =
 
     AddInstance c i next -> do
       checkEnv . checkEnvClasses . at c . _Just . _5 %= (i :)
+      pure next
+
+    AddOperatorAlias o a f next -> do
+      checkEnv . checkEnvOperators . at o .= Just (a, f)
       pure next
 
     GetCheckEnv reply -> use checkEnv >>= pure . reply
