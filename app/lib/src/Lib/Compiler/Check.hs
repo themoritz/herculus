@@ -67,11 +67,13 @@ inferType = cataM $ \case
 
 -- | Infer the type of an expression. Also generates a transformed AST that
 -- may contain placeholders, and a list of deferred constraints.
-inferExpr :: SourceAst -> Check (Intermed, Type, [Constraint])
+inferExpr :: SourceAst -> Check (Intermed, Type, [ConstraintToSolve])
 inferExpr (span :< a) =
   ast undefined (inferExpr' span) undefined undefined (inferRef' span) a
 
-inferExpr' :: Span -> ExprF SourceAst -> Check (Intermed, Type, [Constraint])
+inferExpr'
+  :: Span -> ExprF SourceAst
+  -> Check (Intermed, Type, [ConstraintToSolve])
 inferExpr' span = \case
   Literal lit -> inferLiteral' lit
 
@@ -102,7 +104,7 @@ inferExpr' span = \case
             "Expected exactly one constraint while looking up " <>
             "method variable `" <> x <> "`."
         Recursive -> pure $ recursiveCallPlaceholder span x'
-      pure (e, t, constraints)
+      pure (e, t, map (span,) constraints)
 
   Constructor c -> lookupType c >>= \case
     Nothing -> compileError span $
@@ -147,7 +149,8 @@ inferExpr' span = \case
     unifyTypes' span t recordType
     pure (accessor e' field, resultType, cs)
 
-inferLiteral' :: LiteralF SourceAst -> Check (Intermed, Type, [Constraint])
+inferLiteral'
+  :: LiteralF SourceAst -> Check (Intermed, Type, [ConstraintToSolve])
 inferLiteral' lit = case lit of
   NumberLit n      -> pure (literal $ NumberLit n, tyNumber, [])
   IntegerLit i     -> pure (literal $ IntegerLit i, tyInteger, [])
@@ -161,7 +164,8 @@ inferLiteral' lit = case lit of
          , ty
          , join $ Map.elems $ map (view _3) fields' )
 
-inferRef' :: Span -> RefTextF SourceAst -> Check (Intermed, Type, [Constraint])
+inferRef'
+  :: Span -> RefTextF SourceAst -> Check (Intermed, Type, [ConstraintToSolve])
 inferRef' span = \case
   TableRef t -> resolveTableRef t >>= \case
     Nothing -> compileError span $ "Cannot find table `" <> show t <> "`."
@@ -193,7 +197,7 @@ inferRef' span = \case
 inferDefinitionGroup
   :: [(Text, SourceAst, PolyType)]
   -> [(Text, SourceAst)]
-  -> Check ([(Text, Intermed, PolyType)], [Constraint])
+  -> Check ([(Text, Intermed, PolyType)], [ConstraintToSolve])
 inferDefinitionGroup expls impls = do
   -- Put explicit signatures in env
   inExtendedTypeEnv (envFromDefinitions expls) $ do
@@ -210,7 +214,7 @@ inferDefinitionGroup expls impls = do
 
 checkExplicitDefinition
   :: (Text, SourceAst, PolyType)
-  -> Check ((Text, Intermed, PolyType), [Constraint])
+  -> Check ((Text, Intermed, PolyType), [ConstraintToSolve])
 checkExplicitDefinition (name, e@(span :< _), polyGiven) = do
   (e', t, cs) <- inferExpr e
   (csGiven, tGiven) <- instantiate polyGiven
@@ -226,7 +230,7 @@ checkExplicitDefinition (name, e@(span :< _), polyGiven) = do
     tGiven' = applyTypeSubst s tGiven
     generic = getFtvs tGiven' Set.\\ fixed
     poly = quantify (Set.toList generic) csGiven' t'
-  ps' <- filterM (\c -> not <$> entail csGiven' c) cs'
+  ps' <- filterM (\c -> not <$> entail' csGiven' (snd c)) cs'
   (deferred, retained) <- split fixed generic ps'
 
   if normalizePoly polyGiven /= normalizePoly poly then
@@ -245,7 +249,7 @@ checkExplicitDefinition (name, e@(span :< _), polyGiven) = do
 
 inferImplicitDefinitions
   :: [(Text, SourceAst)]
-  -> Check ([(Text, Intermed, PolyType)], [Constraint])
+  -> Check ([(Text, Intermed, PolyType)], [ConstraintToSolve])
 inferImplicitDefinitions defs = do
   -- Fix the type environment outside of the definition group for computing
   -- the list of type variables that are "fixed" within te definition group.
@@ -279,7 +283,7 @@ inferImplicitDefinitions defs = do
     quantified <- for inferred $ \(name, e, t, cs) -> do
       cs' <- reduce (applyTypeSubst s cs)
       let
-        rs = [c | c <- retained, c `elem` applyTypeSubst s cs']
+        rs = [c | c <- retained, c `elem` map snd cs']
         poly = quantify (Set.toList generic) rs (applyTypeSubst s t)
       pure (name, e, poly, rs)
 
@@ -392,16 +396,17 @@ resolvePlaceholders recConstrs =
         "Internal? Found record type when resolving placeholder."
 
 split
-  :: Set Text -> Set Text -> [Constraint]
-  -> Check ([Constraint], [Constraint])
+  :: Set Text -> Set Text -> [ConstraintToSolve]
+  -> Check ([ConstraintToSolve], [Constraint])
 split fixed generic constraints = do
   -- TODO: Use generic for constraint defaulting
   reduced <- reduce constraints
-  pure $ flip partition reduced $ \c ->
-        all (`Set.member` fixed) (getFtvs c)
+  let (deferred, retained) = flip partition reduced $ \c ->
+        all (`Set.member` fixed) (getFtvs $ snd c)
+  pure (deferred, map snd retained)
 
 -- | Removes any constraint that is entailed by the others
-reduce :: [Constraint] -> Check [Constraint]
+reduce :: [ConstraintToSolve] -> Check [ConstraintToSolve]
 reduce xs = simplify [] =<< join <$> traverse toHeadNormal xs
   where
     simplify ds [] = pure ds
@@ -411,14 +416,17 @@ reduce xs = simplify [] =<< join <$> traverse toHeadNormal xs
 
 -- | `entail cs c` is True when c is entailed by cs, i.e. c holds whenever
 -- all the constraints in cs hold.
-entail :: [Constraint] -> Constraint -> Check Bool
-entail cs c = do
-    supers <- join <$> traverse getSupers cs
-    if c `elem` supers
-      then pure True -- Superclasses are always entailed by their subclasses
-      else byInst c >>= \case
-        Nothing -> pure False
-        Just (cs', _) -> and <$> traverse (entail cs) cs'
+entail :: [ConstraintToSolve] -> ConstraintToSolve -> Check Bool
+entail cs c = entail' (map snd cs) (snd c)
+
+entail' :: [Constraint] -> Constraint -> Check Bool
+entail' cs c = do
+  supers <- join <$> traverse getSupers cs
+  if c `elem` supers
+    then pure True -- Superclasses are always entailed by their subclasses
+    else byInst c >>= \case
+      Nothing -> pure False
+      Just (cs', _) -> and <$> traverse (entail' cs) cs'
 
 -- | Recursively generate a list of constraints for all superclasses.
 getSupers :: Constraint -> Check [Constraint]
@@ -439,7 +447,6 @@ byInst c@(IsIn cls _) = lookupClass cls >>= \case
     Nothing -> pure Nothing
     Just s -> pure $ Just (map (applyTypeSubst s) cs', applyTypeSubst s h)
 
--- TODO: make this more efficient
 getSubClasses :: Text -> Check [Text]
 getSubClasses cls = do
   classes <- view checkEnvClasses <$> getCheckEnv
@@ -454,14 +461,14 @@ inHeadNormal = cata $ \case
   TypeApp f _       -> f
   _                 -> False
 
-toHeadNormal :: Constraint -> Check [Constraint]
-toHeadNormal c@(IsIn _ t)
-  | inHeadNormal t = pure [c]
+toHeadNormal :: ConstraintToSolve -> Check [ConstraintToSolve]
+toHeadNormal c'@(span, c@(IsIn cls t))
+  | inHeadNormal t = pure [c']
   | otherwise      = byInst c >>= \case
-      Nothing -> compileError voidSpan $
-        "Cannot solve the constraint `" <>
-        prettyConstraint c <> "`."
-      Just (cs, _) -> join <$> traverse toHeadNormal cs
+      Nothing -> compileError span $
+        "The type `" <> prettyType t <>
+        "` does not implement class `" <> cls <> "`."
+      Just (cs, _) -> join <$> traverse toHeadNormal (map (span,) cs)
 
 instantiateInstance :: Instance -> Check ([Constraint], Type)
 instantiateInstance (cs, IsIn _ t) =
@@ -482,7 +489,7 @@ instantiate (ForAll as cs t) = do
 checkModule :: Module -> Check (CheckEnv, Map Text Core.Expr)
 checkModule decls = do
   -- Extract all fixity declarations
-  for (extractFixityDecls decls) $ \ExFixityDecl{..} ->
+  for_ (extractFixityDecls decls) $ \ExFixityDecl{..} ->
     addOperatorAlias fOperator fAlias fFixity
 
   -- Check all data declarations and extract the resulting kinds and polytypes
@@ -504,15 +511,20 @@ checkModule decls = do
       -- Put instance env into scope
       inExtendedInstanceEnv (Map.fromList instEnv) $ do
 
+        let valueDecls = extractValueDecls decls
+
         -- Check all type signatures
         declaredTypes <- for (extractTypeDecls decls) $ \ExTypeDecl {..} -> do
+          unless (isJust $ find ((== tName) . vName) valueDecls) $
+            compileError tSpan $
+              "No implementation provided for `" <> tName <> "`."
           checkTypeDecl tSpan tPolyType
           pure (tName, tPolyType)
 
         -- Check types of all value declarations
         result <- checkValueDecls
           (map (map stripAnn) $ Map.fromList declaredTypes)
-          (extractValueDecls decls)
+          valueDecls
 
         -- Put value types into scope
         inExtendedTypeEnv (envFromDefinitions result) $ do
@@ -538,7 +550,7 @@ checkFormula (decls, expr@(span :< _)) = do
     let fixed = getFtvs (applyTypeSubst s typeEnv)
     let generic = getFtvs t' Set.\\ fixed
     (ds, rs) <- split fixed generic (applyTypeSubst s cs)
-    let cs' = ds <> rs
+    let cs' = map snd ds <> rs
     unless (null generic) $ compileError span $
       "Inferred type `" <> prettyType t' <> "` must not be polymorphic."
     unless (null cs') $ internalError (Just span) $
@@ -725,7 +737,7 @@ checkValueDecls declaredTypes decls = do
   (intermeds, ds) <- inferDefinitionGroup expls impls
   unless (null ds) $ internalError Nothing $
     "Deferred the following constraints while checking top-level definitions: "
-    <> prettyConstraints ds
+    <> prettyConstraints (map snd ds)
   pure intermeds
 
 --------------------------------------------------------------------------------

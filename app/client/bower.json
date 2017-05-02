@@ -13,7 +13,7 @@
     "purescript-profunctor-lenses": "^2.6.0",
     "purescript-servant-support": "^7.0.0",
     "purescript-argonaut-generic-codecs": "^5.0.0",
-    "purescript-flatpickr": "master",
+    "purescript-flatpickr": "^0.1.0",
     "purescript-routing": "^3.0.0",
     "purescript-ace": "^3.0.0",
     "purescript-halogen-css": "^5.0.0",

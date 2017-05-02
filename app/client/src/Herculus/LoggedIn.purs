@@ -82,7 +82,7 @@ comp = H.lifecycleParentComponent
             [ ]
             (HH.div_
              [ HH.slot' cp2 unit PO.comp unit absurd
-             , HH.slot' cp5 unit PM.comp unit absurd
+             -- , HH.slot' cp5 unit PM.comp unit absurd
              ]
             )
           R.ProjectDetail p ->

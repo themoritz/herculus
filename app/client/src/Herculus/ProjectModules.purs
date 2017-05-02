@@ -44,8 +44,7 @@ render st = cldiv_ "p2"
     [ HP.class_ (HH.ClassName "h2 m0 mb3") ]
     [ HH.text "Code Modules" ]
   , HH.slot' cp1 unit Ace.comp
-             { value: st.val
-             , mode: "ace/mode/haskell"
+             { mode: "ace/mode/haskell"
              }
              (\(Ace.TextChanged v) -> Just $ H.action $ Update v)
   , HH.button

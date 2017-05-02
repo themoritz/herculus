@@ -228,9 +228,9 @@ parseLit = withSource $ inj . Literal <$> (P.choice
     ]
     P.<?> "literal")
   where
-    parseString = StringLit <$> (lexeme stringLit)
-    parseNumber = NumberLit <$> (lexeme numberLit)
-    parseInteger = IntegerLit <$> (lexeme integerLit)
+    parseString = StringLit <$> stringLit
+    parseNumber = NumberLit <$> numberLit
+    parseInteger = IntegerLit <$> integerLit
     parseRecord = braces $ do
       fields <- P.sepBy1 ((,) <$> identifier <* colon <*> parseExpr) comma
       pure $ RecordLit $ Map.fromList fields

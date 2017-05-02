@@ -13,12 +13,12 @@ flip f b a = f a b
 apply : forall a b. (a -> b) -> a -> b
 apply f x = f x
 
-infixr 0 apply as $
+infixr 0 apply as <|
 
 applyFlipped : forall a b. a -> (a -> b) -> b
 applyFlipped x f = f x
 
-infixl 1 applyFlipped as #
+infixl 1 applyFlipped as |>
 
 --------------------------------------------------------------------------------
 -- Boolean
@@ -105,7 +105,7 @@ instance Eq Boolean where
     _                 -> False
 
 notEq : forall a. Eq a => a -> a -> Boolean
-notEq a b = not $ a == b
+notEq a b = not <| a == b
 
 infix 4 notEq as /=
 
@@ -202,7 +202,11 @@ length xs = case xs of
 filter : forall a. (a -> Boolean) -> List a -> List a
 filter p xs = case xs of
   Nil -> Nil
-  Cons a as -> if p a then Cons a as else as
+  Cons a as ->
+    let
+      as' = filter p as
+    in
+      if p a then Cons a as' else as'
 
 find : forall a. (a -> Boolean) -> List a -> Maybe a
 find p xs = case xs of

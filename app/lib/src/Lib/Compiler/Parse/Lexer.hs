@@ -5,6 +5,8 @@ module Lib.Compiler.Parse.Lexer where
 
 import           Lib.Prelude
 
+import           Control.Monad.Fail        (fail)
+
 import qualified Data.Char                 as C
 import qualified Data.Text                 as T
 
@@ -139,7 +141,7 @@ reserved :: Text -> Parser ()
 reserved s = P.try go P.<?> show s where
   go = do
     s' <- lname
-    guard (s == s')
+    guard (s == s') P.<?> T.unpack s
 
 tyname :: Parser Text
 tyname = P.try uname P.<?> "type name"
@@ -152,6 +154,7 @@ identifier = P.try go P.<?> "identifier" where
   go = do
     s <- lname
     guard (s `notElem` reservedNames)
+      P.<?> "none of the reserved names in " <> show reservedNames
     pure s
 
 anySymbol :: Parser Text
@@ -164,7 +167,7 @@ anySymbol = lexeme (P.try go) P.<?> "symbol"
 symbol :: Text -> Parser ()
 symbol s = P.try $ do
   s' <- anySymbol
-  guard (s == s')
+  guard (s == s') P.<?> T.unpack s
 
 stringLit :: Parser Text
 stringLit = lexeme stringLit'

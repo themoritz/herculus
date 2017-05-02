@@ -162,6 +162,8 @@ data ConstraintF t
 type Constraint = ConstraintF Type
 type SourceConstraint = ConstraintF SourceType
 
+type ConstraintToSolve = (Span, Constraint)
+
 -- Constraints, head constraint
 type Instance = ([Constraint], Constraint)
 
@@ -234,3 +236,6 @@ instance TypeSubstitutable a => TypeSubstitutable (PolyTypeF a) where
 
 instance TypeSubstitutable v => TypeSubstitutable (Map k v) where
   applyTypeSubst s = map (applyTypeSubst s)
+
+instance TypeSubstitutable ConstraintToSolve where
+  applyTypeSubst s (span, c) = (span, applyTypeSubst s c)
