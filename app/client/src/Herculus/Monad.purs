@@ -4,7 +4,9 @@ import Herculus.Prelude
 import Herculus.Notifications.Types as Notify
 import Ace.Types (ACE)
 import Control.Monad.Aff.AVar (AVar, putVar)
+import Control.Monad.Eff (kind Effect)
 import Control.Monad.Eff.Console (CONSOLE)
+import Control.Monad.Eff.Exception (EXCEPTION)
 import Control.Monad.Free (Free, foldFree, liftF)
 import DOM (DOM)
 import Data.JSDate (LOCALE)
@@ -18,13 +20,15 @@ import Servant.PureScript.Affjax (AjaxError, ErrorDescription(ConnectionError, D
 import Servant.PureScript.Settings (SPSettings_, defaultSettings)
 import WebSocket (WEBSOCKET)
 
-foreign import data STORAGE :: !
+foreign import data STORAGE :: Effect
 
 type HercEffects = HalogenEffects
   ( ajax      :: AJAX
   , ace       :: ACE
   , console   :: CONSOLE
   , ws        :: WEBSOCKET
+  -- | Only here because websocket-simple did not switch to `exception`.
+  , err       :: EXCEPTION
   , storage   :: STORAGE
   , flatpickr :: FLATPICKR
   , locale    :: LOCALE
@@ -131,7 +135,7 @@ runApiT apiUrl mToken action =
 
 withApi
   :: forall m a
-   . (MonadTrans m, Monad (m Herc))
+   . MonadTrans m => Monad (m Herc)
   => ApiT Herc a
   -> (a -> m Herc Unit)
   -> m Herc Unit

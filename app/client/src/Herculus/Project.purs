@@ -230,7 +230,7 @@ eval (HandleWebSocket output next) = do
       getAuthToken >>= case _ of
         Nothing -> gotoRoute R.LogIn
         Just token -> do
-          H.query' cp2 unit (H.action $ WS.Send $ WsUpSubscribe token projId)
+          _ <- H.query' cp2 unit (H.action $ WS.Send $ WsUpSubscribe token projId)
           pure unit
     WS.Closed ->
       modify _{ disconnected = true }
@@ -289,7 +289,7 @@ eval (ReorderColumns order next) = do
 
 eval (EditColumn c next) = do
   modify _{ configOpen = true }
-  H.query' cp6 unit $ H.action $ Config.EditColumn c
+  _ <- H.query' cp6 unit $ H.action $ Config.EditColumn c
   pure next
 
 eval (ConfigClose next) = do

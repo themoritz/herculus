@@ -408,7 +408,7 @@ eval = case _ of
 updateAce :: H.ParentDSL State Query Child Slot Output Herc Unit
 updateAce = do
   st <- get
-  H.query' cp1 unit $ H.action $ Ace.SetText $
+  _ <- H.query' cp1 unit $ H.action $ Ace.SetText $
     case st.input.column ^. columnKind of
       ColumnReport repCol -> getReportTemplate repCol st
       ColumnData dataCol -> getFormula dataCol st
@@ -424,7 +424,7 @@ lintTemplate = do
         template = getReportTemplate repCol st
         call = postProjectLintReportColByColumnId template (col ^. columnId)
       withApi call \errs -> do
-        H.query' cp1 unit $ H.action $ Ace.SetAnnotations errs
+        _ <- H.query' cp1 unit $ H.action $ Ace.SetAnnotations errs
         modify _{ errors = errs }
         pure unit
     ColumnData _ -> pure unit
@@ -441,7 +441,7 @@ lintFormula = do
         call = postProjectLintDataColByColumnId
                    (Tuple dt formula) (col ^. columnId)
       withApi call \errs -> do
-        H.query' cp1 unit $ H.action $ Ace.SetAnnotations errs
+        _ <- H.query' cp1 unit $ H.action $ Ace.SetAnnotations errs
         modify _{ errors = errs }
         pure unit
     ColumnReport _ -> pure unit

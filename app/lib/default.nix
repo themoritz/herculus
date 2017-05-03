@@ -4,7 +4,7 @@ let
   myPackages = pkgs.recurseIntoAttrs (
     haskellPackages.override {
       overrides = self: super: {
-        servant-purescript = super.servant-purescript_0_7_0_0;
+        servant-purescript = super.servant-purescript_0_8_0_0;
       };
     }
   );

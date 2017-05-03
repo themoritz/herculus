@@ -130,7 +130,7 @@ eval = case _ of
     pure next
 
   Delete' next -> do
-    H.query unit $ H.action Modal.Open
+    _ <- H.query unit $ H.action Modal.Open
     pure next
 
   ReallyDelete next -> do

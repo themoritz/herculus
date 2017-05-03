@@ -56,11 +56,11 @@ parseCSV sep types input = case runParser input pCSV of
         else fail "could not parse date"
     DataRowRef _ -> fail "not implemented"
     DataList dt -> do
-      whiteSpace
-      string "["
+      _ <- whiteSpace
+      _ <- string "["
       xs <- sepBy (whiteSpace *> pValue dt <* whiteSpace) (string ",")
-      string "]"
-      whiteSpace
+      _ <- string "]"
+      _ <- whiteSpace
       pure $ VList $ fromFoldable xs
     DataMaybe dt -> fail "not implemented"
 

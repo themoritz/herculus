@@ -64,7 +64,7 @@ comp = H.parentComponent
 
   eval :: Query ~> H.ParentDSL State Query ChildQuery ChildSlot o Herc
   eval (Notify cfg next) = do
-    H.query' CP.cp1 unit (H.action $ Notify.Push cfg)
+    _ <- H.query' CP.cp1 unit (H.action $ Notify.Push cfg)
     pure next
 
   eval (Goto view next) = do

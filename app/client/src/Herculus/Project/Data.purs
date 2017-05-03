@@ -118,7 +118,7 @@ prepare tables columns rows cells = do
 
 applyDiff
   :: forall m
-   . (MonadState ProjectData m, MonadWriter (First (Id Table)) m)
+   . MonadState ProjectData m => MonadWriter (First (Id Table)) m
   => Maybe (Id Table)
   -> Diff (Entity Table)
   -> Diff Column
@@ -185,7 +185,10 @@ applyDiff currentTable tableDiff columnDiff rowDiff cellDiff = do
       Create -> do
         tablesLens .= Just row
         columns <- use (pdTables <<< at tableId <<< _Just <<< descColumns)
-        for_ (Map.toList columns) $ \(Tuple columnId column) ->
+        let
+          arr :: Array (Tuple (Id ColumnTag) Column)
+          arr = Map.toUnfoldable columns
+        for_ arr $ \(Tuple columnId column) ->
           use (pdCells <<< at (Coords columnId rowId)) >>= case _ of
             Nothing -> pure unit
             Just content ->

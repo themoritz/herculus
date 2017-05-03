@@ -211,7 +211,7 @@ comp = H.parentComponent
     pure next
 
   eval (DeleteTable t next) = do
-    H.query' cp1 t $ H.action $ Modal.Open
+    _ <- H.query' cp1 t $ H.action $ Modal.Open
     pure next
 
   eval (ReallyDeleteTable t next) = do

@@ -94,7 +94,7 @@ comp = H.lifecycleComponent
       Just flatpickr ->
         liftEff $ do
           date <- toJSDate input.date
-          FP.setDate (FP.DateJSDate date) false flatpickr
+          void $ FP.setDate (FP.DateJSDate date) false flatpickr
     pure next
 
   eval (Open next) = do

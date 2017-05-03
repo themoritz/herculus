@@ -83,5 +83,5 @@ comp = H.parentComponent
     pure next
 
   eval (Toggle next) = do
-    H.query unit (H.action Popup.Toggle)
+    _ <- H.query unit (H.action Popup.Toggle)
     pure next

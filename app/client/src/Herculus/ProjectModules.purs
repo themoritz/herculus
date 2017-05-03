@@ -56,7 +56,7 @@ render st = cldiv_ "p2"
 eval :: Query ~> H.ParentDSL State Query Child Slot Void Herc
 eval = case _ of
   Mark next -> do
-    H.query' cp1 unit $ H.action $ Ace.SetAnnotations
+    _ <- H.query' cp1 unit $ H.action $ Ace.SetAnnotations
       [ Error
         { errMsg: "Foo"
         , errSpan: Span

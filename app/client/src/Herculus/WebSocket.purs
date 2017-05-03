@@ -7,7 +7,7 @@ import Halogen.HTML as HH
 import Halogen.Query.EventSource as ES
 import Herculus.Notifications.Types as Notify
 import WebSocket as WS
-import Control.Monad.Aff (forkAff, later', runAff)
+import Control.Monad.Aff (forkAff, delay, runAff)
 import Control.Monad.Aff.AVar (AVar, makeVar, peekVar, putVar, takeVar)
 import Control.Monad.Eff.Ref (Ref, newRef, readRef, writeRef)
 import Control.Monad.Eff.Var (set)
@@ -15,6 +15,7 @@ import DOM.Websocket.Event.Types (MessageEvent)
 import Data.Argonaut.Core (stringify)
 import Data.Argonaut.Generic.Aeson (decodeJson, encodeJson)
 import Data.Argonaut.Parser (jsonParser)
+import Data.Time.Duration (Milliseconds(..))
 import Halogen.Query.HalogenM (halt)
 import Herculus.Monad (Herc, HercEffects, getWebSocketUrl, notify)
 
@@ -44,7 +45,7 @@ data Output mo
 
 comp
   :: forall mi mo
-   . (Generic mi, Generic mo)
+   . Generic mi => Generic mo
   => H.Component HH.HTML (Query mi) Unit (Output mo) Herc
 comp = H.lifecycleComponent
   { initialState: const Nothing
@@ -72,7 +73,7 @@ comp = H.lifecycleComponent
       , dead
       }
     -- Consume message queue
-    liftAff $ forkAff $ forever do
+    _ <- liftAff $ forkAff $ forever do
       m <- peekVar queue
       peekVar open
       mConn <- liftEff $ readRef connection
@@ -152,7 +153,7 @@ wsService url vars = do
   ES.produce \emit -> do
     -- Set `open` to true on open
     set socket.onopen \_ -> do
-      runAff' $ do
+      _ <- runAff' $ do
         putVar vars.open unit
         liftEff $ writeRef vars.closed false
       emit (Left (OnOpen ES.Listening))
@@ -161,7 +162,7 @@ wsService url vars = do
       emit (Left (OnMessage event id))
     -- Set `open` to false on close and reconnect
     set socket.onclose \_ -> do
-      runAff' $ do
+      _ <- runAff' $ do
         cannotClose <- liftEff $ readRef vars.closed
         if cannotClose
           then pure unit
@@ -171,6 +172,7 @@ wsService url vars = do
       emit (Left (OnClose ES.Listening))
       dead <- liftEff $ readRef vars.dead
       unless dead $ void $
-        runAff' $ later' 10000 $
+        runAff' $ do
+          delay (Milliseconds 1000.0)
           liftEff $ emit (Left (Connect ES.Done))
       pure unit

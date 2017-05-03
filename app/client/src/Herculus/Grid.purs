@@ -293,7 +293,7 @@ eval = case _ of
     pure next
 
   TogglePopup next -> do
-    H.query' cp5 unit (H.action Popup.Toggle)
+    _ <- H.query' cp5 unit (H.action Popup.Toggle)
     pure next
 
   ResizeColumn' colId width next -> do
@@ -305,7 +305,7 @@ eval = case _ of
     pure next
 
   EditCell coords mChar next -> do
-    H.query' cp3 coords $ H.action $ DataCell.StartEdit mChar
+    _ <- H.query' cp3 coords $ H.action $ DataCell.StartEdit mChar
     pure next
 
   Cut ev subset@(Tuple subsetCols subsetRows) next -> do
@@ -353,7 +353,7 @@ eval = case _ of
       pastedRows = max 0 $ min (length availableRows) (length csv) - 1
       pastedCols = max 0 $ min (length availableCols) maxWidth - 1
         where maxWidth = fromMaybe 0 $ maximum $ map length csv
-    H.query' cp6 unit $ H.action $ Control.SetSelection
+    _ <- H.query' cp6 unit $ H.action $ Control.SetSelection
       { start
       , end:
         { x: start.x + pastedCols
@@ -364,28 +364,28 @@ eval = case _ of
     pure next
 
   SaveValue colId rowId val mDir next -> do
-    H.query' cp6 unit $ H.action $ Control.Focus mDir
+    _ <- H.query' cp6 unit $ H.action $ Control.Focus mDir
     H.raise $ Commands [CmdCellSet colId rowId val]
     pure next
 
   YieldFocus next -> do
-    H.query' cp6 unit $ H.action $ Control.Focus Nothing
+    _ <- H.query' cp6 unit $ H.action $ Control.Focus Nothing
     pure next
 
   MouseDown ev next -> do
-    H.query' cp6 unit $ H.action $ Control.MouseDown ev
+    _ <- H.query' cp6 unit $ H.action $ Control.MouseDown ev
     pure next
 
   MouseMove ev next -> do
-    H.query' cp6 unit $ H.action $ Control.MouseMove ev
+    _ <- H.query' cp6 unit $ H.action $ Control.MouseMove ev
     pure next
 
   MouseUp ev next -> do
-    H.query' cp6 unit $ H.action $ Control.MouseUp ev
+    _ <- H.query' cp6 unit $ H.action $ Control.MouseUp ev
     pure next
 
   DoubleClick ev next -> do
-    H.query' cp6 unit $ H.action $ Control.DoubleClick ev
+    _ <- H.query' cp6 unit $ H.action $ Control.DoubleClick ev
     pure next
 
   OpenColumnConfig' c next -> do

@@ -467,7 +467,7 @@ eval = case _ of
 
   StartEdit mChar next -> do
     dataCol <- gets _.input.dataCol
-    case dataCol ^. dataColType of
+    _ <- case dataCol ^. dataColType of
       DataNumber ->
         H.query' cp2 (SlotSub SlotRoot) $
         H.action $ EditBox.StartEdit mChar
