@@ -303,21 +303,23 @@ parseType' :: Parser SourceType
 parseType' = P.choice
   [ withSource (TypeVar <$> identifier)
   , withSource (TypeConstructor <$> tyname)
+  , parseRowType
   , parseRecordType
   , parens parseType
   ]
 
+parseRowType :: Parser SourceType
+parseRowType = withSource $ do
+  ref <- Ref <$> (P.try hashSign' *> reference)
+  pure $ inj $ TypeRow $ InRef ref
+
 parseRecordType :: Parser SourceType
-parseRecordType = braces $ do
-  (span, rows) <- withSpan parseRows
-  pure $ spanTypeApp (spanTypeConstructor (span, "Record")) rows
-  where
-  parseRows = do
-    rows <- P.sepBy1 ((,) <$> identifier <* colon <*> parseType) comma
-    (endSpan, end) <- withSpan $ P.option RecordNil $ do
-      _ :< t <- indented *> pipe *> indented *> parseType
-      pure t
-    pure $ foldr (\(ref, ty) rest -> spanRecordCons ref ty rest) (endSpan :< end) rows
+parseRecordType = withSource $ map (inj . TypeRecord) parseFields
+
+parseFields :: Parser (Map Text SourceType)
+parseFields = braces $ do
+  fields <- P.sepBy1 ((,) <$> identifier <* colon <*> parseType) comma
+  pure $ Map.fromList fields
 
 parsePolyType :: Parser SourcePolyType
 parsePolyType = do
@@ -329,5 +331,18 @@ parsePolyType = do
   pure $ ForAll vars preds ty
 
 parseConstraint :: Parser SourceConstraint
-parseConstraint =
-  (IsIn <$> (indented *> tyname) <*> parseType) <* indented <* rfatArrow
+parseConstraint = P.choice
+  [ parseClassConstraint
+  , parseFieldConstraint
+  ] P.<?> "constraint"
+
+parseClassConstraint :: Parser SourceConstraint
+parseClassConstraint =
+  (IsIn <$> (indented *> P.try tyname) <*> parseType) <* indented <* rfatArrow
+
+parseFieldConstraint :: Parser SourceConstraint
+parseFieldConstraint = do
+  v <- indented *> withSource (TypeVar <$> P.try identifier)
+  fields <- parseFields
+  indented *> rfatArrow
+  pure (HasFields fields v)

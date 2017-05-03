@@ -27,7 +27,6 @@ import           Lib.Compiler.AST.Position
 data KindF a
   = KindType
   | KindFun a a
-  | KindRecord a
   | KindUnknown Int
   deriving (Functor, Foldable, Traversable, Show)
 
@@ -38,9 +37,6 @@ kindType = Fix KindType
 
 kindFun :: Kind -> Kind -> Kind
 kindFun f arg = Fix (KindFun f arg)
-
-kindRecord :: Kind -> Kind
-kindRecord = Fix . KindRecord
 
 kindUnknown :: Int -> Kind
 kindUnknown = Fix . KindUnknown
@@ -57,9 +53,8 @@ data TypeF a
   = TypeVar Text
   | TypeConstructor Text
   | TypeApp a a
-  | RecordCons Text a a
-  | RecordNil
-  | TypeRow (Id Table)
+  | TypeRow (RefOrId Table)
+  | TypeRecord (Map Text a)
   deriving (Functor, Foldable, Traversable, Show)
 
 type Type = Fix TypeF
@@ -74,14 +69,11 @@ typeConstructor = Fix . TypeConstructor
 typeApp :: Type -> Type -> Type
 typeApp a b = Fix (TypeApp a b)
 
-recordCons :: Text -> Type -> Type -> Type
-recordCons f t rest = Fix (RecordCons f t rest)
-
-recordNil :: Type
-recordNil = Fix RecordNil
-
-typeRow :: Id Table -> Type
+typeRow :: RefOrId Table -> Type
 typeRow = Fix . TypeRow
+
+typeRecord :: Map Text Type -> Type
+typeRecord = Fix . TypeRecord
 
 spanTypeConstructor :: (Span, Text) -> SourceType
 spanTypeConstructor (span, t) = span :< TypeConstructor t
@@ -89,10 +81,6 @@ spanTypeConstructor (span, t) = span :< TypeConstructor t
 spanTypeApp :: SourceType -> SourceType -> SourceType
 spanTypeApp f@(fspan :< _) arg@(argspan :< _) =
   spanUnion fspan argspan :< TypeApp f arg
-
-spanRecordCons :: Text -> SourceType -> SourceType -> SourceType
-spanRecordCons f t@(tspan :< _) r@(rspan :< _) =
-  spanUnion tspan rspan :< RecordCons f t r
 
 --------------------------------------------------------------------------------
 
@@ -107,20 +95,16 @@ data OrdType
   | OTConstructor Text
   | OTApp OrdType OrdType
   | OTRecord (Map Text OrdType)
+  | OTRow (RefOrId Table)
   deriving (Eq, Ord)
 
 toOrdType :: Type -> OrdType
-toOrdType (Fix t) = case t of
+toOrdType = cata $ \case
   TypeVar x -> OTVar x
   TypeConstructor x -> OTConstructor x
-  TypeApp (Fix (TypeConstructor "Record")) r -> OTRecord $ Map.fromList $ go r
-  TypeApp f arg -> OTApp (toOrdType f) (toOrdType arg)
-  _ -> error "toOrdType: encountered RecordCons or RecordNil"
-  where
-  go (Fix t') = case t' of
-    RecordCons field ty rest -> (field, toOrdType ty) : go rest
-    RecordNil                -> []
-    _ -> error "toOrdType: did not encounter RecordCons or RecordNil"
+  TypeApp f arg -> OTApp f arg
+  TypeRecord m -> OTRecord m
+  TypeRow t -> OTRow t
 
 --------------------------------------------------------------------------------
 
@@ -135,12 +119,15 @@ type SourcePolyType = PolyTypeF SourceType
 normalizePoly :: PolyType -> PolyType
 normalizePoly (ForAll as cs t) = ForAll as' cs' t'
   where
+  -- Order is important therefore we can't use `getFtvs`
   getVarsT = cata $ \case
     TypeVar v -> [v]
+    TypeConstructor _ -> []
     TypeApp f arg -> f <> arg
-    RecordCons _ a b -> a <> b
-    _ -> []
+    TypeRecord m -> mconcat $ Map.elems m
+    TypeRow _ -> []
   getVarsC (IsIn _ ty) = getVarsT ty
+  getVarsC (HasFields m ty) = mconcat (Map.elems $ map getVarsT m) <> getVarsT ty
   getVarsCS = nub . join . map getVarsC
   vs = [ v | v <- nub (getVarsCS (sort cs) <> getVarsT t), v `elem` as ]
   as' = map snd zipped
@@ -154,9 +141,10 @@ quantify as cs t = ForAll as' cs t
   where
   as' = [a | a <- as, a `elem` (getFtvs cs <> getFtvs t)]
 
--- | Class and type, which should be member of the class
 data ConstraintF t
+  -- | Class and type that should be member of the class
   = IsIn Text t
+  | HasFields (Map Text t) t
   deriving (Eq, Ord, Functor, Foldable, Traversable, Show)
 
 type Constraint = ConstraintF Type
@@ -177,10 +165,10 @@ class HasFreeTypeVars t where
 
 instance HasFreeTypeVars Type where
   getFtvs = cata $ \case
-    TypeVar v        -> Set.singleton v
-    TypeApp f arg    -> f `Set.union` arg
-    RecordCons _ a b -> a `Set.union` b
-    _ -> Set.empty
+    TypeVar v     -> Set.singleton v
+    TypeApp f arg -> f `Set.union` arg
+    TypeRecord m  -> Set.unions $ Map.elems m
+    _             -> Set.empty
 
 instance HasFreeTypeVars a => HasFreeTypeVars [a] where
   getFtvs = foldr Set.union Set.empty . map getFtvs
@@ -190,7 +178,8 @@ instance HasFreeTypeVars t => HasFreeTypeVars (PolyTypeF t) where
     (getFtvs t `Set.union` getFtvs cs) `Set.difference` Set.fromList as
 
 instance HasFreeTypeVars t => HasFreeTypeVars (ConstraintF t) where
-  getFtvs (IsIn _ t) = getFtvs t
+  getFtvs (IsIn _ t)      = getFtvs t
+  getFtvs (HasFields m t) = getFtvs (Map.elems m) `Set.union` getFtvs t
 
 instance HasFreeTypeVars v => HasFreeTypeVars (Map k v) where
   getFtvs = getFtvs . Map.elems
@@ -229,7 +218,11 @@ instance TypeSubstitutable a => TypeSubstitutable [a] where
   applyTypeSubst s = map (applyTypeSubst s)
 
 instance TypeSubstitutable a => TypeSubstitutable (ConstraintF a) where
-  applyTypeSubst s (IsIn c t) = IsIn c (applyTypeSubst s t)
+  applyTypeSubst s = \case
+    IsIn c t ->
+      IsIn c (applyTypeSubst s t)
+    HasFields m t ->
+      HasFields (applyTypeSubst s m) (applyTypeSubst s t)
 
 instance TypeSubstitutable a => TypeSubstitutable (PolyTypeF a) where
   applyTypeSubst s = map (applyTypeSubst s)

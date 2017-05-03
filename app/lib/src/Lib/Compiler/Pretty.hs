@@ -34,7 +34,6 @@ prettyKind = show . cata kindDoc
   kindDoc = \case
     KindType      -> textStrict "Type"
     KindFun f arg -> parens $ f <+> textStrict "->" <+> arg
-    KindRecord t  -> char '#' <+> t
     KindUnknown v -> int v
 
 prettyType :: Type -> Text
@@ -79,7 +78,13 @@ intermedDoc = intermed
 --------------------------------------------------------------------------------
 
 constraintDoc :: ConstraintF Doc -> Doc
-constraintDoc (IsIn cls ty) = textStrict cls <+> ty
+constraintDoc = \case
+  IsIn cls ty ->
+    textStrict cls <+> parens ty
+  HasFields m t ->
+    t <+> recordDoc (map goField (Map.toList m))
+    where
+      goField (k, v) = textStrict k <> char ':' <+> v
 
 polyTypeDoc :: PolyTypeF Doc -> Doc
 polyTypeDoc (ForAll vars cs ty) =
@@ -92,19 +97,19 @@ polyTypeDoc (ForAll vars cs ty) =
 
 constraintsDoc :: [ConstraintF Doc] -> Doc
 constraintsDoc = foldr go empty where
-  go (IsIn cls t) rest = textStrict cls <+> parens t <+> textStrict "=>" <+> rest
+  go c rest = constraintDoc c <+> textStrict "=>" <+> rest
 
 typeDoc :: TypeF (Cofree TypeF Doc) -> Doc
 typeDoc = \case
   TypeVar v -> textStrict v
   TypeConstructor c -> textStrict c
-  TypeRow t -> braces $ textStrict $ show t
   TypeApp (_ :< TypeApp (arr :< TypeConstructor "->") (a :< _)) (b :< _) ->
     parens (a <+> arr <+> b)
   TypeApp (f :< _) (arg :< _) -> parens (f <+> arg)
-  RecordCons field (t :< _) (rest :< _) ->
-    textStrict field <+> colon <+> t <> comma <+> rest
-  RecordNil -> empty
+  TypeRow t -> textStrict "#" <> textStrict (show t)
+  TypeRecord m -> recordDoc (map goField (Map.toList m))
+    where
+      goField (k, v :< _) = textStrict k <> char ':' <+> v
 
 declarationDoc :: DeclarationF Doc -> Doc
 declarationDoc = \case
@@ -120,9 +125,9 @@ declarationDoc = \case
     where
     goSupers = foldr goSuper empty supers
     goSuper (n, p) rest = textStrict n <+> textStrict p <+> textStrict "=>" <+> rest
-  InstanceDecl (IsIn cls t) cs vals ->
+  InstanceDecl c cs vals ->
     textStrict "instance" <+> constraintsDoc cs <+>
-      textStrict cls <+> t <+> textStrict "where" <$$>
+      constraintDoc c <+> textStrict "where" <$$>
     indent 2 (vsep vals)
   TypeDecl name poly ->
     textStrict name <+> colon <+> polyTypeDoc poly

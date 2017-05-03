@@ -97,6 +97,17 @@ instance FromJSON (Ref a)
 
 --
 
+data RefOrId a
+  = InRef (Ref a)
+  | InId (Id a)
+  deriving (Generic, Eq, Ord)
+
+instance Show a => Show (RefOrId a) where
+  show (InRef r) = show r
+  show (InId i)  = show i
+
+--
+
 newtype Number = Number Double
   deriving (Num, Fractional, Eq, Ord)
 

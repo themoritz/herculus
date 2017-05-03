@@ -189,10 +189,11 @@ data PlaceholderF a
   -- | Class, type, method name. Translate to dictionary selection in dictionary
   -- that's in scope.
   | MethodPlaceholder Span (ConstraintF a) Text
-  -- | Function name, type. Recursively defined functions. Once the function
-  -- has been generalized, convert this to application of
-  -- `DictionaryPlaceholder`s.
+  -- | Function name, type. Recursively defined functions. Once the function has
+  -- been generalized, convert this to application of `DictionaryPlaceholder`s.
   | RecursiveCallPlaceholder Span Text
+  -- | Field, type. Similar role as method placeholder.
+  | AccessorPlaceholder Span Text a
   deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 dictionaryPlaceholder
@@ -207,6 +208,11 @@ recursiveCallPlaceholder
   :: PlaceholderF :<: f => Span -> Text -> Fix f
 recursiveCallPlaceholder span name =
   Fix $ inj $ RecursiveCallPlaceholder span name
+
+accessorPlaceholder
+  :: PlaceholderF :<: f => Span -> Text -> Fix f -> Fix f
+accessorPlaceholder span field t =
+  Fix $ inj $ AccessorPlaceholder span field t
 
 --------------------------------------------------------------------------------
 

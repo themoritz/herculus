@@ -20,8 +20,10 @@ import           Lib.Prelude
 import           Control.Lens              hiding ((:<))
 import           Control.Monad.Free
 
+import           Data.Align                (align)
 import           Data.Functor.Foldable
 import qualified Data.Map                  as Map
+import           Data.These                (These (..))
 
 import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Env
@@ -277,7 +279,6 @@ runCheck env goResolve =
           (KindFun f arg, KindFun f' arg') -> do
             unify f f'
             unify arg arg'
-          (KindRecord x, KindRecord y) -> unify x y
           _ -> compileError span $
             "Cannot match kind `" <>
             prettyKind a' <> "` with `" <>
@@ -315,19 +316,18 @@ runCheck env goResolve =
           (TypeVar x, _)         -> bind x b'
           (_, TypeVar y)         -> bind y a'
           (TypeConstructor x, TypeConstructor y) | x == y -> pure ()
-          (TypeRow x, TypeRow y) | x == y -> pure ()
           (TypeApp f arg, TypeApp f' arg') -> do
             unify f f'
             unify arg arg'
-          (RecordCons f t rest, RecordCons f' t' rest')
-            | f == f' -> do
-                unify t t'
-                unify rest rest'
-            | otherwise -> do
-                deferredRest <- lift $ foldCheck go freshType
-                unify rest (recordCons f' t' deferredRest)
-                unify rest' (recordCons f t deferredRest)
-          (RecordNil, RecordNil) -> pure ()
+          (TypeRow x, TypeRow y) | x == y -> pure ()
+          (TypeRecord m, TypeRecord m') -> do
+            let unifyField k = \case
+                  These t t' -> unify t t'
+                  _ -> compileError span $
+                    "Cannot unify record types `" <>
+                    prettyType a' <> "` with `" <>
+                    prettyType b' <> "` because of field `" <> k <> "`."
+            void $ Map.traverseWithKey unifyField $ align m m'
           _ -> compileError span $
             "Cannot match type `" <>
             prettyType a' <> "` with `" <>

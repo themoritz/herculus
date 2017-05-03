@@ -44,9 +44,6 @@ primKindEnv = Map.fromList
   , ( "Array"
     , kindUnary
     )
-  , ( "Record"
-    , kindFun (kindRecord kindType) kindType
-    )
   ]
 
 --------------------------------------------------------------------------------
@@ -95,7 +92,7 @@ typeOfDataType = \case
   DataString   -> tyString
   DataNumber   -> tyNumber
   DataTime     -> tyDateTime
-  DataRowRef t -> typeRow t
+  DataRowRef t -> typeRow $ InId t
   DataList t   -> typeApp tyList $ typeOfDataType t
   DataMaybe t  -> typeApp tyMaybe $ typeOfDataType t
 

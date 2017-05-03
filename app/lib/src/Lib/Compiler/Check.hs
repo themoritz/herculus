@@ -11,13 +11,16 @@ import qualified Control.Comonad.Trans.Cofree as T
 import           Control.Lens                 hiding ((:<))
 import           Control.Monad.Trans.Maybe
 
+import           Data.Align                   (align)
 import           Data.Functor.Foldable
 import           Data.List                    (partition)
 import qualified Data.Map                     as Map
 import           Data.Maybe                   (fromJust)
 import qualified Data.Set                     as Set
+import           Data.These                   (These (..))
 
 import           Lib.Model.Column
+import           Lib.Types
 
 import           Lib.Compiler.AST
 import           Lib.Compiler.AST.Common
@@ -56,12 +59,10 @@ inferType = cataM $ \case
       kres <- freshKind
       unifyKinds span kc (kindFun karg kres)
       pure kres
-    RecordCons _ k r -> do
-      unifyKinds span (kindRecord k) r
-      pure r
-    RecordNil -> do
-      k <- freshKind
-      pure (kindRecord k)
+    TypeRow _ ->
+      pure kindType
+    TypeRecord _ ->
+      pure kindType
 
 --------------------------------------------------------------------------------
 
@@ -117,7 +118,10 @@ checkExpr' t span = \case
 checkRef'
   :: Type -> Span -> RefTextF SourceAst
   -> Check (Intermed, [ConstraintToSolve])
-checkRef' t span = undefined
+checkRef' t span ref = do
+  (e, t', cs) <- inferRef' span ref
+  unifyTypes span t' t
+  pure (e, cs)
 
 --------------------------------------------------------------------------------
 
@@ -193,17 +197,13 @@ inferExpr' span = \case
 
   Accessor e field -> do
     (e', eType, cs) <- inferExpr e
-    -- Convert a row type to a record type
-    -- FIXME: This does not work because eType might not be unified to be
-    -- TypeRow yet. Maybe use placeholder mechanism or a typeclass for that.
-    t <- case eType of
-      Fix (TypeRow t) -> getTableRecordType t
-      other           -> pure other
     resultType <- freshType
-    tailType <- freshType
-    let recordType = typeApp tyRecord $ recordCons field resultType tailType
-    unifyTypes' span t recordType
-    pure (accessor e' field, resultType, cs)
+    let
+      fields = Map.singleton field resultType
+      placeholder = accessorPlaceholder span field (injFix eType)
+    pure ( app (app placeholder e') (literal $ StringLit field)
+         , resultType
+         , (span, HasFields fields eType) : cs )
 
 inferLiteral'
   :: LiteralF SourceAst -> Check (Intermed, Type, [ConstraintToSolve])
@@ -213,11 +213,8 @@ inferLiteral' = \case
   StringLit s      -> pure (literal $ StringLit s, tyString, [])
   RecordLit fields -> do
     fields' <- traverse inferExpr fields
-    let ty = typeApp tyRecord $
-             Map.foldrWithKey recordCons recordNil $
-             map (view _2) fields'
     pure ( literal $ RecordLit (map (view _1) fields')
-         , ty
+         , typeRecord $ map (view _2) fields'
          , join $ Map.elems $ map (view _3) fields' )
 
 inferRef'
@@ -227,7 +224,7 @@ inferRef' span = \case
     Nothing -> compileError span $ "Cannot find table `" <> show t <> "`."
     Just i ->
       pure ( tableRef i
-           , typeApp tyList (typeRow i)
+           , typeApp tyList (typeRow $ InId i)
            , [] )
   ColumnRef c -> resolveColumnRef c >>= \case
     Nothing -> compileError span $ "Cannot find column `" <> show c <> "`."
@@ -869,22 +866,18 @@ matchType t1 t2 = runMaybeT $ match t1 t2
   match (Fix a) b'@(Fix b) = case (a, b) of
     (TypeVar x, _) -> pure $ Map.singleton x b'
     (TypeConstructor x, TypeConstructor y) | x == y -> pure Map.empty
-    (TypeRow x, TypeRow y) | x == y -> pure Map.empty
     (TypeApp f arg, TypeApp f' arg') -> do
       sf <- match f f'
       sarg <- match arg arg'
       hoistMaybe $ typeSubstMerge sf sarg
-    (RecordCons f t rest, RecordCons f' t' rest')
-      | f == f' -> do
-          st <- match t t'
-          srest <- match rest rest'
-          hoistMaybe $ typeSubstMerge st srest
-      | otherwise -> do
-          deferredRest <- lift freshType
-          srest <- match rest (recordCons f' t' deferredRest)
-          srest' <- match rest' (recordCons f t deferredRest)
-          hoistMaybe $ typeSubstMerge  srest srest'
-    (RecordNil, RecordNil) -> pure $ Map.empty
+    (TypeRow x, TypeRow y) | x == y -> pure Map.empty
+    (TypeRecord m, TypeRecord m') -> do
+      let matchField s (k, th) = case th of
+            These t t' -> do
+              s' <- match t t'
+              hoistMaybe $ typeSubstMerge s s'
+            _ -> hoistMaybe Nothing
+      foldM matchField Map.empty $ Map.toList $ align m m'
     _ -> hoistMaybe Nothing
   hoistMaybe :: Applicative m => Maybe a -> MaybeT m a
   hoistMaybe = MaybeT . pure

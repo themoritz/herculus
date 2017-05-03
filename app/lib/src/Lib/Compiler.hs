@@ -93,7 +93,7 @@ testDataCol = DataCol
 testResolveInterp :: Monad m => Resolver m
 testResolveInterp = \case
   GetTableRecordType _ reply ->
-    pure $ reply $ typeApp tyRecord $ recordCons "A" tyNumber recordNil
+    pure $ reply $ typeRecord (Map.singleton "A" tyNumber)
   ResolveColumnOfTableRef _ _ reply ->
     pure $ reply $ Just (nullObjectId, nullObjectId, testDataCol)
   ResolveColumnRef _ reply ->
@@ -115,7 +115,7 @@ testGetInterp = \case
 voidResolver :: Monad m => Resolver m
 voidResolver = \case
   GetTableRecordType _ reply ->
-    pure $ reply $ typeApp tyRecord recordNil
+    pure $ reply $ typeRecord Map.empty
   ResolveColumnOfTableRef _ _ reply ->
     pure $ reply Nothing
   ResolveColumnRef _ reply ->
