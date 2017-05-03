@@ -19,7 +19,7 @@ import           Lib.Model.Table
 import           Lib.Types
 
 import qualified Lib.Compiler.AST             as A
-import           Lib.Compiler.Pretty          (record)
+import           Lib.Compiler.Pretty          (recordDoc)
 
 data Literal
   = NumberLit Double
@@ -59,7 +59,7 @@ literalDoc = \case
   NumberLit n      -> double n
   IntegerLit i     -> integer i
   StringLit s      -> dquotes $ textStrict s
-  RecordLit fields -> record (map goField (Map.toList $ map exprDoc fields))
+  RecordLit fields -> recordDoc (map goField (Map.toList $ map exprDoc fields))
     where
       goField (k, v) = textStrict k <> char ':' <+> v
 

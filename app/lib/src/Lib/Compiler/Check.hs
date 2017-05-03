@@ -65,6 +65,62 @@ inferType = cataM $ \case
 
 --------------------------------------------------------------------------------
 
+-- | Top-down type checking
+checkExpr :: Type -> SourceAst -> Check (Intermed, [ConstraintToSolve])
+checkExpr t (span :< a) =
+  ast undefined (checkExpr' t span) undefined undefined (checkRef' t span) a
+
+checkExpr'
+  :: Type -> Span -> ExprF SourceAst
+  -> Check (Intermed, [ConstraintToSolve])
+checkExpr' t span = \case
+  Abs (hoistCofree unsafePrj -> binder) body
+    | Arrow argType resultType <- t -> do
+        binderDict <- checkBinder argType binder
+        (bodyExpr, bodyCs) <-
+          inExtendedTypeEnv binderDict $ checkExpr resultType body
+        pure (abs (injFix $ stripAnn binder) bodyExpr, bodyCs)
+
+  App f@(fSpan :< _) arg -> do
+    (fExpr, fType, fCs) <- inferExpr f
+    s <- getTypeSubst
+    let fType' = applyTypeSubst s fType
+    case fType' of
+      Arrow argType resultType -> do
+        unifyTypes' span resultType t
+        (argExpr, argCs) <- checkExpr argType arg
+        pure (app fExpr argExpr, fCs <> argCs)
+      _ -> compileError fSpan $
+        "Expected function but got `" <> prettyType fType' <> "`."
+
+  Case scrutinee alts -> do
+    (scrutExpr, scrutType, scrutCs) <- inferExpr scrutinee
+    alts' <- for alts $ \(hoistCofree unsafePrj -> binder, e) -> do
+      binderDict <- checkBinder scrutType binder
+      (e', cs) <- inExtendedTypeEnv binderDict $ checkExpr t e
+      pure ((injFix $ stripAnn binder, e'), cs)
+    pure ( case' scrutExpr $ map fst alts'
+         , scrutCs <> join (map snd alts') )
+
+  Let definitions rest -> do
+    (dict, ds) <- inferDefinitionGroup [] definitions
+    inExtendedTypeEnv (envFromDefinitions dict) $ do
+      (restExpr, cs) <- checkExpr t rest
+      pure ( let' (map (view _1 &&& view _2) dict) restExpr
+           , ds <> cs )
+
+  other -> do
+    (e, t', cs) <- inferExpr' span other
+    unifyTypes' span t' t
+    pure (e, cs)
+
+checkRef'
+  :: Type -> Span -> RefTextF SourceAst
+  -> Check (Intermed, [ConstraintToSolve])
+checkRef' t span = undefined
+
+--------------------------------------------------------------------------------
+
 -- | Infer the type of an expression. Also generates a transformed AST that
 -- may contain placeholders, and a list of deferred constraints.
 inferExpr :: SourceAst -> Check (Intermed, Type, [ConstraintToSolve])
@@ -79,7 +135,7 @@ inferExpr' span = \case
 
   Abs (hoistCofree unsafePrj -> binder) e -> do
     argType <- freshType
-    binderDict <- inferBinder argType binder
+    binderDict <- checkBinder argType binder
     (e', resultType, cs) <- inExtendedTypeEnv binderDict $ inferExpr e
     pure (abs (injFix $ stripAnn binder) e', argType --> resultType, cs)
 
@@ -118,7 +174,7 @@ inferExpr' span = \case
     resultType <- freshType
     (scrutExpr, scrutType, scrutCs) <- inferExpr scrutinee
     alts' <- for alts $ \(hoistCofree unsafePrj -> binder, e) -> do
-      binderDict <- inferBinder scrutType binder
+      binderDict <- checkBinder scrutType binder
       (e', eType, cs) <- inExtendedTypeEnv binderDict $ inferExpr e
       unifyTypes' span resultType eType
       pure ((injFix $ stripAnn binder, e'), cs)
@@ -151,7 +207,7 @@ inferExpr' span = \case
 
 inferLiteral'
   :: LiteralF SourceAst -> Check (Intermed, Type, [ConstraintToSolve])
-inferLiteral' lit = case lit of
+inferLiteral' = \case
   NumberLit n      -> pure (literal $ NumberLit n, tyNumber, [])
   IntegerLit i     -> pure (literal $ IntegerLit i, tyInteger, [])
   StringLit s      -> pure (literal $ StringLit s, tyString, [])
@@ -216,20 +272,18 @@ checkExplicitDefinition
   :: (Text, SourceAst, PolyType)
   -> Check ((Text, Intermed, PolyType), [ConstraintToSolve])
 checkExplicitDefinition (name, e@(span :< _), polyGiven) = do
-  (e', t, cs) <- inferExpr e
   (csGiven, tGiven) <- instantiate polyGiven
-  unifyTypes' span t tGiven
+  (e', cs) <- checkExpr tGiven e
 
   s <- getTypeSubst
   env <- map etPoly . view checkEnvTypes <$> getCheckEnv
   let
     fixed = getFtvs (applyTypeSubst s env)
     cs' = applyTypeSubst s cs
-    t' = applyTypeSubst s t
     csGiven' = applyTypeSubst s csGiven
     tGiven' = applyTypeSubst s tGiven
     generic = getFtvs tGiven' Set.\\ fixed
-    poly = quantify (Set.toList generic) csGiven' t'
+    poly = quantify (Set.toList generic) csGiven' tGiven'
   ps' <- filterM (\c -> not <$> entail' csGiven' (snd c)) cs'
   (deferred, retained) <- split fixed generic ps'
 
@@ -295,8 +349,8 @@ inferImplicitDefinitions defs = do
 
     pure (resolved, deferred)
 
-inferBinder :: Type -> SourceBinder -> Check (Map Text EnvType)
-inferBinder expected (span :< b) = case b of
+checkBinder :: Type -> SourceBinder -> Check (Map Text EnvType)
+checkBinder expected (span :< b) = case b of
   VarBinder x ->
     pure $ Map.singleton x $ EnvType (ForAll [] [] expected) Default
   WildcardBinder -> pure $ Map.empty
@@ -311,7 +365,7 @@ inferBinder expected (span :< b) = case b of
         "` expects " <> show (length args) <>
         " arguments but was given " <> show (length binders) <> "."
       unifyTypes' span expected result
-      Map.unions <$> zipWithM inferBinder (reverse args) binders
+      Map.unions <$> zipWithM checkBinder (reverse args) binders
   where
   peelArgs :: Type -> ([Type], Type)
   peelArgs = go []
@@ -368,7 +422,7 @@ resolvePlaceholders recConstrs =
         let go :: Text -> Check (Maybe Intermed)
             go c = lookupInstanceDict (ByTypeVar c v) >>= \case
               Nothing -> do
-                subs <- getSubClasses cls
+                subs <- getSubClasses c
                 mp <- msum <$> traverse go subs
                 pure $ map (\p -> accessor p c) mp
               Just dict -> pure $ Just $ var dict
@@ -472,7 +526,8 @@ toHeadNormal c'@(span, c@(IsIn cls t))
 
 instantiateInstance :: Instance -> Check ([Constraint], Type)
 instantiateInstance (cs, IsIn _ t) =
-  instantiate (ForAll (Set.toList $ getFtvs t) cs t)
+  let as = Set.toList $ getFtvs t <> getFtvs cs in
+  instantiate (ForAll as cs t)
 
 instantiate :: PolyType -> Check ([Constraint], Type)
 instantiate (ForAll as cs t) = do
@@ -539,8 +594,27 @@ checkModule decls = do
           env <- getCheckEnv
           pure (env, moduleExprs)
 
-checkFormula :: Formula -> Check (Core.Expr, Type)
-checkFormula (decls, expr@(span :< _)) = do
+checkFormula :: Type -> Formula -> Check Core.Expr
+checkFormula tGiven (decls, expr@(span :< _)) = do
+  (env, exprs) <- checkModule decls
+  inExtendedEnv env $ do
+    (i, cs) <- checkExpr tGiven expr
+    s <- getTypeSubst
+    let t' = applyTypeSubst s tGiven
+    typeEnv <- map etPoly . view checkEnvTypes <$> getCheckEnv
+    let fixed = getFtvs (applyTypeSubst s typeEnv)
+    let generic = getFtvs t' Set.\\ fixed
+    (ds, rs) <- split fixed generic (applyTypeSubst s cs)
+    let cs' = map snd ds <> rs
+    unless (null cs') $ internalError (Just span) $
+      "Formula expression still has the following deferred constraints: " <>
+      prettyConstraints (map snd cs)
+    i' <- resolvePlaceholders Map.empty i
+    c <- compileIntermed i'
+    pure $ Core.Let (Map.toList exprs) c
+
+inferFormula :: Formula -> Check (Core.Expr, Type)
+inferFormula (decls, expr@(span :< _)) = do
   (env, exprs) <- checkModule decls
   inExtendedEnv env $ do
     (i, t, cs) <- inferExpr expr
@@ -637,22 +711,34 @@ buildInstanceDict ExInstanceDecl {..} = do
           Nothing -> compileError iSpan $
             "No instance for superclass `" <> super <> "` implemented."
           Just d -> pure (super, var d)
-      -- Check constraints
-      csDict <- for iConstraints $ \(IsIn cls' (stripAnn -> t')) -> do
+      -- Create new type variables for the instance constraints and head
+      (cs, freshHeadType) <- instantiateInstance
+        ( map (map stripAnn) iConstraints
+        , map stripAnn iHead )
+      -- Check the method implementations
+      interims <- for iMethods $ \ExValueDecl {..} -> do
+        Just (EnvType poly _, _) <- lookupType vName
+        let ForAll _ _ givenType =
+              applyTypeSubst (Map.singleton param freshHeadType) poly
+        (e, cs') <- checkExpr givenType vExpr
+        -- TODO: make sure `cs'` equals the instance constraints
+        pure (vName, e)
+      -- Check constraints and build dict
+      -- Need to apply substitution to the constraints since the new type
+      -- vairables might have been unified during checking.
+      s <- getTypeSubst
+      csDict <- for (applyTypeSubst s cs) $ \(IsIn cls' t') -> do
         n <- freshName
         v <- flip cata t' $ \case
           TypeVar v -> pure v
           _ -> compileError iSpan $
             "Type of instance constraint must be type variable."
         pure (ByTypeVar cls' v, n)
-      result <- inExtendedInstanceEnv (Map.fromList csDict) $ do
-        for iMethods $ \ExValueDecl {..} -> do
-          (e', t', cs) <- inferExpr vExpr
-          Just (EnvType (ForAll _ _ givenT) _, _) <- lookupType vName
-          unifyTypes' vSpan t' (applyTypeSubst (Map.singleton param t) givenT)
-          -- TODO: make sure `cs` equals the instance constraints
-          e'' <- resolvePlaceholders Map.empty e'
-          pure (vName, e'')
+      -- Resolve placeholders
+      result <- inExtendedInstanceEnv (Map.fromList csDict) $
+        for interims $ \(name, e) -> do
+          e' <- resolvePlaceholders Map.empty e
+          pure (name, e')
       -- Build instance dictionaries
       let record = literal $ RecordLit $ Map.union
             (Map.fromList superDicts)

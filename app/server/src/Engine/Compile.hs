@@ -22,7 +22,6 @@ import           Lib.Compiler.Check.Monad  (ResolveF (..), Resolver)
 import           Lib.Compiler.Core
 import           Lib.Compiler.Env
 import           Lib.Compiler.Error
-import           Lib.Compiler.Pretty
 import           Lib.Compiler.Type
 import           Lib.Model
 import           Lib.Model.Column
@@ -68,21 +67,15 @@ checkDataCol
   :: MonadEngine m
   => Id Table -> Id Column -> DataType -> Text -> m DataCompileResult
 checkDataCol t c dt src = do
-  res <- compileFormula src (mkResolver t) preludeCheckEnv
+  let colType = typeOfDataType dt
+  res <- compileFormulaWithType src colType (mkResolver t) preludeCheckEnv
   case res of
     Left err -> abort c [err]
-    Right (expr, inferredType) -> do
-      let colType = typeOfDataType dt
-      if inferredType /= colType
-        then let msg = "Inferred type `" <> prettyType inferredType <>
-                       "` does not match column type `" <>
-                       prettyType colType <> "`."
-             in abort c [Error msg voidSpan]
-        else do
-          let deps = collectCodeDependencies expr
-          cycles <- graphSetCodeDependencies c deps
-          if cycles then abort c [Error "Dependency graph has cycles." voidSpan]
-                    else pure $ CompileResultOk expr
+    Right expr -> do
+      let deps = collectCodeDependencies expr
+      cycles <- graphSetCodeDependencies c deps
+      if cycles then abort c [Error "Dependency graph has cycles." voidSpan]
+                else pure $ CompileResultOk expr
 
 checkReportCol
   :: MonadEngine m

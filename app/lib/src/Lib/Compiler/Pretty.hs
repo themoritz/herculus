@@ -9,7 +9,8 @@ module Lib.Compiler.Pretty
   , prettyConstraints
   , prettyAst
   , prettyIntermed
-  , record
+  , prettyBinder
+  , recordDoc
   ) where
 
 import           Lib.Prelude                  hiding (empty)
@@ -47,6 +48,9 @@ prettyConstraint = show . constraintDoc . map (histo typeDoc)
 
 prettyConstraints :: [Constraint] -> Text
 prettyConstraints = show . constraintsDoc . map (map (histo typeDoc))
+
+prettyBinder :: Binder -> Text
+prettyBinder = show . cata binderDoc
 
 --------------------------------------------------------------------------------
 
@@ -144,12 +148,12 @@ literalDoc = \case
   NumberLit n      -> double n
   IntegerLit i     -> integer i
   StringLit s      -> dquotes $ textStrict s
-  RecordLit fields -> record (map goField (Map.toList fields))
+  RecordLit fields -> recordDoc (map goField (Map.toList fields))
     where
       goField (k, v) = textStrict k <> char ':' <+> v
 
-record :: [Doc] -> Doc
-record = encloseSep (textStrict "{ ") (textStrict " }") (textStrict ", ")
+recordDoc :: [Doc] -> Doc
+recordDoc = encloseSep (textStrict "{ ") (textStrict " }") (textStrict ", ")
 
 exprDoc :: ExprF Doc -> Doc
 exprDoc = \case

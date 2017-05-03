@@ -38,7 +38,14 @@ compileFormula
   -> m (Either Error (Expr, Type))
 compileFormula src resolver env = runExceptT $ do
   e <- hoistError $ parse src (mkCheckEnvOpTable env) parseFormula
-  ExceptT $ runCheck env resolver $ checkFormula e
+  ExceptT $ runCheck env resolver $ inferFormula e
+
+compileFormulaWithType
+  :: Monad m => Text -> Type -> Resolver m -> CheckEnv
+  -> m (Either Error Expr)
+compileFormulaWithType src t resolver env = runExceptT $ do
+  e <- hoistError $ parse src (mkCheckEnvOpTable env) parseFormula
+  ExceptT $ runCheck env resolver $ checkFormula t e
 
 compileModule
   :: Monad m => Text -> Resolver m -> CheckEnv

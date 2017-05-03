@@ -60,7 +60,7 @@ checkTemplateChunk (span :< chunk) = case chunk of
     (e', eType, cs) <- inferExpr e
     -- TODO: Check `cs` is empty
     argType <- freshType
-    binderDict <- inferBinder argType binder
+    binderDict <- checkBinder argType binder
     body' <- inExtendedTypeEnv binderDict $ checkTemplate' body
     unifyTypes' span (typeApp tyList argType) eType
     pure $ tplFor (injFix $ stripAnn binder) e' body'
