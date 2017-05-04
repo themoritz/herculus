@@ -93,7 +93,7 @@ testDataCol = DataCol
 testResolveInterp :: Monad m => Resolver m
 testResolveInterp = \case
   GetTableRecordType _ reply ->
-    pure $ reply $ typeRecord (Map.singleton "A" tyNumber)
+    pure $ reply $ Map.singleton "A" tyNumber
   ResolveColumnOfTableRef _ _ reply ->
     pure $ reply $ Just (nullObjectId, nullObjectId, testDataCol)
   ResolveColumnRef _ reply ->
@@ -104,18 +104,18 @@ testResolveInterp = \case
 testGetInterp :: Monad m => Getter m
 testGetInterp = \case
   GetCellValue _ reply ->
-    pure $ reply $ Just $ VBool True
+    pure $ reply $ Just $ VNumber (Number 4.0)
   GetColumnValues _ reply ->
-    pure $ reply [Just $ VBool False]
+    pure $ reply [Just $ VNumber (Number 4.0)]
   GetTableRows _  reply ->
     pure $ reply [nullObjectId]
-  GetRowField _ _ reply ->
-    pure $ reply $ Just $ VBool True
+  GetRowRecord _ reply ->
+    pure $ reply $ Just $ Map.singleton "A" $ VNumber (Number 4.0)
 
 voidResolver :: Monad m => Resolver m
 voidResolver = \case
   GetTableRecordType _ reply ->
-    pure $ reply $ typeRecord Map.empty
+    pure $ reply Map.empty
   ResolveColumnOfTableRef _ _ reply ->
     pure $ reply Nothing
   ResolveColumnRef _ reply ->
@@ -131,8 +131,8 @@ voidGetter = \case
     pure $ reply []
   GetTableRows _  reply ->
     pure $ reply []
-  GetRowField _ _ reply ->
-    pure $ reply Nothing
+  GetRowRecord _ reply ->
+    pure $ reply $ Just Map.empty
 
 --------------------------------------------------------------------------------
 
@@ -152,19 +152,19 @@ testParseSpans src = withParsed src testOpTable parseModule $ \decls ->
 testCheck :: Text -> IO ()
 testCheck src = compileModule src testResolveInterp primCheckEnv >>= \case
   Left err -> putStrLn $ displayError src err
-  Right (_, code) -> do
-    void $ flip Map.traverseWithKey code $ \n core -> do
+  Right (_, code) ->
+    void $ flip Map.traverseWithKey code $ \n core ->
       putStrLn $ n <> ": " <> prettyCore core <> "\n"
 
 testEval :: Text -> IO ()
 testEval src = do
   res <- runExceptT $ do
-    (expr, t) <- ExceptT $ (map (mapLeft errMsg)) $
-      compileFormula src testResolveInterp preludeCheckEnv
-    val <- ExceptT $ evalFormula expr testGetInterp preludeTermEnv
+    (expr, t) <- ExceptT $ compileFormula src testResolveInterp preludeCheckEnv
+    val <- ExceptT $ (map (mapLeft (\msg -> Error msg voidSpan))) $
+      evalFormula expr testGetInterp preludeTermEnv
     pure (t, val)
   case res of
-    Left err -> putStrLn err
+    Left err -> putStrLn $ displayError src err
     Right (t, val) -> do
       putStrLn $ "Type: " <> prettyType t
       print val

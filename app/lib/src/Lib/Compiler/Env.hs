@@ -44,6 +44,9 @@ primKindEnv = Map.fromList
   , ( "Array"
     , kindUnary
     )
+  , ( "Row"
+    , kindFun kindTable kindType
+    )
   ]
 
 --------------------------------------------------------------------------------
@@ -78,6 +81,13 @@ tyList = typeConstructor "List"
 tyMaybe :: Type
 tyMaybe = typeConstructor "Maybe"
 
+tyRow :: Type -> Type
+tyRow = typeApp (typeConstructor "Row")
+
+pattern Row :: TypeF (Fix TypeF) -> TypeF (Fix TypeF)
+pattern Row t =
+  TypeApp (Fix (TypeConstructor "Row")) (Fix t)
+
 infixr 2 -->
 (-->) :: Type -> Type -> Type
 (-->) a b = typeApp (typeApp tyFunction a) b
@@ -92,7 +102,7 @@ typeOfDataType = \case
   DataString   -> tyString
   DataNumber   -> tyNumber
   DataTime     -> tyDateTime
-  DataRowRef t -> typeRow $ InId t
+  DataRowRef t -> tyRow $ typeTable $ InId t
   DataList t   -> typeApp tyList $ typeOfDataType t
   DataMaybe t  -> typeApp tyMaybe $ typeOfDataType t
 
@@ -213,14 +223,13 @@ primEnv = Map.fromList
         dataBool $ a == b
       )
     )
-  -- FIXME: Need to encode "Row of table x" in the type system
-  -- , ( "prim_eqRow"
-  --   , ( ForAll [] [] $ tyRow --> tyRow --> tyBoolean
-  --     , RPrimFun $ \(RRowRef a) -> pure $
-  --       RPrimFun $ \(RRowRef b) -> pure $
-  --       dataBool $ a == b
-  --     )
-  --   )
+  , ( "prim_eqRow"
+    , ( ForAll ["t"] [] $ tyRow (typeVar "t") --> tyRow (typeVar "t") --> tyBoolean
+      , RPrimFun $ \(RRowRef a) -> pure $
+        RPrimFun $ \(RRowRef b) -> pure $
+        dataBool $ a == b
+      )
+    )
   -- Ord
   , ( "prim_compareNumber"
     , ( ForAll [] [] $ tyNumber --> tyNumber --> tyOrdering

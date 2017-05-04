@@ -28,7 +28,7 @@ type Boolean
   | False
 
 conj : Boolean -> Boolean -> Boolean
-conj x y = if x then False else y
+conj x y = if x then y else False
 
 infixr 3 conj as &&
 
@@ -95,8 +95,8 @@ instance Eq String where
 instance Eq DateTime where
   eq = prim_eqDateTime
 
--- instance Eq Row where
---   eq = prim_eqRow
+instance Eq (Row t) where
+  eq = prim_eqRow
 
 instance Eq Boolean where
   eq x y = case Tuple x y of

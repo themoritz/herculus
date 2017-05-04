@@ -14,6 +14,7 @@ import           Lib.Prelude
 
 import           Control.Lens
 
+import qualified Data.Map                  as Map
 import           Data.Maybe                (mapMaybe)
 
 import           Lib.Compiler
@@ -123,12 +124,12 @@ resolveColumnRef tableId colName = do
     Just (Entity i col) -> fmap (tableId,i,)
                                 (col ^? columnKind . _ColumnData)
 
-getTableRecordType :: MonadEngine m => Id Table -> m Type
+getTableRecordType :: MonadEngine m => Id Table -> m (Map Text Type)
 getTableRecordType t = do
   cols <- getTableColumns t
-  pure $ typeApp tyRecord $ go $ flip mapMaybe cols $ \(Entity _ col) ->
-    fmap (col ^. columnName,) (col ^? columnKind . _ColumnData)
-  where
-  go [] = recordNil
-  go ((name, col):rest) =
-    recordCons name (typeOfDataType (col ^. dataColType)) (go rest)
+  let goCol (Entity _ col) = case col ^. columnKind of
+        ColumnData dataCol ->
+          Just (col ^. columnName, typeOfDataType (dataCol ^. dataColType))
+        ColumnReport _ ->
+          Nothing
+  pure $ Map.fromList $ mapMaybe goCol cols

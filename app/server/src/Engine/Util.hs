@@ -29,8 +29,8 @@ mkGetter r = \case
     reply <$> getColumnValues c
   GetTableRows t reply ->
     map (reply . map entityId) $ getTableRows t
-  GetRowField r' c reply ->
-    reply <$> getRowField r' c
+  GetRowRecord r' reply ->
+    reply <$> getRowRecord r'
 
 --------------------------------------------------------------------------------
 

@@ -58,16 +58,17 @@ eval env e = consumeGas *> case e of
         Nothing   -> tryAlts as
         Just env' -> eval (env' `Map.union` env) expr
     tryAlts alts
-  Accessor e field -> do
-    v <- eval env e
-    case v of
-      RRecord r -> pure $ fromJust $ Map.lookup field r
-      -- Row references are automatically dereferenced here.
-      RRowRef mR -> case mR of
-        Nothing -> evalError "Invalid row reference."
-        Just r -> getRowField r (Ref field) >>= \case
-          Nothing -> evalError "Dependent cell not ready."
-          Just val -> pure $ loadValue val
+  Access e' field -> do
+    RRecord r <- eval env e'
+    RString f <- eval env field
+    pure $ fromJust $ Map.lookup f r
+  Deref e' -> do
+    RRowRef mR <- eval env e'
+    case mR of
+      Nothing -> evalError "Invalid row reference."
+      Just r  -> getRowRecord r >>= \case
+        Just record -> pure $ RRecord $ map loadValue record
+        Nothing -> evalError "Dependent cell not ready."
 
 matchValue :: Result -> Binder -> Maybe TermEnv
 matchValue res = \case

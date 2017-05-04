@@ -110,7 +110,8 @@ data ExprF a
   -- | Scrutinee, list of alternatives (binder, expression)
   | Case a [(a, a)]
   | Let [(Text, a)] a
-  | Accessor a Text
+  | Access a a
+  | Deref a
   deriving (Functor, Foldable, Traversable, Show)
 
 type Expr = Fix ExprF
@@ -139,8 +140,11 @@ case' scrut alts = Fix (inj (Case scrut alts))
 let' :: ExprF :<: f => [(Text, Fix f)] -> Fix f -> Fix f
 let' defs body = Fix (inj (Let defs body))
 
-accessor :: ExprF :<: f => Fix f -> Text -> Fix f
-accessor e field = Fix (inj (Accessor e field))
+access :: ExprF :<: f => Fix f -> Fix f -> Fix f
+access e field = Fix (inj (Access e field))
+
+deref :: ExprF :<: f => Fix f -> Fix f
+deref e = Fix (inj (Deref e))
 
 spanAbs
   :: ExprF :<: f
@@ -148,11 +152,11 @@ spanAbs
 spanAbs b@(bspan :< _) body@(bodyspan :< _) =
   spanUnion bspan bodyspan :< inj (Abs b body)
 
-spanAccessor
+spanAccess
   :: ExprF :<: f
-  => WithSpan f -> (Span, Text) -> WithSpan f
-spanAccessor e@(espan :< _) (span, ref) =
-  spanUnion espan span :< inj (Accessor e ref)
+  => WithSpan f -> WithSpan f -> WithSpan f
+spanAccess e@(espan :< _) field@(fieldspan :< _) =
+  spanUnion espan fieldspan :< inj (Access e field)
 
 spanApp
   :: ExprF :<: f
@@ -192,8 +196,8 @@ data PlaceholderF a
   -- | Function name, type. Recursively defined functions. Once the function has
   -- been generalized, convert this to application of `DictionaryPlaceholder`s.
   | RecursiveCallPlaceholder Span Text
-  -- | Field, type. Similar role as method placeholder.
-  | AccessorPlaceholder Span Text a
+  -- | Type. Similar role as method placeholder.
+  | AccessPlaceholder Span a
   deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 dictionaryPlaceholder
@@ -209,10 +213,10 @@ recursiveCallPlaceholder
 recursiveCallPlaceholder span name =
   Fix $ inj $ RecursiveCallPlaceholder span name
 
-accessorPlaceholder
-  :: PlaceholderF :<: f => Span -> Text -> Fix f -> Fix f
-accessorPlaceholder span field t =
-  Fix $ inj $ AccessorPlaceholder span field t
+accessPlaceholder
+  :: PlaceholderF :<: f => Span -> Fix f -> Fix f
+accessPlaceholder span t =
+  Fix $ inj $ AccessPlaceholder span t
 
 --------------------------------------------------------------------------------
 

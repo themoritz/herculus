@@ -28,6 +28,7 @@ data KindF a
   = KindType
   | KindFun a a
   | KindUnknown Int
+  | KindTable
   deriving (Functor, Foldable, Traversable, Show)
 
 type Kind = Fix KindF
@@ -41,6 +42,9 @@ kindFun f arg = Fix (KindFun f arg)
 kindUnknown :: Int -> Kind
 kindUnknown = Fix . KindUnknown
 
+kindTable :: Kind
+kindTable = Fix KindTable
+
 -- Replace remaining unknown kind variables with `Type`
 tidyKind :: Kind -> Kind
 tidyKind = cata $ \case
@@ -53,7 +57,7 @@ data TypeF a
   = TypeVar Text
   | TypeConstructor Text
   | TypeApp a a
-  | TypeRow (RefOrId Table)
+  | TypeTable (RefOrId Table)
   | TypeRecord (Map Text a)
   deriving (Functor, Foldable, Traversable, Show)
 
@@ -69,8 +73,8 @@ typeConstructor = Fix . TypeConstructor
 typeApp :: Type -> Type -> Type
 typeApp a b = Fix (TypeApp a b)
 
-typeRow :: RefOrId Table -> Type
-typeRow = Fix . TypeRow
+typeTable :: RefOrId Table -> Type
+typeTable = Fix . TypeTable
 
 typeRecord :: Map Text Type -> Type
 typeRecord = Fix . TypeRecord
@@ -95,7 +99,7 @@ data OrdType
   | OTConstructor Text
   | OTApp OrdType OrdType
   | OTRecord (Map Text OrdType)
-  | OTRow (RefOrId Table)
+  | OTTable (RefOrId Table)
   deriving (Eq, Ord)
 
 toOrdType :: Type -> OrdType
@@ -104,7 +108,7 @@ toOrdType = cata $ \case
   TypeConstructor x -> OTConstructor x
   TypeApp f arg -> OTApp f arg
   TypeRecord m -> OTRecord m
-  TypeRow t -> OTRow t
+  TypeTable t -> OTTable t
 
 --------------------------------------------------------------------------------
 
@@ -125,7 +129,7 @@ normalizePoly (ForAll as cs t) = ForAll as' cs' t'
     TypeConstructor _ -> []
     TypeApp f arg -> f <> arg
     TypeRecord m -> mconcat $ Map.elems m
-    TypeRow _ -> []
+    TypeTable _ -> []
   getVarsC (IsIn _ ty) = getVarsT ty
   getVarsC (HasFields m ty) = mconcat (Map.elems $ map getVarsT m) <> getVarsT ty
   getVarsCS = nub . join . map getVarsC
@@ -153,7 +157,7 @@ type SourceConstraint = ConstraintF SourceType
 type ConstraintToSolve = (Span, Constraint)
 
 -- Constraints, head constraint
-type Instance = ([Constraint], Constraint)
+type Instance = ([Constraint], Text, Type)
 
 -- Superclasses, signature of member functions, instances
 type Class = ([Text], Text, Kind, Map Text PolyType, [Instance])

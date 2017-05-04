@@ -52,7 +52,7 @@ data GetF a
   = GetCellValue (Id Column) (Maybe Value -> a)
   | GetColumnValues (Id Column) ([Maybe Value] -> a)
   | GetTableRows (Id Table) ([Id Row] -> a)
-  | GetRowField (Id Row) (Ref Column) (Maybe Value -> a)
+  | GetRowRecord (Id Row) (Maybe (Map Text Value) -> a)
   deriving (Functor)
 
 getCellValue :: Id Column -> Eval (Maybe Value)
@@ -64,8 +64,8 @@ getColumnValues c = liftEval $ GetColumnValues c id
 getTableRows :: Id Table -> Eval [Id Row]
 getTableRows t = liftEval $ GetTableRows t id
 
-getRowField :: Id Row -> Ref Column -> Eval (Maybe Value)
-getRowField r c = liftEval $ GetRowField r c id
+getRowRecord :: Id Row -> Eval (Maybe (Map Text Value))
+getRowRecord r = liftEval $ GetRowRecord r id
 
 --------------------------------------------------------------------------------
 

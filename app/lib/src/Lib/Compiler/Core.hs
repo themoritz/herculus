@@ -49,7 +49,8 @@ data Expr
   | App Expr Expr
   | Let [(Text, Expr)] Expr
   | Case Expr [(Binder, Expr)]
-  | Accessor Expr Text
+  | Access Expr Expr
+  | Deref Expr
   deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON)
 
 --------------------------------------------------------------------------------
@@ -104,8 +105,10 @@ exprDoc = \case
     indent 2 (vsep (map goCase cases))
     where
       goCase (b, e') = binderDoc b <+> textStrict "->" <+> exprDoc e'
-  Accessor e field ->
-    parens (exprDoc e) <> dot <> textStrict field
+  Access e field ->
+    parens (exprDoc e) <> dot <> exprDoc field
+  Deref e ->
+    textStrict "*" <> parens (exprDoc e)
 
 prettyCore :: Expr -> Text
 prettyCore = show . exprDoc
@@ -129,8 +132,10 @@ toCore (Fix com) = A.compiled goExpr undefined goRef com
       Case (toCore scrut) (map (binderToCore *** toCore) alts)
     A.Let defs body ->
       Let (map (id *** toCore) defs) (toCore body)
-    A.Accessor e field ->
-      Accessor (toCore e) field
+    A.Access e field ->
+      Access (toCore e) (toCore field)
+    A.Deref e ->
+      Deref (toCore e)
   goLiteral :: A.LiteralF A.Compiled -> Literal
   goLiteral = \case
     A.NumberLit n -> NumberLit n
@@ -166,4 +171,5 @@ collectCodeDependencies = go
     App f arg              -> go f <> go arg
     Let defs e             -> go e <> mconcat (map (go . snd) defs)
     Case e alts            -> go e <> mconcat (map (go . snd) alts)
-    Accessor e _           -> go e
+    Access e _             -> go e
+    Deref e                -> go e

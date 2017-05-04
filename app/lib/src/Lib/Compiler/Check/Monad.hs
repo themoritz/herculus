@@ -159,14 +159,14 @@ debugTypeSubst = liftCheck $ DebugTypeSubst ()
 type Resolver m = forall x. ResolveF x -> m x
 
 data ResolveF a
-  = GetTableRecordType (Id Table) (Type -> a)
+  = GetTableRecordType (Id Table) (Map Text Type -> a)
   | ResolveColumnOfTableRef (Ref Table) (Ref Column)
                             (Maybe (Id Table, Id Column, DataCol) -> a)
   | ResolveColumnRef (Ref Column) (Maybe (Id Column, DataCol) -> a)
   | ResolveTableRef (Ref Table) (Maybe (Id Table) -> a)
   deriving (Functor)
 
-getTableRecordType :: Id Table -> Check Type
+getTableRecordType :: Id Table -> Check (Map Text Type)
 getTableRecordType t = liftCheck $ GetTableRecordType t id
 
 resolveColumnOfTableRef
@@ -177,7 +177,7 @@ resolveColumnRef :: Ref Column -> Check (Maybe (Id Column, DataCol))
 resolveColumnRef c = liftCheck $ ResolveColumnRef c id
 
 resolveTableRef :: Ref Table -> Check (Maybe (Id Table))
-resolveTableRef c = liftCheck $ ResolveTableRef c id
+resolveTableRef t = liftCheck $ ResolveTableRef t id
 
 --------------------------------------------------------------------------------
 
@@ -200,6 +200,8 @@ data DictLookup
   = ByTypeVar Text Text
   -- | Class name, constructor name
   | ByConstructor Text Text
+  -- | Type variable
+  | AccessByTypeVar Text
   deriving (Eq, Ord, Show)
 
 data CheckEnv = CheckEnv
@@ -276,6 +278,7 @@ runCheck env goResolve =
           (KindUnknown x, _) -> bind x b'
           (_, KindUnknown x) -> bind x a'
           (KindType, KindType) -> pure ()
+          (KindTable, KindTable) -> pure ()
           (KindFun f arg, KindFun f' arg') -> do
             unify f f'
             unify arg arg'
@@ -319,7 +322,7 @@ runCheck env goResolve =
           (TypeApp f arg, TypeApp f' arg') -> do
             unify f f'
             unify arg arg'
-          (TypeRow x, TypeRow y) | x == y -> pure ()
+          (TypeTable x, TypeTable y) | x == y -> pure ()
           (TypeRecord m, TypeRecord m') -> do
             let unifyField k = \case
                   These t t' -> unify t t'

@@ -35,6 +35,7 @@ prettyKind = show . cata kindDoc
     KindType      -> textStrict "Type"
     KindFun f arg -> parens $ f <+> textStrict "->" <+> arg
     KindUnknown v -> int v
+    KindTable     -> textStrict "Table"
 
 prettyType :: Type -> Text
 prettyType = show . histo typeDoc
@@ -106,10 +107,10 @@ typeDoc = \case
   TypeApp (_ :< TypeApp (arr :< TypeConstructor "->") (a :< _)) (b :< _) ->
     parens (a <+> arr <+> b)
   TypeApp (f :< _) (arg :< _) -> parens (f <+> arg)
-  TypeRow t -> textStrict "#" <> textStrict (show t)
+  TypeTable t -> textStrict "#" <> textStrict (show t)
   TypeRecord m -> recordDoc (map goField (Map.toList m))
     where
-      goField (k, v :< _) = textStrict k <> char ':' <+> v
+      goField (k, v :< _) = textStrict k <+> char ':' <+> v
 
 declarationDoc :: DeclarationF Doc -> Doc
 declarationDoc = \case
@@ -185,8 +186,10 @@ exprDoc = \case
     where
       goBinding (v, body) =
         textStrict v <+> equals <$$> indent 2 body
-  Accessor e field ->
-    parens e <> dot <> textStrict field
+  Access e field ->
+    parens e <> dot <> field
+  Deref e ->
+    textStrict "*" <> parens e
 
 placeholderDoc :: PlaceholderF Doc -> Doc
 placeholderDoc = \case
@@ -196,6 +199,8 @@ placeholderDoc = \case
     textStrict "<" <> constraintDoc c <+> dot <> textStrict name <> textStrict ">"
   RecursiveCallPlaceholder _ t ->
     textStrict "<" <> textStrict t <> textStrict ">"
+  AccessPlaceholder _ t ->
+    textStrict "<get " <> t <> textStrict " >"
 
 refTextDoc :: RefTextF Doc -> Doc
 refTextDoc = \case

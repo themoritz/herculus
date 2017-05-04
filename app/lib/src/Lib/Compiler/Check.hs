@@ -59,8 +59,8 @@ inferType = cataM $ \case
       kres <- freshKind
       unifyKinds span kc (kindFun karg kres)
       pure kres
-    TypeRow _ ->
-      pure kindType
+    TypeTable _ ->
+      pure kindTable
     TypeRecord _ ->
       pure kindType
 
@@ -154,10 +154,14 @@ inferExpr' span = \case
     Nothing -> compileError span $ "Variable `" <> x <> "` not in scope."
     Just (EnvType poly origin, x') -> do
       (constraints, t) <- instantiate poly
-      let
-        dictPlaceholders cs = map (dictionaryPlaceholder span . map injFix) cs
       e <- case origin of
-        Default -> pure $ foldl' app (var x') (dictPlaceholders constraints)
+        Default -> do
+          let
+            toPlaceholder c = case c of
+              IsIn _ _      -> dictionaryPlaceholder span (map injFix c)
+              HasFields _ t -> accessPlaceholder span (injFix t)
+            placeholders = map toPlaceholder constraints
+          pure $ foldl' app (var x') placeholders
         Method -> case constraints of
           [c] -> pure $ methodPlaceholder span (map injFix c) x'
           _ -> internalError (Just span) $
@@ -195,15 +199,29 @@ inferExpr' span = \case
            , restType
            , ds <> cs )
 
-  Accessor e field -> do
+  Access e field@(fieldSpan :< _) -> do
     (e', eType, cs) <- inferExpr e
+    (field', fieldType, _) <- inferExpr field
+    unifyTypes' fieldSpan fieldType tyString
     resultType <- freshType
     let
+      Fix (Literal (StringLit field)) = unsafePrjFix field'
       fields = Map.singleton field resultType
-      placeholder = accessorPlaceholder span field (injFix eType)
-    pure ( app (app placeholder e') (literal $ StringLit field)
+      placeholder = accessPlaceholder span (injFix eType)
+    pure ( app (app placeholder e') field'
          , resultType
          , (span, HasFields fields eType) : cs )
+
+  Deref e@(eSpan :< _) -> do
+    (e', eType, cs) <- inferExpr e
+    s <- getTypeSubst
+    let eType' = applyTypeSubst s eType
+    case eType' of
+      Fix (TypeTable (InId i)) -> do
+        t <- getTableRecordType i
+        pure (e', typeRecord t, cs)
+      _ -> compileError eSpan $
+        "Expected row type but got `" <> prettyType eType' <> "`."
 
 inferLiteral'
   :: LiteralF SourceAst -> Check (Intermed, Type, [ConstraintToSolve])
@@ -224,7 +242,7 @@ inferRef' span = \case
     Nothing -> compileError span $ "Cannot find table `" <> show t <> "`."
     Just i ->
       pure ( tableRef i
-           , typeApp tyList (typeRow $ InId i)
+           , typeApp tyList (tyRow $ typeTable $ InId i)
            , [] )
   ColumnRef c -> resolveColumnRef c >>= \case
     Nothing -> compileError span $ "Cannot find column `" <> show c <> "`."
@@ -279,15 +297,17 @@ checkExplicitDefinition (name, e@(span :< _), polyGiven) = do
     cs' = applyTypeSubst s cs
     csGiven' = applyTypeSubst s csGiven
     tGiven' = applyTypeSubst s tGiven
-    generic = getFtvs tGiven' Set.\\ fixed
+    generic = (getFtvs csGiven' `Set.union` getFtvs tGiven') Set.\\ fixed
     poly = quantify (Set.toList generic) csGiven' tGiven'
   ps' <- filterM (\c -> not <$> entail' csGiven' (snd c)) cs'
   (deferred, retained) <- split fixed generic ps'
 
-  if normalizePoly polyGiven /= normalizePoly poly then
+  s' <- getTypeSubst
+  let poly' = applyTypeSubst s' poly
+  if normalizePoly polyGiven /= normalizePoly poly' then
       compileError span $
         "The given type signature is too general. The inferred type is\n`" <>
-        prettyPolyType poly <> "` while the given signature was\n`" <>
+        prettyPolyType poly' <> "` while the given signature was\n`" <>
         prettyPolyType polyGiven <> "`."
     else if not (null retained) then
       compileError span $
@@ -324,18 +344,23 @@ inferImplicitDefinitions defs = do
     -- Calculate deferred and retained constraints.
     s <- getTypeSubst
     let
-      inferredTypes = map (applyTypeSubst s . view _3) inferred
+      ftvs (_, _, t, cs) =
+        getFtvs (applyTypeSubst s t) `Set.union`
+        getFtvs (applyTypeSubst s $ map snd cs)
       fixed = getFtvs (applyTypeSubst s outerEnv)
-      generic = getFtvs inferredTypes Set.\\ fixed
+      generic = Set.unions (map ftvs inferred) Set.\\ fixed
       css = applyTypeSubst s $ join $ map (view _4) inferred
     (deferred, retained) <- split fixed generic css
 
     -- Quantify over the intersection of retained and the inferred constraints
+    s' <- getTypeSubst
     quantified <- for inferred $ \(name, e, t, cs) -> do
-      cs' <- reduce (applyTypeSubst s cs)
+      cs' <- reduce (applyTypeSubst s' cs)
+      s'' <- getTypeSubst
       let
         rs = [c | c <- retained, c `elem` map snd cs']
-        poly = quantify (Set.toList generic) rs (applyTypeSubst s t)
+        poly = quantify (Set.toList generic) rs (applyTypeSubst s'' t)
+      traceM $ name <> " : " <> prettyPolyType poly
       pure (name, e, poly, rs)
 
     -- Resolve placeholders
@@ -377,15 +402,26 @@ resolveConstraints
   :: Map Text [Constraint] -> Intermed -> [Constraint] -> Check Intermed
 resolveConstraints recConstrs e cs = do
   s <- getTypeSubst
-  dicts <- for (applyTypeSubst s cs) $ \(IsIn cls t) -> do
+  dicts <- for (applyTypeSubst s cs) $ \c -> do
     n <- freshName
-    flip cata t $ \case
-      TypeVar v -> pure (ByTypeVar cls v, n)
+    let
+      t = case c of
+        IsIn _ t'      -> t'
+        HasFields _ t' -> t'
+    v <- flip cata t $ \case
+      TypeVar v -> pure v
       TypeApp f _ -> f
       _ -> internalError Nothing $
-        "Type in retained constraint not in head-normal form."
+        "Type `" <> prettyType t <>
+        "` in retained constraint `" <> prettyConstraint c <>
+        "` not in head-normal form."
+    pure $ case c of
+      IsIn cls _    -> (ByTypeVar cls v, n)
+      HasFields _ _ -> (AccessByTypeVar v, n)
   inExtendedInstanceEnv (Map.fromList dicts) $ do
     e' <- resolvePlaceholders recConstrs e
+    -- Order of the constraints in the polytype ensures that order of abs equals
+    -- order of app.
     pure $ foldr (abs . varBinder . snd) e' dicts
 
 resolvePlaceholders :: Map Text [Constraint] -> Intermed -> Check Intermed
@@ -402,13 +438,33 @@ resolvePlaceholders recConstrs =
     MethodPlaceholder span c name -> getDict span c >>= \case
       -- Not found: placeholder will be resolved in surrounding scope
       Nothing -> pure $ Fix $ inj p
-      Just d -> pure $ accessor d name
+      Just d -> pure $ access d (literal $ StringLit name)
     RecursiveCallPlaceholder span name -> do
       case Map.lookup name recConstrs of
         Just cs -> do
           let ps = map (dictionaryPlaceholder span . map injFix) cs
           resolvePlaceholders recConstrs $ foldl' app (var name) ps
         Nothing -> pure $ Fix $ inj p
+    AccessPlaceholder span (unsafePrjFix -> t) -> do
+      s <- getTypeSubst
+      let Fix t' = applyTypeSubst s t
+      case t' of
+        TypeVar v -> lookupInstanceDict (AccessByTypeVar v) >>= \case
+          Nothing -> internalError (Just span) $
+            "No function for access placeholder in scope."
+          Just n -> pure $ var n
+        Row (TypeTable _) ->
+          pure $ abs (varBinder "e") $
+                 abs (varBinder "field") $
+                 access (deref (var "e")) (var "field")
+        TypeRecord _ ->
+          pure $ abs (varBinder "e") $
+                 abs (varBinder "field") $
+                 access (var "e") (var "field")
+        _ -> internalError (Just span) $
+          "Found type `" <> prettyType (Fix t') <>
+          "` when resolving access placeholder."
+
 
   getDict :: Span -> ConstraintF Intermed -> Check (Maybe Intermed)
   getDict span (IsIn cls (unsafePrjFix -> t)) = do
@@ -421,18 +477,18 @@ resolvePlaceholders recConstrs =
               Nothing -> do
                 subs <- getSubClasses c
                 mp <- msum <$> traverse go subs
-                pure $ map (\p -> accessor p c) mp
+                pure $ map (\p -> access p (literal $ StringLit c)) mp
               Just dict -> pure $ Just $ var dict
         go cls
       TypeConstructor c -> do
         d <- lookupInstanceDict (ByConstructor cls c) >>= \case
-          Nothing -> compileError span $
+          Nothing -> internalError (Just span) $
             "No instance of class `" <> cls <> "` found for type `" <>
             c <> "`."
           Just dict -> pure $ var dict
-        byInst (IsIn cls t') >>= \case
-          Nothing -> compileError span $
-            "Internal? Cannot find dict for constraint: " <>
+        byInst cls t' >>= \case
+          Nothing -> internalError (Just span) $
+            "Cannot find dict for constraint: " <>
             prettyConstraint (IsIn cls t')
           Just inst -> do
             (cs, t'') <- instantiateInstance inst
@@ -443,8 +499,8 @@ resolvePlaceholders recConstrs =
                        recConstrs
                        (foldl' app d dictPlaceholders)
       TypeApp f' _ -> f'
-      _ -> compileError span $
-        "Internal? Found record type when resolving placeholder."
+      _ -> internalError (Just span) $
+        "Found record or row type when resolving placeholder."
 
 split
   :: Set Text -> Set Text -> [ConstraintToSolve]
@@ -458,12 +514,20 @@ split fixed generic constraints = do
 
 -- | Removes any constraint that is entailed by the others
 reduce :: [ConstraintToSolve] -> Check [ConstraintToSolve]
-reduce xs = simplify [] =<< join <$> traverse toHeadNormal xs
+reduce xs =
+    traverse toHeadNormalRecord xs >>=
+    applyTS . join >>=
+    traverse toHeadNormal >>=
+    simplify [] . join
   where
     simplify ds [] = pure ds
     simplify ds (c:cs) = entail (ds <> cs) c >>= \case
       True -> simplify ds cs
       False -> simplify (c:ds) cs
+    applyTS :: [ConstraintToSolve] -> Check [ConstraintToSolve]
+    applyTS cs = do
+      s <- getTypeSubst
+      pure $ applyTypeSubst s cs
 
 -- | `entail cs c` is True when c is entailed by cs, i.e. c holds whenever
 -- all the constraints in cs hold.
@@ -475,28 +539,36 @@ entail' cs c = do
   supers <- join <$> traverse getSupers cs
   if c `elem` supers
     then pure True -- Superclasses are always entailed by their subclasses
-    else byInst c >>= \case
-      Nothing -> pure False
-      Just (cs', _) -> and <$> traverse (entail' cs) cs'
+    else case c of
+      IsIn cls t -> byInst cls t >>= \case
+        Nothing -> pure False
+        Just (cs', _, _) -> and <$> traverse (entail' cs) cs'
+      HasFields _ _ -> pure False
 
--- | Recursively generate a list of constraints for all superclasses.
+-- | Recursively generate a list of constraints for all superclasses, including
+-- itself.
 getSupers :: Constraint -> Check [Constraint]
-getSupers c@(IsIn cls t) = lookupClass cls >>= \case
-  Nothing -> pure [c]
-  Just (supers, _, _, _, _) -> do
-    css <- for supers $ \s -> getSupers (IsIn s t)
-    pure (c : join css)
+getSupers c = case c of
+  IsIn cls t -> lookupClass cls >>= \case
+    Nothing -> pure [c]
+    Just (supers, _, _, _, _) -> do
+      css <- for supers $ \s -> getSupers (IsIn s t)
+      pure (c : join css)
+  HasFields _ _ -> pure [c]
 
 -- If c matches an instance, return the instance constraints as subgoals.
-byInst :: Constraint -> Check (Maybe Instance)
-byInst c@(IsIn cls _) = lookupClass cls >>= \case
+byInst :: Text -> Type -> Check (Maybe Instance)
+byInst cls t = lookupClass cls >>= \case
   Nothing -> pure Nothing
   Just (_, _, _, _, insts) ->
     msum <$> traverse tryInst insts
   where
-  tryInst (cs', h) = matchConstraint h c >>= \case
-    Nothing -> pure Nothing
-    Just s -> pure $ Just (map (applyTypeSubst s) cs', applyTypeSubst s h)
+  tryInst (cs', cls', t')
+    | cls' == cls = matchType t' t >>= \case
+        Nothing -> pure Nothing
+        Just s ->
+          pure $ Just (map (applyTypeSubst s) cs', cls', applyTypeSubst s t')
+    | otherwise = pure Nothing
 
 getSubClasses :: Text -> Check [Text]
 getSubClasses cls = do
@@ -513,16 +585,50 @@ inHeadNormal = cata $ \case
   _                 -> False
 
 toHeadNormal :: ConstraintToSolve -> Check [ConstraintToSolve]
-toHeadNormal c'@(span, c@(IsIn cls t))
-  | inHeadNormal t = pure [c']
-  | otherwise      = byInst c >>= \case
-      Nothing -> compileError span $
-        "The type `" <> prettyType t <>
-        "` does not implement class `" <> cls <> "`."
-      Just (cs, _) -> join <$> traverse toHeadNormal (map (span,) cs)
+toHeadNormal c'@(span, c) = case c of
+  IsIn cls t
+    | inHeadNormal t -> pure [c']
+    | otherwise      -> byInst cls t >>= \case
+        Nothing -> compileError span $
+          "The type `" <> prettyType t <>
+          "` does not implement class `" <> cls <> "`."
+        Just (cs, _, _) -> join <$> traverse toHeadNormal (map (span,) cs)
+  HasFields _ _ -> pure [c']
+
+-- This does unification, so after it we need to apply current type subst.
+toHeadNormalRecord :: ConstraintToSolve -> Check [ConstraintToSolve]
+toHeadNormalRecord c'@(span, c) = case c of
+  IsIn _ _ -> pure [c']
+  HasFields fields (Fix t) -> case t of
+    TypeVar _ -> pure [c']
+    TypeRecord m -> do
+      m `checkSubsumes` fields
+      pure []
+    Row (TypeTable refOrId) ->
+      case refOrId of
+        InId i -> do
+          m <- getTableRecordType i
+          m `checkSubsumes` fields
+          pure []
+        InRef _ -> internalError (Just span)
+          "Table ref was not resolved in type."
+    _ -> compileError span $
+      "Won't be able to access fields of type `" <> prettyType (Fix t) <> "`."
+  where
+    checkSubsumes :: Map Text Type -> Map Text Type -> Check ()
+    checkSubsumes big small = void $Map.traverseWithKey go $ align big small
+      where go k = \case
+              This _ -> pure ()
+              That _ -> compileError span $
+                "Could not verify object has required field `" <> k <> "`."
+              These t t' -> unifyTypes span t t' >>= \case
+                Left err -> throwError $ err
+                  { errMsg = "While checking field `" <> k <> "`: " <> errMsg err
+                  }
+                Right () -> pure ()
 
 instantiateInstance :: Instance -> Check ([Constraint], Type)
-instantiateInstance (cs, IsIn _ t) =
+instantiateInstance (cs, _, t) =
   let as = Set.toList $ getFtvs t <> getFtvs cs in
   instantiate (ForAll as cs t)
 
@@ -570,13 +676,11 @@ checkModule decls = do
           unless (isJust $ find ((== tName) . vName) valueDecls) $
             compileError tSpan $
               "No implementation provided for `" <> tName <> "`."
-          checkTypeDecl tSpan tPolyType
-          pure (tName, tPolyType)
+          poly <- checkTypeDecl tSpan tPolyType
+          pure (tName, poly)
 
         -- Check types of all value declarations
-        result <- checkValueDecls
-          (map (map stripAnn) $ Map.fromList declaredTypes)
-          valueDecls
+        result <- checkValueDecls (Map.fromList declaredTypes) valueDecls
 
         -- Put value types into scope
         inExtendedTypeEnv (envFromDefinitions result) $ do
@@ -622,7 +726,11 @@ inferFormula (decls, expr@(span :< _)) = do
     let generic = getFtvs t' Set.\\ fixed
     (ds, rs) <- split fixed generic (applyTypeSubst s cs)
     let cs' = map snd ds <> rs
-    unless (null generic) $ compileError span $
+    -- Since split unifies, get substitution again
+    s' <- getTypeSubst
+    let t'' = applyTypeSubst s' t'
+    let generic' = getFtvs t'' Set.\\ fixed
+    unless (null generic') $ compileError span $
       "Inferred type `" <> prettyType t' <> "` must not be polymorphic."
     unless (null cs') $ internalError (Just span) $
       "Formula expression still has the following inferred constraints: " <>
@@ -630,15 +738,36 @@ inferFormula (decls, expr@(span :< _)) = do
     i' <- resolvePlaceholders Map.empty i
     c <- compileIntermed i'
     -- TODO: check type given by column
-    pure (Core.Let (Map.toList exprs) c, t')
+    pure (Core.Let (Map.toList exprs) c, t'')
 
-checkTypeDecl :: Span -> SourcePolyType -> Check ()
+checkTypeDecl :: Span -> SourcePolyType -> Check PolyType
 checkTypeDecl span (ForAll as cs t) = do
   quantifierDict <- freshKindDict as
   inExtendedKindEnv quantifierDict $ do
     inferred <- inferType t
     unifyKinds span inferred kindType
     traverse_ (checkConstraint span) cs
+    ForAll as <$> traverse goConstr cs <*> goType t
+  where
+  goConstr :: SourceConstraint -> Check Constraint
+  goConstr (IsIn cls t') =
+    IsIn cls <$> goType t'
+  goConstr (HasFields fields t') =
+    HasFields <$> (traverse goType fields) <*> goType t'
+
+  goType :: SourceType -> Check Type
+  goType t' = do
+   flip cata t' $ \case
+    span' T.:< tF -> case tF of
+      TypeTable refOrId -> case refOrId of
+        InRef r -> resolveTableRef r >>= \case
+          Nothing -> compileError span' $ "Table `" <> show r <> "` not found."
+          Just i -> pure $ typeTable (InId i)
+        InId i -> pure $ typeTable (InId i)
+      TypeApp f arg -> typeApp <$> f <*> arg
+      TypeVar v -> pure $ typeVar v
+      TypeConstructor c -> pure $ typeConstructor c
+      TypeRecord m -> typeRecord <$> sequence m
 
 checkConstraint :: Span -> SourceConstraint -> Check ()
 checkConstraint span (IsIn cls t@(spant :< _)) = lookupClass cls >>= \case
@@ -649,6 +778,12 @@ checkConstraint span (IsIn cls t@(spant :< _)) = lookupClass cls >>= \case
       "Constraints must be in head-normal form (starting with a type variable)."
     k <- inferType t
     unifyKinds spant k kind
+checkConstraint _ (HasFields fields t@(spant :< _)) = do
+  k <- inferType t
+  unifyKinds spant k kindType
+  for_ fields $ \f@(spanf :< _) -> do
+    k' <- inferType f
+    unifyKinds spanf k' kindType
 
 checkInstanceDecl :: ExInstanceDecl -> Check (DictLookup, Text)
 checkInstanceDecl ExInstanceDecl {..} = do
@@ -665,8 +800,8 @@ checkInstanceDecl ExInstanceDecl {..} = do
         k <- inferType t'
         unifyKinds iSpan k kind
       -- Check for overlapping instances
-      for_ insts $ \(_, c) -> do
-        overlap <- unifyConstraints (IsIn cls t) c
+      for_ insts $ \(_, cls', t') -> do
+        overlap <- unifyConstraints (IsIn cls t) (IsIn cls' t')
         when overlap $ compileError iSpan "Overlapping instances"
       -- Check all methods are implemented and no more
       let implVals = Map.fromList $
@@ -682,7 +817,7 @@ checkInstanceDecl ExInstanceDecl {..} = do
             "Class method `" <> s <> "` not implemented."
           Just _ -> pure ()
       -- Add to class env
-      addInstance cls (map (map stripAnn) iConstraints, IsIn cls t)
+      addInstance cls (map (map stripAnn) iConstraints, cls, t)
       -- Check instance head and derive dictionary name for this instance
       headConstructor <- getTypeConstructor iSpan t
       let dictName = "$" <> cls <> headConstructor
@@ -711,7 +846,7 @@ buildInstanceDict ExInstanceDecl {..} = do
       -- Create new type variables for the instance constraints and head
       (cs, freshHeadType) <- instantiateInstance
         ( map (map stripAnn) iConstraints
-        , map stripAnn iHead )
+        , cls, t )
       -- Check the method implementations
       interims <- for iMethods $ \ExValueDecl {..} -> do
         Just (EnvType poly _, _) <- lookupType vName
@@ -762,12 +897,11 @@ checkClassDecl ExClassDecl {..} = do
 
   inExtendedKindEnv (Map.singleton param paramKind) $ do
     sigs' <- for cMethods $ \ExTypeDecl {..} -> do
-      let ForAll as cs t = tPolyType
+      ForAll as cs t <- checkTypeDecl tSpan tPolyType
       when (length cs > 0) $ compileError tSpan $
         "Class methods are not allowed to be constrained."
-      checkTypeDecl tSpan tPolyType
       pure ( tName
-           , ForAll (param:as) [IsIn cls $ typeVar param] (stripAnn t) )
+           , ForAll (param:as) [IsIn cls $ typeVar param] t )
     s <- getKindSubst
     addClass cls ( supers'
                  , param
@@ -870,7 +1004,7 @@ matchType t1 t2 = runMaybeT $ match t1 t2
       sf <- match f f'
       sarg <- match arg arg'
       hoistMaybe $ typeSubstMerge sf sarg
-    (TypeRow x, TypeRow y) | x == y -> pure Map.empty
+    (TypeTable x, TypeTable y) | x == y -> pure Map.empty
     (TypeRecord m, TypeRecord m') -> do
       let matchField s (k, th) = case th of
             These t t' -> do

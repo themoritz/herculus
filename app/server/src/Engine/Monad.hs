@@ -1,23 +1,23 @@
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE NoImplicitPrelude          #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TemplateHaskell            #-}
 -- |
 
 module Engine.Monad where
 
-import           Control.Lens                 hiding (op)
+import           Lib.Prelude                  hiding (Selector)
+
+import           Control.Lens                 hiding (op, (&))
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 
-import           Data.Foldable                (find, foldl', for_)
-import           Data.Functor                 (($>))
 import           Data.Map                     (Map)
 import qualified Data.Map                     as Map
 import           Data.Maybe                   (mapMaybe)
-import           Data.Proxy
 import           Data.Set                     (Set)
 import qualified Data.Set                     as Set
 
@@ -132,7 +132,7 @@ class MonadError AppError m => MonadEngine m where
   -- Not cached (still need to combine with store)
   getTableRows           :: Id Table -> m [Entity Row]
   getTableColumns        :: Id Table -> m [Entity Column]
-  getRowField            :: Id Row -> Ref Column -> m (Maybe Value)
+  getRowRecord           :: Id Row -> m (Maybe (Map Text Value))
   getTableByName         :: Ref Table -> m (Maybe (Entity Table))
   getColumnOfTableByName :: Id Table -> Ref Column -> m (Maybe (Entity Column))
 
@@ -322,16 +322,17 @@ instance MonadHexl m => MonadEngine (EngineT m) where
     [ "tableId" =: toObjectId tableId ]
     (\column -> column ^. columnTableId == tableId)
 
-  getRowField rowId columnRef = do
+  getRowRecord rowId = do
     row <- storeGetById' storeRows rowId
-    result <- getColumnOfTableByName (row ^. rowTableId) columnRef
-    case result of
-      Nothing -> lift $ throwError $ ErrBug "getRowField: column not found"
-      Just (Entity columnId _) -> do
-        Entity _ cell <- getCellByCoord columnId rowId
-        case cell ^. cellContent of
-          CellError _ -> pure Nothing
-          CellValue v -> pure $ Just v
+    columns <- getTableColumns (row ^. rowTableId)
+    vals <- for columns $ \(Entity columnId col) -> do
+      Entity _ cell <- getCellByCoord columnId rowId
+      let field = col ^. columnName
+      let val = case cell ^. cellContent of
+            CellError _ -> Nothing
+            CellValue v -> Just v
+      pure (field, val)
+    pure (sequence $ Map.fromList vals)
 
   getTableByName name = do
     i <- askProjectId

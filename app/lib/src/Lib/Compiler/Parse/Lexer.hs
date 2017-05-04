@@ -5,8 +5,6 @@ module Lib.Compiler.Parse.Lexer where
 
 import           Lib.Prelude
 
-import           Control.Monad.Fail        (fail)
-
 import qualified Data.Char                 as C
 import qualified Data.Text                 as T
 
