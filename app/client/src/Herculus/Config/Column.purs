@@ -1,15 +1,18 @@
 module Herculus.Config.Column where
 
 import Herculus.Prelude
+import CSS as CSS
 import Halogen as H
 import Halogen.HTML as HH
+import Halogen.HTML.CSS as HC
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Herculus.Ace as Ace
+import Herculus.EditBox as Edit
 import Data.Array (cons, null)
-import Halogen.Component.ChildPath (cp1, type (\/), type (<\/>))
+import Halogen.Component.ChildPath (cp1, cp2, type (\/), type (<\/>))
 import Herculus.Monad (Herc, withApi)
-import Herculus.Utils (Options, clbutton_, cldiv_, clspan, dropdown, faIcon_)
+import Herculus.Utils (Options, clbutton_, cldiv, cldiv_, clspan, dropdown, faIcon_)
 import Lib.Api.Rest (postProjectLintDataColByColumnId, postProjectLintReportColByColumnId, postProjectRunCommandsByProjectId)
 import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), CompileStatus(StatusError, StatusNone, StatusOk), DataCol, ReportCol, columnId, columnKind, columnName, dataColCompileStatus, dataColIsDerived, dataColSourceCode, dataColType, reportColCompileStatus, reportColFormat, reportColLanguage, reportColTemplate)
 import Lib.Api.Schema.Project (Command(..))
@@ -23,6 +26,7 @@ data Query a
   | Update Input a
   | Reset a
   | Save a
+  | SetName String a
   | SetReportLang (Maybe ReportLanguage) a
   | SetReportFormat ReportFormat a
   | SetReportTemplate String a
@@ -65,9 +69,11 @@ emptyTmp =
 
 type Child =
   Ace.Query <\/>
+  Edit.Query String <\/>
   Const Void
 
 type Slot =
+  Unit \/
   Unit \/
   Unit
 
@@ -181,55 +187,103 @@ comp = H.lifecycleParentComponent
 
 render :: State -> H.ParentHTML Query Child Slot Herc
 render st = HH.div_
-  [ cldiv_ "p1"
-    [ HH.text $ "Edit Column "
-    , HH.b_
-      [ HH.text $ st.input.column ^. columnName ]
-    ]
-  , confFooter
-  , case st.input.column ^. columnKind of
-      ColumnData dat -> dataColConf dat
-      ColumnReport rep -> reportColConf rep
-  , statusBar
-  ]
+  case st.input.column ^. columnKind of
+    ColumnData dat -> dataColConf dat
+    ColumnReport rep -> reportColConf rep
 
   where
 
-  dataColConf dat = HH.div_
-    [ cldiv_ "p1"
-      [ HH.text "Column Datatype"
-      , HH.div_
-        [ selBranch (getDataType dat st) SetDataType ]
-      ]
-    , cldiv_ ""
-      [ HH.input
-        [ HP.type_ HP.InputCheckbox
-        , HP.checked $ case getIsDerived dat st of
-            Derived -> true
-            NotDerived -> false
-        , HE.onChecked \on ->
-            Just $ H.action $ SetIsDerived $
-            if on then Derived else NotDerived
-        ]
-      , HH.span_
-        [ HH.text "Use formula ("
-        , HH.a
-          [ HP.href "/doc/formulas/#the-hexl-language"
-          , HP.target "_blank"
+  header =
+    let
+      head = cldiv_ "flex"
+        [ cldiv_ "flex-auto"
+          [ HH.slot' cp2 unit Edit.comp
+                   { value: st.input.column ^. columnName
+                   , placeholder: "Name..."
+                   , className: "bold editbox"
+                   , inputClassName: "editbox__input"
+                   , invalidClassName: "editbox__input--invalid"
+                   , show: id
+                   , validate: Just
+                   , clickable: true
+                   }
+                   case _ of
+                     Edit.Save v _ -> Just $ H.action $ SetName v
+                     Edit.Cancel -> Nothing
           ]
-          [ HH.text "Help" ]
-        , HH.text ")"
+        , cldiv_ ""
+          [ clbutton_ "button--pure" Close'
+            [ faIcon_ "close fa-lg fa-fw" ]
+          ]
         ]
-      ]
-    , cldiv_ ("pb1" <> case getIsDerived dat st of
-                Derived -> ""
-                NotDerived -> " column-config__editor--disabled"
-             )
-      [ HH.slot' cp1 unit Ace.comp
-                 { mode: "ace/mode/haskell"
-                 }
-                 \(Ace.TextChanged f) -> Just $ H.action $ SetFormula f
-      ]
+      body = cldiv_ "flex items-end"
+        [ cldiv_ "font-smaller flex-auto"
+          [ HH.text $ "on table ???"
+          ]
+        , cldiv_ "font-smaller"
+          [ clbutton_ "button bold mr1" Delete'
+            [ faIcon_ "close red mr1"
+            , HH.text "Delete"
+            ]
+          , clbutton_ "button bold mr1" Reset
+            [ faIcon_ "undo gray mr1"
+            , HH.text "Reset"
+            ]
+          , clbutton_ "button bold" Save
+            [ faIcon_ "check green mr1"
+            , HH.text "Save"
+            ]
+          ]
+        ]
+    in
+      section "wrench" head body 
+
+  dataColConf dat =
+    [ header
+    , let
+        head = cldiv_ "bold"
+          [ HH.text "Column Type" ]
+        body = cldiv_ ""
+          [ selBranch (getDataType dat st) SetDataType ]
+      in
+        section "cube" head body
+    , let
+        head = cldiv_ "bold"
+          [ HH.text "Column Formula" ]
+        body = cldiv_ ""
+          [ cldiv_ ""
+            [ HH.input
+              [ HP.type_ HP.InputCheckbox
+              , HP.checked $ case getIsDerived dat st of
+                  Derived -> true
+                  NotDerived -> false
+              , HE.onChecked \on ->
+                  Just $ H.action $ SetIsDerived $
+                  if on then Derived else NotDerived
+              ]
+            , HH.span_
+              [ HH.text "Calculate content with formula ("
+              , HH.a
+                [ HP.href "/doc/formulas/#the-hexl-language"
+                , HP.target "_blank"
+                ]
+                [ HH.text "Help" ]
+              , HH.text "):"
+              ]
+            ]
+          , cldiv_ ("my1 column-config__editor" <> case getIsDerived dat st of
+                      Derived -> ""
+                      NotDerived -> " column-config__editor--disabled"
+                   )
+            [ HH.slot' cp1 unit Ace.comp
+                       { mode: "ace/mode/haskell"
+                       }
+                       \(Ace.TextChanged f) -> Just $ H.action $ SetFormula f
+            ]
+          , errorBar
+          ]
+      in
+        section "calculator" head body
     ]
 
   selBranch
@@ -256,72 +310,85 @@ render st = HH.div_
         _ -> HH.text ""
     ]
 
-  reportColConf rep = HH.div_
-    [ cldiv_ "table col-12"
-      [ cldiv_ "table-cell col-6 p1"
-        [ HH.text "Input language ("
-        , HH.a
-          [ HP.href "/doc/formulas/#report-templates"
-          , HP.target "_blank"
-          ]
-          [ HH.text "Help" ]
-        , HH.text ")"
-        , dropdown "select" reportLangs
+  reportColConf rep =
+    [ header
+    , let
+        head = cldiv_ "bold"
+          [ HH.text "Input Language" ]
+        body =
+          dropdown "select" reportLangs
                    (getReportLanguage rep st) SetReportLang
-        ]
-      , cldiv_ "table-cell col-1 p1 align-bottom center"
-        [ faIcon_ "long-arrow-right"
-        ]
-      , cldiv_ "table-cell col-5 p1"
-        [ HH.text "Output format"
-        , dropdown "select" reportFormats
-                   (getReportFormat rep st) SetReportFormat
-        ]
-      ]
-    , cldiv_ "px1"
-      [ HH.text "Template"
-      ]
-    , cldiv_ "pb1"
-      [ HH.slot' cp1 unit Ace.comp
-                 { mode: case getReportLanguage rep st of
-                     Nothing -> "ace/mode/text"
-                     Just ReportLanguageHTML -> "ace/mode/html"
-                     Just ReportLanguageLatex -> "ace/mode/latex"
-                     Just ReportLanguageMarkdown -> "ace/mode/markdown"
-                 }
-                 \(Ace.TextChanged t) -> Just (H.action $ SetReportTemplate t)
-      ]
+      in
+        section "file-code-o" head body
+    , let
+        head = cldiv_ "bold"
+          [ HH.text "Output Format" ]
+        body = cldiv_ ""
+          [ dropdown "select" reportFormats
+              (getReportFormat rep st) SetReportFormat
+          ]
+      in
+        section "file-pdf-o" head body
+    , let
+        head = cldiv_ "bold"
+          [ HH.text "Report Template"
+          , HH.text " ("
+          , HH.a
+            [ HP.href "/doc/formulas/#report-templates"
+            , HP.target "_blank"
+            ]
+            [ HH.text "Help" ]
+          , HH.text ")"
+          ]
+        body = cldiv_ ""
+          [ cldiv_ "column-config__editor my1"
+            [ HH.slot' cp1 unit Ace.comp
+                       { mode: case getReportLanguage rep st of
+                           Nothing -> "ace/mode/text"
+                           Just ReportLanguageHTML -> "ace/mode/html"
+                           Just ReportLanguageLatex -> "ace/mode/latex"
+                           Just ReportLanguageMarkdown -> "ace/mode/markdown"
+                       }
+                       \(Ace.TextChanged t) -> Just (H.action $ SetReportTemplate t)
+            ]
+          , errorBar
+          ]
+      in
+        section "file-text-o" head body
     ]
 
-  confFooter = cldiv_ "clearfix p1 bg-lightgray"
-    [ cldiv_ "left"
-      [ clspan "link font-smaller"
-        [ HE.onClick (HE.input_ Close') ]
-        [ HH.text "Close" ]
-      , HH.text " "
-      , clspan "link font-smaller"
-        [ HE.onClick (HE.input_ Reset) ]
-        [ HH.text "Reset" ]
+  errorItem ok text = cldiv_ "flex"
+    [ cldiv_ ""
+      [ faIcon_ $ if ok
+                  then "check-circle fa-fw green"
+                  else "exclamation-circle fa-fw red"
       ]
-    , cldiv_ "right"
-      [ clbutton_ "button bold mr1" Delete'
-        [ faIcon_ "close red mr1"
-        , HH.text "Delete column"
-        ]
-      , clbutton_ "button bold" Save
-        [ faIcon_ "check green mr1"
-        , HH.text "Save"
-        ]
-      ]
+    , cldiv_ "flex-auto gray pl1"
+      [ HH.text text ]
     ]
 
-  statusBar = if null st.errors
-    then cldiv_ "bg-lightgreen m0 p1"
-      [ HH.text "No errors found." ]
-    else HH.div_ $
-      st.errors <#> \(Error e) ->
-        cldiv_ "bg-lightred m0 p1"
-        [ HH.text e.errMsg ]
+  errorBar = cldiv_ "" $
+    if null st.errors
+    then [ errorItem true "All fine!" ]
+    else map (\(Error e) -> errorItem false e.errMsg) st.errors
+
+section :: forall p i. String -> HH.HTML p i -> HH.HTML p i -> HH.HTML p i
+section icon head body = cldiv_ "flex items-start config__section"
+  [ cldiv_ "pt1 pb1 pl1"
+    [ faIcon_ $ icon <> " fa-lg fa-fw lightgray"
+    ]
+  , cldiv_ "flex-auto"
+    [ cldiv "p1 border-box"
+      [ HC.style do
+          CSS.minHeight (CSS.px 24.0)
+      ]
+      [ head
+      ]
+    , cldiv_ "px1 pb1"
+      [ body
+      ]
+    ]
+  ]
 
 eval :: Query ~> H.ParentDSL State Query Child Slot Output Herc
 eval = case _ of
@@ -361,6 +428,15 @@ eval = case _ of
     withApi sendCmd \_ ->
       modify _{ tmp = emptyTmp
               }
+    pure next
+
+  SetName name next -> do
+    st <- H.get
+    when (name /= st.input.column ^. columnName) $ do
+      let
+        cmd = CmdColumnSetName (st.input.column ^. columnId) name
+        sendCmd = postProjectRunCommandsByProjectId [cmd] st.input.projectId
+      withApi sendCmd \_ -> pure unit
     pure next
 
   SetReportLang lang next -> do

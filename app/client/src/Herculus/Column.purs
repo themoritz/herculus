@@ -4,14 +4,12 @@ import Herculus.Prelude
 import CSS as CSS
 import Halogen as H
 import Halogen.HTML as HH
-import Halogen.HTML.Properties as HP
 import Halogen.HTML.CSS as HC
 import Halogen.HTML.Events as HE
-import Halogen.Component.ChildPath (cp1, type (\/), type (<\/>))
+import Halogen.HTML.Properties as HP
 import Data.Array (find)
-import Herculus.EditBox as Edit
 import Herculus.Monad (Herc)
-import Herculus.Utils (Options, cldiv_, faIcon_)
+import Herculus.Utils (Options, cldiv, cldiv_, faIcon_)
 import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), CompileStatus(StatusError, StatusNone, StatusOk), columnKind, columnName, dataColCompileStatus, dataColIsDerived, dataColType, reportColCompileStatus, reportColFormat, reportColLanguage)
 import Lib.Custom (Id)
 import Lib.Model.Column (DataType(..), IsDerived(..), ReportFormat(..), ReportLanguage(..))
@@ -19,7 +17,6 @@ import Lib.Model.Table (Table)
 
 data Query a
   = Update Input a
-  | SetName' String a
   | OpenConfig' a
 
 type Input =
@@ -28,19 +25,16 @@ type Input =
   }
 
 data Output
-  = SetName String
-  | OpenConfig
+  = OpenConfig
 
 type State =
   { input :: Input
   }
 
 type Child =
-  Edit.Query String <\/>
   Const Void
 
 type Slot =
-  Unit \/
   Unit
 
 comp :: H.Component HH.HTML Query Input Output Herc
@@ -54,45 +48,31 @@ comp = H.parentComponent
   }
 
 render :: State -> H.ParentHTML Query Child Slot Herc
-render st = cldiv_ "flex items-center"
-  [ cldiv_ "flex-auto"
-    [ HH.div
-      [ HC.style do
-          CSS.marginLeft $ CSS.px 18.0
-      ]
-      [ HH.slot' cp1 unit Edit.comp
-               { value: st.input.column ^. columnName
-               , placeholder: "Name..."
-               , className: "bold editbox"
-               , inputClassName: "editbox__input"
-               , invalidClassName: "editbox__input--invalid"
-               , show: id
-               , validate: Just
-               , clickable: true
-               }
-               case _ of
-                 Edit.Save v _ -> Just $ H.action $ SetName' v
-                 Edit.Cancel -> Nothing
-      ]
-    , columnInfo
+render st = cldiv_ ""
+  [ cldiv "bold"
+    [ HC.style do
+        CSS.marginLeft $ CSS.px 20.0
+        CSS.minHeight $ CSS.px 24.0
     ]
-  , HH.div_
-    [ HH.button
-      [ HE.onClick $ HE.input_ OpenConfig'
-      , HP.class_ (H.ClassName "button--pure")
-      ]
-      [ faIcon_ $ "gear fa-2x" <> (if hasErrors then " red" else "") ]
+    [ HH.text $ st.input.column ^. columnName
     ]
+  , columnInfo
   ]
 
   where
 
-  columnInfo = cldiv_ "column-info font-smaller gray"
+  columnInfo = cldiv_ "column-info font-smaller gray" $
+    [ HH.button
+      [ HE.onClick $ HE.input_ OpenConfig'
+      , HP.class_ (H.ClassName "button--pure mr1")
+      ]
+      [ faIcon_ $ "gear fa-lg" <> (if hasErrors then " red" else "") ]
+    ] <>
     case st.input.column ^. columnKind of
       ColumnData dat ->
         [ case dat ^. dataColIsDerived of
             Derived    -> faIcon_ "superscript mr1"
-            NotDerived -> faIcon_ "i-cursor mr1"
+            NotDerived -> faIcon_ "pencil-square-o mr1"
         , HH.span_
           [ HH.text $ dataTypeInfo (dat ^. dataColType)
           ]
@@ -106,7 +86,7 @@ render st = cldiv_ "flex items-center"
               Just ReportLanguageLatex    -> "Latex"
               Just ReportLanguageHTML     -> "HTML"
           in
-            HH.text ("Report " <> lang <> " ")
+            HH.text (lang <> " ")
         , faIcon_ "long-arrow-right mr1"
         , let
             format = case rep ^. reportColFormat of
@@ -139,11 +119,6 @@ eval = case _ of
 
   OpenConfig' next -> do
     H.raise OpenConfig
-    pure next
-
-  SetName' name next -> do
-    oldName <- gets \st -> st.input.column ^. columnName
-    when (name /= oldName) $ H.raise $ SetName name
     pure next
 
 hasColumnErrors :: Column -> Boolean

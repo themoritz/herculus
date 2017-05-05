@@ -249,7 +249,7 @@ render st = HK.div
       [ HC.style do
           CSS.width  $ CSS.px $ toNumber 16
           CSS.left   $ CSS.px $ toNumber (left + 6)
-          CSS.top    $ CSS.px $ toNumber 7
+          CSS.top    $ CSS.px $ toNumber 5
           CSS.height $ CSS.px $ toNumber 14
       , HE.onMouseDown $ HE.input \ev -> ReorderStart ix left ev
       ]

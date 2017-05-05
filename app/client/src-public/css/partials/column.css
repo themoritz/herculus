@@ -1,7 +1,10 @@
 .column-info {
-  padding-left: 3px;
   overflow: hidden;
   white-space: nowrap;
+}
+
+.column-config__editor {
+  border: 1px solid lightgray;
 }
 
 .column-config__editor--disabled {

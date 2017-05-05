@@ -209,7 +209,6 @@ render st = HK.div
             , tables: st.input.tables
             }
           handler o = Just $ H.action case o of
-            Col.SetName name -> SendCommand $ CmdColumnSetName colId name
             Col.OpenConfig -> OpenColumnConfig' colId
         in
           HH.slot' cp2 colId Col.comp input handler

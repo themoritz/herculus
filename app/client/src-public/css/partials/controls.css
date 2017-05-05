@@ -51,7 +51,7 @@
   background: none;
   outline: none;
   color: $link;
-  padding: 3px;
+  padding: 0px;
   line-height: 15px;
   transition-property: color;
   transition-duration: 100ms;

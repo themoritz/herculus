@@ -4,7 +4,7 @@ import Herculus.Prelude
 import Halogen as H
 import Halogen.HTML as HH
 import Herculus.Monad (Herc)
-import Herculus.Utils (faButton_)
+import Herculus.Utils (cldiv_, faButton_)
 
 data Query a
   = Delete' a
@@ -22,7 +22,9 @@ comp = H.component
   }
 
 render :: State -> H.ComponentHTML Query
-render st = faButton_ "minus-circle" Delete'
+render st = cldiv_ "center"
+  [ faButton_ "minus-circle" Delete'
+  ]
 
 eval :: Query ~> H.ComponentDSL State Query Output Herc
 eval = case _ of
