@@ -115,33 +115,37 @@ typeDoc = \case
 declarationDoc :: DeclarationF Doc -> Doc
 declarationDoc = \case
   DataDecl name args constrs ->
-    textStrict "data" <+> textStrict name <+> hsep (map textStrict args) <$$>
+    textStrict "data" <+> name <+> hsep args <$$>
     indent 2 (vsep (map goConstr (zip prefixes constrs)))
     where
       prefixes = '=' : repeat '|'
-      goConstr (p, (n, as)) = char p <+> textStrict n <+> hsep as
+      goConstr (p, (n, as)) = char p <+> n <+> hsep as
   ClassDecl (name, param) supers sigs ->
-    textStrict "class" <+> goSupers <+> textStrict name <+> textStrict param <+> textStrict "where" <$$>
+    textStrict "class" <+> goSupers <+> name <+> param <+> textStrict "where" <$$>
     indent 2 (vsep sigs)
     where
     goSupers = foldr goSuper empty supers
-    goSuper (n, p) rest = textStrict n <+> textStrict p <+> textStrict "=>" <+> rest
-  InstanceDecl c cs vals ->
-    textStrict "instance" <+> constraintsDoc cs <+>
-      constraintDoc c <+> textStrict "where" <$$>
+    goSuper (n, p) rest = n <+> p <+> textStrict "=>" <+> rest
+  InstanceDecl (hCls, hTy) cs vals ->
+    textStrict "instance" <+> goConstrs <+>
+      hCls <+> hTy <+> textStrict "where" <$$>
     indent 2 (vsep vals)
+    where
+    goConstrs = foldr goConst empty cs
+    goConst (cls, t) rest = cls <+> t <+> textStrict "=>" <+> rest
   TypeDecl name poly ->
-    textStrict name <+> colon <+> polyTypeDoc poly
+    name <+> colon <+> polyTypeDoc poly
   ValueDecl name binders expr ->
-    textStrict name <+> hsep binders <+> equals <$$>
+    name <+> hsep binders <+> equals <$$>
     indent 2 expr
   FixityDecl x alias (Infix assoc fixity) ->
-    assocDoc <+> int fixity <+> textStrict x <+> textStrict "as" <+> textStrict alias
+    assocDoc <+> int fixity <+> x <+> textStrict "as" <+> alias
     where
     assocDoc = case assoc of
       AssocL -> "infixl"
       AssocR -> "infixr"
       AssocN -> "infix"
+  DeclName t -> textStrict t
 
 binderDoc :: BinderF Doc -> Doc
 binderDoc = \case

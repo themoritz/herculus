@@ -360,7 +360,6 @@ inferImplicitDefinitions defs = do
       let
         rs = [c | c <- retained, c `elem` map snd cs']
         poly = quantify (Set.toList generic) rs (applyTypeSubst s'' t)
-      traceM $ name <> " : " <> prettyPolyType poly
       pure (name, e, poly, rs)
 
     -- Resolve placeholders
@@ -648,7 +647,7 @@ checkModule :: Module -> Check (CheckEnv, Map Text Core.Expr)
 checkModule decls = do
   -- Extract all fixity declarations
   for_ (extractFixityDecls decls) $ \ExFixityDecl{..} ->
-    addOperatorAlias fOperator fAlias fFixity
+    addOperatorAlias (getText fOperator) (getText fAlias) fFixity
 
   -- Check all data declarations and extract the resulting kinds and polytypes
   (kinds, dataPolys) <- checkADTs (extractDataDecls decls)
@@ -673,11 +672,12 @@ checkModule decls = do
 
         -- Check all type signatures
         declaredTypes <- for (extractTypeDecls decls) $ \ExTypeDecl {..} -> do
-          unless (isJust $ find ((== tName) . vName) valueDecls) $
-            compileError tSpan $
-              "No implementation provided for `" <> tName <> "`."
+          let name = getText tName
+          unless (isJust $ find ((== name) . getText  .vName) valueDecls) $
+            compileError (getSpan tName) $
+              "No implementation provided for `" <> name <> "`."
           poly <- checkTypeDecl tSpan tPolyType
-          pure (tName, poly)
+          pure (name, poly)
 
         -- Check types of all value declarations
         result <- checkValueDecls (Map.fromList declaredTypes) valueDecls
@@ -787,25 +787,29 @@ checkConstraint _ (HasFields fields t@(spant :< _)) = do
 
 checkInstanceDecl :: ExInstanceDecl -> Check (DictLookup, Text)
 checkInstanceDecl ExInstanceDecl {..} = do
-  let IsIn cls t'@(stripAnn -> t) = iHead
+  let (SourceText clsSpan cls, t'@(stripAnn -> t)) = iHead
   lookupClass cls >>= \case
-    Nothing -> compileError iSpan $
-      "Instance class `" <> cls <> "` not defined."
+    Nothing -> compileError clsSpan $
+      "Class `" <> cls <> "` is not defined."
     Just (_, _, kind, sigs, insts) -> do
       -- Check kind of instance type
-      constrEnv <- map Map.unions $ for (iHead : iConstraints) $ \(IsIn _ ct) ->
+      constrEnv <- map Map.unions $ for (iHead : iConstraints) $ \(_, ct) ->
         freshKindDict $ Set.toList $ getFtvs $ stripAnn ct
       inExtendedKindEnv constrEnv $ do
-        traverse_ (checkConstraint iSpan) iConstraints
+        for_ iConstraints $ \(cls, ct) ->
+          checkConstraint (getSpan cls) (IsIn (getText cls) ct)
         k <- inferType t'
         unifyKinds iSpan k kind
       -- Check for overlapping instances
-      for_ insts $ \(_, cls', t') -> do
-        overlap <- unifyConstraints (IsIn cls t) (IsIn cls' t')
-        when overlap $ compileError iSpan "Overlapping instances"
+      for_ insts $ \(_, cls', t'') -> do
+        overlap <- unifyConstraints (IsIn cls t) (IsIn cls' t'')
+        let tSpan :< _ = t'
+        when overlap $ compileError tSpan $
+          "This instance overlaps with an instance of type `" <>
+          prettyType t'' <> "`."
       -- Check all methods are implemented and no more
       let implVals = Map.fromList $
-                     map (vName &&& vSpan) iMethods
+                     map (getText . vName &&& getSpan . vName) iMethods
       void $ flip Map.traverseWithKey implVals $ \v span' ->
         case Map.lookup v sigs of
           Nothing -> compileError span' $
@@ -813,11 +817,14 @@ checkInstanceDecl ExInstanceDecl {..} = do
           Just _ -> pure ()
       void $ flip Map.traverseWithKey sigs $ \s _ ->
         case Map.lookup s implVals of
-          Nothing -> compileError iSpan $
+          Nothing -> compileError clsSpan $
             "Class method `" <> s <> "` not implemented."
           Just _ -> pure ()
       -- Add to class env
-      addInstance cls (map (map stripAnn) iConstraints, cls, t)
+      addInstance cls
+        ( map (\(getText -> cls, ct) -> IsIn cls (stripAnn ct)) iConstraints
+        , cls
+        , t )
       -- Check instance head and derive dictionary name for this instance
       headConstructor <- getTypeConstructor iSpan t
       let dictName = "$" <> cls <> headConstructor
@@ -831,39 +838,41 @@ getTypeConstructor span = cata $ \case
 
 buildInstanceDict :: ExInstanceDecl -> Check (Text, Core.Expr)
 buildInstanceDict ExInstanceDecl {..} = do
-  let IsIn cls (stripAnn -> t) = iHead
+  let (SourceText clsSpan cls, stripAnn -> t) = iHead
   lookupClass cls >>= \case
-    Nothing -> compileError iSpan $
+    Nothing -> internalError (Just clsSpan) $
       "Internal: Instance class `" <> cls <> "` not defined."
     Just (supers, param, _, _, _) -> do
       headConstructor <- getTypeConstructor iSpan t
       -- Check instances for all superclasses are defined and build super dict
       superDicts <- for supers $ \super ->
         lookupInstanceDict (ByConstructor super headConstructor) >>= \case
-          Nothing -> compileError iSpan $
+          Nothing -> compileError clsSpan $
             "No instance for superclass `" <> super <> "` implemented."
           Just d -> pure (super, var d)
       -- Create new type variables for the instance constraints and head
       (cs, freshHeadType) <- instantiateInstance
-        ( map (map stripAnn) iConstraints
+        ( map (\(getText -> cls', stripAnn -> t') -> IsIn cls' t') iConstraints
         , cls, t )
       -- Check the method implementations
       interims <- for iMethods $ \ExValueDecl {..} -> do
-        Just (EnvType poly _, _) <- lookupType vName
+        let name = getText vName
+        Just (EnvType poly _, _) <- lookupType name
         let ForAll _ _ givenType =
               applyTypeSubst (Map.singleton param freshHeadType) poly
         (e, cs') <- checkExpr givenType vExpr
         -- TODO: make sure `cs'` equals the instance constraints
-        pure (vName, e)
+        pure (name, e)
       -- Check constraints and build dict
       -- Need to apply substitution to the constraints since the new type
       -- vairables might have been unified during checking.
       s <- getTypeSubst
-      csDict <- for (applyTypeSubst s cs) $ \(IsIn cls' t') -> do
+      let sourceCs = zip (applyTypeSubst s cs) (map snd iConstraints)
+      csDict <- for sourceCs $ \(IsIn cls' t', t'Span :< _) -> do
         n <- freshName
         v <- flip cata t' $ \case
           TypeVar v -> pure v
-          _ -> compileError iSpan $
+          _ -> compileError t'Span $
             "Type of instance constraint must be type variable."
         pure (ByTypeVar cls' v, n)
       -- Resolve placeholders
@@ -881,26 +890,28 @@ buildInstanceDict ExInstanceDecl {..} = do
 
 checkClassDecl :: ExClassDecl -> Check (Map Text EnvType)
 checkClassDecl ExClassDecl {..} = do
-  let (cls, param) = cHead
+  let (SourceText clsSpan cls, SourceText paramSpan param) = cHead
   lookupClass cls >>= \case
     Nothing -> pure ()
-    Just _ -> compileError cSpan $ "Class already defined"
-  supers' <- for cSupers $ \(super, param') -> do
-    lookupClass super >>= \case
-      Nothing ->
-        compileError cSpan $ "Superclass `" <> super <> "` not defined."
-      Just _ -> pure ()
-    when (param' /= param) $
-      compileError cSpan $ "Class parameter `" <> param' <> "` not defined."
-    pure super
+    Just _ -> compileError clsSpan $ "Class `" <> cls <> "` is already defined"
+  supers' <- for cSupers $
+    \(SourceText superSpan super, SourceText param'Span param') -> do
+      lookupClass super >>= \case
+        Nothing ->
+          compileError superSpan $ "Superclass `" <> super <> "` not defined."
+        Just _ -> pure ()
+      when (param' /= param) $
+        compileError param'Span $
+          "Class parameter `" <> param' <> "` not defined."
+      pure super
   paramKind <- freshKind
 
   inExtendedKindEnv (Map.singleton param paramKind) $ do
     sigs' <- for cMethods $ \ExTypeDecl {..} -> do
       ForAll as cs t <- checkTypeDecl tSpan tPolyType
-      when (length cs > 0) $ compileError tSpan $
+      when (length cs > 0) $ compileError (getSpan tName) $
         "Class methods are not allowed to be constrained."
-      pure ( tName
+      pure ( getText tName
            , ForAll (param:as) [IsIn cls $ typeVar param] t )
     s <- getKindSubst
     addClass cls ( supers'
@@ -914,17 +925,18 @@ checkADTs :: [ExDataDecl] -> Check (Map Text Kind, Map Text EnvType)
 checkADTs dataDecls = do
   -- TODO: Check for duplicate definitions
   -- Kind checking
-  dTypeDict <- freshKindDict $ map dName dataDecls
+  dTypeDict <- freshKindDict $ map (getText . dName) dataDecls
   inExtendedKindEnv dTypeDict $
     for_ dataDecls $ \ExDataDecl {..} -> do
-      argTypeDict <- freshKindDict dArgs
+      let args = map getText dArgs
+      argTypeDict <- freshKindDict args
       inExtendedKindEnv argTypeDict $ do
         for_ dConstrs $ \(_, cargs) ->
           for cargs $ \carg@(cargSpan :< _) -> do
             argKind <- inferType carg
             unifyKinds cargSpan kindType argKind
-      k <- fromJust <$> lookupKind dName
-      let argKinds = map (\a -> fromJust $ Map.lookup a argTypeDict) dArgs
+      k <- fromJust <$> lookupKind (getText dName)
+      let argKinds = map (\a -> fromJust $ Map.lookup a argTypeDict) args
       unifyKinds dSpan k (foldr kindFun kindType argKinds)
       pure ()
   -- Collect for env
@@ -933,8 +945,9 @@ checkADTs dataDecls = do
     kindEnv = map (tidyKind . applyKindSubst s) dTypeDict
     typeEnv = do
       ExDataDecl {..} <- dataDecls
-      let result = foldl typeApp (typeConstructor dName) (map typeVar dArgs)
-      (cname, cargs) <- dConstrs
+      let result = foldl typeApp (typeConstructor $ getText dName)
+                                 (map (typeVar . getText) dArgs)
+      (getText -> cname, cargs) <- dConstrs
       let ty = foldr (-->) result (stripAnn <$> cargs)
       pure $ (cname, ty)
     quant t = ForAll (Set.toList $ getFtvs t) [] t
@@ -947,10 +960,11 @@ checkValueDecls
   -> Check [(Text, Intermed, PolyType)]
 checkValueDecls declaredTypes decls = do
   let
-    (impls, expls) = partitionEithers $ flip map decls $ \ExValueDecl {..} ->
-      case Map.lookup vName declaredTypes of
-        Nothing -> Left (vName, vExpr)
-        Just p  -> Right (vName, vExpr, p)
+    (impls, expls) = partitionEithers $ flip map decls $ \ExValueDecl {..} -> do
+      let name = getText vName
+      case Map.lookup name declaredTypes of
+        Nothing -> Left (name, vExpr)
+        Just p  -> Right (name, vExpr, p)
   (intermeds, ds) <- inferDefinitionGroup expls impls
   unless (null ds) $ internalError Nothing $
     "Deferred the following constraints while checking top-level definitions: "

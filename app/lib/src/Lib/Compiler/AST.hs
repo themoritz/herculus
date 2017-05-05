@@ -81,18 +81,20 @@ compiled e b r = coproduct e $ coproduct b r
 
 data DeclarationF a
   -- | Name, type arguments, constructors (name, arguments)
-  = DataDecl Text [Text] [(Text, [a])]
+  = DataDecl a [a] [(a, [a])]
   -- | (Classname, param), superclasses (name, param), method signatures
   -- (type declaration)
-  | ClassDecl (Text, Text) [(Text, Text)] [a]
+  | ClassDecl (a, a) [(a, a)] [a]
   -- | Head, constraints, methods (value declaration)
-  | InstanceDecl (ConstraintF a) [ConstraintF a] [a]
+  | InstanceDecl (a, a) [(a, a)] [a]
   -- | Type signature: Name, type
-  | TypeDecl Text (PolyTypeF a)
+  | TypeDecl a (PolyTypeF a)
   -- | Name, binders, expression
-  | ValueDecl Text [a] a
+  | ValueDecl a [a] a
   -- | Alias, operator, fixity
-  | FixityDecl Text Text Fixity
+  | FixityDecl a a Fixity
+  -- | General declaration name
+  | DeclName Text
   deriving (Functor, Show)
 
 type Declaration = Fix DeclarationF

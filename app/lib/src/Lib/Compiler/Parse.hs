@@ -62,13 +62,13 @@ parseDeclaration = P.choice
 parseDataDecl :: Parser SourceAst
 parseDataDecl = withSource $ do
   P.try $ reserved "type"
-  name <- indented *> tyname
-  tyArgs <- many (indented *> identifier)
+  name <- indented *> declName tyname
+  tyArgs <- many (indented *> declName identifier)
   constructors <- P.option [] $ do
     indented *> equals
     let
       constr = (,)
-        <$> dconsname
+        <$> declName dconsname
         <*> many (indented *> (hoistCofree inj <$> parseType'))
     P.sepBy1 constr pipe
   pure $ inj (DataDecl name tyArgs constructors)
@@ -77,37 +77,42 @@ parseClassDecl :: Parser SourceAst
 parseClassDecl = withSource $ do
   P.try $ reserved "class"
   supers <- many (P.try parseSuper)
-  cls <- tyname
-  param <- identifier
+  cls <- declName tyname
+  param <- declName identifier
   reserved "where"
   indented
   decls <- mark $ many (same *> parseTypeDecl)
   pure $ inj $ ClassDecl (cls, param) supers decls
   where
-  parseSuper = (,) <$> (indented *> tyname) <*> identifier <* rfatArrow
+  parseSuper = (,) <$> (indented *> declName tyname)
+                   <*> declName identifier <* rfatArrow
 
 parseInstanceDecl :: Parser SourceAst
 parseInstanceDecl = withSource $ do
   P.try $ reserved "instance"
-  cs <- many (P.try parseConstraint)
-  cls <- tyname
+  cs <- many (P.try constraint)
+  cls <- declName tyname
   ty <- parseType
   reserved "where"
   decls <- mark $ many (same *> parseValueDecl)
-  pure $ inj $ InstanceDecl (IsIn cls (hoistCofree inj ty))
-                            (map (map (hoistCofree inj)) cs)
+  pure $ inj $ InstanceDecl (cls, (hoistCofree inj ty))
+                            (map (id *** hoistCofree inj) cs)
                             decls
+  where
+  constraint =
+    ((,) <$> (indented *> declName tyname) <*> parseType)
+    <* indented <* rfatArrow
 
 parseTypeDecl :: Parser SourceAst
 parseTypeDecl = withSource $ inj <$> (TypeDecl
-  <$> P.try (identifier <* colon)
+  <$> P.try (declName identifier <* colon)
   <*> (map (hoistCofree inj) <$> parsePolyType)
                                      )
 
 parseValueDecl :: Parser SourceAst
 parseValueDecl = withSource $ do
   (name, binders) <- P.try $ (,)
-    <$> identifier
+    <$> declName identifier
     <*> (many (hoistCofree inj <$> parseBinder) <* equals)
   expr <- parseExpr
   pure $ inj $ ValueDecl name binders expr
@@ -120,12 +125,15 @@ parseFixityDecl = withSource $ do
     , P.try (reserved "infix") $> AssocN
     ]
   fixity <- integerLit
-  x <- identifier
+  x <- declName identifier
   reserved "as"
-  op <- anySymbol
+  (span, op) <- withSpan anySymbol
   let opSpec = Infix assoc $ fromIntegral fixity
   modify $ addOpSpec op opSpec
-  pure $ inj $ FixityDecl x op opSpec
+  pure $ inj $ FixityDecl x (span :< inj (DeclName op)) opSpec
+
+declName :: Parser Text -> Parser SourceAst
+declName p = withSource $ inj . DeclName <$> p
 
 --------------------------------------------------------------------------------
 
