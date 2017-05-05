@@ -15,6 +15,7 @@ library
                      , Lib.Compiler.AST.Common
                      , Lib.Compiler.AST.Position
                      , Lib.Compiler.Check
+                     , Lib.Compiler.Check.Error
                      , Lib.Compiler.Check.Extract
                      , Lib.Compiler.Check.Monad
                      , Lib.Compiler.Core

@@ -26,6 +26,7 @@ import qualified Data.Map                  as Map
 import           Data.These                (These (..))
 
 import           Lib.Compiler.AST.Position
+import           Lib.Compiler.Check.Error
 import           Lib.Compiler.Env
 import           Lib.Compiler.Error
 import           Lib.Compiler.Parse.State
@@ -282,10 +283,7 @@ runCheck env goResolve =
           (KindFun f arg, KindFun f' arg') -> do
             unify f f'
             unify arg arg'
-          _ -> compileError span $
-            "Cannot match kind `" <>
-            prettyKind a' <> "` with `" <>
-            prettyKind b' <> "`."
+          _ -> checkError span $ KindMismatch a' b'
 
       bind :: Int -> Kind -> CheckInterpT m ()
       bind i k = do
@@ -296,10 +294,7 @@ runCheck env goResolve =
             let
               k1' = applyKindSubst subst k1
               k2' = applyKindSubst subst k2
-            compileError span $
-              "Infinite kind while trying to unify `" <>
-              prettyKind k1' <> "` with `" <>
-              prettyKind k2' <> "`."
+            checkError span $ InfiniteKind k1' k2'
           _ -> pure ()
         checkKindSubst %= kindSubstAfter (Map.singleton i k)
 
@@ -326,15 +321,9 @@ runCheck env goResolve =
           (TypeRecord m, TypeRecord m') -> do
             let unifyField k = \case
                   These t t' -> unify t t'
-                  _ -> compileError span $
-                    "Cannot unify record types `" <>
-                    prettyType a' <> "` with `" <>
-                    prettyType b' <> "` because of field `" <> k <> "`."
+                  _ -> checkError span $ FieldMismatch a' b' k
             void $ Map.traverseWithKey unifyField $ align m m'
-          _ -> compileError span $
-            "Cannot match type `" <>
-            prettyType a' <> "` with `" <>
-            prettyType b' <> "`."
+          _ -> checkError span $ TypeMismatch a' b'
 
       bind :: Text -> Type -> ExceptT Error (CheckInterpT m) ()
       bind x t = do
@@ -345,10 +334,7 @@ runCheck env goResolve =
             let
               t1' = applyTypeSubst subst t1
               t2' = applyTypeSubst subst t2
-            compileError span $
-              "Infinite type while trying to unify `" <>
-              prettyType t1' <> "` with `" <>
-              prettyType t2' <> "`."
+            checkError span $ InfiniteType t1' t2'
           _ -> pure ()
         checkTypeSubst %= typeSubstAfter (Map.singleton x t)
 

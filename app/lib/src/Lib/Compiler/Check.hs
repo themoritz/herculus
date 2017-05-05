@@ -25,6 +25,7 @@ import           Lib.Types
 import           Lib.Compiler.AST
 import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
+import           Lib.Compiler.Check.Error
 import           Lib.Compiler.Check.Extract
 import           Lib.Compiler.Check.Monad
 import qualified Lib.Compiler.Core            as Core
@@ -50,10 +51,10 @@ inferType :: SourceType -> Check Kind
 inferType = cataM $ \case
   span T.:< t -> case t of
     TypeVar v -> lookupKind v >>= \case
-      Nothing -> compileError span $ "Undefined type variable: " <> v
+      Nothing -> checkError span $ UndefinedTypeVariable v
       Just k -> pure k
     TypeConstructor c -> lookupKind c >>= \case
-      Nothing -> compileError span $ "Undefined type constructor: " <> c
+      Nothing -> checkError span $ UndefinedTypeConstructor c
       Just k -> pure k
     TypeApp kc karg -> do
       kres <- freshKind
@@ -91,8 +92,7 @@ checkExpr' t span = \case
         unifyTypes' span resultType t
         (argExpr, argCs) <- checkExpr argType arg
         pure (app fExpr argExpr, fCs <> argCs)
-      _ -> compileError fSpan $
-        "Expected function but got `" <> prettyType fType' <> "`."
+      _ -> checkError fSpan $ ExpectedFunction fType'
 
   Case scrutinee alts -> do
     (scrutExpr, scrutType, scrutCs) <- inferExpr scrutinee
@@ -151,15 +151,15 @@ inferExpr' span = \case
     pure (app fExpr argExpr, resultType, fCs <> argCs)
 
   Var x -> lookupType x >>= \case
-    Nothing -> compileError span $ "Variable `" <> x <> "` not in scope."
+    Nothing -> checkError span $ UndefinedVariable x
     Just (EnvType poly origin, x') -> do
       (constraints, t) <- instantiate poly
       e <- case origin of
         Default -> do
           let
             toPlaceholder c = case c of
-              IsIn _ _      -> dictionaryPlaceholder span (map injFix c)
-              HasFields _ t -> accessPlaceholder span (injFix t)
+              IsIn _ _       -> dictionaryPlaceholder span (map injFix c)
+              HasFields _ t' -> accessPlaceholder span (injFix t')
             placeholders = map toPlaceholder constraints
           pure $ foldl' app (var x') placeholders
         Method -> case constraints of
@@ -171,8 +171,7 @@ inferExpr' span = \case
       pure (e, t, map (span,) constraints)
 
   Constructor c -> lookupType c >>= \case
-    Nothing -> compileError span $
-      "Type constructor `" <> c <> "` not in scope."
+    Nothing -> checkError span $ UndefinedConstructor c
     Just (EnvType poly _, _) -> do
       -- Type constructors aren't constrained so no need for placeholders here.
       (_, t) <- instantiate poly
@@ -205,8 +204,8 @@ inferExpr' span = \case
     unifyTypes' fieldSpan fieldType tyString
     resultType <- freshType
     let
-      Fix (Literal (StringLit field)) = unsafePrjFix field'
-      fields = Map.singleton field resultType
+      Fix (Literal (StringLit fieldStr)) = unsafePrjFix field'
+      fields = Map.singleton fieldStr resultType
       placeholder = accessPlaceholder span (injFix eType)
     pure ( app (app placeholder e') field'
          , resultType
@@ -217,11 +216,10 @@ inferExpr' span = \case
     s <- getTypeSubst
     let eType' = applyTypeSubst s eType
     case eType' of
-      Fix (TypeTable (InId i)) -> do
+      Fix (Row (TypeTable (InId i))) -> do
         t <- getTableRecordType i
         pure (e', typeRecord t, cs)
-      _ -> compileError eSpan $
-        "Expected row type but got `" <> prettyType eType' <> "`."
+      _ -> checkError eSpan $ ExpectedRowOfTable eType'
 
 inferLiteral'
   :: LiteralF SourceAst -> Check (Intermed, Type, [ConstraintToSolve])
@@ -239,21 +237,19 @@ inferRef'
   :: Span -> RefTextF SourceAst -> Check (Intermed, Type, [ConstraintToSolve])
 inferRef' span = \case
   TableRef t -> resolveTableRef t >>= \case
-    Nothing -> compileError span $ "Cannot find table `" <> show t <> "`."
+    Nothing -> checkError span $ UnknownTable t
     Just i ->
       pure ( tableRef i
            , typeApp tyList (tyRow $ typeTable $ InId i)
            , [] )
   ColumnRef c -> resolveColumnRef c >>= \case
-    Nothing -> compileError span $ "Cannot find column `" <> show c <> "`."
+    Nothing -> checkError span $ UnknownColumn c
     Just (i, dataCol) ->
       pure ( columnRef i
            , typeOfDataType (dataCol ^. dataColType)
            , [] )
   ColumnOfTableRef t c -> resolveColumnOfTableRef t c >>= \case
-    Nothing -> compileError span $
-      "Table `" <> show t <> "` does not have a column named `" <>
-      show c <> "`."
+    Nothing -> checkError span $ UnknownColumnOfTable c t
     Just (ti, ci, dataCol) ->
       pure ( columnOfTableRef ti ci
            , typeApp tyList $ typeOfDataType (dataCol ^. dataColType)
@@ -305,15 +301,9 @@ checkExplicitDefinition (name, e@(span :< _), polyGiven) = do
   s' <- getTypeSubst
   let poly' = applyTypeSubst s' poly
   if normalizePoly polyGiven /= normalizePoly poly' then
-      compileError span $
-        "The given type signature is too general. The inferred type is\n`" <>
-        prettyPolyType poly' <> "` while the given signature was\n`" <>
-        prettyPolyType polyGiven <> "`."
+      checkError span $ SignatureTooGeneral poly' polyGiven
     else if not (null retained) then
-      compileError span $
-        "Not enough constraints given in the type signature. " <>
-        "Missing constraints that were inferred: `" <>
-        prettyConstraints retained <> "`."
+      checkError span $ SignatureMissingConstraints retained
     else do
       e'' <- resolveConstraints Map.empty e' csGiven'
       pure ((name, e'', poly), deferred)
@@ -376,15 +366,13 @@ checkBinder expected (span :< b) = case b of
     pure $ Map.singleton x $ EnvType (ForAll [] [] expected) Default
   WildcardBinder -> pure $ Map.empty
   ConstructorBinder name binders -> lookupType name >>= \case
-    Nothing -> compileError span $ "Type constructor not in scope: " <> name
+    Nothing -> checkError span $ UndefinedConstructor name
     Just (EnvType poly _, _) -> do
       (_, t) <- instantiate poly
       let
         (args, result) = peelArgs t
-      unless (length args == length binders) $ compileError span $
-        "Type constructor `" <> name <>
-        "` expects " <> show (length args) <>
-        " arguments but was given " <> show (length binders) <> "."
+      unless (length args == length binders) $ checkError span $
+        WrongNumberOfConstructorArgs name (length args) (length binders)
       unifyTypes' span expected result
       Map.unions <$> zipWithM checkBinder (reverse args) binders
   where
@@ -588,9 +576,7 @@ toHeadNormal c'@(span, c) = case c of
   IsIn cls t
     | inHeadNormal t -> pure [c']
     | otherwise      -> byInst cls t >>= \case
-        Nothing -> compileError span $
-          "The type `" <> prettyType t <>
-          "` does not implement class `" <> cls <> "`."
+        Nothing -> checkError span $ MissingInstance cls t
         Just (cs, _, _) -> join <$> traverse toHeadNormal (map (span,) cs)
   HasFields _ _ -> pure [c']
 
@@ -611,19 +597,16 @@ toHeadNormalRecord c'@(span, c) = case c of
           pure []
         InRef _ -> internalError (Just span)
           "Table ref was not resolved in type."
-    _ -> compileError span $
-      "Won't be able to access fields of type `" <> prettyType (Fix t) <> "`."
+    _ -> checkError span $ TypeDoesNotHaveFields (Fix t)
   where
     checkSubsumes :: Map Text Type -> Map Text Type -> Check ()
     checkSubsumes big small = void $Map.traverseWithKey go $ align big small
       where go k = \case
               This _ -> pure ()
-              That _ -> compileError span $
-                "Could not verify object has required field `" <> k <> "`."
+              That _ -> checkError span $ MissingField k big
               These t t' -> unifyTypes span t t' >>= \case
-                Left err -> throwError $ err
-                  { errMsg = "While checking field `" <> k <> "`: " <> errMsg err
-                  }
+                Left err -> checkAppendError err $
+                  CheckingSubsumption big small k
                 Right () -> pure ()
 
 instantiateInstance :: Instance -> Check ([Constraint], Type)
@@ -674,8 +657,7 @@ checkModule decls = do
         declaredTypes <- for (extractTypeDecls decls) $ \ExTypeDecl {..} -> do
           let name = getText tName
           unless (isJust $ find ((== name) . getText  .vName) valueDecls) $
-            compileError (getSpan tName) $
-              "No implementation provided for `" <> name <> "`."
+            checkError (getSpan tName) $ MissingImplementation name
           poly <- checkTypeDecl tSpan tPolyType
           pure (name, poly)
 
@@ -730,7 +712,7 @@ inferFormula (decls, expr@(span :< _)) = do
     s' <- getTypeSubst
     let t'' = applyTypeSubst s' t'
     let generic' = getFtvs t'' Set.\\ fixed
-    unless (null generic') $ compileError span $
+    unless (null generic') $ internalError (Just span) $
       "Inferred type `" <> prettyType t' <> "` must not be polymorphic."
     unless (null cs') $ internalError (Just span) $
       "Formula expression still has the following inferred constraints: " <>
@@ -761,7 +743,7 @@ checkTypeDecl span (ForAll as cs t) = do
     span' T.:< tF -> case tF of
       TypeTable refOrId -> case refOrId of
         InRef r -> resolveTableRef r >>= \case
-          Nothing -> compileError span' $ "Table `" <> show r <> "` not found."
+          Nothing -> checkError span' $ UnknownTable r
           Just i -> pure $ typeTable (InId i)
         InId i -> pure $ typeTable (InId i)
       TypeApp f arg -> typeApp <$> f <*> arg
@@ -771,11 +753,10 @@ checkTypeDecl span (ForAll as cs t) = do
 
 checkConstraint :: Span -> SourceConstraint -> Check ()
 checkConstraint span (IsIn cls t@(spant :< _)) = lookupClass cls >>= \case
-  Nothing -> compileError span $ "Class `" <> cls <> "` is not defined."
+  Nothing -> checkError span $ UndefinedClass cls
   Just (_, _, kind, _, _) -> do
     let t' = stripAnn t
-    unless (inHeadNormal t') $ compileError spant
-      "Constraints must be in head-normal form (starting with a type variable)."
+    unless (inHeadNormal t') $ checkError spant $ NoHeadNormalForm t'
     k <- inferType t
     unifyKinds spant k kind
 checkConstraint _ (HasFields fields t@(spant :< _)) = do
@@ -789,40 +770,35 @@ checkInstanceDecl :: ExInstanceDecl -> Check (DictLookup, Text)
 checkInstanceDecl ExInstanceDecl {..} = do
   let (SourceText clsSpan cls, t'@(stripAnn -> t)) = iHead
   lookupClass cls >>= \case
-    Nothing -> compileError clsSpan $
-      "Class `" <> cls <> "` is not defined."
+    Nothing -> checkError clsSpan $ UndefinedClass cls
     Just (_, _, kind, sigs, insts) -> do
       -- Check kind of instance type
       constrEnv <- map Map.unions $ for (iHead : iConstraints) $ \(_, ct) ->
         freshKindDict $ Set.toList $ getFtvs $ stripAnn ct
       inExtendedKindEnv constrEnv $ do
-        for_ iConstraints $ \(cls, ct) ->
-          checkConstraint (getSpan cls) (IsIn (getText cls) ct)
+        for_ iConstraints $ \(SourceText clsSpan' cls', ct) ->
+          checkConstraint clsSpan' (IsIn cls' ct)
         k <- inferType t'
         unifyKinds iSpan k kind
       -- Check for overlapping instances
       for_ insts $ \(_, cls', t'') -> do
         overlap <- unifyConstraints (IsIn cls t) (IsIn cls' t'')
         let tSpan :< _ = t'
-        when overlap $ compileError tSpan $
-          "This instance overlaps with an instance of type `" <>
-          prettyType t'' <> "`."
+        when overlap $ checkError tSpan $ OverlappingInstance t''
       -- Check all methods are implemented and no more
       let implVals = Map.fromList $
                      map (getText . vName &&& getSpan . vName) iMethods
       void $ flip Map.traverseWithKey implVals $ \v span' ->
         case Map.lookup v sigs of
-          Nothing -> compileError span' $
-            "Method `" <> v <> "` is not a member of class `" <> cls <> "`."
-          Just _ -> pure ()
+          Nothing -> checkError span' $ UndefinedMethod v cls
+          Just _  -> pure ()
       void $ flip Map.traverseWithKey sigs $ \s _ ->
         case Map.lookup s implVals of
-          Nothing -> compileError clsSpan $
-            "Class method `" <> s <> "` not implemented."
-          Just _ -> pure ()
+          Nothing -> checkError clsSpan $ MissingImplementation s
+          Just _  -> pure ()
       -- Add to class env
       addInstance cls
-        ( map (\(getText -> cls, ct) -> IsIn cls (stripAnn ct)) iConstraints
+        ( map (\(getText -> cls', ct) -> IsIn cls' (stripAnn ct)) iConstraints
         , cls
         , t )
       -- Check instance head and derive dictionary name for this instance
@@ -831,10 +807,10 @@ checkInstanceDecl ExInstanceDecl {..} = do
       pure (ByConstructor cls headConstructor, dictName)
 
 getTypeConstructor :: Span -> Type -> Check Text
-getTypeConstructor span = cata $ \case
+getTypeConstructor span t = flip cata t $ \case
   TypeConstructor c -> pure c
   TypeApp f _ -> f
-  _ -> compileError span $ "Instance head must be type constructor."
+  _ -> checkError span $ InvalidInstanceHeadType t
 
 buildInstanceDict :: ExInstanceDecl -> Check (Text, Core.Expr)
 buildInstanceDict ExInstanceDecl {..} = do
@@ -847,8 +823,7 @@ buildInstanceDict ExInstanceDecl {..} = do
       -- Check instances for all superclasses are defined and build super dict
       superDicts <- for supers $ \super ->
         lookupInstanceDict (ByConstructor super headConstructor) >>= \case
-          Nothing -> compileError clsSpan $
-            "No instance for superclass `" <> super <> "` implemented."
+          Nothing -> checkError clsSpan $ MissingSuperclassInstance super
           Just d -> pure (super, var d)
       -- Create new type variables for the instance constraints and head
       (cs, freshHeadType) <- instantiateInstance
@@ -872,8 +847,7 @@ buildInstanceDict ExInstanceDecl {..} = do
         n <- freshName
         v <- flip cata t' $ \case
           TypeVar v -> pure v
-          _ -> compileError t'Span $
-            "Type of instance constraint must be type variable."
+          _ -> checkError t'Span $ InvalidInstanceConstraintType t'
         pure (ByTypeVar cls' v, n)
       -- Resolve placeholders
       result <- inExtendedInstanceEnv (Map.fromList csDict) $
@@ -893,24 +867,23 @@ checkClassDecl ExClassDecl {..} = do
   let (SourceText clsSpan cls, SourceText paramSpan param) = cHead
   lookupClass cls >>= \case
     Nothing -> pure ()
-    Just _ -> compileError clsSpan $ "Class `" <> cls <> "` is already defined"
+    Just _ -> checkError clsSpan $ DuplicateClass cls
   supers' <- for cSupers $
     \(SourceText superSpan super, SourceText param'Span param') -> do
       lookupClass super >>= \case
         Nothing ->
-          compileError superSpan $ "Superclass `" <> super <> "` not defined."
+          checkError superSpan $ UndefinedClass super
         Just _ -> pure ()
       when (param' /= param) $
-        compileError param'Span $
-          "Class parameter `" <> param' <> "` not defined."
+        checkError param'Span $ UndefinedTypeVariable param'
       pure super
   paramKind <- freshKind
 
   inExtendedKindEnv (Map.singleton param paramKind) $ do
     sigs' <- for cMethods $ \ExTypeDecl {..} -> do
       ForAll as cs t <- checkTypeDecl tSpan tPolyType
-      when (length cs > 0) $ compileError (getSpan tName) $
-        "Class methods are not allowed to be constrained."
+      when (length cs > 0) $ checkError (getSpan tName) $
+        SignatureMustBeUnconstrained (getText tName)
       pure ( getText tName
            , ForAll (param:as) [IsIn cls $ typeVar param] t )
     s <- getKindSubst
