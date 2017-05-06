@@ -2,6 +2,7 @@ module Herculus.Config.Column where
 
 import Herculus.Prelude
 import CSS as CSS
+import Data.Map as Map
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.CSS as HC
@@ -9,12 +10,13 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Herculus.Ace as Ace
 import Herculus.EditBox as Edit
-import Data.Array (cons, null)
+import Data.Array (cons, find, null)
+import Data.Lens ((^?))
 import Halogen.Component.ChildPath (cp1, cp2, type (\/), type (<\/>))
 import Herculus.Monad (Herc, withApi)
-import Herculus.Utils (Options, clbutton_, cldiv, cldiv_, clspan, dropdown, faIcon_)
+import Herculus.Utils (Options, clbutton_, cldiv, cldiv_, dropdown, faIcon_)
 import Lib.Api.Rest (postProjectLintDataColByColumnId, postProjectLintReportColByColumnId, postProjectRunCommandsByProjectId)
-import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), CompileStatus(StatusError, StatusNone, StatusOk), DataCol, ReportCol, columnId, columnKind, columnName, dataColCompileStatus, dataColIsDerived, dataColSourceCode, dataColType, reportColCompileStatus, reportColFormat, reportColLanguage, reportColTemplate)
+import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), CompileStatus(StatusError, StatusNone, StatusOk), DataCol, ReportCol, _ColumnData, _ColumnReport, columnId, columnKind, columnName, columnTableId, dataColCompileStatus, dataColIsDerived, dataColSourceCode, dataColType, reportColCompileStatus, reportColFormat, reportColLanguage, reportColTemplate)
 import Lib.Api.Schema.Project (Command(..))
 import Lib.Compiler.Error (Error(..))
 import Lib.Custom (Id(..), ProjectTag)
@@ -66,6 +68,21 @@ emptyTmp =
   , reportFormat   : Nothing
   , reportTemplate : Nothing
   }
+
+unsavedChanges :: State -> Boolean
+unsavedChanges st =
+  isJust st.tmp.dataType ||
+  isJust st.tmp.isDerived ||
+  (case st.tmp.formula,
+        st.input.column ^? columnKind <<< _ColumnData <<< dataColSourceCode of
+    Just f, Just f' | f /= f' -> true
+    _, _ -> false) ||
+  isJust st.tmp.reportLanguage ||
+  isJust st.tmp.reportFormat ||
+  (case st.tmp.reportTemplate,
+        st.input.column ^? columnKind <<< _ColumnReport <<< reportColTemplate of
+    Just t, Just t' | t /= t' -> true
+    _, _ -> false)
 
 type Child =
   Ace.Query <\/>
@@ -216,21 +233,32 @@ render st = HH.div_
             [ faIcon_ "close fa-lg fa-fw" ]
           ]
         ]
+      unsaved = unsavedChanges st
+      disabled = if unsaved then "" else " button--disabled"
       body = cldiv_ "flex items-end"
         [ cldiv_ "font-smaller flex-auto"
-          [ HH.text $ "on table ???"
+          [ HH.text $ "Column on table "
+          , HH.b_
+            [ HH.text $ maybe "???" _.label
+                (find (\t -> t.value == st.input.column ^. columnTableId)
+                      st.input.tables)
+            ]
           ]
         , cldiv_ "font-smaller"
           [ clbutton_ "button bold mr1" Delete'
             [ faIcon_ "close red mr1"
             , HH.text "Delete"
             ]
-          , clbutton_ "button bold mr1" Reset
+          , HH.button
+            [ HP.class_ (H.ClassName $ "button bold mr1" <> disabled)
+            , HE.onClick (if unsaved then HE.input_ Reset else const Nothing)
+            , HP.disabled (not unsaved)
+            ]
             [ faIcon_ "undo gray mr1"
             , HH.text "Reset"
             ]
           , clbutton_ "button bold" Save
-            [ faIcon_ "check green mr1"
+            [ faIcon_ $ "check mr1 " <> if unsaved then "green" else "gray"
             , HH.text "Save"
             ]
           ]

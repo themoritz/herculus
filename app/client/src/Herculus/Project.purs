@@ -162,7 +162,7 @@ render st =
                        CSS.width $ CSS.px $ toNumber $ st.configWidth
                    ]
                    [ HH.slot' cp6 unit Config.comp
-                       { cols: input.cols
+                       { cols: Map.unions $ _._descColumns <$> st.projectData._pdTables
                        , tables: input.tables
                        , projectId: input.projectId
                        }
