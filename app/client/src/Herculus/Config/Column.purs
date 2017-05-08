@@ -2,7 +2,6 @@ module Herculus.Config.Column where
 
 import Herculus.Prelude
 import CSS as CSS
-import Data.Map as Map
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.CSS as HC
@@ -10,8 +9,13 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Herculus.Ace as Ace
 import Herculus.EditBox as Edit
+import Control.Monad.Aff (delay)
+import Control.Monad.Eff.Ref (Ref, newRef, readRef, writeRef)
+import Control.Monad.Fork (fork)
 import Data.Array (cons, find, null)
+import Data.Int (toNumber)
 import Data.Lens ((^?))
+import Data.Time.Duration (Milliseconds(..))
 import Halogen.Component.ChildPath (cp1, cp2, type (\/), type (<\/>))
 import Herculus.Monad (Herc, withApi)
 import Herculus.Utils (Options, clbutton_, cldiv, cldiv_, dropdown, faIcon_)
@@ -48,6 +52,7 @@ type State =
   { input :: Input
   , tmp :: Tmp
   , errors :: Array Error
+  , delayRef :: Maybe (Ref Boolean)
   }
 
 type Tmp =
@@ -194,6 +199,7 @@ comp = H.lifecycleParentComponent
     { input: _
     , tmp: emptyTmp
     , errors: []
+    , delayRef: Nothing
     }
   , render
   , eval
@@ -477,12 +483,12 @@ eval = case _ of
 
   SetReportTemplate template next -> do
     modify _{ tmp { reportTemplate = Just template } }
-    lintTemplate
+    withDelay 700 lintTemplate
     pure next
 
   SetFormula formula next -> do
     modify _{ tmp { formula = Just formula } }
-    lintFormula
+    withDelay 700 lintFormula
     pure next
 
   SetIsDerived isDerived next -> do
@@ -549,3 +555,23 @@ lintFormula = do
         modify _{ errors = errs }
         pure unit
     ColumnReport _ -> pure unit
+
+withDelay
+  :: Int
+  -> H.ParentDSL State Query Child Slot Output Herc Unit
+  -> H.ParentDSL State Query Child Slot Output Herc Unit
+withDelay duration action = do
+  { delayRef } <- get
+  case delayRef of
+    Nothing -> pure unit
+    Just r -> liftEff $ writeRef r false
+  newRef <- liftEff $ newRef true
+  _ <- fork do
+    liftAff $ delay (Milliseconds $ toNumber duration)
+    case delayRef of
+      Nothing -> action
+      Just r -> do
+        active <- liftEff $ readRef newRef
+        if active then action else pure unit
+  modify _{ delayRef = Just newRef }
+    
