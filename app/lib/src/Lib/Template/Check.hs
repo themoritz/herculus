@@ -9,6 +9,7 @@ import           Lib.Prelude
 import           Control.Comonad.Cofree
 
 import           Data.Functor.Foldable
+import           Data.List                (unzip)
 import qualified Data.Map                 as Map
 
 import           Lib.Compiler.AST
@@ -21,8 +22,11 @@ import           Lib.Template.AST
 import           Lib.Template.Core        (TplChunk, toCore)
 
 checkTemplate :: [SourceTplChunk] -> Check [TplChunk]
-checkTemplate tpls =
-  map toCore . traverse go =<< tplResolvePlaceholders =<< checkTemplate' tpls
+checkTemplate chunks = do
+  (i, cs) <- checkTemplate' chunks
+  cleanToplevelConstraints cs Nothing
+  i' <- tplResolvePlaceholders i
+  map toCore $ traverse go i'
   where
     go :: TplIntermed -> Check TplCompiled
     go (Fix i) = case i of
@@ -50,27 +54,28 @@ chunkResolvePlaceholders (Fix i) = case i of
     <*> tplResolvePlaceholders el
   TplPrint e -> tplPrint <$> resolvePlaceholders Map.empty e
 
-checkTemplate' :: [SourceTplChunk] -> Check [TplIntermed]
-checkTemplate' = traverse checkTemplateChunk
+checkTemplate' :: [SourceTplChunk] -> Check ([TplIntermed], [ConstraintToSolve])
+checkTemplate' chunks =
+  (id *** join) . unzip <$> traverse checkTemplateChunk chunks
 
-checkTemplateChunk :: SourceTplChunk -> Check TplIntermed
+checkTemplateChunk :: SourceTplChunk -> Check (TplIntermed, [ConstraintToSolve])
 checkTemplateChunk (span :< chunk) = case chunk of
-  TplText t -> pure $ tplText t
+  TplText t -> pure (tplText t, [])
   TplFor (hoistCofree unsafePrj -> binder) e body -> do
     (e', eType, cs) <- inferExpr e
     -- TODO: Check `cs` is empty
     argType <- freshType
     binderDict <- checkBinder argType binder
-    body' <- inExtendedTypeEnv binderDict $ checkTemplate' body
+    (body', bodyCs) <- inExtendedTypeEnv binderDict $ checkTemplate' body
     unifyTypes' span (typeApp tyList argType) eType
-    pure $ tplFor (injFix $ stripAnn binder) e' body'
+    pure (tplFor (injFix $ stripAnn binder) e' body', cs <> bodyCs)
   TplIf cond th el -> do
     (cond', condType, cs) <- inferExpr cond
     unifyTypes' span tyBoolean condType
-    th' <- checkTemplate' th
-    el' <- checkTemplate' el
-    pure $ tplIf cond' th' el'
+    (th', thCs) <- checkTemplate' th
+    (el', elCs) <- checkTemplate' el
+    pure (tplIf cond' th' el', cs <> thCs <> elCs)
   TplPrint e -> do
     (e', eType, cs) <- inferExpr e
     let printFn = methodPlaceholder span (IsIn "Print" $ injFix eType) "print"
-    pure $ tplPrint (app printFn e')
+    pure (tplPrint (app printFn e'), cs)

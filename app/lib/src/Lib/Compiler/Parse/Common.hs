@@ -36,7 +36,7 @@ mkOpTable embedOp combine = (map.map) binary . groupBy f . sortBy g
   binary (name, Infix assoc _) =
     let
       p = do
-        (span, _) <- withSpan $ P.try (symbol name)
+        (span, _) <- withSpan $ P.try (indented *> symbol name)
         pure $ \l r ->
           combine (combine (embedOp (span, name)) l) r
     in

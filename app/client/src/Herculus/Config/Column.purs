@@ -574,4 +574,4 @@ withDelay duration action = do
         active <- liftEff $ readRef newRef
         if active then action else pure unit
   modify _{ delayRef = Just newRef }
-    
+

@@ -677,50 +677,55 @@ checkModule decls = do
           env <- getCheckEnv
           pure (env, moduleExprs)
 
+cleanToplevelConstraints
+  :: [ConstraintToSolve] -> Maybe Type -> Check ()
+cleanToplevelConstraints cs mt = do
+  s <- getTypeSubst
+  typeEnv <- map etPoly . view checkEnvTypes <$> getCheckEnv
+  let
+    fixed = getFtvs (applyTypeSubst s typeEnv)
+    typeFtvs = case mt of
+      Nothing -> Set.empty
+      Just t  -> getFtvs (applyTypeSubst s t)
+    generic = typeFtvs Set.\\ fixed
+  (ds, rs) <- split fixed generic (applyTypeSubst s cs)
+  let cs' = map snd ds <> rs
+  -- There should be no remaining constraints here
+  unless (null cs') $ internalError Nothing $
+    "Toplevel expression still has the following deferred constraints: " <>
+    prettyConstraints (map snd cs)
+  -- Since split unifies, get substitution again
+  case mt of
+    Nothing -> pure ()
+    Just t -> do
+      s' <- getTypeSubst
+      let
+        t' = applyTypeSubst s' t
+        generic' = getFtvs t' Set.\\ fixed
+      unless (null generic') $ internalError Nothing $
+        "Inferred type `" <> prettyType t' <> "` must not be polymorphic."
+
 checkFormula :: Type -> Formula -> Check Core.Expr
-checkFormula tGiven (decls, expr@(span :< _)) = do
+checkFormula tGiven (decls, expr) = do
   (env, exprs) <- checkModule decls
   inExtendedEnv env $ do
     (i, cs) <- checkExpr tGiven expr
-    s <- getTypeSubst
-    let t' = applyTypeSubst s tGiven
-    typeEnv <- map etPoly . view checkEnvTypes <$> getCheckEnv
-    let fixed = getFtvs (applyTypeSubst s typeEnv)
-    let generic = getFtvs t' Set.\\ fixed
-    (ds, rs) <- split fixed generic (applyTypeSubst s cs)
-    let cs' = map snd ds <> rs
-    unless (null cs') $ internalError (Just span) $
-      "Formula expression still has the following deferred constraints: " <>
-      prettyConstraints (map snd cs)
+    cleanToplevelConstraints cs (Just tGiven)
     i' <- resolvePlaceholders Map.empty i
     c <- compileIntermed i'
     pure $ Core.Let (Map.toList exprs) c
 
+-- Only for internal use
 inferFormula :: Formula -> Check (Core.Expr, Type)
-inferFormula (decls, expr@(span :< _)) = do
+inferFormula (decls, expr) = do
   (env, exprs) <- checkModule decls
   inExtendedEnv env $ do
     (i, t, cs) <- inferExpr expr
-    s <- getTypeSubst
-    let t' = applyTypeSubst s t
-    typeEnv <- map etPoly . view checkEnvTypes <$> getCheckEnv
-    let fixed = getFtvs (applyTypeSubst s typeEnv)
-    let generic = getFtvs t' Set.\\ fixed
-    (ds, rs) <- split fixed generic (applyTypeSubst s cs)
-    let cs' = map snd ds <> rs
-    -- Since split unifies, get substitution again
-    s' <- getTypeSubst
-    let t'' = applyTypeSubst s' t'
-    let generic' = getFtvs t'' Set.\\ fixed
-    unless (null generic') $ internalError (Just span) $
-      "Inferred type `" <> prettyType t' <> "` must not be polymorphic."
-    unless (null cs') $ internalError (Just span) $
-      "Formula expression still has the following inferred constraints: " <>
-      prettyConstraints cs'
+    cleanToplevelConstraints cs (Just t)
     i' <- resolvePlaceholders Map.empty i
     c <- compileIntermed i'
-    -- TODO: check type given by column
-    pure (Core.Let (Map.toList exprs) c, t'')
+    s <- getTypeSubst
+    pure (Core.Let (Map.toList exprs) c, applyTypeSubst s t)
 
 checkTypeDecl :: Span -> SourcePolyType -> Check PolyType
 checkTypeDecl span (ForAll as cs t) = do
