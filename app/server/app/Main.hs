@@ -33,6 +33,7 @@ import           Lib.Model.Cell
 import           Lib.Model.Class
 import           Lib.Model.Column
 import           Lib.Model.Row
+import           Migration
 import           Monads
 import           Options                        (Options (..), getOptions)
 
@@ -91,5 +92,9 @@ main = do
   let env = HexlEnv pipe optMongoCollection connections
       webSocketApp = wsApp env
       restApp = serve routes $ rest env optAssetDir
-  putStrLn $ "Listening on port " <> show optPort <> " ..."
-  Warp.run optPort $ websocketsOr defaultConnectionOptions webSocketApp restApp
+  --
+  runHexlT env migrate >>= \case
+    Left err -> putStrLn $ "Error during migration: " <> show err
+    Right () -> do
+      putStrLn $ "Listening on port " <> show optPort <> " ..."
+      Warp.run optPort $ websocketsOr defaultConnectionOptions webSocketApp restApp

@@ -21,6 +21,7 @@ library
                      , Handler.Rest
                      , HexlNat
                      , Latex
+                     , Migration
                      , Monads
                      , Options
   build-depends:       aeson

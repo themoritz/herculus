@@ -11,9 +11,7 @@ module Engine.Monad where
 import           Lib.Prelude                  hiding (Selector)
 
 import           Control.Lens                 hiding (op, (&))
-import           Control.Monad.Except
-import           Control.Monad.Reader
-import           Control.Monad.State
+import           Control.Monad.Trans.Class
 
 import           Data.Map                     (Map)
 import qualified Data.Map                     as Map

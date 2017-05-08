@@ -6,6 +6,7 @@
 module Engine
   ( Command (..)
   , runCommands
+  , commitEngineState
   ) where
 
 import           Lib.Prelude
@@ -46,13 +47,12 @@ runCommands projectId cmds = do
     getCompileTargets >>= mapM_ compileColumn
     propagate
   -- Commit changes
-  let Store{..} = st ^. engineStore
-  commit _storeCells
-  commit _storeColumns
-  commit _storeRows
-  commit _storeTables
-  update projectId (projectDependencyGraph .~ (st ^. engineGraph))
+  commitEngineState projectId st
   -- Send changes to clients
+  broadcastStoreChanges projectId (st ^. engineStore)
+
+broadcastStoreChanges :: MonadHexl m => Id Project -> Store -> m ()
+broadcastStoreChanges projectId Store{..} = do
   connections <- withConnectionMgr $ getConnectionsToProject projectId
   sendWS connections $ WsDownProjectDiff
     projectId
@@ -66,7 +66,16 @@ filterChanges = mapMaybe f . Map.toList
   where f (i, (Change op, a)) = Just (op, Entity i a)
         f (_, (Cached, _))    = Nothing
 
-commit :: (Model a, MonadHexl m) => StoreMap a -> m ()
+commitEngineState :: MonadDB m => Id Project -> EngineState -> m ()
+commitEngineState projectId st = do
+  let Store{..} = st ^. engineStore
+  commit _storeCells
+  commit _storeColumns
+  commit _storeRows
+  commit _storeTables
+  update projectId (projectDependencyGraph .~ (st ^. engineGraph))
+
+commit :: (Model a, MonadDB m) => StoreMap a -> m ()
 commit m = do
   let filterUpserts (op, Entity i a) = case op of
         Create -> Nothing

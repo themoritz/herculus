@@ -20,6 +20,16 @@ applyFlipped x f = f x
 
 infixl 1 applyFlipped as |>
 
+compose : forall a b c. (b -> c) -> (a -> b) -> a -> c
+compose g f x = g (f x)
+
+infixr 9 compose as <<<
+
+composeFlipped : forall a b c. (a -> b) -> (b -> c) -> a -> c
+composeFlipped f g x = g (f x)
+
+infixr 9 composeFlipped as >>>
+
 --------------------------------------------------------------------------------
 -- Boolean
 

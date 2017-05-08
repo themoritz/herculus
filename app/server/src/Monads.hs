@@ -13,13 +13,14 @@
 
 module Monads
   ( AppError (..)
+  , MonadHexlEnv (..)
   , MonadDB (..)
   , MonadHexl (..)
   , HexlEnv (..)
   , HexlT
   , atomicallyConnectionMgr
   , runHexlT
-  , askHexlEnv
+  , runMongo
   ) where
 
 import           Lib.Prelude
@@ -63,6 +64,9 @@ data AppError
     -- forbidden: valid request but not allowed, e.g. session expired
   | ErrForbidden Text
   deriving (Show)
+
+class Monad m => MonadHexlEnv m where
+  askHexlEnv :: m HexlEnv
 
 -- DB layer: Typed queries
 
@@ -116,10 +120,7 @@ newtype HexlT m a = HexlT
 runHexlT :: HexlEnv -> HexlT m a -> m (Either AppError a)
 runHexlT env action = runReaderT (runExceptT (unHexlT action)) env
 
-askHexlEnv :: Monad m => HexlT m HexlEnv
-askHexlEnv = HexlT $ lift $ ask
-
-asksHexlEnv :: Monad m => (HexlEnv -> a) -> HexlT m a
+asksHexlEnv :: MonadHexlEnv m => (HexlEnv -> a) -> m a
 asksHexlEnv f = f <$> askHexlEnv
 
 instance MonadTrans HexlT where
@@ -138,6 +139,9 @@ instance MonadIO m => MonadLogger (HexlT m) where
     liftIO $ B8.putStrLn $ fromLogStr $ toLogStr msg
 
 --
+
+instance Monad m => MonadHexlEnv (HexlT m) where
+  askHexlEnv = HexlT $ lift $ ask
 
 instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
   getById :: forall a. Model a => Id a -> HexlT m (Either Text a)
@@ -277,7 +281,7 @@ atomicallyConnectionMgr ref action = atomically $ do
 
 --
 
-runMongo :: MonadIO m => Mongo.Action IO a -> HexlT m a
+runMongo :: (MonadHexlEnv m, MonadIO m) => Mongo.Action IO a -> m a
 runMongo action = do
   pipe <- asksHexlEnv envPipe
   database <- asksHexlEnv envDatabase
