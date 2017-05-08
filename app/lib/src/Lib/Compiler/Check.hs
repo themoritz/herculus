@@ -334,11 +334,16 @@ inferImplicitDefinitions defs = do
     -- Calculate deferred and retained constraints.
     s <- getTypeSubst
     let
-      ftvs (_, _, t, cs) =
+      ftvsConstr = \case
+        -- Don't count vars in ordinary constraints as FTVs for ambiguity
+        -- check to kick in.
+        IsIn _ _ -> Set.empty
+        other -> getFtvs other
+      ftvsInferred (_, _, t, cs) =
         getFtvs (applyTypeSubst s t) `Set.union`
-        getFtvs (applyTypeSubst s $ map snd cs)
+        Set.unions (map ftvsConstr (applyTypeSubst s $ map snd cs))
       fixed = getFtvs (applyTypeSubst s outerEnv)
-      generic = Set.unions (map ftvs inferred) Set.\\ fixed
+      generic = Set.unions (map ftvsInferred inferred) Set.\\ fixed
       css = applyTypeSubst s $ join $ map (view _4) inferred
     (deferred, retained) <- split fixed generic css
 
@@ -493,11 +498,23 @@ split
   :: Set Text -> Set Text -> [ConstraintToSolve]
   -> Check ([ConstraintToSolve], [Constraint])
 split fixed generic constraints = do
-  -- TODO: Use generic for constraint defaulting
   reduced <- reduce constraints
   let (deferred, retained) = flip partition reduced $ \c ->
         all (`Set.member` fixed) (getFtvs $ snd c)
+  checkAmbiguities (fixed `Set.union` generic) retained
   pure (deferred, map snd retained)
+
+checkAmbiguities
+  :: Set Text -> [ConstraintToSolve] -> Check ()
+checkAmbiguities vars cs = do
+  s <- getTypeSubst
+  for_ cs $ \(span, c) -> case c of
+    -- Only ordinary class constraints can be ambiguous
+    IsIn cls _ -> do
+      let ambiguities =
+            getFtvs (applyTypeSubst s c) Set.\\ vars
+      unless (null ambiguities) $ checkError span $ AmbiguousTypeVar cls
+    HasFields _ _ -> pure ()
 
 -- | Removes any constraint that is entailed by the others
 reduce :: [ConstraintToSolve] -> Check [ConstraintToSolve]
@@ -944,9 +961,7 @@ checkValueDecls declaredTypes decls = do
         Nothing -> Left (name, vExpr)
         Just p  -> Right (name, vExpr, p)
   (intermeds, ds) <- inferDefinitionGroup expls impls
-  unless (null ds) $ internalError Nothing $
-    "Deferred the following constraints while checking top-level definitions: "
-    <> prettyConstraints (map snd ds)
+  cleanToplevelConstraints ds Nothing
   pure intermeds
 
 --------------------------------------------------------------------------------

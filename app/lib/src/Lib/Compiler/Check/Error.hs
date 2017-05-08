@@ -60,6 +60,7 @@ data CheckError
   | FieldMismatch Type Type Text
   | InfiniteKind Kind Kind
   | InfiniteType Type Type
+  | AmbiguousTypeVar Text
 
 printCheckErr :: CheckError -> Text
 printCheckErr = \case
@@ -141,6 +142,9 @@ printCheckErr = \case
     "Infinite type while trying to unify `" <>
     prettyType expected <> "` with `" <>
     prettyType actual <> "`."
+  AmbiguousTypeVar cls ->
+    "Ambiguity detected while picking an implementation for class `" <>
+    cls <> "`."
 
 data CheckAppendError
   = CheckingSubsumption (Map Text Type) (Map Text Type) Text
