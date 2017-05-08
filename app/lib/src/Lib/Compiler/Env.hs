@@ -294,6 +294,12 @@ primEnv = Map.fromList
           (fromInteger $ round $ n * (10^p)) / (10.0^^p)
       )
     )
+  , ( "prim_toNumber"
+    , ( ForAll [] [] $ tyInteger --> tyNumber
+      , RPrimFun $ \(RInteger i) -> pure $
+        RNumber $ Number $ fromInteger i
+      )
+    )
   ]
 
 --------------------------------------------------------------------------------

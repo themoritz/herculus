@@ -75,6 +75,9 @@ instance Num Number where
 roundTo : Integer -> Number -> Number
 roundTo = prim_roundTo
 
+toNumber : Integer -> Number
+toNumber = prim_toNumber
+
 --------------------------------------------------------------------------------
 -- Eq
 
