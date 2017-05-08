@@ -88,6 +88,23 @@ spanTypeApp f@(fspan :< _) arg@(argspan :< _) =
 
 --------------------------------------------------------------------------------
 
+instance {-# OVERLAPS #-} Eq Kind where
+  a == b = toOrdKind a == toOrdKind b
+
+data OrdKind
+  = OKType
+  | OKFun OrdKind OrdKind
+  | OKUnknown Int
+  | OKTable
+  deriving (Eq, Ord)
+
+toOrdKind :: Kind -> OrdKind
+toOrdKind = cata $ \case
+  KindType -> OKType
+  KindFun a b -> OKFun a b
+  KindUnknown i -> OKUnknown i
+  KindTable -> OKTable
+
 instance {-# OVERLAPS #-} Eq Type where
   a == b = toOrdType a == toOrdType b
 

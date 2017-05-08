@@ -58,7 +58,7 @@ inferType = cataM $ \case
       Just k -> pure k
     TypeApp kc karg -> do
       kres <- freshKind
-      unifyKinds span kc (kindFun karg kres)
+      unifyKinds span (kindFun karg kres) kc
       pure kres
     TypeTable _ ->
       pure kindTable
@@ -89,7 +89,7 @@ checkExpr' t span = \case
     let fType' = applyTypeSubst s fType
     case fType' of
       Arrow argType resultType -> do
-        unifyTypes' span resultType t
+        unifyTypes' span t resultType
         (argExpr, argCs) <- checkExpr argType arg
         pure (app fExpr argExpr, fCs <> argCs)
       _ -> checkError fSpan $ ExpectedFunction fType'
@@ -112,7 +112,7 @@ checkExpr' t span = \case
 
   other -> do
     (e, t', cs) <- inferExpr' span other
-    unifyTypes' span t' t
+    unifyTypes' span t t'
     pure (e, cs)
 
 checkRef'
@@ -120,7 +120,7 @@ checkRef'
   -> Check (Intermed, [ConstraintToSolve])
 checkRef' t span ref = do
   (e, t', cs) <- inferRef' span ref
-  unifyTypes span t' t
+  unifyTypes' span t t'
   pure (e, cs)
 
 --------------------------------------------------------------------------------
@@ -147,7 +147,7 @@ inferExpr' span = \case
     (fExpr, fType, fCs) <- inferExpr f
     (argExpr, argType, argCs) <- inferExpr arg
     resultType <- freshType
-    unifyTypes' span fType (argType --> resultType)
+    unifyTypes' span (argType --> resultType) fType
     pure (app fExpr argExpr, resultType, fCs <> argCs)
 
   Var x -> lookupType x >>= \case
@@ -201,7 +201,7 @@ inferExpr' span = \case
   Access e field@(fieldSpan :< _) -> do
     (e', eType, cs) <- inferExpr e
     (field', fieldType, _) <- inferExpr field
-    unifyTypes' fieldSpan fieldType tyString
+    unifyTypes' fieldSpan tyString fieldType
     resultType <- freshType
     let
       Fix (Literal (StringLit fieldStr)) = unsafePrjFix field'
@@ -328,7 +328,7 @@ inferImplicitDefinitions defs = do
       (e', t, cs) <- inferExpr e
       -- Unify the inferred type with the fresh type to deal with recursion.
       Just (EnvType (ForAll _ _ t') _, _) <- lookupType name
-      unifyTypes' span t t'
+      unifyTypes' span t' t
       pure (name, e', t, cs)
 
     -- Calculate deferred and retained constraints.
@@ -484,6 +484,8 @@ resolvePlaceholders recConstrs =
             prettyConstraint (IsIn cls t')
           Just inst -> do
             (cs, t'') <- instantiateInstance inst
+            -- Important that t'' is on the left because we want to substitute
+            -- the type vars there. TODO: Maybe user matchTypes instead?
             unifyTypes' span t'' t
             let dictPlaceholders =
                   map (dictionaryPlaceholder span . map injFix) cs
@@ -617,11 +619,11 @@ toHeadNormalRecord c'@(span, c) = case c of
     _ -> checkError span $ TypeDoesNotHaveFields (Fix t)
   where
     checkSubsumes :: Map Text Type -> Map Text Type -> Check ()
-    checkSubsumes big small = void $Map.traverseWithKey go $ align big small
+    checkSubsumes big small = void $ Map.traverseWithKey go $ align big small
       where go k = \case
               This _ -> pure ()
               That _ -> checkError span $ MissingField k big
-              These t t' -> unifyTypes span t t' >>= \case
+              These t t' -> unifyTypes span t' t >>= \case
                 Left err -> checkAppendError err $
                   CheckingSubsumption big small k
                 Right () -> pure ()
@@ -749,7 +751,7 @@ checkTypeDecl span (ForAll as cs t) = do
   quantifierDict <- freshKindDict as
   inExtendedKindEnv quantifierDict $ do
     inferred <- inferType t
-    unifyKinds span inferred kindType
+    unifyKinds span kindType inferred
     traverse_ (checkConstraint span) cs
     ForAll as <$> traverse goConstr cs <*> goType t
   where
@@ -780,13 +782,13 @@ checkConstraint span (IsIn cls t@(spant :< _)) = lookupClass cls >>= \case
     let t' = stripAnn t
     unless (inHeadNormal t') $ checkError spant $ NoHeadNormalForm t'
     k <- inferType t
-    unifyKinds spant k kind
+    unifyKinds spant kind k
 checkConstraint _ (HasFields fields t@(spant :< _)) = do
   k <- inferType t
-  unifyKinds spant k kindType
+  unifyKinds spant kindType k
   for_ fields $ \f@(spanf :< _) -> do
     k' <- inferType f
-    unifyKinds spanf k' kindType
+    unifyKinds spanf kindType k'
 
 checkInstanceDecl :: ExInstanceDecl -> Check (DictLookup, Text)
 checkInstanceDecl ExInstanceDecl {..} = do
@@ -801,7 +803,7 @@ checkInstanceDecl ExInstanceDecl {..} = do
         for_ iConstraints $ \(SourceText clsSpan' cls', ct) ->
           checkConstraint clsSpan' (IsIn cls' ct)
         k <- inferType t'
-        unifyKinds iSpan k kind
+        unifyKinds iSpan kind k
       -- Check for overlapping instances
       for_ insts $ \(_, cls', t'') -> do
         overlap <- unifyConstraints (IsIn cls t) (IsIn cls' t'')

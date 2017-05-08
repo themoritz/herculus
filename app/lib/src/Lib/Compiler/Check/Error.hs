@@ -55,8 +55,10 @@ data CheckError
   | InvalidInstanceConstraintType Type
   | OverlappingInstance Type
   | DuplicateClass Text
-  | KindMismatch Kind Kind
-  | TypeMismatch Type Type
+  -- | Sub left and right, expected and actual
+  | KindMismatch Kind Kind Kind Kind
+  -- | Sub left and right, expected and actual
+  | TypeMismatch Type Type Type Type
   | FieldMismatch Type Type Text
   | InfiniteKind Kind Kind
   | InfiniteType Type Type
@@ -122,14 +124,24 @@ printCheckErr = \case
     prettyType otherType <> "`."
   DuplicateClass cls ->
     "Class `" <> cls <> "` is already defined"
-  KindMismatch expected actual ->
-    "Cannot match kind `" <>
-    prettyKind expected <> "` with `" <>
-    prettyKind actual <> "`."
-  TypeMismatch expected actual ->
-    "Cannot match type `" <>
-    prettyType expected <> "` with `" <>
-    prettyType actual <> "`."
+  KindMismatch a b expected actual -> if a == expected && b == actual
+    then "Cannot match expected kind `" <>
+         prettyKind expected <> "` with actual kind`" <>
+         prettyKind actual <> "`."
+    else "Cannot match `" <>
+         prettyKind a <> "` with `" <>
+         prettyKind b <> "`. Expected kind is `" <>
+         prettyKind expected <> "` while actual kind is `" <>
+         prettyKind actual <> "`."
+  TypeMismatch a b expected actual -> if a == expected && b == actual
+    then "Cannot match expected type `" <>
+         prettyType expected <> "` with actual type`" <>
+         prettyType actual <> "`."
+    else "Cannot match `" <>
+         prettyType a <> "` with `" <>
+         prettyType b <> "`. Expected type is `" <>
+         prettyType expected <> "` while actual type is `" <>
+         prettyType actual <> "`."
   FieldMismatch expected actual field ->
     "Cannot unify record types `" <>
     prettyType expected <> "` with `" <>

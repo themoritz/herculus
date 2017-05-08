@@ -28,15 +28,12 @@ import           Lib.Types
 data CellContent
   = CellValue Value
   | CellError Text
-  deriving (Eq, Show, Typeable, Generic)
+  deriving (Eq, Show, Typeable, Generic, ToJSON, FromJSON)
 
 cellContentDoc :: CellContent -> Doc
 cellContentDoc = \case
   CellValue v -> valueDoc v
   CellError e -> textStrict "Error:" <+> textStrict e
-
-instance ToJSON CellContent
-instance FromJSON CellContent
 
 instance ToBSON CellContent
 instance FromBSON CellContent
@@ -59,10 +56,7 @@ data Value
   | VBool Bool
   | VList [Value]
   | VMaybe (Maybe Value)
-  deriving (Show, Generic, Typeable, Eq)
-
-instance ToJSON Value
-instance FromJSON Value
+  deriving (Show, Generic, Typeable, Eq, ToJSON, FromJSON)
 
 valueDoc :: Value -> Doc
 valueDoc = error "not defined"
@@ -106,7 +100,7 @@ data Cell = Cell
   , _cellTableId  :: Id Table
   , _cellColumnId :: Id Column
   , _cellRowId    :: Id Row
-  } deriving (Generic)
+  } deriving (Generic, ToJSON, FromJSON)
 
 makeLenses ''Cell
 
@@ -114,9 +108,6 @@ newCell :: Id Table -> Id Column -> Id Row -> CellContent -> Cell
 newCell t c r content = Cell content t c r
 
 instance Model Cell where collectionName = const "cells"
-
-instance ToJSON Cell
-instance FromJSON Cell
 
 instance ToDocument Cell where
   toDocument (Cell con t c r) =
