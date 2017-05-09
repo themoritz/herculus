@@ -675,9 +675,9 @@ checkModule decls = do
         -- Check all type signatures
         declaredTypes <- for (extractTypeDecls decls) $ \ExTypeDecl {..} -> do
           let name = getText tName
+          poly <- checkTypeDecl tSpan tPolyType
           unless (isJust $ find ((== name) . getText  .vName) valueDecls) $
             checkError (getSpan tName) $ MissingImplementation name
-          poly <- checkTypeDecl tSpan tPolyType
           pure (name, poly)
 
         -- Check types of all value declarations

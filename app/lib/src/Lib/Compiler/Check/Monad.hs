@@ -283,7 +283,11 @@ runCheck env goResolve =
           (KindFun f arg, KindFun f' arg') -> do
             unify f f'
             unify arg arg'
-          _ -> checkError span $ KindMismatch a' b' k1 k2
+          _ -> do
+            let
+              k1'' = applyKindSubst subst k1
+              k2'' = applyKindSubst subst k2
+            checkError span $ KindMismatch a' b' k1'' k2''
 
       bind :: Int -> Kind -> CheckInterpT m ()
       bind i k = do
@@ -323,7 +327,11 @@ runCheck env goResolve =
                   These t t' -> unify t t'
                   _ -> checkError span $ FieldMismatch a' b' k
             void $ Map.traverseWithKey unifyField $ align m m'
-          _ -> checkError span $ TypeMismatch a' b' t1 t2
+          _ -> do
+            let
+              t1'' = applyTypeSubst subst t1
+              t2'' = applyTypeSubst subst t2
+            checkError span $ TypeMismatch a' b' t1'' t2''
 
       bind :: Text -> Type -> ExceptT Error (CheckInterpT m) ()
       bind x t = do

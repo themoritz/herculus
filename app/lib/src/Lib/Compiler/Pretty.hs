@@ -29,52 +29,72 @@ import           Lib.Compiler.Type
 import           Lib.Types
 
 prettyKind :: Kind -> Text
-prettyKind = show . cata kindDoc
+prettyKind = show . fst . cata kindDoc
   where
+  kindDoc :: KindF BDoc -> BDoc
   kindDoc = \case
-    KindType      -> textStrict "Type"
-    KindFun f arg -> parens $ f <+> textStrict "->" <+> arg
-    KindUnknown v -> int v
-    KindTable     -> textStrict "Table"
+    KindType ->
+      (textStrict "Type", 0)
+    KindFun (f, nF) (arg, nArg) ->
+      (pF <+> textStrict "->" <+> pArg, 2)
+      where
+        pF = if nF >= 2 then parens f else f
+        pArg = if nArg > 2 then parens arg else arg
+    KindUnknown v ->
+      (int v, 0)
+    KindTable ->
+      (textStrict "Table", 0)
 
 prettyType :: Type -> Text
-prettyType = show . histo typeDoc
+prettyType = show . fst . histo typeDoc
 
 prettyPolyType :: PolyTypeF Type -> Text
-prettyPolyType = show . polyTypeDoc . map (histo typeDoc)
+prettyPolyType = show . polyTypeDoc . map (fst . histo typeDoc)
 
 prettyConstraint :: Constraint -> Text
-prettyConstraint = show . constraintDoc . map (histo typeDoc)
+prettyConstraint = show . constraintDoc . map (fst . histo typeDoc)
 
 prettyConstraints :: [Constraint] -> Text
-prettyConstraints = show . constraintsDoc . map (map (histo typeDoc))
+prettyConstraints = show . constraintsDoc . map (map (fst . histo typeDoc))
 
 prettyBinder :: Binder -> Text
 prettyBinder = show . cata binderDoc
 
 --------------------------------------------------------------------------------
 
-prettyAst :: Ast -> Text
-prettyAst = show . histo astDoc
+-- Second part is the "bracketing need". Currently only used for types and
+-- kinds.
+--
+-- 0: atoms, never bracket
+-- 1: App, left-associative
+-- 2: ->, right-associative
+type BDoc = (Doc, Int)
 
-astDoc :: AstF (Cofree AstF Doc) -> Doc
+liftPretty
+  :: Functor f => (f Doc -> Doc) -> f (Cofree g BDoc) -> BDoc
+liftPretty = liftAlg . imapAlg (,0) fst
+
+prettyAst :: Ast -> Text
+prettyAst = show . fst . histo astDoc
+
+astDoc :: AstF (Cofree AstF BDoc) -> BDoc
 astDoc = ast
-  (liftAlg declarationDoc)
-  (liftAlg exprDoc)
-  (liftAlg binderDoc)
+  (liftPretty declarationDoc)
+  (liftPretty exprDoc)
+  (liftPretty binderDoc)
   (typeDoc . map (hoistCofree unsafePrj))
-  (liftAlg refTextDoc)
+  (liftPretty refTextDoc)
 
 prettyIntermed :: Intermed -> Text
-prettyIntermed = show . histo intermedDoc
+prettyIntermed = show . fst . histo intermedDoc
 
-intermedDoc :: IntermedF (Cofree IntermedF Doc) -> Doc
+intermedDoc :: IntermedF (Cofree IntermedF BDoc) -> BDoc
 intermedDoc = intermed
-  (liftAlg exprDoc)
-  (liftAlg binderDoc)
+  (liftPretty exprDoc)
+  (liftPretty binderDoc)
   (typeDoc . map (hoistCofree unsafePrj))
-  (liftAlg placeholderDoc)
-  (liftAlg refIdDoc)
+  (liftPretty placeholderDoc)
+  (liftPretty refIdDoc)
 
 --------------------------------------------------------------------------------
 
@@ -100,17 +120,28 @@ constraintsDoc :: [ConstraintF Doc] -> Doc
 constraintsDoc = foldr go empty where
   go c rest = constraintDoc c <+> textStrict "=>" <+> rest
 
-typeDoc :: TypeF (Cofree TypeF Doc) -> Doc
+typeDoc :: TypeF (Cofree TypeF BDoc) -> BDoc
 typeDoc = \case
-  TypeVar v -> textStrict v
-  TypeConstructor c -> textStrict c
-  TypeApp (_ :< TypeApp (arr :< TypeConstructor "->") (a :< _)) (b :< _) ->
-    parens (a <+> arr <+> b)
-  TypeApp (f :< _) (arg :< _) -> parens (f <+> arg)
-  TypeTable t -> textStrict "#" <> textStrict (show t)
-  TypeRecord m -> recordDoc (map goField (Map.toList m))
+  TypeVar v ->
+    (textStrict v, 0)
+  TypeConstructor c ->
+    (textStrict c, 0)
+  TypeApp (_ :< TypeApp ((arr, _) :< TypeConstructor "->") ((a, nA) :< _)) ((b, nB) :< _) ->
+    (pA <+> arr <+> pB, 2)
     where
-      goField (k, v :< _) = textStrict k <+> char ':' <+> v
+      pA = if nA >= 2 then parens a else a
+      pB = if nB > 2 then parens b else b
+  TypeApp ((f, nF) :< _) ((arg, nArg) :< _) ->
+    (pF <+> pArg, 1)
+    where
+      pF = if nF > 1 then parens f else f
+      pArg = if nArg >= 1 then parens arg else arg
+  TypeTable t ->
+    (textStrict "#" <> textStrict (show t), 0)
+  TypeRecord m ->
+    (recordDoc (map goField (Map.toList m)), 0)
+    where
+      goField (k, (v, _) :< _) = textStrict k <+> char ':' <+> v
 
 declarationDoc :: DeclarationF Doc -> Doc
 declarationDoc = \case

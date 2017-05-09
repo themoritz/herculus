@@ -29,8 +29,11 @@ stripAnn (_ :< e) = Fix $ map stripAnn e
 liftAlg :: Functor f => (f a -> a) -> f (Cofree g a) -> a
 liftAlg alg = alg . map (\(a :< _) -> a)
 
-mapAlg :: (f ~> g) -> (g a -> a) -> f a -> a
-mapAlg nat alg = alg . nat
+hoistAlg :: (f ~> g) -> (g a -> a) -> f a -> a
+hoistAlg nat alg = alg . nat
+
+imapAlg :: Functor f => (a -> b) -> (b -> a) -> (f a -> a) -> f b -> b
+imapAlg i j alg = i . alg . map j
 
 -- | Change the base functor of a fixed point
 hoistFix :: Functor f => (f ~> g) -> Fix f -> Fix g

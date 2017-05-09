@@ -126,7 +126,7 @@ printCheckErr = \case
     "Class `" <> cls <> "` is already defined"
   KindMismatch a b expected actual -> if a == expected && b == actual
     then "Cannot match expected kind `" <>
-         prettyKind expected <> "` with actual kind`" <>
+         prettyKind expected <> "` with actual kind `" <>
          prettyKind actual <> "`."
     else "Cannot match `" <>
          prettyKind a <> "` with `" <>
@@ -135,7 +135,7 @@ printCheckErr = \case
          prettyKind actual <> "`."
   TypeMismatch a b expected actual -> if a == expected && b == actual
     then "Cannot match expected type `" <>
-         prettyType expected <> "` with actual type`" <>
+         prettyType expected <> "` with actual type `" <>
          prettyType actual <> "`."
     else "Cannot match `" <>
          prettyType a <> "` with `" <>
