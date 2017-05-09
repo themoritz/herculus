@@ -8,6 +8,7 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE StandaloneDeriving    #-}
+{-# LANGUAGE PatternSynonyms       #-}
 -- |
 
 module Lib.Compiler.AST where
@@ -37,6 +38,9 @@ type Formula = ([SourceAst], SourceAst)
 
 type AstF =
   DeclarationF :+: ExprF :+: BinderF :+: TypeF :+: RefTextF
+
+pattern ExprPat :: ExprF a -> AstF a
+pattern ExprPat e = InjR (InjL e)
 
 instance Show a => Show (AstF a) where
   show = ast show show show show show

@@ -83,16 +83,8 @@ checkExpr' t span = \case
           inExtendedTypeEnv binderDict $ checkExpr resultType body
         pure (abs (injFix $ stripAnn binder) bodyExpr, bodyCs)
 
-  App f@(fSpan :< _) arg -> do
-    (fExpr, fType, fCs) <- inferExpr f
-    s <- getTypeSubst
-    let fType' = applyTypeSubst s fType
-    case fType' of
-      Arrow argType resultType -> do
-        unifyTypes' span t resultType
-        (argExpr, argCs) <- checkExpr argType arg
-        pure (app fExpr argExpr, fCs <> argCs)
-      _ -> checkError fSpan $ ExpectedFunction fType'
+  e@(App _ _) -> do
+    checkApp t (span :< inj e)
 
   Case scrutinee alts -> do
     (scrutExpr, scrutType, scrutCs) <- inferExpr scrutinee
@@ -122,6 +114,16 @@ checkRef' t span ref = do
   (e, t', cs) <- inferRef' span ref
   unifyTypes' span t t'
   pure (e, cs)
+
+checkApp :: Type -> SourceAst -> Check (Intermed, [ConstraintToSolve])
+checkApp t' = \case
+  _ :< ExprPat (App f arg) -> do
+    argType <- freshType
+    (fExpr, fCs) <- checkApp (argType --> t') f
+    (argExpr, argCs) <- checkExpr argType arg
+    pure (app fExpr argExpr, fCs <> argCs)
+  other ->
+    checkExpr t' other
 
 --------------------------------------------------------------------------------
 
