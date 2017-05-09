@@ -8,11 +8,12 @@ module Lib.Compiler where
 
 import           Lib.Prelude
 
-import           Data.FileEmbed            (embedStringFile,
-                                            makeRelativeToProject)
-import qualified Data.Map                  as Map
+import           Data.FileEmbed               (embedStringFile,
+                                               makeRelativeToProject)
+import qualified Data.Map                     as Map
 
-import           Text.Show.Pretty          (ppShow)
+import           Text.PrettyPrint.Leijen.Text (Doc)
+import           Text.Show.Pretty             (ppShow)
 
 import           Lib.Model.Cell
 import           Lib.Model.Column
@@ -23,6 +24,7 @@ import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Check
 import           Lib.Compiler.Check.Monad
 import           Lib.Compiler.Core
+import           Lib.Compiler.Docs
 import           Lib.Compiler.Env
 import           Lib.Compiler.Error
 import           Lib.Compiler.Eval
@@ -60,6 +62,14 @@ evalFormula
 evalFormula expr getter env = runEval 5000 getter $ do
   r <- eval env expr
   storeValue r
+
+documentModule
+  :: Monad m => Text -> Resolver m -> CheckEnv
+  -> m (Either Error Doc)
+documentModule src resolver env = runExceptT $ do
+  e <- hoistError $ parse src (mkCheckEnvOpTable env) parseModule
+  ExceptT $ runCheck env resolver $ checkModule e
+  pure $ moduleDoc e
 
 --------------------------------------------------------------------------------
 
@@ -168,3 +178,8 @@ testEval src = do
     Right (t, val) -> do
       putStrLn $ "Type: " <> prettyType t
       print val
+
+testDocs :: Text -> IO ()
+testDocs src = documentModule src voidResolver primCheckEnv >>= \case
+  Left err -> putStrLn $ displayError src err
+  Right doc -> print doc

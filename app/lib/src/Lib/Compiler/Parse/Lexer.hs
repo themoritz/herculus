@@ -5,6 +5,8 @@ module Lib.Compiler.Parse.Lexer where
 
 import           Lib.Prelude
 
+import           Control.Lens
+
 import qualified Data.Char                 as C
 import qualified Data.Text                 as T
 
@@ -27,17 +29,39 @@ testParser p s =
 
 --------------------------------------------------------------------------------
 
+whitespace :: Parser ()
+whitespace = P.skipMany (P.satisfy C.isSpace)
+
+comment :: Parser Text
+comment = blockComment <|> lineComment
+  where
+  blockComment :: Parser Text
+  blockComment = P.try $ do
+    text' "{-"
+    (T.pack <$> P.manyTill P.anyChar (P.try (text' "-}")))
+
+  lineComment :: Parser Text
+  lineComment = P.try $ do
+    text' "--"
+    (T.pack <$> P.manyTill P.anyChar (P.try (void (P.char '\n') <|> P.eof)))
+
+-- Skips whitespace and collects docstrings
 scn :: Parser ()
-scn = L.space
-  (void P.spaceChar)
-  (L.skipLineComment "--")
-  (L.skipBlockComment "{-" "-}")
+scn = do
+  whitespace
+  dss <- map join $ many $ do
+    (T.stripPrefix " | " -> mDocString) <- comment
+    whitespace
+    pure $ case mDocString of
+      Nothing        -> []
+      Just docString -> [docString]
+  when (length dss > 0) $ parserLastDocString .= (T.intercalate "\n" dss)
 
 lexeme :: Parser a -> Parser a
 lexeme p = do
   x <- p
   pos <- getPosition
-  modify $ \st -> st { parserLastTokenEnd = prevColumn pos }
+  parserLastTokenEnd .= prevColumn pos
   scn
   pure x
 
@@ -54,17 +78,17 @@ getPosition = fromSourcePos <$> P.getPosition
 
 mark :: Parser a -> Parser a
 mark p = do
-  current <- gets parserIndentation
+  current <- use parserIndentation
   pos <- P.unPos . P.sourceColumn <$> P.getPosition
-  modify $ \st -> st { parserIndentation = pos }
+  parserIndentation .= pos
   a <- p
-  modify $ \st -> st { parserIndentation = current }
+  parserIndentation .= current
   pure a
 
 checkIndentation :: (Word -> Text) -> (Word -> Word -> Bool) -> Parser ()
 checkIndentation mkMsg rel = do
   pos <- P.unPos . P.sourceColumn <$> P.getPosition
-  current <- gets parserIndentation
+  current <- use parserIndentation
   guard (pos `rel` current) P.<?> T.unpack (mkMsg current)
 
 indented :: Parser ()

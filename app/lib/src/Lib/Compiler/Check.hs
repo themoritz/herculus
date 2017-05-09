@@ -648,7 +648,7 @@ instantiate (ForAll as cs t) = do
 --------------------------------------------------------------------------------
 
 checkModule :: Module -> Check (CheckEnv, Map Text Core.Expr)
-checkModule decls = do
+checkModule (extractDecls -> decls) = do
   -- Extract all fixity declarations
   for_ (extractFixityDecls decls) $ \ExFixityDecl{..} ->
     addOperatorAlias (getText fOperator) (getText fAlias) fFixity
@@ -930,7 +930,7 @@ checkADTs dataDecls = do
       let args = map getText dArgs
       argTypeDict <- freshKindDict args
       inExtendedKindEnv argTypeDict $ do
-        for_ dConstrs $ \(_, cargs) ->
+        for_ dConstrs $ \(_, _, cargs) ->
           for cargs $ \carg@(cargSpan :< _) -> do
             argKind <- inferType carg
             unifyKinds cargSpan kindType argKind
@@ -946,7 +946,7 @@ checkADTs dataDecls = do
       ExDataDecl {..} <- dataDecls
       let result = foldl typeApp (typeConstructor $ getText dName)
                                  (map (typeVar . getText) dArgs)
-      (getText -> cname, cargs) <- dConstrs
+      (_, getText -> cname, cargs) <- dConstrs
       let ty = foldr (-->) result (stripAnn <$> cargs)
       pure $ (cname, ty)
     quant t = ForAll (Set.toList $ getFtvs t) [] t

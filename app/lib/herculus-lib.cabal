@@ -19,6 +19,7 @@ library
                      , Lib.Compiler.Check.Extract
                      , Lib.Compiler.Check.Monad
                      , Lib.Compiler.Core
+                     , Lib.Compiler.Docs
                      , Lib.Compiler.Env
                      , Lib.Compiler.Error
                      , Lib.Compiler.Eval
@@ -114,6 +115,23 @@ executable psc-gen
                      , purescript-bridge
                      , servant-purescript
                      , text
+  ghc-options:         -Wall
+
+executable doc-gen
+  hs-source-dirs:      doc-gen
+  main-is:             Main.hs
+  other-modules:       Options
+  default-language:    Haskell2010
+  build-depends:       base
+                     , containers
+                     , herculus-lib
+                     , lens
+                     , optparse-applicative
+                     , text
+  default-extensions:  OverloadedStrings
+                     , LambdaCase
+                     , NoImplicitPrelude
+  ghc-options:         -Wall
 
 test-suite herculus-lib-test
   type:                exitcode-stdio-1.0

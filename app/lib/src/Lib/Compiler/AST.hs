@@ -84,15 +84,16 @@ compiled e b r = coproduct e $ coproduct b r
 --------------------------------------------------------------------------------
 
 data DeclarationF a
-  -- | Name, type arguments, constructors (name, arguments)
-  = DataDecl a [a] [(a, [a])]
-  -- | (Classname, param), superclasses (name, param), method signatures
-  -- (type declaration)
-  | ClassDecl (a, a) [(a, a)] [a]
+  -- | DocString, Name, type arguments, constructors (DocString, name,
+  -- arguments)
+  = DataDecl Text a [a] [(Text, a, [a])]
+  -- | DocString, (Classname, param), superclasses (name, param), method
+  -- signatures (type declaration)
+  | ClassDecl Text (a, a) [(a, a)] [a]
   -- | Head, constraints, methods (value declaration)
   | InstanceDecl (a, a) [(a, a)] [a]
-  -- | Type signature: Name, type
-  | TypeDecl a (PolyTypeF a)
+  -- | Type signature: DocString, name, type
+  | TypeDecl Text a (PolyTypeF a)
   -- | Name, binders, expression
   | ValueDecl a [a] a
   -- | Alias, operator, fixity

@@ -12,6 +12,7 @@ module Lib.Compiler.Parse
 import           Lib.Prelude
 
 import           Control.Comonad.Cofree
+import           Control.Lens              hiding ((:<), op)
 
 import           Data.Foldable             (foldl')
 import qualified Data.Map                  as Map
@@ -61,28 +62,34 @@ parseDeclaration = P.choice
 
 parseDataDecl :: Parser SourceAst
 parseDataDecl = withSource $ do
+  docString <- use parserLastDocString
   P.try $ reserved "type"
+  -- We reset the docstring state after we've committed to this declaration
+  parserLastDocString .= ""
   name <- indented *> declName tyname
   tyArgs <- many (indented *> declName identifier)
   constructors <- P.option [] $ do
     indented *> equals
     let
-      constr = (,)
-        <$> declName dconsname
+      constr = (,,)
+        <$> (use parserLastDocString <* (parserLastDocString .= ""))
+        <*> declName dconsname
         <*> many (indented *> (hoistCofree inj <$> parseType'))
     P.sepBy1 constr pipe
-  pure $ inj (DataDecl name tyArgs constructors)
+  pure $ inj (DataDecl docString name tyArgs constructors)
 
 parseClassDecl :: Parser SourceAst
 parseClassDecl = withSource $ do
+  docString <- use parserLastDocString
   P.try $ reserved "class"
+  parserLastDocString .= ""
   supers <- many (P.try parseSuper)
   cls <- indented *> declName tyname
   param <- indented *> declName identifier
   indented *> reserved "where"
   indented
   decls <- mark $ many (same *> parseTypeDecl)
-  pure $ inj $ ClassDecl (cls, param) supers decls
+  pure $ inj $ ClassDecl docString (cls, param) supers decls
   where
   parseSuper = (,) <$> (indented *> declName tyname)
                    <*> (indented *> declName identifier <* rfatArrow)
@@ -104,10 +111,12 @@ parseInstanceDecl = withSource $ do
     <* indented <* rfatArrow
 
 parseTypeDecl :: Parser SourceAst
-parseTypeDecl = withSource $ inj <$> (TypeDecl
-  <$> P.try (declName identifier <* indented <* colon)
-  <*> (map (hoistCofree inj) <$> (indented *> parsePolyType))
-                                     )
+parseTypeDecl = withSource $ do
+  docString <- use parserLastDocString
+  name <- P.try (declName identifier <* indented <* colon)
+  parserLastDocString .= ""
+  poly <- indented *> parsePolyType
+  pure $ inj $ TypeDecl docString name (hoistCofree inj <$> poly)
 
 parseValueDecl :: Parser SourceAst
 parseValueDecl = withSource $ do
@@ -131,7 +140,7 @@ parseFixityDecl = withSource $ do
   indented *> reserved "as"
   (span, op) <- indented *> withSpan anySymbol
   let opSpec = Infix assoc $ fromIntegral fixity
-  modify $ addOpSpec op opSpec
+  addOpSpec op opSpec
   pure $ inj $ FixityDecl x (span :< inj (DeclName op)) opSpec
 
 declName :: Parser Text -> Parser SourceAst
@@ -141,7 +150,7 @@ declName p = withSource $ inj . DeclName <$> p
 
 parseExpr :: Parser SourceAst
 parseExpr = do
-  opSpecs <- gets parserOperators
+  opSpecs <- use parserOperators
   makeExprParser terms (mkOpTable spanVar spanApp opSpecs)
     P.<?> "expression"
   where
@@ -296,7 +305,7 @@ parseBinder' = P.choice
 
 parseType :: Parser SourceType
 parseType = do
-  opSpecs <- gets parserTypeOperators
+  opSpecs <- use parserTypeOperators
   makeExprParser terms (mkOpTable spanTypeConstructor spanTypeApp opSpecs)
   where
     terms = P.choice

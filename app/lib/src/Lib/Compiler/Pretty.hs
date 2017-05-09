@@ -11,6 +11,7 @@ module Lib.Compiler.Pretty
   , prettyIntermed
   , prettyBinder
   , recordDoc
+  , typeDoc
   ) where
 
 import           Lib.Prelude                  hiding (empty)
@@ -49,13 +50,13 @@ prettyType :: Type -> Text
 prettyType = show . fst . histo typeDoc
 
 prettyPolyType :: PolyTypeF Type -> Text
-prettyPolyType = show . polyTypeDoc . map (fst . histo typeDoc)
+prettyPolyType = show . fst . polyTypeDoc . map (histo typeDoc)
 
 prettyConstraint :: Constraint -> Text
-prettyConstraint = show . constraintDoc . map (fst . histo typeDoc)
+prettyConstraint = show . fst . constraintDoc . map (histo typeDoc)
 
 prettyConstraints :: [Constraint] -> Text
-prettyConstraints = show . constraintsDoc . map (map (fst . histo typeDoc))
+prettyConstraints = show . fst . constraintsDoc . map (map (histo typeDoc))
 
 prettyBinder :: Binder -> Text
 prettyBinder = show . cata binderDoc
@@ -73,6 +74,9 @@ type BDoc = (Doc, Int)
 liftPretty
   :: Functor f => (f Doc -> Doc) -> f (Cofree g BDoc) -> BDoc
 liftPretty = liftAlg . imapAlg (,0) fst
+
+downPretty :: Functor f => (f BDoc -> BDoc) -> f Doc -> Doc
+downPretty = imapAlg fst (,0)
 
 prettyAst :: Ast -> Text
 prettyAst = show . fst . histo astDoc
@@ -98,27 +102,27 @@ intermedDoc = intermed
 
 --------------------------------------------------------------------------------
 
-constraintDoc :: ConstraintF Doc -> Doc
+constraintDoc :: ConstraintF BDoc -> BDoc
 constraintDoc = \case
-  IsIn cls ty ->
-    textStrict cls <+> parens ty
-  HasFields m t ->
-    t <+> recordDoc (map goField (Map.toList m))
+  IsIn cls (ty, nTy) ->
+    (textStrict cls <+> (if nTy >= 1 then parens ty else ty), 0)
+  HasFields m (t, _) ->
+    (t <+> recordDoc (map goField (Map.toList m)), 0)
     where
-      goField (k, v) = textStrict k <> char ':' <+> v
+      goField (k, (v, _)) = textStrict k <> char ':' <+> v
 
-polyTypeDoc :: PolyTypeF Doc -> Doc
+polyTypeDoc :: PolyTypeF BDoc -> BDoc
 polyTypeDoc (ForAll vars cs ty) =
-  goVars <+> constraintsDoc cs <+> ty
+  (goVars <+> fst (constraintsDoc cs) <+> fst ty, 0)
   where
   goVars = if null vars
     then empty
     else textStrict "forall" <+>
          hsep (map textStrict vars) <> dot
 
-constraintsDoc :: [ConstraintF Doc] -> Doc
-constraintsDoc = foldr go empty where
-  go c rest = constraintDoc c <+> textStrict "=>" <+> rest
+constraintsDoc :: [ConstraintF BDoc] -> BDoc
+constraintsDoc cs = (foldr go empty cs, 0) where
+  go c rest = fst (constraintDoc c) <+> textStrict "=>" <+> rest
 
 typeDoc :: TypeF (Cofree TypeF BDoc) -> BDoc
 typeDoc = \case
@@ -145,13 +149,13 @@ typeDoc = \case
 
 declarationDoc :: DeclarationF Doc -> Doc
 declarationDoc = \case
-  DataDecl name args constrs ->
+  DataDecl _ name args constrs ->
     textStrict "data" <+> name <+> hsep args <$$>
     indent 2 (vsep (map goConstr (zip prefixes constrs)))
     where
       prefixes = '=' : repeat '|'
-      goConstr (p, (n, as)) = char p <+> n <+> hsep as
-  ClassDecl (name, param) supers sigs ->
+      goConstr (p, (_, n, as)) = char p <+> n <+> hsep as
+  ClassDecl _ (name, param) supers sigs ->
     textStrict "class" <+> goSupers <+> name <+> param <+> textStrict "where" <$$>
     indent 2 (vsep sigs)
     where
@@ -164,8 +168,8 @@ declarationDoc = \case
     where
     goConstrs = foldr goConst empty cs
     goConst (cls, t) rest = cls <+> t <+> textStrict "=>" <+> rest
-  TypeDecl name poly ->
-    name <+> colon <+> polyTypeDoc poly
+  TypeDecl _ name poly ->
+    name <+> colon <+> downPretty polyTypeDoc poly
   ValueDecl name binders expr ->
     name <+> hsep binders <+> equals <$$>
     indent 2 expr
@@ -229,9 +233,9 @@ exprDoc = \case
 placeholderDoc :: PlaceholderF Doc -> Doc
 placeholderDoc = \case
   DictionaryPlaceholder _ c ->
-    textStrict "<" <> constraintDoc c <> textStrict ">"
+    textStrict "<" <> downPretty constraintDoc c <> textStrict ">"
   MethodPlaceholder _ c name ->
-    textStrict "<" <> constraintDoc c <+> dot <> textStrict name <> textStrict ">"
+    textStrict "<" <> downPretty constraintDoc c <+> dot <> textStrict name <> textStrict ">"
   RecursiveCallPlaceholder _ t ->
     textStrict "<" <> textStrict t <> textStrict ">"
   AccessPlaceholder _ t ->

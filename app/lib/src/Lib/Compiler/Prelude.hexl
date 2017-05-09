@@ -4,6 +4,7 @@
 id : forall a. a -> a
 id x = x
 
+-- | The function `const a` always returns `a`.
 const : forall a b. b -> a -> b
 const c _ = c
 
@@ -37,16 +38,20 @@ type Boolean
   = True
   | False
 
+-- | Conjunction of two booleans. The result is true if both arguments are true.
 conj : Boolean -> Boolean -> Boolean
 conj x y = if x then y else False
 
 infixr 3 conj as &&
 
+-- | Disjunction of two booleans. The result is true if the first, the second,
+-- | or both arguments are true.
 disj : Boolean -> Boolean -> Boolean
 disj x y = if x then True else y
 
 infixr 2 disj as ||
 
+-- | Negate a boolean value.
 not : Boolean -> Boolean
 not x = if x then False else True
 
@@ -82,6 +87,8 @@ instance Num Number where
   one = 1.0
   zero = 0.0
 
+-- | For example, the expression `roundTo 2 n` rounds the number `n` to a
+-- precision of `2`.
 roundTo : Integer -> Number -> Number
 roundTo = prim_roundTo
 
@@ -91,7 +98,9 @@ toNumber = prim_toNumber
 --------------------------------------------------------------------------------
 -- Eq
 
+-- | Class of types where elements can be compared to each other.
 class Eq a where
+  -- | Returns true if both arguments are equal.
   eq : a -> a -> Boolean
 
 infix 4 eq as ==
@@ -117,6 +126,7 @@ instance Eq Boolean where
     Tuple False False -> True
     _                 -> False
 
+-- | Returns true if both arguments are not equal.
 notEq : forall a. Eq a => a -> a -> Boolean
 notEq a b = not <| a == b
 
@@ -125,12 +135,18 @@ infix 4 notEq as /=
 --------------------------------------------------------------------------------
 -- Ordering
 
+-- | The type returned by `compare`.
 type Ordering
+  -- | Both elements are equal.
   = EQ
+  -- | The first element is less than the second one.
   | LT
+  -- | The first element is greater than the second one.
   | GT
 
+-- | Class of types that can be ordered.
 class Eq a => Ord a where
+  -- | Compares two elements.
   compare : a -> a -> Ordering
 
 instance Ord Number where
@@ -142,6 +158,7 @@ instance Ord Integer where
 instance Ord DateTime where
   compare = prim_compareDateTime
 
+-- | Returns true if the first argument is less than the second.
 lessThan : forall a. Ord a => a -> a -> Boolean
 lessThan a b = case compare a b of
   LT -> True
@@ -149,6 +166,7 @@ lessThan a b = case compare a b of
 
 infixl 4 lessThan as <
 
+-- | Returns true if the first argument is more than the second.
 greaterThan : forall a. Ord a => a -> a -> Boolean
 greaterThan a b = case compare a b of
   GT -> True
@@ -156,6 +174,7 @@ greaterThan a b = case compare a b of
 
 infixl 4 greaterThan as >
 
+-- | Returns true if the first argument is less than or equal to the second.
 lessThanOrEq : forall a. Ord a => a -> a -> Boolean
 lessThanOrEq a b = case compare a b of
   GT -> False
@@ -163,6 +182,7 @@ lessThanOrEq a b = case compare a b of
 
 infixl 4 lessThanOrEq as <=
 
+-- | Returns true if the first argument is more than or equal to the second.
 greaterThanOrEq : forall a. Ord a => a -> a -> Boolean
 greaterThanOrEq a b = case compare a b of
   LT -> False
@@ -202,16 +222,29 @@ member x xs = case xs of
   Nil -> False
   Cons a as -> if x == a then True else member x as
 
+
+-- | Calculates the sum over a list of numbers.
 sum : forall a. Num a => List a -> a
 sum xs = case xs of
   Nil -> zero
   Cons a as -> a + sum as
 
+-- | Get the length of a list.
 length : forall a. List a -> Integer
 length xs = case xs of
   Nil -> 0
   Cons _ as -> 1 + length as
 
+{- | Filter a list according to the given predicate. For example,
+
+``` haskell
+let predicate x = x.Temperature >= 0 && x.Temperature <= 10;
+filter predicate #Cities
+```
+
+would filter the rows of the "Cities" table to include only those where the
+temperature is between `0` and `10` degrees.
+-}
 filter : forall a. (a -> Boolean) -> List a -> List a
 filter p xs = case xs of
   Nil -> Nil
@@ -221,6 +254,8 @@ filter p xs = case xs of
     in
       if p a then Cons a as' else as'
 
+-- | Find the first element in a list that matches the given predicate, or return
+-- | `Nothing`.
 find : forall a. (a -> Boolean) -> List a -> Maybe a
 find p xs = case xs of
   Nil -> Nothing
@@ -239,11 +274,15 @@ instance Eq a => Eq (Maybe a) where
     Tuple (Just a) (Just b) -> a == b
     _                       -> False
 
+-- | The expression `maybe b f x` applies the function `f` to the content of x,
+-- | or just returns `b`, if x is `Nothing`.
 maybe : forall a b. b -> (a -> b) -> Maybe a -> b
 maybe def f ma = case ma of
   Nothing -> def
   Just a -> f a
 
+-- | The expression `fromMaybe 0 x` returns the content of x if there is one, or
+-- | `0` in case of `Nothing`.
 fromMaybe : forall a. a -> Maybe a -> a
 fromMaybe def = maybe def id
 
@@ -268,7 +307,10 @@ either f g e = case e of
 --------------------------------------------------------------------------------
 -- Functor
 
+-- | Class of types that represent "containers" which can be mapped over.
 class Functor f where
+  -- | Apply a function to every element in the container `f` (e.g., a list),
+  -- | and return the result.
   map : forall a b. (a -> b) -> f a -> f b
 
 instance Functor List where
@@ -289,7 +331,10 @@ instance Functor (Either a) where
 --------------------------------------------------------------------------------
 -- Semigroup
 
+-- | Class of types where elements can be "appended" to one another.
 class Semigroup a where
+  -- | Appends two values of `a` to get a new value of `a`. Example: `"Hello "
+  -- | <> name`
   append : a -> a -> a
 
 infixr 5 append as <>
@@ -305,7 +350,9 @@ instance Semigroup String where
 --------------------------------------------------------------------------------
 -- Print
 
+-- | Class of types that can be converted into a `String`.
 class Print a where
+  -- | Convert the argument into a string.
   print : a -> String
 
 instance Print Boolean where
@@ -323,20 +370,29 @@ instance Print String where
 --------------------------------------------------------------------------------
 -- Formatting
 
+-- | A call like `formatNumber s x` formats the number `x` according to the
+-- | format string `s`. For a list of formatting characters, see
+-- | [here](https://hackage.haskell.org/package/base-4.9.0.0/docs/Text-Printf.html#v:printf).
 formatNumber : String -> Number -> String
 formatNumber = prim_formatNumber
 
+-- | `formatTime s t` formats time `t` according to the format string `s`. For a
+-- | list of formatting characters see
+-- | [here](https://hackage.haskell.org/package/time-1.6.0.1/docs/Data-Time-Format.html#v:formatTime).
 formatDateTime : String -> DateTime -> String
 formatDateTime = prim_formatDateTime
 
 --------------------------------------------------------------------------------
 -- DateTime
 
+-- | Returns the year of a given time.
 year : DateTime -> Integer
 year = prim_year
 
+-- | Returns the month of the year (1-12) of a given time.
 month : DateTime -> Integer
 month = prim_month
 
+-- | Returns the day of the month (1-31) of a given time.
 day : DateTime -> Integer
 day = prim_day

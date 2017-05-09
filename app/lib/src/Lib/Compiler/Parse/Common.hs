@@ -8,6 +8,7 @@ module Lib.Compiler.Parse.Common where
 import           Lib.Prelude
 
 import           Control.Comonad.Cofree
+import           Control.Lens              hiding ((:<))
 
 import           Data.List                 (groupBy)
 
@@ -49,7 +50,7 @@ withSpan :: Parser a -> Parser (Span, a)
 withSpan p = do
   start <- getPosition
   x <- p
-  end <- gets parserLastTokenEnd
+  end <- use parserLastTokenEnd
   pure (Span start end, x)
 
 withSource :: Parser (f (WithSpan f)) -> Parser (WithSpan f)
