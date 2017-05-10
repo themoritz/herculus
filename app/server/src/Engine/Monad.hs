@@ -198,6 +198,7 @@ instance MonadHexl m => MonadEngine (EngineT m) where
     DataBool     -> pure $ VBool False
     DataString   -> pure $ VString ""
     DataNumber   -> pure $ VNumber 0
+    DataInteger  -> pure $ VInteger 0
     DataTime     -> VTime <$> lift getCurrentTime
     DataRowRef t -> do
       res <- lift $ getOneByQuery [ "tableId" =: toObjectId t ]

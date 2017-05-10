@@ -173,7 +173,7 @@ declarationDoc = \case
   ValueDecl name binders expr ->
     name <+> hsep binders <+> equals <$$>
     indent 2 expr
-  FixityDecl x alias (Infix assoc fixity) ->
+  FixityDecl _ x alias (Infix assoc fixity) ->
     assocDoc <+> int fixity <+> x <+> textStrict "as" <+> alias
     where
     assocDoc = case assoc of

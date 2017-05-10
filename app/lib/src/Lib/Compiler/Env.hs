@@ -101,6 +101,7 @@ typeOfDataType = \case
   DataBool     -> tyBoolean
   DataString   -> tyString
   DataNumber   -> tyNumber
+  DataInteger  -> tyInteger
   DataTime     -> tyDateTime
   DataRowRef t -> tyRow $ typeTable $ InId t
   DataList t   -> typeApp tyList $ typeOfDataType t

@@ -97,7 +97,7 @@ Each item that we might want to add to the list needs several attributes:
 
 Therefore, we add three columns to the items table:
 
-* _Date_ of type `Time`
+* _Date_ of type `DateTime`
 * _Client_ of type `Row from Clients`
 * _Hours_ of type `Number`
 
@@ -168,8 +168,8 @@ bills. For every bill, you need the following information:
 
 Therefore, we will create a table called _Bills_ with the following columns:
 
-* _PeriodStart_ of type `Time`
-* _PeriodEnd_ of type `Time`
+* _PeriodStart_ of type `DateTime`
+* _PeriodEnd_ of type `DateTime`
 * _Client_ of type `Row from Clients`
 
 After doing this and adding some data, the table might look like this:
@@ -199,10 +199,11 @@ check the _Use formula_ checkbox, and enter the following formula into the
 editor:
 
 ``` haskell
-let includeItem item =
-     item.Date >= $PeriodStart 
+includeItem item =
+     item.Date >= $PeriodStart
   && item.Date <= $PeriodEnd
-  && item.Client.Name == $Client.Name;
+  && item.Client == $Client
+
 filter includeItem #Items
 ```
 
@@ -223,15 +224,10 @@ it. Basically, we are doing two things:
     3. The client that is selected in the item is the same as the client that
        the current bill is for.
 
-       _Note: Ideally we want to directly compare the client references for
-       equality, but we are still working on that feature, so for the time
-       being, we check the names (which should be unequal for different
-       clients)._
-
 * Second, we filter all the rows from the _Items_ table according to the
   function we just defined. In this case,
   the [filter function](../formulas/#filter) takes two arguments:
-    1. A function that takes a `Row from Items` and returns a `Bool`. the
+    1. A function that takes a `Row from Items` and returns a `Boolean`. the
        `includeItem` is precisely such a function.
     2. A list of such rows: `List (Row from Items)`. The argument we supply,
        `#Items`, refers to the _Items_ table, which is precisely such a list.
@@ -282,7 +278,7 @@ dialog:
   <tbody>
     {% for item in $Items %}
     <tr>
-      <td>{{ formatTime "%D" item.Date }}</td>
+      <td>{{ formatDateTime "%D" item.Date }}</td>
       <td>{{ formatNumber "%.2f" item.Hours }}</td>
       <td>{{ formatNumber "%.2f" $Client.HourlyRate }}</td>
       <td>{{ formatNumber "%.2f" item.Amount }}</td>
@@ -290,12 +286,14 @@ dialog:
     {% endfor %}
   </tbody>
 </table>
-  
+
 Total amount to pay:
 <b>
   {{
-    let amounts = map (\i -> i.Amount) $Items;
-    formatNumber "%.2f" (sum amounts)
+    let
+      amounts = map (\i -> i.Amount) $Items
+    in
+      formatNumber "%.2f" (sum amounts)
   }}
 </b>
 ```
@@ -322,7 +320,7 @@ the list.
 This concludes the guide of how to build a basic Herculus app. Feel free to
 extend the app in various ways. For example, you could
 
-* add a column of type `Bool` to indicate if the bill has already been paid,
+* add a column of type `Boolean` to indicate if the bill has already been paid,
 * add a bill number,
 * calculate the total amount to pay in a separate column in the _Bills_ table,
   so that you have a good overview over your bills,

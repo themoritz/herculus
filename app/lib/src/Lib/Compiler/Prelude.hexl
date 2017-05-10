@@ -1,6 +1,7 @@
 --------------------------------------------------------------------------------
--- Function
+-- | # General Functions
 
+-- | The identity function does nothing and just returns its value.
 id : forall a. a -> a
 id x = x
 
@@ -14,11 +15,15 @@ flip f b a = f a b
 apply : forall a b. (a -> b) -> a -> b
 apply f x = f x
 
+-- | Apply the function on the left-hand side to the argument on the right-hand
+-- | side.
 infixr 0 apply as <|
 
 applyFlipped : forall a b. a -> (a -> b) -> b
 applyFlipped x f = f x
 
+-- | Apply the function on the right-hand side to the argument on the left-hand
+-- | side.
 infixl 1 applyFlipped as |>
 
 compose : forall a b c. (b -> c) -> (a -> b) -> a -> c
@@ -32,7 +37,7 @@ composeFlipped f g x = g (f x)
 infixr 9 composeFlipped as >>>
 
 --------------------------------------------------------------------------------
--- Boolean
+-- | # Boolean Values
 
 type Boolean
   = True
@@ -56,9 +61,9 @@ not : Boolean -> Boolean
 not x = if x then False else True
 
 --------------------------------------------------------------------------------
--- Num
+-- | # Numeric Values
 
-class Num x where
+interface Num x where
   add : x -> x -> x
   sub : x -> x -> x
   mul : x -> x -> x
@@ -71,7 +76,7 @@ infixl 6 sub as -
 infixl 7 mul as *
 infixl 7 div as /
 
-instance Num Integer where
+implements Num Integer where
   add = prim_addInteger
   sub = prim_subInteger
   mul = prim_mulInteger
@@ -79,7 +84,7 @@ instance Num Integer where
   one = 1
   zero = 0
 
-instance Num Number where
+implements Num Number where
   add = prim_addNumber
   sub = prim_subNumber
   mul = prim_mulNumber
@@ -96,34 +101,34 @@ toNumber : Integer -> Number
 toNumber = prim_toNumber
 
 --------------------------------------------------------------------------------
--- Eq
+-- | # Equality
 
--- | Class of types where elements can be compared to each other.
-class Eq a where
+-- | Interface of types where elements can be compared to each other.
+interface Eq a where
   -- | Returns true if both arguments are equal.
   eq : a -> a -> Boolean
 
 infix 4 eq as ==
 
-instance Eq Integer where
+implements Eq Integer where
   eq = prim_eqInteger
 
-instance Eq Number where
+implements Eq Number where
   eq = prim_eqNumber
 
-instance Eq String where
+implements Eq String where
   eq = prim_eqString
 
-instance Eq DateTime where
+implements Eq DateTime where
   eq = prim_eqDateTime
 
-instance Eq (Row t) where
+implements Eq (Row t) where
   eq = prim_eqRow
 
-instance Eq Boolean where
-  eq x y = case Tuple x y of
-    Tuple True True   -> True
-    Tuple False False -> True
+implements Eq Boolean where
+  eq x y = case Pair x y of
+    Pair True True   -> True
+    Pair False False -> True
     _                 -> False
 
 -- | Returns true if both arguments are not equal.
@@ -133,7 +138,7 @@ notEq a b = not <| a == b
 infix 4 notEq as /=
 
 --------------------------------------------------------------------------------
--- Ordering
+-- | # Ordering
 
 -- | The type returned by `compare`.
 type Ordering
@@ -144,18 +149,18 @@ type Ordering
   -- | The first element is greater than the second one.
   | GT
 
--- | Class of types that can be ordered.
-class Eq a => Ord a where
+-- | Interface of types that can be ordered.
+interface Eq a => Ord a where
   -- | Compares two elements.
   compare : a -> a -> Ordering
 
-instance Ord Number where
+implements Ord Number where
   compare = prim_compareNumber
 
-instance Ord Integer where
+implements Ord Integer where
   compare = prim_compareInteger
 
-instance Ord DateTime where
+implements Ord DateTime where
   compare = prim_compareDateTime
 
 -- | Returns true if the first argument is less than the second.
@@ -197,24 +202,24 @@ max : forall a. Ord a => a -> a -> a
 max a b = if a < b then b else a
 
 --------------------------------------------------------------------------------
--- Data.Tuple
+-- | # Pairs
 
-type Tuple a b = Tuple a b
+type Pair a b = Pair a b
 
-instance Eq a => Eq b => Eq (Tuple a b) where
-  eq (Tuple a b) (Tuple a' b') = a == a' && b == b'
+implements Eq a => Eq b => Eq (Pair a b) where
+  eq (Pair a b) (Pair a' b') = a == a' && b == b'
 
 --------------------------------------------------------------------------------
--- Data.List
+-- | # Lists
 
 type List a
   = Nil
   | Cons a (List a)
 
-instance Eq a => Eq (List a) where
-  eq xs ys = case Tuple xs ys of
-    Tuple Nil Nil                 -> True
-    Tuple (Cons a as) (Cons b bs) -> a == b && as == bs
+implements Eq a => Eq (List a) where
+  eq xs ys = case Pair xs ys of
+    Pair Nil Nil                 -> True
+    Pair (Cons a as) (Cons b bs) -> a == b && as == bs
     _                             -> False
 
 member : forall a. Eq a => a -> List a -> Boolean
@@ -238,7 +243,7 @@ length xs = case xs of
 {- | Filter a list according to the given predicate. For example,
 
 ``` haskell
-let predicate x = x.Temperature >= 0 && x.Temperature <= 10;
+predicate x = x.Temperature >= 0 && x.Temperature <= 10
 filter predicate #Cities
 ```
 
@@ -262,16 +267,16 @@ find p xs = case xs of
   Cons a as -> if p a then Just a else find p as
 
 --------------------------------------------------------------------------------
--- Data.Maybe
+-- | # Maybe Values
 
 type Maybe a
   = Nothing
   | Just a
 
-instance Eq a => Eq (Maybe a) where
-  eq ma mb = case Tuple ma mb of
-    Tuple Nothing Nothing   -> True
-    Tuple (Just a) (Just b) -> a == b
+implements Eq a => Eq (Maybe a) where
+  eq ma mb = case Pair ma mb of
+    Pair Nothing Nothing   -> True
+    Pair (Just a) (Just b) -> a == b
     _                       -> False
 
 -- | The expression `maybe b f x` applies the function `f` to the content of x,
@@ -287,16 +292,16 @@ fromMaybe : forall a. a -> Maybe a -> a
 fromMaybe def = maybe def id
 
 --------------------------------------------------------------------------------
--- Data.Either
+-- | # Either Values
 
 type Either a b
   = Left a
   | Right b
 
-instance Eq a => Eq b => Eq (Either a b) where
-  eq e e' = case Tuple e e' of
-    Tuple (Left a) (Left a')   -> a == a'
-    Tuple (Right b) (Right b') -> b == b'
+implements Eq a => Eq b => Eq (Either a b) where
+  eq e e' = case Pair e e' of
+    Pair (Left a) (Left a')   -> a == a'
+    Pair (Right b) (Right b') -> b == b'
     _                          -> False
 
 either : forall a b c. (a -> c) -> (b -> c) -> Either a b -> c
@@ -305,70 +310,70 @@ either f g e = case e of
   Right b -> g b
 
 --------------------------------------------------------------------------------
--- Functor
+-- | # Containers
 
--- | Class of types that represent "containers" which can be mapped over.
-class Functor f where
+-- | Interface of types that represent "containers" which can be mapped over.
+interface Functor f where
   -- | Apply a function to every element in the container `f` (e.g., a list),
   -- | and return the result.
   map : forall a b. (a -> b) -> f a -> f b
 
-instance Functor List where
+implements Functor List where
   map f xs = case xs of
     Nil -> Nil
     Cons a as -> Cons (f a) (map f as)
 
-instance Functor Maybe where
+implements Functor Maybe where
   map f ma = case ma of
     Nothing -> Nothing
     Just a -> Just (f a)
 
-instance Functor (Either a) where
+implements Functor (Either a) where
   map f e = case e of
     Left a -> Left a
     Right b -> Right (f b)
 
 --------------------------------------------------------------------------------
--- Semigroup
+-- | # Appendable Values
 
--- | Class of types where elements can be "appended" to one another.
-class Semigroup a where
+-- | Interface of types where elements can be "appended" to one another.
+interface Semigroup a where
   -- | Appends two values of `a` to get a new value of `a`. Example: `"Hello "
   -- | <> name`
   append : a -> a -> a
 
 infixr 5 append as <>
 
-instance Semigroup (List a) where
+implements Semigroup (List a) where
   append xs ys = case xs of
     Nil -> ys
     Cons a as -> Cons a (as <> ys)
 
-instance Semigroup String where
+implements Semigroup String where
   append = prim_appendString
 
 --------------------------------------------------------------------------------
--- Print
+-- | # Printable Values
 
--- | Class of types that can be converted into a `String`.
-class Print a where
+-- | Interface of types that can be converted into a `String`.
+interface Print a where
   -- | Convert the argument into a string.
   print : a -> String
 
-instance Print Boolean where
+implements Print Boolean where
   print x = if x then "True" else "False"
 
-instance Print Integer where
+implements Print Integer where
   print = prim_printInteger
 
-instance Print Number where
+implements Print Number where
   print = prim_printNumber
 
-instance Print String where
+implements Print String where
   print = id
 
 --------------------------------------------------------------------------------
--- Formatting
+-- | # Formatting
 
 -- | A call like `formatNumber s x` formats the number `x` according to the
 -- | format string `s`. For a list of formatting characters, see
@@ -376,14 +381,14 @@ instance Print String where
 formatNumber : String -> Number -> String
 formatNumber = prim_formatNumber
 
--- | `formatTime s t` formats time `t` according to the format string `s`. For a
+-- | `formatDateTime s t` formats time `t` according to the format string `s`. For a
 -- | list of formatting characters see
 -- | [here](https://hackage.haskell.org/package/time-1.6.0.1/docs/Data-Time-Format.html#v:formatTime).
 formatDateTime : String -> DateTime -> String
 formatDateTime = prim_formatDateTime
 
 --------------------------------------------------------------------------------
--- DateTime
+-- | # Date and Time
 
 -- | Returns the year of a given time.
 year : DateTime -> Integer

@@ -98,10 +98,11 @@ render st = cldiv_ ""
         ]
 
   dataTypeInfo = case _ of
-    DataBool     -> "Bool"
+    DataBool     -> "Boolean"
     DataString   -> "String"
     DataNumber   -> "Number"
-    DataTime     -> "Time"
+    DataInteger  -> "Integer"
+    DataTime     -> "DateTime"
     DataRowRef t -> "Row from " <>
                     maybe "missing table"
                           _.label (find (\o -> o.value == t) st.input.tables)

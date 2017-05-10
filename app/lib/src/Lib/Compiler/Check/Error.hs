@@ -36,7 +36,6 @@ data CheckError
   | UndefinedConstructor Text
   | UndefinedClass Text
   | UndefinedMethod Text Text
-  | ExpectedFunction Type
   | ExpectedRowOfTable Type
   | UnknownTable (Ref Table)
   | UnknownColumn (Ref Column)
@@ -78,8 +77,6 @@ printCheckErr = \case
     "Undefined class: " <> cls
   UndefinedMethod name cls ->
     "Method `" <> name <> "` is not a member of class `" <> cls <> "`."
-  ExpectedFunction t ->
-    "Expected function but got `" <> prettyType t <> "`."
   ExpectedRowOfTable t ->
     "Expected row of table but got `" <> prettyType t <> "`."
   UnknownTable t ->
@@ -97,7 +94,7 @@ printCheckErr = \case
     prettyPolyType inferred <> "` while the given signature was `" <>
     prettyPolyType given <> "`."
   SignatureMustBeUnconstrained name ->
-    "Class methods are not allowed to be constrained."
+    "Interface methods are not allowed to be constrained."
   WrongNumberOfConstructorArgs c expected actual ->
     "Type constructor `" <> c <>
     "` expects " <> show expected <>
@@ -105,10 +102,10 @@ printCheckErr = \case
   TypeDoesNotHaveFields t ->
     "Won't be able to access fields of type `" <> prettyType t <> "`."
   MissingSuperclassInstance cls ->
-    "No instance for superclass `" <> cls <> "` found."
+    "No implementation for interface `" <> cls <> "` found."
   MissingInstance cls t ->
     "The type `" <> prettyType t <>
-    "` does not implement class `" <> cls <> "`."
+    "` does not implement the interface `" <> cls <> "`."
   MissingField f record ->
     "Could not verify object has required field `" <> f <> "`."
   MissingImplementation name ->
@@ -116,14 +113,14 @@ printCheckErr = \case
   NoHeadNormalForm t ->
     "Constraints must be in head-normal form (starting with a type variable)."
   InvalidInstanceHeadType t ->
-    "The type appearing in an instance head must be a type constructor."
+    "The type for which an interface is implemented must be a type constructor."
   InvalidInstanceConstraintType t ->
-    "Type of instance constraint must be type variable."
+    "The types of implementation constraints must be type variables."
   OverlappingInstance otherType ->
-    "This instance overlaps with an instance of type `" <>
+    "This implementation overlaps with an implementation for type `" <>
     prettyType otherType <> "`."
   DuplicateClass cls ->
-    "Class `" <> cls <> "` is already defined"
+    "Interface `" <> cls <> "` is already defined"
   KindMismatch a b expected actual -> if a == expected && b == actual
     then "Cannot match expected kind `" <>
          prettyKind expected <> "` with actual kind `" <>
@@ -155,7 +152,7 @@ printCheckErr = \case
     prettyType expected <> "` with `" <>
     prettyType actual <> "`."
   AmbiguousTypeVar cls ->
-    "Ambiguity detected while picking an implementation for class `" <>
+    "Ambiguity detected while picking an implementation for interface `" <>
     cls <> "`."
 
 data CheckAppendError

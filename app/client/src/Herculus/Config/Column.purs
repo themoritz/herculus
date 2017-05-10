@@ -126,6 +126,7 @@ data Branch
   = BBool
   | BString
   | BNumber
+  | BInteger
   | BTime
   | BRowRef
   | BList
@@ -138,6 +139,7 @@ toBranch = case _ of
   DataBool     -> BBool
   DataString   -> BString
   DataNumber   -> BNumber
+  DataInteger  -> BInteger
   DataTime     -> BTime
   DataRowRef _ -> BRowRef
   DataList   _ -> BList
@@ -145,13 +147,14 @@ toBranch = case _ of
 
 branches :: Options Branch
 branches =
-  [ { value: BBool  , label: "Bool"   }
-  , { value: BString, label: "String" }
-  , { value: BNumber, label: "Number" }
-  , { value: BTime  , label: "Time"   }
-  , { value: BRowRef, label: "Row"    }
-  , { value: BList  , label: "List"   }
-  , { value: BMaybe , label: "Maybe"  }
+  [ { value: BBool   , label: "Boolean"  }
+  , { value: BString , label: "String"   }
+  , { value: BNumber , label: "Number"   }
+  , { value: BInteger, label: "Integer"  }
+  , { value: BTime   , label: "DateTime" }
+  , { value: BRowRef , label: "Row"      }
+  , { value: BList   , label: "List"     }
+  , { value: BMaybe  , label: "Maybe"    }
   ]
 
 reportLangs :: Options (Maybe ReportLanguage)
@@ -325,13 +328,14 @@ render st = HH.div_
     -> HH.HTML p (Query Unit)
   selBranch value cb = HH.span_
     [ dropdown "select" branches (toBranch value) case _ of
-        BBool   -> cb DataBool
-        BString -> cb DataString
-        BNumber -> cb DataNumber
-        BTime   -> cb DataTime
-        BMaybe  -> cb (DataMaybe DataNumber)
-        BList   -> cb (DataList DataNumber)
-        BRowRef -> cb (DataRowRef (Id ""))
+        BBool    -> cb DataBool
+        BString  -> cb DataString
+        BNumber  -> cb DataNumber
+        BInteger -> cb DataInteger
+        BTime    -> cb DataTime
+        BMaybe   -> cb (DataMaybe DataNumber)
+        BList    -> cb (DataList DataNumber)
+        BRowRef  -> cb (DataRowRef (Id ""))
     , HH.text " "
     , case value of
         DataMaybe sub -> selBranch sub (cb <<< DataMaybe)
@@ -544,16 +548,18 @@ lintFormula = do
   st <- get
   let col = st.input.column
   case col ^. columnKind of
-    ColumnData dataCol -> do
-      let
-        dt = getDataType dataCol st
-        formula = getFormula dataCol st
-        call = postProjectLintDataColByColumnId
-                   (Tuple dt formula) (col ^. columnId)
-      withApi call \errs -> do
-        _ <- H.query' cp1 unit $ H.action $ Ace.SetAnnotations errs
-        modify _{ errors = errs }
-        pure unit
+    ColumnData dataCol -> case getIsDerived dataCol st of
+      Derived -> do
+        let
+          dt = getDataType dataCol st
+          formula = getFormula dataCol st
+          call = postProjectLintDataColByColumnId
+                     (Tuple dt formula) (col ^. columnId)
+        withApi call \errs -> do
+          _ <- H.query' cp1 unit $ H.action $ Ace.SetAnnotations errs
+          modify _{ errors = errs }
+          pure unit
+      NotDerived -> pure unit
     ColumnReport _ -> pure unit
 
 withDelay

@@ -15,15 +15,15 @@ import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (intercalate)
 import Data.Generic (gCompare, gEq)
 import Data.Lens (Setter', _Just, element, traversed)
-import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3)
+import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
 import Herculus.EditBox (SaveKey(..))
 import Herculus.Grid.Geometry (Direction(..))
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (RowCache)
 import Herculus.Utils (cldiv, cldiv_, clspan, clspan_, dropdown, faButton_, faIcon_, mkIndexed)
 import Lib.Api.Schema.Column (ColumnKind(ColumnData), DataCol, columnKind, columnName, dataColIsDerived, dataColType)
-import Lib.Custom (Id, ValNumber(ValNumber), ValTime(ValTime), parseValNumber)
-import Lib.Model.Cell (CellContent(..), Value(..), _VBool, _VList, _VMaybe, _VNumber, _VRowRef, _VString, _VTime)
+import Lib.Custom (Id, ValNumber(ValNumber), ValTime(ValTime), parseInteger, parseValNumber)
+import Lib.Model.Cell (CellContent(..), Value(..), _VBool, _VInteger, _VList, _VMaybe, _VNumber, _VRowRef, _VString, _VTime)
 import Lib.Model.Column (DataType(..), IsDerived(..))
 import Lib.Model.Row (Row)
 import Lib.Model.Table (Table)
@@ -71,6 +71,7 @@ type Child =
   EditBox.Query String <\/>
   EditBox.Query ValNumber <\/>
   Date.Query <\/>
+  EditBox.Query Int <\/>
   Const Void
 
 data SlotPath
@@ -90,6 +91,7 @@ type Slot =
   SlotPath \/
   SlotPath \/
   SlotPath \/
+  SlotPath \/
   Void
 
 --------------------------------------------------------------------------------
@@ -103,6 +105,7 @@ needsExpand dt derived = case dt, derived of
   DataBool,      _          -> false
   DataString,    _          -> false
   DataNumber,    _          -> false
+  DataInteger,   _          -> false
   DataTime,      _          -> false
   DataRowRef _,  NotDerived -> false
   DataRowRef _,  Derived    -> true
@@ -115,6 +118,7 @@ defaultValue = case _ of
   DataBool     -> VBool false
   DataString   -> VString ""
   DataNumber   -> VNumber (ValNumber "0")
+  DataInteger  -> VInteger 0
   DataTime     -> VTime (ValTime "2017-01-01T00:00:00Z")
   DataRowRef _ -> VRowRef Nothing
   DataList   _ -> VList []
@@ -184,7 +188,7 @@ render st = case st.input.content of
     VBool b -> editBool b (path <<< _VBool)
     VString s -> editString (SlotSub slot) s (path <<< _VString)
     VNumber n -> editNumber (SlotSub slot) n (path <<< _VNumber)
-    VInteger _ -> HH.text "Integer not supported yet"
+    VInteger i -> editInteger (SlotSub slot) i (path <<< _VInteger)
     VTime t -> editTime (SlotSub slot) t (path <<< _VTime)
     VRowRef mr -> case dt of
       DataRowRef t -> editRowRef mode t mr (path <<< _VRowRef)
@@ -205,7 +209,7 @@ render st = case st.input.content of
     VBool b -> showBool b
     VString s -> showString s
     VNumber n -> showNumber n
-    VInteger i -> HH.text "Integer not supported yet"
+    VInteger i -> showInteger i
     VTime t -> showTime t
     VRowRef mr -> case dt of
       DataRowRef t -> showRowRef mode t mr
@@ -288,6 +292,28 @@ render st = case st.input.content of
   showNumber (ValNumber str) = cldiv_ "cell-plain right-align"
     [ HH.text str ]
 
+  editInteger
+    :: SlotPath -> Int -> Path Int
+    -> H.ParentHTML Query Child Slot Herc
+  editInteger slot val path =
+    HH.slot' cp4 slot EditBox.comp
+             { value: val
+             , placeholder: ""
+             , className: "right-align full-height " <>
+                          ifRootElse slot "plaincell" "editbox"
+             , inputClassName: ifRootElse slot "plaincell__input"
+                                               "editbox__input"
+             , invalidClassName: ifRootElse slot "red"
+                                                 "editbox__input--invalid"
+             , show: show
+             , validate: parseInteger
+             , clickable: ifRootElse slot false true
+             }
+             (editBoxHandler slot path)
+
+  showInteger i = cldiv_ "cell-plain right-align"
+    [ HH.text (show i) ]
+
   editTime
     :: SlotPath -> ValTime -> Path ValTime
     -> H.ParentHTML Query Child Slot Herc
@@ -318,7 +344,7 @@ render st = case st.input.content of
         then [ { value: Nothing, label: "" } ]
         else []
     in
-      [ dropdown "select" (defaultOption <> options) val
+      [ dropdown "select select--width100" (defaultOption <> options) val
                  (setValueAction path Nothing)
       ]
 
@@ -470,6 +496,9 @@ eval = case _ of
     _ <- case dataCol ^. dataColType of
       DataNumber ->
         H.query' cp2 (SlotSub SlotRoot) $
+        H.action $ EditBox.StartEdit mChar
+      DataInteger ->
+        H.query' cp4 (SlotSub SlotRoot) $
         H.action $ EditBox.StartEdit mChar
       DataString ->
         H.query' cp1 (SlotSub SlotRoot) $

@@ -12,4 +12,4 @@ Welcome to the home of [Herculus](https://www.herculus.io) documentation!
 ## Learn More
 
 There is a reference of all the
-[built-in functions](formulas/#included-functions) in the formulas manual.
+[built-in functions](reference/) in the formulas manual.

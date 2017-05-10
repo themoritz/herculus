@@ -60,7 +60,8 @@ extractDecl (span :< (unsafePrj -> decl)) = case decl of
     EDValue ExValueDecl { vSpan = span, .. }
     where vExpr = foldr spanAbs e binders
 
-  FixityDecl (exSourceText -> fAlias)
+  FixityDecl fDocString
+             (exSourceText -> fAlias)
              (exSourceText -> fOperator)
              fFixity ->
     EDFixity ExFixityDecl { fSpan = span, .. }
@@ -135,10 +136,11 @@ extractValueDecls = mapMaybe $ \case
   _         -> Nothing
 
 data ExFixityDecl = ExFixityDecl
-  { fSpan     :: Span
-  , fOperator :: SourceText
-  , fAlias    :: SourceText
-  , fFixity   :: Fixity
+  { fSpan      :: Span
+  , fDocString :: Text
+  , fOperator  :: SourceText
+  , fAlias     :: SourceText
+  , fFixity    :: Fixity
   }
 
 extractFixityDecls :: [ExtractedDecl] -> [ExFixityDecl]

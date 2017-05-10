@@ -81,7 +81,7 @@ parseDataDecl = withSource $ do
 parseClassDecl :: Parser SourceAst
 parseClassDecl = withSource $ do
   docString <- use parserLastDocString
-  P.try $ reserved "class"
+  P.try $ reserved "interface"
   parserLastDocString .= ""
   supers <- many (P.try parseSuper)
   cls <- indented *> declName tyname
@@ -96,7 +96,7 @@ parseClassDecl = withSource $ do
 
 parseInstanceDecl :: Parser SourceAst
 parseInstanceDecl = withSource $ do
-  P.try $ reserved "instance"
+  P.try $ reserved "implements"
   cs <- many (P.try constraint)
   cls <- indented *> declName tyname
   ty <- indented *> parseType
@@ -130,18 +130,20 @@ parseValueDecl = withSource $ do
 
 parseFixityDecl :: Parser SourceAst
 parseFixityDecl = withSource $ do
+  docString <- use parserLastDocString
   assoc <- P.choice
     [ P.try (reserved "infixl") $> AssocL
     , P.try (reserved "infixr") $> AssocR
     , P.try (reserved "infix") $> AssocN
     ]
+  parserLastDocString .= ""
   fixity <- indented *> integerLit
   x <- indented *> declName identifier
   indented *> reserved "as"
   (span, op) <- indented *> withSpan anySymbol
   let opSpec = Infix assoc $ fromIntegral fixity
   addOpSpec op opSpec
-  pure $ inj $ FixityDecl x (span :< inj (DeclName op)) opSpec
+  pure $ inj $ FixityDecl docString x (span :< inj (DeclName op)) opSpec
 
 declName :: Parser Text -> Parser SourceAst
 declName p = withSource $ inj . DeclName <$> p

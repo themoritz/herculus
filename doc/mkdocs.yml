@@ -5,6 +5,7 @@ pages:
   - Guides:
       - Building Your First App: guides/app.md
   - Formulas: formulas.md
+  - Function Reference: reference.md
 theme: cinder
 extra_css:
   - "css/herculus.css"

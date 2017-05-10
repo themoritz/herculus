@@ -33,6 +33,7 @@ data DataType
   = DataBool
   | DataString
   | DataNumber
+  | DataInteger
   | DataTime
   | DataRowRef (Id Table)
   | DataList DataType
@@ -44,6 +45,7 @@ getTypeDependencies = \case
   DataBool      -> mempty
   DataString    -> mempty
   DataNumber    -> mempty
+  DataInteger   -> mempty
   DataTime      -> mempty
   DataRowRef t  -> singleRowRef t
   DataList sub  -> getTypeDependencies sub

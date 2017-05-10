@@ -5,7 +5,7 @@ import Control.Monad.Eff.Unsafe (unsafePerformEff)
 import Data.Array (fromFoldable, intercalate, many, zipWith)
 import Data.JSDate (isValid, parse)
 import Data.String (fromCharArray, singleton)
-import Lib.Custom (ValNumber(..), ValTime(..), fromJSDate, pValNumber)
+import Lib.Custom (ValNumber(..), ValTime(..), fromJSDate, pInteger, pValNumber)
 import Lib.Model.Cell (Value(..))
 import Lib.Model.Column (DataType(..))
 import Text.Parsing.Parser (Parser, fail, runParser)
@@ -48,6 +48,8 @@ parseCSV sep types input = case runParser input pCSV of
       VString <$> pField
     DataNumber ->
       VNumber <$> pValNumber
+    DataInteger ->
+      VInteger <$> pInteger
     DataTime -> do
       str <- fromCharArray <$> many (noneOf [sep, '\n', '[', ']', ',', ' '])
       let jsdate = unsafePerformEff (parse str)

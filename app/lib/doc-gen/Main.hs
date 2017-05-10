@@ -20,5 +20,7 @@ main = do
     else T.getContents
 
   documentModule input voidResolver primCheckEnv >>= \case
-    Left err  -> T.hPutStrLn stderr $ displayError input err
+    Left err  -> do
+      T.hPutStrLn stderr $ displayError input err
+      exitFailure
     Right doc -> print doc

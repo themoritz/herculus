@@ -96,8 +96,8 @@ data DeclarationF a
   | TypeDecl Text a (PolyTypeF a)
   -- | Name, binders, expression
   | ValueDecl a [a] a
-  -- | Alias, operator, fixity
-  | FixityDecl a a Fixity
+  -- | DocString, Alias, operator, fixity
+  | FixityDecl Text a a Fixity
   -- | General declaration name
   | DeclName Text
   deriving (Functor, Show)

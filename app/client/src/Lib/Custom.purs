@@ -4,6 +4,7 @@ import Prelude
 import Control.Monad.Eff (Eff)
 import Data.Array (cons, some)
 import Data.Either (Either(..))
+import Data.Foldable (foldl)
 import Data.Generic (class Generic, gCompare, gEq)
 import Data.JSDate (JSDate, LOCALE, parse)
 import Data.Maybe (Maybe(Just, Nothing), maybe)
@@ -29,6 +30,33 @@ data UserTag
 
 newtype ValNumber = ValNumber String
 derive instance genericValNumber :: Generic ValNumber
+
+parseInteger :: String -> Maybe Int
+parseInteger str = case runParser str pInteger of
+  Left _ -> Nothing
+  Right a -> Just a
+
+pInteger :: Parser String Int
+pInteger = do
+  mPref <- optionMaybe $ oneOf ['+', '-']
+  cs <- some $ oneOf $ toCharArray "0123456789"
+  let abs = foldl (\x y -> x * 10 + y) 0 (map charToInt cs)
+  pure case mPref of
+    Just '-' -> -abs
+    _ -> abs
+  where
+    charToInt = case _ of
+      '0' -> 0
+      '1' -> 1
+      '2' -> 2
+      '3' -> 3
+      '4' -> 4
+      '5' -> 5
+      '6' -> 6
+      '7' -> 7
+      '8' -> 8
+      '9' -> 9
+      _   -> 0
 
 parseValNumber :: String -> Maybe ValNumber
 parseValNumber str = case runParser str pValNumber of

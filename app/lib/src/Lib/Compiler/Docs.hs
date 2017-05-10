@@ -18,10 +18,13 @@ import           Lib.Compiler.Pretty
 import           Lib.Compiler.Type
 
 section :: Text -> Doc
-section str = textStrict "###" <+> textStrict str
+section str = textStrict "##" <+> textStrict str
 
-subsection :: Text -> Doc
-subsection str = textStrict "####" <+> textStrict str
+decl :: Text -> Doc
+decl str = textStrict "###" <+> textStrict str
+
+subdecl :: Text -> Doc
+subdecl str = textStrict "####" <+> textStrict str
 
 code :: Doc -> Doc
 code c =
@@ -32,10 +35,21 @@ code c =
 inlineCode :: Doc -> Doc
 inlineCode c = char '`' <> c <> char '`'
 
+header :: Text -> Doc
+header str = case fst (splitDocString str) of
+  Nothing -> empty
+  Just h  -> section h
+
 docString :: Text -> Doc
-docString str = if str == ""
-  then empty
-  else vsep $ map pretty $ T.lines str
+docString str = vsep $ map pretty $ snd (splitDocString str)
+
+-- | Splits into header and actual docstring
+splitDocString :: Text -> (Maybe Text, [Text])
+splitDocString ds = case T.lines ds of
+  [] -> (Nothing, [])
+  h:rest -> case T.stripPrefix "# " h of
+    Just h' -> (Just h', rest)
+    Nothing -> (Nothing, h:rest)
 
 paragraphs :: [Doc] -> Doc
 paragraphs = vsep . punctuate line . mapMaybe go
@@ -48,7 +62,7 @@ typeAsArg t =
 
 moduleDoc :: Module -> Doc
 moduleDoc (extractDecls -> decls) =
-  paragraphs $ join $ map goDecl decls
+  paragraphs $ (textStrict "# Function Reference") : (join $ map goDecl decls)
   where
   instances = extractInstanceDecls decls
   getInstances cls = flip filter instances $ \ExInstanceDecl {..} ->
@@ -56,7 +70,8 @@ moduleDoc (extractDecls -> decls) =
   goDecl = \case
 
     EDData ExDataDecl {..} ->
-      [ section name
+      [ header dDocString
+      , decl name
       , code (textStrict "type" <+> textStrict name <+> hsep (map goArg dArgs))
       , docString dDocString
       ] <> constrs
@@ -65,23 +80,24 @@ moduleDoc (extractDecls -> decls) =
         goArg = textStrict . getText
         constrs = if null dConstrs
           then []
-          else [subsection "Constructors", paragraphs (map goConstr dConstrs)]
+          else [subdecl "Constructors", paragraphs (map goConstr dConstrs)]
         goConstr (ds, n, args) =
-          textStrict "*" <+> align (paragraphs
+          textStrict "*  " <+> align (paragraphs
             [ inlineCode (textStrict (getText n) <+> hsep (map typeAsArg args))
             , docString ds
             ]
           )
 
     EDClass ExClassDecl {..} ->
-      [ section h
-      , code ( textStrict "class" <+> hsep (map goSuper cSupers) <+>
+      [ header cDocString
+      , decl h
+      , code ( textStrict "interface" <+> hsep (map goSuper cSupers) <+>
              textStrict h <+> textStrict p <+> textStrict "where"
            )
       , docString cDocString
-      , subsection "Methods"
+      , subdecl "Methods"
       , methods
-      , subsection "Instances"
+      , subdecl "Implementations"
       , insts
       ]
       where
@@ -90,7 +106,7 @@ moduleDoc (extractDecls -> decls) =
           textStrict cls <+> textStrict param <+> textStrict "=>"
         methods = paragraphs (map goMethod cMethods)
         goMethod ExTypeDecl {..} =
-          textStrict "*" <+> align (paragraphs
+          textStrict "*  " <+> align (paragraphs
             [ inlineCode $ (textStrict $ getText tName) <+> colon <+>
                      textStrict (prettyPolyType $ map stripAnn tPolyType)
             , docString tDocString
@@ -98,7 +114,7 @@ moduleDoc (extractDecls -> decls) =
           )
         insts = vsep (map goInst $ getInstances h)
         goInst ExInstanceDecl {..} =
-          textStrict "*" <+> inlineCode (
+          textStrict "*  " <+> inlineCode (
             hsep (map goConstr iConstraints) <+>
             textStrict h <+> typeAsArg (snd iHead)
           )
@@ -109,7 +125,8 @@ moduleDoc (extractDecls -> decls) =
     EDInstance _ -> []
 
     EDType ExTypeDecl {..} ->
-      [ section name
+      [ header tDocString
+      , decl name
       , code (textStrict name <+> colon <+> poly)
       , docString tDocString
       ]
@@ -120,9 +137,11 @@ moduleDoc (extractDecls -> decls) =
     EDValue _ -> []
 
     EDFixity ExFixityDecl {..} ->
-      [ section $ "(" <> op <> ")"
-      , textStrict ("Infix operator alias for [" <> alias <> "](#" <> alias <> ").")
-      , textStrict ("_" <> goAssoc <> "-associative, precedence: " <> show p <> "_")
+      [ decl $ "(" <> op <> ")"
+      , textStrict $
+          "Infix operator alias for [" <> alias <> "](#" <> alias <>
+          "). _" <> goAssoc <> "-associative, precedence: " <> show p <> "_"
+      , docString fDocString
       ]
       where
         Infix assoc p = fFixity
