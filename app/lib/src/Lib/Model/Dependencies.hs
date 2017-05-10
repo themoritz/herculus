@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE NoImplicitPrelude   #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -10,6 +11,7 @@ module Lib.Model.Dependencies
   ( DependencyGraph
   , emptyDependencyGraph
   , getAllColumnDependants
+  , getColumnCompileDependants
   , getTableDependants
   , getTableDependantsOnly
   , setCodeDependencies
@@ -20,9 +22,9 @@ module Lib.Model.Dependencies
   , ColumnOrder
   ) where
 
-import           Control.Applicative
+import           Lib.Prelude
+
 import           Control.Lens
-import           Control.Monad.State
 import           Control.Monad.Trans.Maybe
 
 import           Data.Align
@@ -32,10 +34,9 @@ import           Data.Map                     (Map)
 import qualified Data.Map                     as Map
 import           Data.Maybe                   (fromMaybe)
 import           Data.Serialize
+import           Data.Set                     (Set)
 import qualified Data.Set                     as Set
 import           Data.These
-
-import           GHC.Generics
 
 import {-# SOURCE #-} Lib.Model.Column
 import           Lib.Model.Dependencies.Types
@@ -72,26 +73,50 @@ setColumnDependants :: (Id Column, Id Table) -> [(Id Column, ColumnDependency)]
 setColumnDependants (c, t) edges =
   columnDependants . at c . non (t, Map.empty) . _2 .~ Map.fromList edges
 
-getAllColumnDependants :: (Id Column, Id Table)
-                       -- ^ Pair of column together with its table
-                       -> DependencyGraph -> [(Id Column, AddTargetMode)]
+getAllColumnDependants
+  :: (Id Column, Id Table)
+  -- ^ Pair of column together with its table
+  -> DependencyGraph -> [(Id Column, AddTargetMode)]
 getAllColumnDependants (c, t) graph =
     Map.toList $ alignWith alignDeps direct indirect
   where
     direct   = fromMaybe nil
                  (graph ^? columnDependants . at c . _Just . _2)
-    indirect = maybe nil (Map.filter follow)
+    indirect = maybe nil (Map.filter actuallyDependant)
                  (graph ^. tableDependants . at t)
-    follow = \case
-      TblDepColumnRef -> False
-      -- The ColumnRef dependency is only used to track columns that reference
-      -- that table, but a column referencing that table is not dependant during
-      -- propagation.
-      TblDepTableRef  -> True
-      TblDepRowRef    -> True
     alignDeps :: These ColumnDependency TableDependency -> AddTargetMode
     alignDeps (This ColDepRef) = AddOne
     alignDeps _                = AddAll
+
+actuallyDependant :: TableDependency -> Bool
+actuallyDependant = \case
+  TblDepColumnRef -> False
+  -- The ColumnRef dependency is only used to track columns that reference
+  -- that table, but a column referencing that table is not dependant during
+  -- propagation.
+  TblDepTableRef  -> True
+  TblDepRowRef    -> True
+
+getColumnCompileDependants
+  :: Monad m
+  => Id Column
+  -> (Id Column -> m (Id Table))
+  -> DependencyGraph
+  -> m (Set (Id Column))
+getColumnCompileDependants c getTableId graph = do
+  t <- getTableId c
+  let
+    direct   = fromMaybe nil
+                 (graph ^? columnDependants . at c . _Just . _2)
+    indirect = maybe nil (Map.filter actuallyDependant)
+                 (graph ^. tableDependants . at t)
+    all'     = Map.toList $ align direct indirect
+  sets' <- for all' $ \(i, th) -> case th of
+    That TblDepRowRef ->
+      Set.insert i <$> getColumnCompileDependants i getTableId graph
+    _ ->
+      pure $ Set.singleton i
+  pure $ Set.unions sets'
 
 --------------------------------------------------------------------------------
 
@@ -146,7 +171,7 @@ setTypeDependencies c getTableId typeDeps graph = do
       tableDependants . itraversed . withIndex
                       . filtered (flip Set.notMember tblDepsSet . fst)
                       . _2 %= Map.update removeRowRef c
-      -- Columns have to type deps so we don't touch them
+      -- Columns have no type deps so we don't touch them
 
       -- Add edges:
       for_ (Set.toList tblDepsSet) $ \dep ->
@@ -205,7 +230,7 @@ getDependantsTopological
   -> DependencyGraph
   -> m (Maybe ColumnOrder)
 getDependantsTopological getTableId roots graph =
-    fmap tail <$> evalStateT (runMaybeT $ topSort nullObjectId) Map.empty
+    fmap tailSafe <$> evalStateT (runMaybeT $ topSort nullObjectId) Map.empty
   where
     topSort :: Id Column -> MaybeT (StateT (Map (Id Column) Bool) m) ColumnOrder
     topSort x = gets (Map.lookup x) >>= \case

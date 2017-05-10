@@ -149,7 +149,7 @@ executeCommand = \case
       -- When the dataType has changed:
       when (dataCol ^. dataColType /= dataType) $ do
         scheduleCompileColumn columnId
-        scheduleCompileColumnDependants (columnId, oldCol ^. columnTableId)
+        scheduleCompileColumnDependants columnId
         when (isDerived == NotDerived) $ do
           cells <- getColumnCells columnId
           for_ cells $ \(Entity _ (Cell _ t c r)) -> do
@@ -193,12 +193,12 @@ executeCommand = \case
       Just _ -> throwError $ ErrUser "A column with that name already exists."
       Nothing -> pure ()
     modifyColumn columnId $ columnName .~ name
-    scheduleCompileColumnDependants (columnId, column ^. columnTableId)
+    scheduleCompileColumnDependants columnId
 
   CmdColumnDelete columnId -> do
     column <- getColumn columnId
     deleteColumn columnId
-    scheduleCompileColumnDependants (columnId, column ^. columnTableId)
+    scheduleCompileColumnDependants columnId
     graphModify $ purgeColumn columnId
 
   CmdRowCreate tableId -> do
@@ -258,11 +258,11 @@ executeCommand = \case
 
 --------------------------------------------------------------------------------
 
-scheduleCompileColumnDependants :: MonadEngine m
-                                => (Id Column, Id Table) -> m ()
-scheduleCompileColumnDependants (columnId, tableId) = do
-  dependants <- graphGets $ getAllColumnDependants (columnId, tableId)
-  mapM_ (scheduleCompileColumn . fst) dependants
+scheduleCompileColumnDependants :: MonadEngine m => Id Column -> m ()
+scheduleCompileColumnDependants columnId = do
+  dependants <- graphGetsM $
+    getColumnCompileDependants columnId getColumnTableId
+  mapM_ scheduleCompileColumn dependants
 
 setAndPropagateCellContent :: MonadEngine m
                            => Id Table -> Id Column -> Id Row

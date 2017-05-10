@@ -130,7 +130,6 @@ executable doc-gen
                      , text
   default-extensions:  OverloadedStrings
                      , LambdaCase
-                     , NoImplicitPrelude
   ghc-options:         -Wall
 
 test-suite herculus-lib-test
