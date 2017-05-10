@@ -68,7 +68,7 @@ documentModule
   -> m (Either Error Doc)
 documentModule src resolver env = runExceptT $ do
   e <- hoistError $ parse src (mkCheckEnvOpTable env) parseModule
-  ExceptT $ runCheck env resolver $ checkModule e
+  _ <- ExceptT $ runCheck env resolver $ checkModule e
   pure $ moduleDoc e
 
 --------------------------------------------------------------------------------

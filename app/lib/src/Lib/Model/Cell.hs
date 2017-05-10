@@ -12,12 +12,10 @@ import           Lib.Prelude
 import           Control.Lens
 import           Control.Monad.Writer
 
-import           Data.Aeson                   (FromJSON, ToJSON)
+import           Data.Aeson           (FromJSON, ToJSON)
 import           Data.Aeson.Bson
-import           Data.Bson                    (Val, (=:))
-import qualified Data.Bson                    as Bson
-
-import           Text.PrettyPrint.Leijen.Text hiding ((<$>))
+import           Data.Bson            (Val, (=:))
+import qualified Data.Bson            as Bson
 
 import           Lib.Model.Class
 import           Lib.Model.Column
@@ -29,11 +27,6 @@ data CellContent
   = CellValue Value
   | CellError Text
   deriving (Eq, Show, Typeable, Generic, ToJSON, FromJSON)
-
-cellContentDoc :: CellContent -> Doc
-cellContentDoc = \case
-  CellValue v -> valueDoc v
-  CellError e -> textStrict "Error:" <+> textStrict e
 
 instance ToBSON CellContent
 instance FromBSON CellContent
@@ -58,15 +51,13 @@ data Value
   | VMaybe (Maybe Value)
   deriving (Show, Generic, Typeable, Eq, ToJSON, FromJSON)
 
-valueDoc :: Value -> Doc
-valueDoc = error "not defined"
-
 -- TODO: delete in favor of ajax calls to the server version of defaultContent
 defaultContentPure :: DataType -> Value
 defaultContentPure = \case
   DataBool     -> VBool False
   DataString   -> VString ""
   DataNumber   -> VNumber 0
+  DataInteger  -> VInteger 0
   DataTime     -> VTime defaultTime
   DataRowRef _ -> VRowRef Nothing
   DataList   _ -> VList []
@@ -85,6 +76,7 @@ invalidateRowRef r old =
       VBool b    -> pure $ VBool b
       VString s  -> pure $ VString s
       VNumber n  -> pure $ VNumber n
+      VInteger i -> pure $ VInteger i
       VTime t    -> pure $ VTime t
       VRowRef mr -> VRowRef <$> if mr == Just r
                                   then do tell [()]
@@ -92,6 +84,8 @@ invalidateRowRef r old =
                                   else pure mr
       VList vs   -> VList <$> mapM go vs
       VMaybe mv  -> VMaybe <$> mapM go mv
+      VData l vs -> VData l <$> mapM go vs
+      VRecord m  -> VRecord <$> mapM (\(k, v) -> (k,) <$> go v) m
 
 --
 

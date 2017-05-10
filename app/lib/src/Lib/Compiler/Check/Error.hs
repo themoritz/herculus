@@ -93,7 +93,7 @@ printCheckErr = \case
     "The given type signature is too general. The inferred type is `" <>
     prettyPolyType inferred <> "` while the given signature was `" <>
     prettyPolyType given <> "`."
-  SignatureMustBeUnconstrained name ->
+  SignatureMustBeUnconstrained _name ->
     "Interface methods are not allowed to be constrained."
   WrongNumberOfConstructorArgs c expected actual ->
     "Type constructor `" <> c <>
@@ -106,15 +106,15 @@ printCheckErr = \case
   MissingInstance cls t ->
     "The type `" <> prettyType t <>
     "` does not implement the interface `" <> cls <> "`."
-  MissingField f record ->
+  MissingField f _record ->
     "Could not verify object has required field `" <> f <> "`."
   MissingImplementation name ->
     "No implementation provided for `" <> name <> "`."
-  NoHeadNormalForm t ->
+  NoHeadNormalForm _t ->
     "Constraints must be in head-normal form (starting with a type variable)."
-  InvalidInstanceHeadType t ->
+  InvalidInstanceHeadType _t ->
     "The type for which an interface is implemented must be a type constructor."
-  InvalidInstanceConstraintType t ->
+  InvalidInstanceConstraintType _t ->
     "The types of implementation constraints must be type variables."
   OverlappingInstance otherType ->
     "This implementation overlaps with an implementation for type `" <>
@@ -160,5 +160,5 @@ data CheckAppendError
 
 printCheckAppendErr :: CheckAppendError -> Text
 printCheckAppendErr = \case
-  CheckingSubsumption big small field ->
+  CheckingSubsumption _big _small field ->
     "While checking field `" <> field <> "`."

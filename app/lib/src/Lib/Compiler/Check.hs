@@ -890,7 +890,7 @@ buildInstanceDict ExInstanceDecl {..} = do
 
 checkClassDecl :: ExClassDecl -> Check (Map Text EnvType)
 checkClassDecl ExClassDecl {..} = do
-  let (SourceText clsSpan cls, SourceText paramSpan param) = cHead
+  let (SourceText clsSpan cls, SourceText _ param) = cHead
   lookupClass cls >>= \case
     Nothing -> pure ()
     Just _ -> checkError clsSpan $ DuplicateClass cls
@@ -1017,7 +1017,7 @@ matchType t1 t2 = runMaybeT $ match t1 t2
       hoistMaybe $ typeSubstMerge sf sarg
     (TypeTable x, TypeTable y) | x == y -> pure Map.empty
     (TypeRecord m, TypeRecord m') -> do
-      let matchField s (k, th) = case th of
+      let matchField s (_, th) = case th of
             These t t' -> do
               s' <- match t t'
               hoistMaybe $ typeSubstMerge s s'

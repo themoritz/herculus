@@ -1,7 +1,9 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 -- |
 
-module Lib.Compiler.Docs where
+module Lib.Compiler.Docs
+  ( moduleDoc
+  ) where
 
 import           Lib.Prelude                  hiding (empty, (<$>))
 

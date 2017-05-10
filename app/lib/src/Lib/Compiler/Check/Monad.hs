@@ -440,7 +440,7 @@ runCheck env goResolve =
     DebugTypeSubst next -> do
       subst <- use checkTypeSubst
       traceM "- Type subst -"
-      flip Map.traverseWithKey subst $ \k t ->
+      _ <- flip Map.traverseWithKey subst $ \k t ->
         traceM $ k <> " :-> " <> prettyType t
       traceM "--------------"
       pure next
