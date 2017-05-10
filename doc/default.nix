@@ -4,6 +4,8 @@ with pkgs.python27Packages;
 
 let
 
+  herculus-lib = import ./../app/lib { inherit pkgs; };
+
   livereload = buildPythonPackage rec {
     name = "livereload-2.5.1";
     src = pkgs.fetchurl {
@@ -52,8 +54,10 @@ in
       pkgs.python35
       mkdocs
       mkdocs-cinder
+      herculus-lib
     ];
     buildPhase = ''
+      doc-gen -p > docs/reference.md
       mkdocs build
     '';
     installPhase = "mkdir $out && cp -r ./site/* $out";
