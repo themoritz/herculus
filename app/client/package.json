@@ -1,5 +1,6 @@
 {
-  "name": "psc-client",
+  "name": "herculus-purescript-client",
+  "version": "0.0.1",
   "scripts": {
     "watch": "node ./webpack/dev.js",
     "build": "webpack --config ./webpack/dev.js --progress --colors",
@@ -8,6 +9,9 @@
   },
   "devDependencies": {
     "basil.js": "git+https://github.com/Wisembly/basil.js.git",
+    "basscss": "^8.0.3",
+    "basscss-addons": "^1.0.0",
+    "basscss-basic": "^1.0.0",
     "connect-history-api-fallback": "^1.2.0",
     "css-loader": "^0.26.1",
     "express": "^4.13.4",
