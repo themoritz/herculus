@@ -29,6 +29,8 @@ module Lib.Prelude
   --
   , mapLeft
   , hoistError
+  --
+  , mapMaybeM
   ) where
 
 import           Prelude                    (id)
@@ -109,3 +111,12 @@ mapLeft _ (Right b) = Right b
 
 hoistError :: MonadError e m => Either e a -> m a
 hoistError = either throwError pure
+
+--------------------------------------------------------------------------------
+
+mapMaybeM :: Monad m => (a -> m (Maybe b)) -> [a] -> m [b]
+mapMaybeM f = \case
+  [] -> pure []
+  a:as -> f a >>= \case
+    Nothing -> mapMaybeM f as
+    Just b -> (b:) <$> mapMaybeM f as

@@ -523,8 +523,7 @@ checkAmbiguities vars cs = do
 -- | Removes any constraint that is entailed by the others
 reduce :: [ConstraintToSolve] -> Check [ConstraintToSolve]
 reduce xs =
-    traverse toHeadNormalRecord xs >>=
-    applyTS . join >>=
+    simplifyHasFields xs >>=
     traverse toHeadNormal >>=
     simplify [] . join
   where
@@ -532,10 +531,6 @@ reduce xs =
     simplify ds (c:cs) = entail (ds <> cs) c >>= \case
       True -> simplify ds cs
       False -> simplify (c:ds) cs
-    applyTS :: [ConstraintToSolve] -> Check [ConstraintToSolve]
-    applyTS cs = do
-      s <- getTypeSubst
-      pure $ applyTypeSubst s cs
 
 -- | `entail cs c` is True when c is entailed by cs, i.e. c holds whenever
 -- all the constraints in cs hold.
@@ -601,24 +596,38 @@ toHeadNormal c'@(span, c) = case c of
         Just (cs, _, _) -> join <$> traverse toHeadNormal (map (span,) cs)
   HasFields _ _ -> pure [c']
 
+simplifyHasFields :: [ConstraintToSolve] -> Check [ConstraintToSolve]
+simplifyHasFields =
+  untilFixedM (\cs -> applyTS =<< mapMaybeM byHasFields cs)
+  where
+  untilFixedM :: (Monad m, Eq a) => (a -> m a) -> a -> m a
+  untilFixedM f old = do
+    new <- f old
+    if new == old then pure new else untilFixedM f new
+  applyTS :: [ConstraintToSolve] -> Check [ConstraintToSolve]
+  applyTS cs = do
+    s <- getTypeSubst
+    pure $ applyTypeSubst s cs
+
 -- This does unification, so after it we need to apply current type subst.
-toHeadNormalRecord :: ConstraintToSolve -> Check [ConstraintToSolve]
-toHeadNormalRecord c'@(span, c) = case c of
-  IsIn _ _ -> pure [c']
-  HasFields fields (Fix t) -> case t of
-    TypeVar _ -> pure [c']
-    TypeRecord m -> do
-      m `checkSubsumes` fields
-      pure []
-    Row (TypeTable refOrId) ->
-      case refOrId of
-        InId i -> do
-          m <- getTableRecordType i
-          m `checkSubsumes` fields
-          pure []
-        InRef _ -> internalError (Just span)
-          "Table ref was not resolved in type."
-    _ -> checkError span $ TypeDoesNotHaveFields (Fix t)
+byHasFields :: ConstraintToSolve -> Check (Maybe ConstraintToSolve)
+byHasFields c'@(span, c) = case c of
+  IsIn _ _ -> pure $ Just c'
+  HasFields fields (Fix t) -> do
+    case t of
+      TypeVar _ -> pure $ Just c'
+      TypeRecord m -> do
+        m `checkSubsumes` fields
+        pure Nothing
+      Row (TypeTable refOrId) ->
+        case refOrId of
+          InId i -> do
+            m <- getTableRecordType i
+            m `checkSubsumes` fields
+            pure Nothing
+          InRef _ -> internalError (Just span)
+            "Table ref was not resolved in type."
+      _ -> checkError span $ TypeDoesNotHaveFields (Fix t)
   where
     checkSubsumes :: Map Text Type -> Map Text Type -> Check ()
     checkSubsumes big small = void $ Map.traverseWithKey go $ align big small
