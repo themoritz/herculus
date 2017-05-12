@@ -16,8 +16,10 @@ library
                      , Lib.Compiler.AST.Position
                      , Lib.Compiler.Check
                      , Lib.Compiler.Check.Error
+                     , Lib.Compiler.Check.Error.Types
                      , Lib.Compiler.Check.Extract
                      , Lib.Compiler.Check.Monad
+                     , Lib.Compiler.Check.Monad.Types
                      , Lib.Compiler.Core
                      , Lib.Compiler.Docs
                      , Lib.Compiler.Env

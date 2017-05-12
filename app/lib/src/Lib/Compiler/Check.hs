@@ -625,8 +625,8 @@ toHeadNormalRecord c'@(span, c) = case c of
       where go k = \case
               This _ -> pure ()
               That _ -> checkError span $ MissingField k big
-              These t t' -> unifyTypes span t' t >>= \case
-                Left err -> checkAppendError err $
+              These t t' -> unifyTypes t' t >>= \case
+                Left err -> checkAppendError span err $
                   CheckingSubsumption big small k
                 Right () -> pure ()
 
@@ -712,9 +712,11 @@ cleanToplevelConstraints cs mt = do
   (ds, rs) <- split fixed generic (applyTypeSubst s cs)
   let cs' = map snd ds <> rs
   -- There should be no remaining constraints here
-  unless (null cs') $ internalError Nothing $
-    "Toplevel expression still has the following deferred constraints: " <>
-    prettyConstraints (map snd cs)
+  unless (null cs') $ do
+    cs'' <- traverse mkConstraintPrintable cs'
+    internalError Nothing $
+      "Toplevel expression still has the following constraints: " <>
+      prettyConstraints cs''
   -- Since split unifies, get substitution again
   case mt of
     Nothing -> pure ()
@@ -991,11 +993,11 @@ compileIntermed :: Intermed -> Check Core.Expr
 compileIntermed i = Core.toCore <$> cleanUpIntermed i
 
 unifyTypes' :: Span -> Type -> Type -> Check ()
-unifyTypes' s t1 t2 = either throwError pure =<< unifyTypes s t1 t2
+unifyTypes' s t1 t2 = either (checkError s) pure =<< unifyTypes t1 t2
 
 unifyConstraints :: Constraint -> Constraint -> Check Bool
 unifyConstraints (IsIn c t) (IsIn c' t')
-  | c == c'   = retain $ unifyTypes voidSpan t t' >>= \case
+  | c == c'   = retain $ unifyTypes t t' >>= \case
       Left _   -> pure False
       Right () -> pure True
   | otherwise = pure False

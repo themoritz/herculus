@@ -109,6 +109,7 @@ class MonadError AppError m => MonadEngine m where
   createTable :: Table -> m (Id Table)
   modifyTable :: Id Table -> (Table -> Table) -> m ()
   deleteTable :: Id Table -> m ()
+  getTable :: Id Table -> m Table
 
   createColumn :: Column -> m (Id Column)
   modifyColumn :: Id Column -> (Column -> Column) -> m ()
@@ -222,6 +223,8 @@ instance MonadHexl m => MonadEngine (EngineT m) where
     lift $ deleteByQuery (Proxy :: Proxy Cell) query
     lift $ deleteByQuery (Proxy :: Proxy Row) query
     storeDelete storeTables tableId
+
+  getTable = storeGetById' storeTables
 
   createColumn column = do
     columnId <- storeCreate storeColumns column

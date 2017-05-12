@@ -113,6 +113,8 @@ mkResolver ownTblId = \case
 
     GetTableRecordType tblId reply -> reply <$> getTableRecordType tblId
 
+    GetTableName tblId reply -> reply . view tableName <$> getTable tblId
+
 resolveColumnRef
   :: MonadEngine m
   => Id Table -> Ref Column

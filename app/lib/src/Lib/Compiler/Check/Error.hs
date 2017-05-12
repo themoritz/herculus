@@ -7,61 +7,44 @@ module Lib.Compiler.Check.Error
   , checkError
   , CheckAppendError (..)
   , checkAppendError
+  , mkKindPrintable
+  , mkTypePrintable
+  , mkConstraintPrintable
+  , mkPolyPrintable
   ) where
 
 import           Lib.Prelude
 
-import           Lib.Model.Column
-import           Lib.Model.Table
-import           Lib.Types
+import           Data.Functor.Foldable
 
 import           Lib.Compiler.AST.Position
+import           Lib.Compiler.Check.Error.Types
+import           Lib.Compiler.Check.Monad.Types
 import           Lib.Compiler.Error
 import           Lib.Compiler.Pretty
 import           Lib.Compiler.Type
+import           Lib.Types
 
-checkAppendError :: MonadError Error m => Error -> CheckAppendError -> m a
-checkAppendError err err' = throwError $ err
-  { errMsg = errMsg err <> "\n\n" <> printCheckAppendErr err'
-  }
+checkAppendError :: Span -> CheckError -> CheckAppendError -> Check a
+checkAppendError span err appendErr = do
+  err' <- traverseCheckError
+    mkKindPrintable
+    mkTypePrintable
+    mkPolyPrintable
+    mkConstraintPrintable
+    err
+  compileError span $
+    printCheckErr err' <> "\n\n" <> printCheckAppendErr appendErr
 
-checkError :: MonadError Error m => Span -> CheckError -> m a
-checkError span err = compileError span $ printCheckErr err
-
--- Always expected first
-data CheckError
-  = UndefinedTypeVariable Text
-  | UndefinedTypeConstructor Text
-  | UndefinedVariable Text
-  | UndefinedConstructor Text
-  | UndefinedClass Text
-  | UndefinedMethod Text Text
-  | ExpectedRowOfTable Type
-  | UnknownTable (Ref Table)
-  | UnknownColumn (Ref Column)
-  | UnknownColumnOfTable (Ref Column) (Ref Table)
-  | SignatureMissingConstraints [Constraint]
-  | SignatureTooGeneral PolyType PolyType
-  | SignatureMustBeUnconstrained Text
-  | WrongNumberOfConstructorArgs Text Int Int
-  | TypeDoesNotHaveFields Type
-  | MissingSuperclassInstance Text
-  | MissingInstance Text Type
-  | MissingField Text (Map Text Type)
-  | MissingImplementation Text
-  | NoHeadNormalForm Type
-  | InvalidInstanceHeadType Type
-  | InvalidInstanceConstraintType Type
-  | OverlappingInstance Type
-  | DuplicateClass Text
-  -- | Sub left and right, expected and actual
-  | KindMismatch Kind Kind Kind Kind
-  -- | Sub left and right, expected and actual
-  | TypeMismatch Type Type Type Type
-  | FieldMismatch Type Type Text
-  | InfiniteKind Kind Kind
-  | InfiniteType Type Type
-  | AmbiguousTypeVar Text
+checkError :: Span -> CheckError -> Check a
+checkError span err = do
+  err' <- traverseCheckError
+    mkKindPrintable
+    mkTypePrintable
+    mkPolyPrintable
+    mkConstraintPrintable
+    err
+  compileError span $ printCheckErr err'
 
 printCheckErr :: CheckError -> Text
 printCheckErr = \case
@@ -162,3 +145,24 @@ printCheckAppendErr :: CheckAppendError -> Text
 printCheckAppendErr = \case
   CheckingSubsumption _big _small field ->
     "While checking field `" <> field <> "`."
+
+--------------------------------------------------------------------------------
+
+mkKindPrintable :: Kind -> Check Kind
+mkKindPrintable k = do
+  s <- getKindSubst
+  pure $ tidyKind $ applyKindSubst s k
+
+mkTypePrintable :: Type -> Check Type
+mkTypePrintable t = do
+  s <- getTypeSubst
+  t' <- flip cataM t $ \case
+    TypeTable (InId i) -> typeTable . InRef . Ref <$> getTableName i
+    other -> pure $ Fix other
+  pure $ applyTypeSubst s t'
+
+mkConstraintPrintable :: Constraint -> Check Constraint
+mkConstraintPrintable = traverse mkTypePrintable
+
+mkPolyPrintable :: PolyType -> Check PolyType
+mkPolyPrintable = traverse mkTypePrintable

@@ -162,7 +162,9 @@ testParseSpans src = withParsed src testOpTable parseModule $ \decls ->
 testCheck :: Text -> IO ()
 testCheck src = compileModule src testResolveInterp primCheckEnv >>= \case
   Left err -> putStrLn $ displayError src err
-  Right (_, code) ->
+  Right (env, code) -> do
+    void $ flip Map.traverseWithKey (_checkEnvTypes env) $ \n et ->
+      putStrLn $ n <> ": " <> prettyPolyType (etPoly et) <> "\n"
     void $ flip Map.traverseWithKey code $ \n core ->
       putStrLn $ n <> ": " <> prettyCore core <> "\n"
 
