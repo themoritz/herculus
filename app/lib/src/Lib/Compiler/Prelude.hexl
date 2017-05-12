@@ -291,6 +291,13 @@ maybe def f ma = case ma of
 fromMaybe : forall a. a -> Maybe a -> a
 fromMaybe def = maybe def id
 
+mapMaybe : forall a b. (a -> Maybe b) -> List a -> List b
+mapMaybe f xs = case xs of
+  Nil -> Nil
+  Cons a as -> case f a of
+    Nothing -> mapMaybe f as
+    Just b -> Cons b (mapMaybe f as)
+
 --------------------------------------------------------------------------------
 -- | # Either Values
 

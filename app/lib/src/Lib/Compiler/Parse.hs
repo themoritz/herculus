@@ -21,7 +21,6 @@ import qualified Text.Megaparsec           as P
 import           Text.Megaparsec.Expr
 
 import           Lib.Compiler.AST
-import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Error
 import           Lib.Compiler.Parse.Common
 import           Lib.Compiler.Parse.Lexer
@@ -259,13 +258,11 @@ parseLit = withSource $ inj . Literal <$> (P.choice
       pure $ RecordLit $ Map.fromList fields
 
 parseIfThenElse :: Parser SourceAst
-parseIfThenElse = do
-  start <- getPosition
+parseIfThenElse = withSource $ do
   cond <-                    P.try (reserved "if")  *> indented *> parseExpr
   true@(tspan :< _) <-  indented *> reserved "then" *> indented *> parseExpr
   false@(fspan :< _) <- indented *> reserved "else" *> indented *> parseExpr
-  end <- getPosition
-  pure $ Span start end :< inj (Case cond
+  pure $ inj (Case cond
     [ (tspan :< inj (ConstructorBinder "True" []), true)
     , (fspan :< inj (ConstructorBinder "False" []), false)
     ])
