@@ -7,19 +7,21 @@
     let
       domain = "herculus.io";
 
+      herculus-lib = import ./../app/lib { inherit pkgs; };
+
       # Landing page
       landingPage = import ./../landing-page/client { inherit pkgs; };
 
       # App server 
       herculusServer = import ./../app/server { inherit pkgs; };
       herculusClient = import ./../app/client {
-        inherit pkgs;
+        inherit pkgs herculus-lib;
         apiUrl = "https://app.${domain}/api/";
         websocketUrl = "wss://app.${domain}/websocket";
       };
 
       # Documentation
-      documentation = import ./../doc { inherit pkgs; };
+      documentation = import ./../doc { inherit pkgs herculus-lib; };
 
       # Forwarded by AWS load balancer
       sslPort = 1443;

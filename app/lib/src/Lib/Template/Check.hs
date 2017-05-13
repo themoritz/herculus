@@ -77,5 +77,5 @@ checkTemplateChunk (span :< chunk) = case chunk of
     pure (tplIf cond' th' el', cs <> thCs <> elCs)
   TplPrint e -> do
     (e', eType, cs) <- inferExpr e
-    let printFn = methodPlaceholder span (IsIn "Print" $ injFix eType) "print"
+    let printFn = methodPlaceholder span "Print" (injFix eType) "print"
     pure (tplPrint (app printFn e'), cs)

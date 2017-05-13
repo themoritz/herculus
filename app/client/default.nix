@@ -1,5 +1,5 @@
 { pkgs ? import <nixpkgs> {}
-, herculus-lib ? import ../lib {}
+, herculus-lib ? import ../lib { inherit pkgs; }
 , apiUrl ? "http://localhost:3000/api/"
 , websocketUrl ? "ws://localhost:3000/websocket"
 }:

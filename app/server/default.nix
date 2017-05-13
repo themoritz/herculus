@@ -6,8 +6,8 @@ let
   myPackages = pkgs.recurseIntoAttrs (
     haskellPackages.override {
       overrides = self: super: {
-        herculus-lib = self.callPackage (import ../lib/herculus-lib.nix) {};
-        servant-purescript = super.servant-purescript_0_7_0_0;
+        herculus-lib = self.callPackage ../lib/herculus-lib.nix {};
+        servant-purescript = self.callPackage ../lib/nix/servant-purescript.nix {};
       };
     }
   );

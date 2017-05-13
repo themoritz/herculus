@@ -1,10 +1,10 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs ? import <nixpkgs> {}
+, herculus-lib ? import ./../app/lib { inherit pkgs; }
+}:
 
 with pkgs.python27Packages; 
 
 let
-
-  herculus-lib = import ./../app/lib { inherit pkgs; };
 
   livereload = buildPythonPackage rec {
     name = "livereload-2.5.1";

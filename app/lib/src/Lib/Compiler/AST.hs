@@ -196,10 +196,10 @@ data PlaceholderF a
   -- | Class, type. Translate to dictionary that's in scope for the class and
   -- type combination. Constrained functions will be applied to these
   -- placeholders.
-  = DictionaryPlaceholder Span (ConstraintF a)
+  = DictionaryPlaceholder Span Text a
   -- | Class, type, method name. Translate to dictionary selection in dictionary
   -- that's in scope.
-  | MethodPlaceholder Span (ConstraintF a) Text
+  | MethodPlaceholder Span Text a Text
   -- | Function name, type. Recursively defined functions. Once the function has
   -- been generalized, convert this to application of `DictionaryPlaceholder`s.
   | RecursiveCallPlaceholder Span Text
@@ -208,12 +208,12 @@ data PlaceholderF a
   deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 dictionaryPlaceholder
-  :: PlaceholderF :<: f => Span -> ConstraintF (Fix f) -> Fix f
-dictionaryPlaceholder span c = Fix $ inj $ DictionaryPlaceholder span c
+  :: PlaceholderF :<: f => Span -> Text -> Fix f -> Fix f
+dictionaryPlaceholder span c t = Fix $ inj $ DictionaryPlaceholder span c t
 
 methodPlaceholder
-  :: PlaceholderF :<: f => Span -> ConstraintF (Fix f) -> Text -> Fix f
-methodPlaceholder span c m = Fix $ inj $ MethodPlaceholder span c m
+  :: PlaceholderF :<: f => Span -> Text -> Fix f -> Text -> Fix f
+methodPlaceholder span c t m = Fix $ inj $ MethodPlaceholder span c t m
 
 recursiveCallPlaceholder
   :: PlaceholderF :<: f => Span -> Text -> Fix f
@@ -224,6 +224,13 @@ accessPlaceholder
   :: PlaceholderF :<: f => Span -> Fix f -> Fix f
 accessPlaceholder span t =
   Fix $ inj $ AccessPlaceholder span t
+
+constrToPlaceholder
+  :: (Functor g, Functor f, PlaceholderF :<: f, TypeF :<: g, TypeF :<: f)
+  => Span -> ConstraintF (Fix g) -> Fix f
+constrToPlaceholder span (map unsafePrjFix -> c)= case c of
+  IsIn cls t -> dictionaryPlaceholder span cls (injFix (t :: Type))
+  HasFields _ t -> accessPlaceholder span (injFix t)
 
 --------------------------------------------------------------------------------
 

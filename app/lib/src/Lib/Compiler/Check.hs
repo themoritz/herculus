@@ -158,16 +158,12 @@ inferExpr' span = \case
       (constraints, t) <- instantiate poly
       e <- case origin of
         Default -> do
-          let
-            toPlaceholder c = case c of
-              IsIn _ _       -> dictionaryPlaceholder span (map injFix c)
-              HasFields _ t' -> accessPlaceholder span (injFix t')
-            placeholders = map toPlaceholder constraints
+          let placeholders = map (constrToPlaceholder span) constraints
           pure $ foldl' app (var x') placeholders
         Method -> case constraints of
-          [c] -> pure $ methodPlaceholder span (map injFix c) x'
+          [IsIn cls t'] -> pure $ methodPlaceholder span cls (injFix t') x'
           _ -> internalError (Just span) $
-            "Expected exactly one constraint while looking up " <>
+            "Expected exactly one interface constraint while looking up " <>
             "method variable `" <> x <> "`."
         Recursive -> pure $ recursiveCallPlaceholder span x'
       pure (e, t, map (span,) constraints)
@@ -349,20 +345,16 @@ inferImplicitDefinitions defs = do
       css = applyTypeSubst s $ join $ map (view _4) inferred
     (deferred, retained) <- split fixed generic css
 
-    -- Quantify over the intersection of retained and the inferred constraints
+    -- Quantify over retained constraints
     s' <- getTypeSubst
-    quantified <- for inferred $ \(name, e, t, cs) -> do
-      cs' <- reduce (applyTypeSubst s' cs)
-      s'' <- getTypeSubst
-      let
-        rs = [c | c <- retained, c `elem` map snd cs']
-        poly = quantify (Set.toList generic) rs (applyTypeSubst s'' t)
-      pure (name, e, poly, rs)
+    quantified <- for inferred $ \(name, e, t, _) -> do
+      let poly = quantify (Set.toList generic) retained (applyTypeSubst s' t)
+      pure (name, e, poly)
 
     -- Resolve placeholders
-    let recConstrs = Map.fromList $ map (view _1 &&& view _4) quantified
-    resolved <- for quantified $ \(name, e, poly, cs) -> do
-      e' <- resolveConstraints recConstrs e cs
+    let recConstrs = Map.fromList $ map (view _1 &&& const retained) quantified
+    resolved <- for quantified $ \(name, e, poly) -> do
+      e' <- resolveConstraints recConstrs e retained
       pure (name, e', poly)
 
     pure (resolved, deferred)
@@ -425,27 +417,26 @@ resolvePlaceholders recConstrs =
 
   goPlaceholder :: PlaceholderF Intermed -> Check Intermed
   goPlaceholder p = case p of
-    DictionaryPlaceholder span c -> getDict span c >>= \case
+    DictionaryPlaceholder span cls t -> getDict span cls t >>= \case
       -- Not found: placeholder will be resolved in surrounding scope
       Nothing -> pure $ Fix $ inj p
       Just d -> pure d
-    MethodPlaceholder span c name -> getDict span c >>= \case
+    MethodPlaceholder span cls t name -> getDict span cls t >>= \case
       -- Not found: placeholder will be resolved in surrounding scope
       Nothing -> pure $ Fix $ inj p
       Just d -> pure $ access d (literal $ StringLit name)
     RecursiveCallPlaceholder span name -> do
       case Map.lookup name recConstrs of
-        Just cs -> do
-          let ps = map (dictionaryPlaceholder span . map injFix) cs
-          resolvePlaceholders recConstrs $ foldl' app (var name) ps
+        Just cs -> resolvePlaceholders recConstrs $
+          foldl' app (var name) (map (constrToPlaceholder span) cs)
         Nothing -> pure $ Fix $ inj p
     AccessPlaceholder span (unsafePrjFix -> t) -> do
       s <- getTypeSubst
       let Fix t' = applyTypeSubst s t
       case t' of
         TypeVar v -> lookupInstanceDict (AccessByTypeVar v) >>= \case
-          Nothing -> internalError (Just span) $
-            "No function for access placeholder in scope."
+          -- Not found: placeholder will be resolved in surrounding scope
+          Nothing -> pure $ Fix $ inj p
           Just n -> pure $ var n
         Row (TypeTable _) ->
           pure $ abs (varBinder "e") $
@@ -459,9 +450,8 @@ resolvePlaceholders recConstrs =
           "Found type `" <> prettyType (Fix t') <>
           "` when resolving access placeholder."
 
-
-  getDict :: Span -> ConstraintF Intermed -> Check (Maybe Intermed)
-  getDict span (IsIn cls (unsafePrjFix -> t)) = do
+  getDict :: Span -> Text -> Intermed -> Check (Maybe Intermed)
+  getDict span cls (unsafePrjFix -> t) = do
     s <- getTypeSubst
     let t' = applyTypeSubst s t
     flip cata t' $ \case
@@ -490,7 +480,7 @@ resolvePlaceholders recConstrs =
             -- the type vars there. TODO: Maybe user matchTypes instead?
             unifyTypes' span t'' t
             let dictPlaceholders =
-                  map (dictionaryPlaceholder span . map injFix) cs
+                  map (constrToPlaceholder span) cs
             Just <$> resolvePlaceholders
                        recConstrs
                        (foldl' app d dictPlaceholders)

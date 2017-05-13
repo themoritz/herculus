@@ -232,14 +232,14 @@ exprDoc = \case
 
 placeholderDoc :: PlaceholderF Doc -> Doc
 placeholderDoc = \case
-  DictionaryPlaceholder _ c ->
-    textStrict "<" <> downPretty constraintDoc c <> textStrict ">"
-  MethodPlaceholder _ c name ->
-    textStrict "<" <> downPretty constraintDoc c <+> dot <> textStrict name <> textStrict ">"
+  DictionaryPlaceholder _ cls t ->
+    textStrict ("<" <> cls) <+> t <> textStrict ">"
+  MethodPlaceholder _ cls t name ->
+    textStrict ("<" <> cls) <+> t <+> dot <> textStrict name <> textStrict ">"
   RecursiveCallPlaceholder _ t ->
     textStrict "<" <> textStrict t <> textStrict ">"
   AccessPlaceholder _ t ->
-    textStrict "<get " <> t <> textStrict " >"
+    textStrict "<access " <> t <> textStrict ">"
 
 refTextDoc :: RefTextF Doc -> Doc
 refTextDoc = \case
