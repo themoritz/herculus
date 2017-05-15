@@ -19,7 +19,7 @@ import           Lib.Compiler.Core
 import           Lib.Compiler.Eval.Monad
 import           Lib.Compiler.Eval.Types
 
-eval :: TermEnv -> Expr -> Eval Result
+eval :: Monad m => TermEnv m -> Expr -> Eval m (Result m)
 eval env e = consumeGas *> case e of
   Literal lit -> evalLit env lit
   Var v -> case Map.lookup v env of
@@ -66,11 +66,11 @@ eval env e = consumeGas *> case e of
     RRowRef mR <- eval env e'
     case mR of
       Nothing -> evalError "Invalid row reference."
-      Just r  -> getRowRecord r >>= \case
+      Just r  -> withGetter (\g -> getRowRecord g r) >>= \case
         Just record -> pure $ RRecord $ map loadValue record
         Nothing -> evalError "Dependent cell not ready."
 
-matchValue :: Result -> Binder -> Maybe TermEnv
+matchValue :: Result m -> Binder -> Maybe (TermEnv m)
 matchValue res = \case
   VarBinder x ->
     Just $ Map.singleton x res
@@ -80,23 +80,23 @@ matchValue res = \case
     , label == name -> map Map.unions $ zipWithM matchValue results args
     | otherwise -> Nothing
 
-evalLit :: TermEnv -> Literal -> Eval Result
+evalLit :: Monad m => TermEnv m -> Literal -> Eval m (Result m)
 evalLit env = \case
   NumberLit n -> pure $ RNumber (Number n)
   IntegerLit i -> pure $ RInteger i
   StringLit s -> pure $ RString s
   RecordLit fields -> RRecord <$> traverse (eval env) fields
 
-evalRef :: Reference -> Eval Result
+evalRef :: Monad m => Reference -> Eval m (Result m)
 evalRef = \case
-  ColumnRef c -> getCellValue c >>= \case
+  ColumnRef c -> withGetter (\g -> getCellValue g c) >>= \case
     Nothing -> evalError "Dependent cell not ready."
     Just v -> pure $ loadValue v
   TableRef t -> do
-    rows <- getTableRows t
+    rows <- withGetter (\g -> getTableRows g t)
     pure $ loadValue $ VList $ map (VRowRef . Just) rows
   ColumnOfTableRef _ c -> do
-    mVals <- getColumnValues c
+    mVals <- withGetter (\g -> getColumnValues g c)
     case sequence mVals of
       Nothing   -> evalError "Dependent cell not ready."
       Just vals -> pure $ loadValue $ VList vals

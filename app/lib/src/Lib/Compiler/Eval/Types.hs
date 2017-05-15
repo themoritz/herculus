@@ -16,19 +16,19 @@ import           Lib.Types
 import           Lib.Compiler.Core
 import           Lib.Compiler.Eval.Monad
 
-type TermEnv = Map Text Result
+type TermEnv m = Map Text (Result m)
 
-termEnvDoc :: TermEnv -> Doc
+termEnvDoc :: TermEnv m -> Doc
 termEnvDoc = vsep . map go . Map.toList
   where go (n, r) = textStrict n <> ":" <+> resultDoc r
 
-termEnvPretty :: TermEnv -> Text
+termEnvPretty :: TermEnv m -> Text
 termEnvPretty = show . termEnvDoc
 
-loadModule :: Map Text Expr -> TermEnv
+loadModule :: Map Text Expr -> TermEnv m
 loadModule = map (flip RContinuation Map.empty)
 
-loadValue :: Value -> Result
+loadValue :: Value -> Result m
 loadValue = \case
   VBool b    -> RData (if b then "True" else "False") []
   VString s  -> RString s
@@ -46,7 +46,7 @@ loadValue = \case
     Nothing -> RData "Nothing" []
     Just v  -> RData "Just" [loadValue v]
 
-storeValue :: Result -> Eval Value
+storeValue :: Monad m => Result m -> Eval m Value
 storeValue r = case r of
   RString s  -> pure $ VString s
   RNumber n  -> pure $ VNumber n
@@ -78,20 +78,20 @@ storeValue r = case r of
   RContinuation _ _ -> internalError "Unexpected continuation"
   RPrimFun _        -> internalError "Unexpected prim function"
 
-data Result
+data Result m
   = RString Text
   | RNumber Number
   | RInteger Integer
   | RDateTime Time
   | RRowRef (Maybe (Id Row))
-  | RData Text [Result]
-  | RRecord (Map Text Result)
+  | RData Text [Result m]
+  | RRecord (Map Text (Result m))
   --
-  | RClosure Binder Expr TermEnv
-  | RContinuation Expr TermEnv
-  | RPrimFun (Result -> Eval Result)
+  | RClosure Binder Expr (TermEnv m)
+  | RContinuation Expr (TermEnv m)
+  | RPrimFun (Result m -> Eval m (Result m))
 
-resultDoc :: Result -> Doc
+resultDoc :: Result m -> Doc
 resultDoc = \case
   RString s -> textStrict s
   RNumber (Number n) -> double n
@@ -108,5 +108,5 @@ resultDoc = \case
   RContinuation _ _ -> textStrict "continuation"
   RPrimFun _ -> textStrict "prim"
 
-prettyResult :: Result -> Text
+prettyResult :: Result m -> Text
 prettyResult = show . resultDoc

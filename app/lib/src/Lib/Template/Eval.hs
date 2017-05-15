@@ -14,10 +14,10 @@ import           Lib.Compiler.Eval.Monad
 import           Lib.Compiler.Eval.Types
 import           Lib.Template.Core
 
-evalTemplate :: TermEnv -> [TplChunk] -> Eval Text
+evalTemplate :: Monad m => TermEnv m -> [TplChunk] -> Eval m Text
 evalTemplate env = map mconcat . traverse (evalTemplateChunk env)
 
-evalTemplateChunk :: TermEnv -> TplChunk -> Eval Text
+evalTemplateChunk :: Monad m => TermEnv m -> TplChunk -> Eval m Text
 evalTemplateChunk env = \case
   TplText t -> pure t
   TplFor iterator expr body -> do

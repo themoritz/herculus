@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE TypeApplications  #-}
 
 module Lib.Compiler where
 
@@ -57,9 +58,9 @@ compileModule src resolver env = runExceptT $ do
   ExceptT $ runCheck env resolver $ checkModule e
 
 evalFormula
-  :: Monad m => Expr -> Getter m -> TermEnv
+  :: Monad m => Expr -> Getter m -> TermEnv m
   -> m (Either Text Value)
-evalFormula expr getter env = runEval 5000 getter $ do
+evalFormula expr getter env = runEval 1000000 getter $ do
   r <- eval env expr
   storeValue r
 
@@ -74,12 +75,12 @@ documentModule src resolver env = runExceptT $ do
 --------------------------------------------------------------------------------
 
 preludeCheckEnv :: CheckEnv
-preludeCheckEnv = fst prelude
+preludeCheckEnv = fst (prelude @Identity)
 
-preludeTermEnv :: TermEnv
+preludeTermEnv :: Monad m => TermEnv m
 preludeTermEnv = snd prelude
 
-prelude :: (CheckEnv, TermEnv)
+prelude :: Monad m => (CheckEnv, TermEnv m)
 prelude =
   case runIdentity $ compileModule preludeText voidResolver primCheckEnv of
     Left err -> error $ displayError preludeText err
@@ -112,15 +113,16 @@ testResolveInterp = \case
     pure $ reply $ Just nullObjectId
 
 testGetInterp :: Monad m => Getter m
-testGetInterp = \case
-  GetCellValue _ reply ->
-    pure $ reply $ Just $ VNumber (Number 4.0)
-  GetColumnValues _ reply ->
-    pure $ reply [Just $ VNumber (Number 4.0)]
-  GetTableRows _  reply ->
-    pure $ reply [nullObjectId]
-  GetRowRecord _ reply ->
-    pure $ reply $ Just $ Map.singleton "A" $ VNumber (Number 4.0)
+testGetInterp = Getter
+  { getCellValue = \_ ->
+      pure $ Just $ VNumber (Number 4.0)
+  , getColumnValues = \_ ->
+      pure $ [Just $ VNumber (Number 4.0)]
+  , getTableRows = \_ ->
+      pure $ [nullObjectId]
+  , getRowRecord = \_ ->
+      pure $ Just $ Map.singleton "A" $ VNumber (Number 4.0)
+  }
 
 voidResolver :: Monad m => Resolver m
 voidResolver = \case
@@ -134,15 +136,16 @@ voidResolver = \case
     pure $ reply Nothing
 
 voidGetter :: Monad m => Getter m
-voidGetter = \case
-  GetCellValue _ reply ->
-    pure $ reply Nothing
-  GetColumnValues _ reply ->
-    pure $ reply []
-  GetTableRows _  reply ->
-    pure $ reply []
-  GetRowRecord _ reply ->
-    pure $ reply $ Just Map.empty
+voidGetter = Getter
+  { getCellValue = \_ ->
+      pure Nothing
+  , getColumnValues = \_ ->
+      pure []
+  , getTableRows = \_ ->
+      pure []
+  , getRowRecord = \_ ->
+      pure $ Just Map.empty
+  }
 
 --------------------------------------------------------------------------------
 

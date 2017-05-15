@@ -1,18 +1,10 @@
-{-# LANGUAGE DeriveFunctor             #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE NoImplicitPrelude         #-}
-{-# LANGUAGE RankNTypes                #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE StandaloneDeriving        #-}
-{-# LANGUAGE TypeOperators             #-}
+{-# LANGUAGE DeriveFunctor     #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 -- |
 
 module Lib.Compiler.Eval.Monad where
 
 import           Lib.Prelude
-
-import           Control.Monad.Free
 
 import           Lib.Model.Cell
 import           Lib.Model.Column
@@ -20,76 +12,54 @@ import           Lib.Model.Row
 import           Lib.Model.Table
 import           Lib.Types
 
-type Eval' = EvalF :+: GetF
+data Getter m = Getter
+  { getCellValue    :: Id Column -> m (Maybe Value)
+  , getColumnValues :: Id Column -> m [Maybe Value]
+  , getTableRows    :: Id Table -> m [Id Row]
+  , getRowRecord    :: Id Row -> m (Maybe (Map Text Value))
+  }
 
-type Eval = Free Eval'
+newtype Eval m a = Eval
+  { unEval :: Getter m -> Int -> m (Either Text (Int, a))
+  } deriving (Functor)
 
-liftEval :: (f :<: Eval') => f a -> Eval a
-liftEval = liftF . inj
+instance Monad m => Applicative (Eval m) where
+  pure a = Eval $ \_ gas -> pure (Right (gas, a))
+  mf <*> ma = Eval $ \env gas ->
+    unEval mf env gas >>= \case
+      Left e -> pure (Left e)
+      Right (gas', f) ->
+        unEval ma env gas' >>= \case
+          Left e -> pure (Left e)
+          Right (gas'', a) -> pure (Right (gas'', f a))
+
+instance Monad m => Monad (Eval m) where
+  return = pure
+  ma >>= f = Eval $ \env gas ->
+    unEval ma env gas >>= \case
+      Left e -> pure (Left e)
+      Right (gas', a) ->
+        unEval (f a) env gas' >>= \case
+          Left e -> pure (Left e)
+          Right (gas'', b) -> pure (Right (gas'', b))
+
+runEval :: Monad m => Int -> Getter m -> Eval m a -> m (Either Text a)
+runEval gas env action = map snd <$> unEval action env gas
 
 --------------------------------------------------------------------------------
 
-data EvalF a
-  = ConsumeGas a
-  | forall b. EvalError Text (b -> a)
+withGetter :: Monad m => (Getter m -> m a) -> Eval m a
+withGetter f = Eval $ \env gas -> do
+  a <- f env
+  pure (Right (gas, a))
 
-deriving instance Functor EvalF
+consumeGas :: Monad m => Eval m ()
+consumeGas = Eval $ \_ gas -> pure $ if gas == 0
+  then Left "Computation exceeeded the maximum allowed number of operations."
+  else Right (gas - 1, ())
 
-consumeGas :: Eval ()
-consumeGas = liftEval $ ConsumeGas ()
+evalError :: Monad m => Text -> Eval m a
+evalError e = Eval $ \_ _ -> pure (Left e)
 
-evalError :: Text -> Eval b
-evalError e = liftEval $ EvalError e id
-
-internalError :: Text -> Eval a
+internalError :: Monad m => Text -> Eval m a
 internalError msg = evalError $ "Internal: " <> msg
-
---------------------------------------------------------------------------------
-
-type Getter m = forall x. GetF x -> m x
-
-data GetF a
-  = GetCellValue (Id Column) (Maybe Value -> a)
-  | GetColumnValues (Id Column) ([Maybe Value] -> a)
-  | GetTableRows (Id Table) ([Id Row] -> a)
-  | GetRowRecord (Id Row) (Maybe (Map Text Value) -> a)
-  deriving (Functor)
-
-getCellValue :: Id Column -> Eval (Maybe Value)
-getCellValue c = liftEval $ GetCellValue c id
-
-getColumnValues :: Id Column -> Eval [Maybe Value]
-getColumnValues c = liftEval $ GetColumnValues c id
-
-getTableRows :: Id Table -> Eval [Id Row]
-getTableRows t = liftEval $ GetTableRows t id
-
-getRowRecord :: Id Row -> Eval (Maybe (Map Text Value))
-getRowRecord r = liftEval $ GetRowRecord r id
-
---------------------------------------------------------------------------------
-
-type EvalInterpT m = StateT Integer (ExceptT Text m)
-
-runEvalInterpT :: Monad m => Integer -> EvalInterpT m a -> m (Either Text a)
-runEvalInterpT gas m = runExceptT $ evalStateT m gas
-
-runEval
-  :: forall m a. Monad m
-  => Integer -> Getter m
-  -> Eval a -> m (Either Text a)
-runEval gas goGet =
-  runEvalInterpT gas .
-  foldFree go
-  where
-  go :: Eval' b -> EvalInterpT m b
-  go = coproduct goEval (lift . lift . goGet)
-  goEval :: EvalF b -> EvalInterpT m b
-  goEval = \case
-    ConsumeGas next -> do
-      g <- get
-      when (g == 0) $ throwError
-        "Computation exceeded the maximum allowed number of operations."
-      put (g - 1)
-      pure next
-    EvalError e _ -> throwError e

@@ -1,5 +1,6 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE PatternSynonyms   #-}
+{-# LANGUAGE TypeApplications  #-}
 -- |
 
 module Lib.Compiler.Env where
@@ -108,12 +109,12 @@ typeOfDataType = \case
   DataMaybe t  -> typeApp tyMaybe $ typeOfDataType t
 
 primTypeEnv :: Map Text PolyType
-primTypeEnv = map fst primEnv
+primTypeEnv = map fst (primEnv @Identity)
 
-primTermEnv :: TermEnv
+primTermEnv :: Monad m => TermEnv m
 primTermEnv = map snd primEnv
 
-primEnv :: Map Text (PolyType, Result)
+primEnv :: Monad m => Map Text (PolyType, Result m)
 primEnv = Map.fromList
   [
   -- Num Number
@@ -305,11 +306,11 @@ primEnv = Map.fromList
 
 --------------------------------------------------------------------------------
 
-dataBool :: Bool -> Result
+dataBool :: Bool -> Result m
 dataBool True  = RData "True" []
 dataBool False = RData "False" []
 
-dataOrdering :: Ordering -> Result
+dataOrdering :: Ordering -> Result m
 dataOrdering EQ = RData "EQ" []
 dataOrdering LT = RData "LT" []
 dataOrdering GT = RData "GT" []

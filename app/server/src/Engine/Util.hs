@@ -9,7 +9,7 @@ import           Lib.Prelude
 
 import           Control.Lens            hiding (Getter)
 
-import           Lib.Compiler.Eval.Monad (GetF (..), Getter)
+import qualified Lib.Compiler.Eval.Monad as Eval (Getter (..))
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Column
@@ -21,16 +21,17 @@ import           Lib.Types
 import           Engine.Monad
 import           Monads
 
-mkGetter :: MonadEngine m => Id Row -> Getter m
-mkGetter r = \case
-  GetCellValue c reply ->
-    reply <$> getCellValue c r
-  GetColumnValues c reply ->
-    reply <$> getColumnValues c
-  GetTableRows t reply ->
-    map (reply . map entityId) $ getTableRows t
-  GetRowRecord r' reply ->
-    reply <$> getRowRecord r'
+mkGetter :: MonadEngine m => Id Row -> Eval.Getter m
+mkGetter r = Eval.Getter
+  { Eval.getCellValue = \c ->
+      getCellValue c r
+  , Eval.getColumnValues = \c ->
+      getColumnValues c
+  , Eval.getTableRows = \t ->
+      map (map entityId) $ getTableRows t
+  , Eval.getRowRecord = \r' ->
+      getRowRecord r'
+  }
 
 --------------------------------------------------------------------------------
 
