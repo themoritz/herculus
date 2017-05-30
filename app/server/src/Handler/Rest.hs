@@ -19,6 +19,7 @@ import           Control.Monad.Except       (ExceptT (..))
 import qualified Data.ByteString.Base64.URL as Base64URL
 import qualified Data.ByteString.Lazy       as BL
 import qualified Data.ByteString.Lazy.Char8 as BL8
+import qualified Data.Map                   as Map
 import qualified Data.Text                  as T
 import qualified Data.Text.Encoding         as Text (decodeUtf8)
 import qualified Data.Text.Lazy             as TL
@@ -32,6 +33,7 @@ import qualified Text.Pandoc                as Pandoc
 import           Lib.Api.Rest
 import qualified Lib.Api.Schema.Auth        as Api
 import qualified Lib.Api.Schema.Column      as Api
+import qualified Lib.Api.Schema.Compiler    as Api
 import qualified Lib.Api.Schema.Project     as Api
 import           Lib.Compiler
 import           Lib.Compiler.Error
@@ -320,6 +322,7 @@ handleProjectLoad projectId = do
            cells
            (map (\(Entity _ cw) -> (_cwColumnId cw, _cwWidth cw)) colSizes)
            colOrders
+           (Map.toList Api.preludeTycons)
 
 handleProjectRunCommands
   :: (MonadHexl m, MonadReader Api.UserInfo m)

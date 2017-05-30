@@ -1,7 +1,6 @@
 module Herculus.DataCell where
 
 import Herculus.Prelude
-import Data.Map as Map
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
@@ -10,9 +9,11 @@ import Herculus.DatePicker as Date
 import Herculus.EditBox as EditBox
 import DOM.Event.Event (stopPropagation)
 import DOM.Event.MouseEvent (MouseEvent, mouseEventToEvent)
-import Data.Array (deleteAt, length, snoc, take)
+import Data.Array (deleteAt, length, snoc, take, zip)
 import Data.Exists (Exists, mkExists, runExists)
-import Data.Foldable (intercalate)
+import Data.Foldable (intercalate, maximum, minimumBy)
+import Data.Map (Map)
+import Data.Map as Map
 import Data.Generic (gCompare, gEq)
 import Data.Lens (Setter', _Just, element, traversed)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
@@ -22,11 +23,13 @@ import Herculus.Monad (Herc)
 import Herculus.Project.Data (RowCache)
 import Herculus.Utils (cldiv, cldiv_, clspan, clspan_, dropdown, faButton_, faIcon_, mkIndexed)
 import Lib.Api.Schema.Column (ColumnKind(ColumnData), DataCol, columnKind, columnName, dataColIsDerived, dataColType)
+import Lib.Api.Schema.Compiler (Type(TypeRecord, TypeTable, TypeApp, TypeConstructor, TypeVar), TyconInfo, tyconParams, tyconValueConstrs)
 import Lib.Custom (Id, ValNumber(ValNumber), ValTime(ValTime), parseInteger, parseValNumber)
 import Lib.Model.Cell (CellContent(..), Value(..), _VBool, _VInteger, _VList, _VMaybe, _VNumber, _VRowRef, _VString, _VTime)
 import Lib.Model.Column (DataType(..), IsDerived(..))
 import Lib.Model.Row (Row)
 import Lib.Model.Table (Table)
+import Partial.Unsafe (unsafePartial)
 
 type Path a = Setter' Value a
 
@@ -53,6 +56,7 @@ data Query a
 type Input =
   { content :: CellContent
   , dataCol :: DataCol
+  , types :: Map String TyconInfo
   , rowCache :: RowCache
   }
 
@@ -100,29 +104,80 @@ data RenderMode
   = Compact
   | Full
 
-needsExpand :: DataType -> IsDerived -> Boolean
-needsExpand dt derived = case dt, derived of
-  DataBool,      _          -> false
-  DataString,    _          -> false
-  DataNumber,    _          -> false
-  DataInteger,   _          -> false
-  DataTime,      _          -> false
-  DataRowRef _,  NotDerived -> false
-  DataRowRef _,  Derived    -> true
-  DataList _,    _          -> true
-  DataMaybe sub, _          -> needsExpand sub derived
+instConstructors
+  :: Array DataType -> TyconInfo
+  -> Array (Tuple String (Array DataType))
+instConstructors dataTypes tci =
+  map goConstr (tci ^. tyconValueConstrs)
+  where
+  paramMap = Map.fromFoldable $ zip (tci ^. tyconParams) dataTypes
+  resolveParam :: Partial => String -> DataType
+  resolveParam p = fromJust $ Map.lookup p paramMap
+  goConstr (Tuple c args) = Tuple c (map (unsafePartial goType) args)
+  goType :: Partial => Type -> DataType
+  goType = case _ of
+    TypeVar v -> resolveParam v
+    TypeConstructor c -> DataAlgebraic c []
+    TypeApp f arg -> case goType f of
+      DataAlgebraic c f' -> DataAlgebraic c (snoc f' $ goType arg)
+    TypeTable t -> DataTable t
+    TypeRecord r -> DataRecord $ map (\(Tuple f t) -> Tuple f (goType t)) r
 
--- TODO: delete in favor of ajax calls to the server version of defaultContent
-defaultValue :: DataType -> Value
-defaultValue = case _ of
-  DataBool     -> VBool false
-  DataString   -> VString ""
-  DataNumber   -> VNumber (ValNumber "0")
-  DataInteger  -> VInteger 0
-  DataTime     -> VTime (ValTime "2017-01-01T00:00:00Z")
-  DataRowRef _ -> VRowRef Nothing
-  DataList   _ -> VList []
-  DataMaybe  _ -> VMaybe Nothing
+needsExpand
+  :: (String -> TyconInfo) -> DataType -> IsDerived -> Boolean
+needsExpand resolveTycon dt derived = case dt, derived of
+  DataAlgebraic "Boolean" [],  _ -> false
+  DataAlgebraic "String" [],   _ -> false
+  DataAlgebraic "Number" [],   _ -> false
+  DataAlgebraic "Integer" [],  _ -> false
+  DataAlgebraic "DateTime" [], _ -> false
+  DataAlgebraic "List" [_],    _ -> true
+  DataAlgebraic "Maybe" [sub], _ -> needsExpand resolveTycon sub derived
+  DataAlgebraic c _, _ ->
+    let cs = resolveTycon c ^. tyconValueConstrs in
+    case maximum (map (length <<< snd) cs) of
+      Just i | i > 0 -> true
+      _ -> false
+  DataRecord _, _ -> true
+  DataTable _,  NotDerived -> false
+  DataTable _,  Derived    -> true
+
+defaultValue :: (String -> TyconInfo) -> DataType -> Value
+defaultValue resolveTycon = defaultValue' 10
+  where
+  -- Max recursion depth to avoid constructing infinite values
+  defaultValue' :: Int -> DataType -> Value
+  defaultValue' i dt = if i == 0 then VUndefined else case dt of
+    DataAlgebraic "Boolean" [] ->
+      VBool false
+    DataAlgebraic "String" [] ->
+      VString ""
+    DataAlgebraic "Number" [] ->
+      VNumber (ValNumber "0")
+    DataAlgebraic "Integer" [] ->
+      VInteger 0
+    DataAlgebraic "DateTime" [] ->
+      VTime (ValTime "2017-01-01T00:00:00Z")
+    DataAlgebraic "Row" [sub] ->
+      defaultValue' (i-1) sub
+    DataAlgebraic "Record" [sub] ->
+      defaultValue' (i-1) sub
+    DataAlgebraic "List" [_] ->
+      VList []
+    DataAlgebraic "Maybe" [_] ->
+      VMaybe Nothing
+    DataAlgebraic tycon args ->
+      let
+        cs = instConstructors args (resolveTycon tycon)
+        compare' (Tuple _ as) (Tuple _ as') = compare (length as) (length as')
+      in
+        case minimumBy compare' cs of
+          Nothing -> VUndefined
+          Just (Tuple vcon vargs) ->
+            VData vcon (map (defaultValue' (i-1)) vargs)
+    DataRecord _ ->
+      VRecord []
+    DataTable _ -> VRowRef Nothing
 
 --------------------------------------------------------------------------------
 
@@ -145,7 +200,7 @@ render st = case st.input.content of
   CellValue val ->
     let
       dt = st.input.dataCol ^. dataColType
-      needsEx = needsExpand dt derived
+      needsEx = needsExpand resolveTycon dt derived
       inline = value (if needsEx then Compact else Full) dt val
     in
       case needsEx of
@@ -172,6 +227,9 @@ render st = case st.input.content of
 
   where
 
+  resolveTycon :: String -> TyconInfo
+  resolveTycon c = unsafePartial $ fromJust $ Map.lookup c st.input.types
+
   derived = st.input.dataCol ^. dataColIsDerived
 
   value
@@ -185,43 +243,56 @@ render st = case st.input.content of
     :: SlotPath -> RenderMode -> DataType -> Value -> Path Value
     -> H.ParentHTML Query Child Slot Herc
   editValue slot mode dt val path = case val of
+    VUndefined -> HH.text "<undefined>"
     VBool b -> editBool b (path <<< _VBool)
     VString s -> editString (SlotSub slot) s (path <<< _VString)
     VNumber n -> editNumber (SlotSub slot) n (path <<< _VNumber)
     VInteger i -> editInteger (SlotSub slot) i (path <<< _VInteger)
     VTime t -> editTime (SlotSub slot) t (path <<< _VTime)
     VRowRef mr -> case dt of
-      DataRowRef t -> editRowRef mode t mr (path <<< _VRowRef)
-      _            -> HH.div_ []
+      DataAlgebraic "Row" [DataTable t] ->
+        editRowRef mode t mr (path <<< _VRowRef)
+      _ ->
+        HH.div_ []
+    VList vs -> case dt of
+      DataAlgebraic "List" [sub] ->
+        editList (SlotSub slot) mode sub vs (path <<< _VList)
+      _ ->
+        HH.div_ []
+    VMaybe v -> case dt of
+      DataAlgebraic "Maybe" [sub] ->
+        editMaybe (SlotSub slot) mode sub v (path <<< _VMaybe)
+      _             -> HH.div_ []
     VData _ _ -> HH.text "Data not supported yet"
     VRecord _ -> HH.text "Record not supported yet"
-    VList vs -> case dt of
-      DataList sub -> editList (SlotSub slot) mode sub vs (path <<< _VList)
-      _            -> HH.div_ []
-    VMaybe v -> case dt of
-      DataMaybe sub -> editMaybe (SlotSub slot) mode sub v (path <<< _VMaybe)
-      _             -> HH.div_ []
 
   showValue
     :: RenderMode -> DataType -> Value
     -> H.ParentHTML Query Child Slot Herc
   showValue mode dt val = case val of
+    VUndefined -> HH.text "<undefined>"
     VBool b -> showBool b
     VString s -> showString s
     VNumber n -> showNumber n
     VInteger i -> showInteger i
     VTime t -> showTime t
     VRowRef mr -> case dt of
-      DataRowRef t -> showRowRef mode t mr
-      _            -> HH.div_ []
+      DataAlgebraic "Row" [DataTable t] ->
+        showRowRef mode t mr
+      _ ->
+        HH.div_ []
+    VList vs -> case dt of
+      DataAlgebraic "List" [sub] ->
+        showList mode sub vs
+      _ ->
+        HH.div_ []
+    VMaybe v -> case dt of
+      DataAlgebraic "Maybe" [sub] ->
+        showMaybe mode sub v
+      _ ->
+        HH.div_ []
     VData _ _ -> HH.text "Data not supported yet"
     VRecord _ -> HH.text "Record not supported yet"
-    VList vs -> case dt of
-      DataList sub -> showList mode sub vs
-      _            -> HH.div_ []
-    VMaybe v -> case dt of
-      DataMaybe sub -> showMaybe mode sub v
-      _             -> HH.div_ []
 
   editBool
     :: Boolean -> Path Boolean
@@ -385,6 +456,7 @@ render st = case st.input.content of
       CellError e -> ""
       CellValue v -> showVal v
     showVal = case _ of
+      VUndefined -> "<undefined>"
       VBool b -> if b then "True" else "False"
       VNumber (ValNumber str) -> str
       VInteger i -> show i
@@ -410,7 +482,7 @@ render st = case st.input.content of
           [ HH.button
             [ HP.class_ (H.ClassName "cell-button")
             , HE.onClick \_ ->
-                setValue path Nothing (snoc vals (defaultValue subDt))
+                setValue path Nothing (snoc vals (defaultValue resolveTycon subDt))
             ]
             [ faIcon_ "plus-circle" ]
           ]
@@ -458,7 +530,7 @@ render st = case st.input.content of
         [ HH.button
           [ HP.class_ (H.ClassName "cell-button")
           , HE.onClick \_ ->
-              setValue path Nothing (Just (defaultValue subDt))
+              setValue path Nothing (Just (defaultValue resolveTycon subDt))
           ]
           [ faIcon_ "plus-circle" ]
         , cldiv_ "cell-maybe--nothing flex-auto"
@@ -494,16 +566,16 @@ eval = case _ of
   StartEdit mChar next -> do
     dataCol <- gets _.input.dataCol
     _ <- case dataCol ^. dataColType of
-      DataNumber ->
+      DataAlgebraic "Number" [] ->
         H.query' cp2 (SlotSub SlotRoot) $
         H.action $ EditBox.StartEdit mChar
-      DataInteger ->
+      DataAlgebraic "Integer" [] ->
         H.query' cp4 (SlotSub SlotRoot) $
         H.action $ EditBox.StartEdit mChar
-      DataString ->
+      DataAlgebraic "String" [] ->
         H.query' cp1 (SlotSub SlotRoot) $
         H.action $ EditBox.StartEdit mChar
-      DataTime ->
+      DataAlgebraic "DateTime" [] ->
         H.query' cp3 (SlotSub SlotRoot) $
         H.action Date.Open
       _          -> pure Nothing

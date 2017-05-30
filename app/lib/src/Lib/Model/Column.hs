@@ -30,26 +30,19 @@ import           Lib.Template.Core
 import           Lib.Types
 
 data DataType
-  = DataBool
-  | DataString
-  | DataNumber
-  | DataInteger
-  | DataTime
-  | DataRowRef (Id Table)
-  | DataList DataType
-  | DataMaybe DataType
-  deriving (Eq, Ord, Show, Read, Generic, ToJSON, FromJSON)
+  = DataAlgebraic Text [DataType]
+  | DataTable (Id Table)
+  | DataRecord [(Text, DataType)]
+  deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
 getTypeDependencies :: DataType -> TypeDependencies
 getTypeDependencies = \case
-  DataBool      -> mempty
-  DataString    -> mempty
-  DataNumber    -> mempty
-  DataInteger   -> mempty
-  DataTime      -> mempty
-  DataRowRef t  -> singleRowRef t
-  DataList sub  -> getTypeDependencies sub
-  DataMaybe sub -> getTypeDependencies sub
+  DataAlgebraic _ args ->
+    mconcat $ map getTypeDependencies args
+  DataTable t  ->
+    singleRowRef t
+  DataRecord fields ->
+    mconcat $ map (getTypeDependencies . snd) fields
 
 --------------------------------------------------------------------------------
 
@@ -149,7 +142,7 @@ instance FromDocument Column where
 -- Util ------------------------------------------------------------------------
 
 emptyDataColType :: DataType
-emptyDataColType = DataNumber
+emptyDataColType = DataAlgebraic "Number" []
 
 emptyReportCol :: Id Table -> Column
 emptyReportCol i = Column

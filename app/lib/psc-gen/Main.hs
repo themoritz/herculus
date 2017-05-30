@@ -23,6 +23,7 @@ import           Servant.PureScript
 import           Lib.Api.Rest
 import           Lib.Api.Schema.Auth
 import           Lib.Api.Schema.Column
+import           Lib.Api.Schema.Compiler
 import           Lib.Api.Schema.Project
 import           Lib.Api.WebSocket
 import           Lib.Compiler.AST.Position
@@ -108,6 +109,10 @@ types =
   , mkSumType (Proxy @M.ReportFormat)
   , mkSumType (Proxy @M.DataType)
   , mkSumType (Proxy @M.IsDerived)
+  -- Lib.Api.Schema.Compiler
+  , mkSumType (Proxy @Kind)
+  , mkSumType (Proxy @Type)
+  , mkSumType (Proxy @TyconInfo)
   -- Lib.Api.Schema.Project
   , mkSumType (Proxy @Command)
   , mkSumType (Proxy @Project)

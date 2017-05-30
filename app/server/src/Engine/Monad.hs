@@ -196,18 +196,28 @@ instance MonadHexl m => MonadEngine (EngineT m) where
   --
 
   makeDefaultValue = \case
-    DataBool     -> pure $ VBool False
-    DataString   -> pure $ VString ""
-    DataNumber   -> pure $ VNumber 0
-    DataInteger  -> pure $ VInteger 0
-    DataTime     -> VTime <$> lift getCurrentTime
-    DataRowRef t -> do
+    DataRecord _ -> pure $ VRecord []
+    DataTable t -> do
       res <- lift $ getOneByQuery [ "tableId" =: toObjectId t ]
       pure $ VRowRef $ case res of
         Left _             -> Nothing
         Right (Entity i _) -> Just i
-    DataList _   -> pure $ VList []
-    DataMaybe _  -> pure $ VMaybe Nothing
+    DataAlgebraic _ _ -> pure $ VData "Dummy" []
+
+  -- TODO:
+  -- makeDefaultValue = \case
+  --   DataBool     -> pure $ VBool False
+  --   DataString   -> pure $ VString ""
+  --   DataNumber   -> pure $ VNumber 0
+  --   DataInteger  -> pure $ VInteger 0
+  --   DataTime     -> VTime <$> lift getCurrentTime
+  --   DataRowRef t -> do
+  --     res <- lift $ getOneByQuery [ "tableId" =: toObjectId t ]
+  --     pure $ VRowRef $ case res of
+  --       Left _             -> Nothing
+  --       Right (Entity i _) -> Just i
+  --   DataList _   -> pure $ VList []
+  --   DataMaybe _  -> pure $ VMaybe Nothing
 
   --
 
@@ -441,9 +451,9 @@ storeListByQuery :: (MonadHexl m, Model a)
                  => What a -> Selector -> (a -> Bool)
                  -> EngineT m [Entity a]
 storeListByQuery what query p = do
-    list <- lift $ listByQuery query
+    lst <- lift $ listByQuery query
     changes <- use (engineStore . what)
-    pure $ foldl' apply list (Map.toList changes)
+    pure $ foldl' apply lst (Map.toList changes)
   where
     updateList :: (a -> Bool) -> a -> [a] -> [a]
     updateList _ _ [] = []

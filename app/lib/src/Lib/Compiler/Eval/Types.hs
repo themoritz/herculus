@@ -30,6 +30,7 @@ loadModule = map (flip RContinuation Map.empty)
 
 loadValue :: Value -> Result m
 loadValue = \case
+  VUndefined -> RUndefined
   VBool b    -> RData (if b then "True" else "False") []
   VString s  -> RString s
   VNumber n  -> RNumber n
@@ -48,6 +49,7 @@ loadValue = \case
 
 storeValue :: Monad m => Result m -> Eval m Value
 storeValue r = case r of
+  RUndefined -> pure VUndefined
   RString s  -> pure $ VString s
   RNumber n  -> pure $ VNumber n
   RInteger i -> pure $ VInteger i
@@ -79,7 +81,8 @@ storeValue r = case r of
   RPrimFun _        -> internalError "Unexpected prim function"
 
 data Result m
-  = RString Text
+  = RUndefined
+  | RString Text
   | RNumber Number
   | RInteger Integer
   | RDateTime Time
@@ -93,6 +96,7 @@ data Result m
 
 resultDoc :: Result m -> Doc
 resultDoc = \case
+  RUndefined -> textStrict "<undefined>"
   RString s -> textStrict s
   RNumber (Number n) -> double n
   RInteger i -> integer i

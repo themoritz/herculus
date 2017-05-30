@@ -31,6 +31,7 @@ import Herculus.Project.TableList (Output(..))
 import Herculus.Utils (cldiv, cldiv_, clspan_, faIcon_)
 import Herculus.Utils.Templates (app)
 import Lib.Api.Schema.Auth (UserInfo)
+import Lib.Api.Schema.Compiler (TyconInfo(..))
 import Lib.Api.Schema.Project (Command, Project, projectId, projectName)
 import Lib.Api.Schema.Project (ProjectData(..)) as Schema
 import Lib.Api.WebSocket (WsDownMessage(..), WsUpMessage(..))
@@ -58,6 +59,7 @@ type State =
   { projectData :: ProjectData
   , columnSizes :: Map (Id ColumnTag) Int
   , columnOrders :: Map (Id Table) (Array (Id ColumnTag))
+  , types :: Map String TyconInfo
   , view :: Maybe (Id Table)
   , projId :: Id ProjectTag
   , _project :: Maybe Project
@@ -103,6 +105,7 @@ initialState (Input ui (R.Project p mT)) =
   { projectData: mkProjectData
   , columnSizes: Map.empty
   , columnOrders: Map.empty
+  , types: Map.empty
   , view: mT
   , projId: p
   , _project: Nothing
@@ -135,6 +138,7 @@ render st =
             , tables: Map.toAscUnfoldable st.projectData._pdTables <#> \(Tuple i t) ->
                 { value: i, label: t ^. descTable <<< tableName }
             , rowCache: st.projectData._pdRowCache
+            , types: st.types
             , tableId: t
             , projectId: st.projId
             , colSizes: st.columnSizes
@@ -163,6 +167,7 @@ render st =
                    ]
                    [ HH.slot' cp6 unit Config.comp
                        { cols: Map.unions $ _._descColumns <$> st.projectData._pdTables
+                       , types: st.types
                        , tables: input.tables
                        , projectId: input.projectId
                        }
@@ -318,6 +323,7 @@ update ui p mT = do
               execState m mkProjectData
         , columnSizes = Map.fromFoldable pd._pdColumnSizes
         , columnOrders = Map.fromFoldable pd._pdColumnOrders
+        , types = Map.fromFoldable pd._pdTypes
         }
     true -> modify _
       { view = mT

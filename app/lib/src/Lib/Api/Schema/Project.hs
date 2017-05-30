@@ -5,21 +5,22 @@
 
 module Lib.Api.Schema.Project where
 
-import           Control.Lens          (makeLenses)
+import           Control.Lens            (makeLenses)
 
-import           Data.Aeson            (FromJSON, ToJSON)
-import           Data.Text             (Text)
+import           Data.Aeson              (FromJSON, ToJSON)
+import           Data.Text               (Text)
 
 import           GHC.Generics
 
 import           Lib.Api.Schema.Column
+import           Lib.Api.Schema.Compiler
 import           Lib.Model
-import qualified Lib.Model.Auth        as M
-import qualified Lib.Model.Cell        as M
-import qualified Lib.Model.Column      as M
-import qualified Lib.Model.Project     as M
-import qualified Lib.Model.Row         as M
-import qualified Lib.Model.Table       as M
+import qualified Lib.Model.Auth          as M
+import qualified Lib.Model.Cell          as M
+import qualified Lib.Model.Column        as M
+import qualified Lib.Model.Project       as M
+import qualified Lib.Model.Row           as M
+import qualified Lib.Model.Table         as M
 import           Lib.Types
 
 
@@ -59,6 +60,7 @@ data ProjectData = ProjectData
   , _pdCells        :: [Entity M.Cell]
   , _pdColumnSizes  :: [(Id M.Column, Int)]
   , _pdColumnOrders :: [(Id M.Table, [Id M.Column])]
+  , _pdTypes        :: [(Text, TyconInfo)]
   } deriving (Generic, ToJSON, FromJSON)
 
 makeLenses ''ProjectData

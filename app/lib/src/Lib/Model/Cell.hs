@@ -38,7 +38,8 @@ instance Val CellContent where
 --
 
 data Value
-  = VString Text
+  = VUndefined
+  | VString Text
   | VNumber Number
   | VInteger Integer
   | VTime Time
@@ -51,18 +52,6 @@ data Value
   | VMaybe (Maybe Value)
   deriving (Show, Generic, Typeable, Eq, ToJSON, FromJSON)
 
--- TODO: delete in favor of ajax calls to the server version of defaultContent
-defaultContentPure :: DataType -> Value
-defaultContentPure = \case
-  DataBool     -> VBool False
-  DataString   -> VString ""
-  DataNumber   -> VNumber 0
-  DataInteger  -> VInteger 0
-  DataTime     -> VTime defaultTime
-  DataRowRef _ -> VRowRef Nothing
-  DataList   _ -> VList []
-  DataMaybe  _ -> VMaybe Nothing
-
 -- | Returns `Nothing` if no reference had to be invalidated
 invalidateRowRef :: Id Row -> Value -> Maybe Value
 invalidateRowRef r old =
@@ -73,6 +62,7 @@ invalidateRowRef r old =
   where
     go :: Value -> Writer [()] Value
     go = \case
+      VUndefined -> pure VUndefined
       VBool b    -> pure $ VBool b
       VString s  -> pure $ VString s
       VNumber n  -> pure $ VNumber n

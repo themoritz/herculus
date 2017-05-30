@@ -10,6 +10,7 @@ import Halogen.Component.ChildPath (cp1, type (\/), type (<\/>))
 import Herculus.Monad (Herc)
 import Herculus.Utils (Options)
 import Lib.Api.Schema.Column (Column)
+import Lib.Api.Schema.Compiler (TyconInfo(..))
 import Lib.Custom (ColumnTag, Id, ProjectTag)
 import Lib.Model.Table (Table)
 
@@ -21,6 +22,7 @@ data Query a
 type Input =
   { cols :: Map (Id ColumnTag) Column
   , tables :: Options (Id Table)
+  , types :: Map String TyconInfo
   , projectId :: Id ProjectTag
   }
 
@@ -66,6 +68,7 @@ render st = case st.view of
           { column: col
           , projectId: st.input.projectId
           , tables: st.input.tables
+          , types: st.input.types
           }
         handler o = Just $ H.action case o of
          Column.Close -> Close'

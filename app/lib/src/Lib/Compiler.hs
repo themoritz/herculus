@@ -52,7 +52,7 @@ compileFormulaWithType src t resolver env = runExceptT $ do
 
 compileModule
   :: Monad m => Text -> Resolver m -> CheckEnv
-  -> m (Either Error (CheckEnv, Map Text Expr))
+  -> m (Either Error CheckResult)
 compileModule src resolver env = runExceptT $ do
   e <- hoistError $ parse src (mkCheckEnvOpTable env) parseModule
   ExceptT $ runCheck env resolver $ checkModule e
@@ -75,18 +75,23 @@ documentModule src resolver env = runExceptT $ do
 --------------------------------------------------------------------------------
 
 preludeCheckEnv :: CheckEnv
-preludeCheckEnv = fst (prelude @Identity)
+preludeCheckEnv = let (x, _, _) = prelude @Identity in x
 
 preludeTermEnv :: Monad m => TermEnv m
-preludeTermEnv = snd prelude
+preludeTermEnv = let (_, x, _) = prelude in x
 
-prelude :: Monad m => (CheckEnv, TermEnv m)
+preludeTycons :: Map Text TyconInfo
+preludeTycons = let (_, _, x) = prelude @Identity in x
+
+prelude :: Monad m => (CheckEnv, TermEnv m, Map Text TyconInfo)
 prelude =
   case runIdentity $ compileModule preludeText voidResolver primCheckEnv of
     Left err -> error $ displayError preludeText err
-    Right (env, code) ->
-      ( primCheckEnv `unionCheckEnv` env
-      , primTermEnv `Map.union` loadModule code )
+    Right CheckResult {..} ->
+      ( primCheckEnv `unionCheckEnv` resultCheckEnv
+      , primTermEnv `Map.union` loadModule resultTermEnv
+      , primTycons `Map.union` resultTycons
+      )
 
 preludeText :: Text
 preludeText =
@@ -96,7 +101,7 @@ preludeText =
 
 testDataCol :: DataCol
 testDataCol = DataCol
-  DataBool
+  (DataAlgebraic "Number" [])
   NotDerived
   ""
   CompileResultNone
@@ -105,6 +110,8 @@ testResolveInterp :: Monad m => Resolver m
 testResolveInterp = \case
   GetTableRecordType _ reply ->
     pure $ reply $ Map.singleton "A" tyNumber
+  GetTableName _ reply ->
+    pure $ reply "Table"
   ResolveColumnOfTableRef _ _ reply ->
     pure $ reply $ Just (nullObjectId, nullObjectId, testDataCol)
   ResolveColumnRef _ reply ->
@@ -128,6 +135,8 @@ voidResolver :: Monad m => Resolver m
 voidResolver = \case
   GetTableRecordType _ reply ->
     pure $ reply Map.empty
+  GetTableName _ reply ->
+    pure $ reply "SomeTable"
   ResolveColumnOfTableRef _ _ reply ->
     pure $ reply Nothing
   ResolveColumnRef _ reply ->
@@ -165,8 +174,8 @@ testParseSpans src = withParsed src testOpTable parseModule $ \decls ->
 testCheck :: Text -> IO ()
 testCheck src = compileModule src testResolveInterp primCheckEnv >>= \case
   Left err -> putStrLn $ displayError src err
-  Right (_, code) ->
-    void $ flip Map.traverseWithKey code $ \n core ->
+  Right CheckResult {..} ->
+    void $ flip Map.traverseWithKey resultTermEnv $ \n core ->
       putStrLn $ n <> ": " <> prettyCore core <> "\n"
 
 testEval :: Text -> IO ()

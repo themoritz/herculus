@@ -63,7 +63,7 @@ inferType = cataM $ \case
     TypeTable _ ->
       pure kindTable
     TypeRecord _ ->
-      pure kindType
+      pure kindRecord
 
 --------------------------------------------------------------------------------
 
@@ -646,14 +646,20 @@ instantiate (ForAll as cs t) = do
 
 --------------------------------------------------------------------------------
 
-checkModule :: Module -> Check (CheckEnv, Map Text Core.Expr)
+data CheckResult = CheckResult
+  { resultCheckEnv :: CheckEnv
+  , resultTermEnv  :: Map Text Core.Expr
+  , resultTycons   :: Map Text TyconInfo
+  }
+
+checkModule :: Module -> Check CheckResult
 checkModule (extractDecls -> decls) = do
   -- Extract all fixity declarations
   for_ (extractFixityDecls decls) $ \ExFixityDecl{..} ->
     addOperatorAlias (getText fOperator) (getText fAlias) fFixity
 
   -- Check all data declarations and extract the resulting kinds and polytypes
-  (kinds, dataPolys) <- checkADTs (extractDataDecls decls)
+  (kinds, dataPolys, resultTycons) <- checkADTs (extractDataDecls decls)
 
   -- Put kinds and data constuctors in scope
   inExtendedTypeEnv dataPolys $ inExtendedKindEnv kinds $ do
@@ -692,10 +698,10 @@ checkModule (extractDecls -> decls) = do
 
           -- Collect exports and compile expressions
           exprs <- for result $ \(name, i, _) -> (name, ) <$> compileIntermed i
-          let moduleExprs =
+          let resultTermEnv =
                 Map.fromList exprs `Map.union` Map.fromList instDicts
-          env <- getCheckEnv
-          pure (env, moduleExprs)
+          resultCheckEnv <- getCheckEnv
+          pure CheckResult {..}
 
 cleanToplevelConstraints
   :: [ConstraintToSolve] -> Maybe Type -> Check ()
@@ -729,25 +735,25 @@ cleanToplevelConstraints cs mt = do
 
 checkFormula :: Type -> Formula -> Check Core.Expr
 checkFormula tGiven (decls, expr) = do
-  (env, exprs) <- checkModule decls
-  inExtendedEnv env $ do
+  CheckResult {..} <- checkModule decls
+  inExtendedEnv resultCheckEnv $ do
     (i, cs) <- checkExpr tGiven expr
     cleanToplevelConstraints cs (Just tGiven)
     i' <- resolvePlaceholders Map.empty i
     c <- compileIntermed i'
-    pure $ Core.Let (Map.toList exprs) c
+    pure $ Core.Let (Map.toList resultTermEnv) c
 
 -- Only for internal use
 inferFormula :: Formula -> Check (Core.Expr, Type)
 inferFormula (decls, expr) = do
-  (env, exprs) <- checkModule decls
-  inExtendedEnv env $ do
+  CheckResult {..} <- checkModule decls
+  inExtendedEnv resultCheckEnv $ do
     (i, t, cs) <- inferExpr expr
     cleanToplevelConstraints cs (Just t)
     i' <- resolvePlaceholders Map.empty i
     c <- compileIntermed i'
     s <- getTypeSubst
-    pure (Core.Let (Map.toList exprs) c, applyTypeSubst s t)
+    pure (Core.Let (Map.toList resultTermEnv) c, applyTypeSubst s t)
 
 checkTypeDecl :: Span -> SourcePolyType -> Check PolyType
 checkTypeDecl span (ForAll as cs t) = do
@@ -921,7 +927,11 @@ checkClassDecl ExClassDecl {..} = do
                  , [] )
     pure $ Map.fromList $ map (id *** (\p -> EnvType p Method)) sigs'
 
-checkADTs :: [ExDataDecl] -> Check (Map Text Kind, Map Text EnvType)
+checkADTs
+  :: [ExDataDecl]
+  -> Check ( Map Text Kind
+           , Map Text EnvType
+           , Map Text TyconInfo)
 checkADTs dataDecls = do
   -- TODO: Check for duplicate definitions
   -- Kind checking
@@ -938,7 +948,6 @@ checkADTs dataDecls = do
       k <- fromJust <$> lookupKind (getText dName)
       let argKinds = map (\a -> fromJust $ Map.lookup a argTypeDict) args
       unifyKinds dSpan k (foldr kindFun kindType argKinds)
-      pure ()
   -- Collect for env
   s <- getKindSubst
   let
@@ -952,7 +961,20 @@ checkADTs dataDecls = do
       pure $ (cname, ty)
     quant t = ForAll (Set.toList $ getFtvs t) [] t
     polyEnv = map (id *** quant) typeEnv
-  pure (kindEnv, map defaultEnvType $ Map.fromList polyEnv)
+    --
+    buildTycon ExDataDecl {..} =
+      ( getText dName
+      , TyconInfo
+        { tyconKind = fromJust $ Map.lookup (getText dName) kindEnv
+        , tyconParams = map getText dArgs
+        , tyconValueConstrs =
+            map (\(_, getText -> c, map stripAnn -> cargs) -> (c, cargs)) dConstrs
+        }
+      )
+  pure ( kindEnv
+       , map defaultEnvType $ Map.fromList polyEnv
+       , Map.fromList $ map buildTycon dataDecls
+       )
 
 checkValueDecls
   :: Map Text PolyType

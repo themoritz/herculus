@@ -45,6 +45,8 @@ prettyKind = show . fst . cata kindDoc
       (int v, 0)
     KindTable ->
       (textStrict "Table", 0)
+    KindRecord ->
+      (textStrict "Record", 0)
 
 prettyType :: Type -> Text
 prettyType = show . fst . histo typeDoc

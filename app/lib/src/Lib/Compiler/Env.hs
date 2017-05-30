@@ -45,10 +45,16 @@ primKindEnv = Map.fromList
   , ( "Array"
     , kindUnary
     )
+  , ( "Record"
+    , kindFun kindRecord kindType
+    )
   , ( "Row"
     , kindFun kindTable kindType
     )
   ]
+
+primTycons :: Map Text TyconInfo
+primTycons = map (\k -> TyconInfo k [] []) primKindEnv
 
 --------------------------------------------------------------------------------
 
@@ -99,14 +105,12 @@ pattern Arrow a b =
 
 typeOfDataType :: DataType -> Type
 typeOfDataType = \case
-  DataBool     -> tyBoolean
-  DataString   -> tyString
-  DataNumber   -> tyNumber
-  DataInteger  -> tyInteger
-  DataTime     -> tyDateTime
-  DataRowRef t -> tyRow $ typeTable $ InId t
-  DataList t   -> typeApp tyList $ typeOfDataType t
-  DataMaybe t  -> typeApp tyMaybe $ typeOfDataType t
+  DataAlgebraic name args ->
+    foldl typeApp (typeConstructor name) $ map typeOfDataType args
+  DataTable t ->
+    typeTable $ InId t
+  DataRecord fields ->
+    typeRecord $ map typeOfDataType $ Map.fromList fields
 
 primTypeEnv :: Map Text PolyType
 primTypeEnv = map fst (primEnv @Identity)

@@ -29,6 +29,7 @@ data KindF a
   | KindFun a a
   | KindUnknown Int
   | KindTable
+  | KindRecord
   deriving (Functor, Foldable, Traversable, Show)
 
 type Kind = Fix KindF
@@ -44,6 +45,9 @@ kindUnknown = Fix . KindUnknown
 
 kindTable :: Kind
 kindTable = Fix KindTable
+
+kindRecord :: Kind
+kindRecord = Fix KindRecord
 
 -- Replace remaining unknown kind variables with `Type`
 tidyKind :: Kind -> Kind
@@ -96,6 +100,7 @@ data OrdKind
   | OKFun OrdKind OrdKind
   | OKUnknown Int
   | OKTable
+  | OKRecord
   deriving (Eq, Ord)
 
 toOrdKind :: Kind -> OrdKind
@@ -104,6 +109,7 @@ toOrdKind = cata $ \case
   KindFun a b -> OKFun a b
   KindUnknown i -> OKUnknown i
   KindTable -> OKTable
+  KindRecord -> OKRecord
 
 instance {-# OVERLAPS #-} Eq Type where
   a == b = toOrdType a == toOrdType b
@@ -253,3 +259,11 @@ instance TypeSubstitutable v => TypeSubstitutable (Map k v) where
 
 instance TypeSubstitutable ConstraintToSolve where
   applyTypeSubst s (span, c) = (span, applyTypeSubst s c)
+
+--------------------------------------------------------------------------------
+
+data TyconInfo = TyconInfo
+  { tyconKind         :: Kind
+  , tyconParams       :: [Text]
+  , tyconValueConstrs :: [(Text, [Type])]
+  }

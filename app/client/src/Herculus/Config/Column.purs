@@ -2,6 +2,7 @@ module Herculus.Config.Column where
 
 import Herculus.Prelude
 import CSS as CSS
+import Data.Map as Map
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.CSS as HC
@@ -12,20 +13,24 @@ import Herculus.EditBox as Edit
 import Control.Monad.Aff (delay)
 import Control.Monad.Eff.Ref (Ref, newRef, readRef, writeRef)
 import Control.Monad.Fork (fork)
-import Data.Array (cons, find, null)
+import Data.Array (cons, find, null, updateAt, zip)
 import Data.Int (toNumber)
-import Data.Lens ((^?))
+import Data.Lens (view, (^?))
+import Data.Map (Map)
 import Data.Time.Duration (Milliseconds(..))
 import Halogen.Component.ChildPath (cp1, cp2, type (\/), type (<\/>))
+import Herculus.Config.Column.Types (filterTypes, subTypes)
 import Herculus.Monad (Herc, withApi)
-import Herculus.Utils (Options, clbutton_, cldiv, cldiv_, dropdown, faIcon_)
+import Herculus.Utils (Options, clbutton_, cldiv, cldiv_, dropdown, faIcon_, mkIndexed)
 import Lib.Api.Rest (postProjectLintDataColByColumnId, postProjectLintReportColByColumnId, postProjectRunCommandsByProjectId)
 import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), CompileStatus(StatusError, StatusNone, StatusOk), DataCol, ReportCol, _ColumnData, _ColumnReport, columnId, columnKind, columnName, columnTableId, dataColCompileStatus, dataColIsDerived, dataColSourceCode, dataColType, reportColCompileStatus, reportColFormat, reportColLanguage, reportColTemplate)
+import Lib.Api.Schema.Compiler (Kind(..), TyconInfo(..), tyconKind)
 import Lib.Api.Schema.Project (Command(..))
 import Lib.Compiler.Error (Error(..))
 import Lib.Custom (Id(..), ProjectTag)
 import Lib.Model.Column (DataType(..), IsDerived(..), ReportFormat(..), ReportLanguage(..))
 import Lib.Model.Table (Table)
+import Partial.Unsafe (unsafePartial)
 
 data Query a
   = Initialize a
@@ -44,6 +49,7 @@ data Query a
 
 type Input =
   { column :: Column
+  , types :: Map String TyconInfo
   , tables :: Options (Id Table)
   , projectId :: Id ProjectTag
   }
@@ -122,41 +128,6 @@ getReportFormat rep st = fromMaybe (rep ^. reportColFormat) st.tmp.reportFormat
 getReportTemplate :: ReportCol -> State -> String
 getReportTemplate rep st = fromMaybe (rep ^. reportColTemplate) st.tmp.reportTemplate
 
-data Branch
-  = BBool
-  | BString
-  | BNumber
-  | BInteger
-  | BTime
-  | BRowRef
-  | BList
-  | BMaybe
-
-derive instance genericBranch :: Generic Branch
-
-toBranch :: DataType -> Branch
-toBranch = case _ of
-  DataBool     -> BBool
-  DataString   -> BString
-  DataNumber   -> BNumber
-  DataInteger  -> BInteger
-  DataTime     -> BTime
-  DataRowRef _ -> BRowRef
-  DataList   _ -> BList
-  DataMaybe  _ -> BMaybe
-
-branches :: Options Branch
-branches =
-  [ { value: BBool   , label: "Boolean"  }
-  , { value: BString , label: "String"   }
-  , { value: BNumber , label: "Number"   }
-  , { value: BInteger, label: "Integer"  }
-  , { value: BTime   , label: "DateTime" }
-  , { value: BRowRef , label: "Row"      }
-  , { value: BList   , label: "List"     }
-  , { value: BMaybe  , label: "Maybe"    }
-  ]
-
 reportLangs :: Options (Maybe ReportLanguage)
 reportLangs =
   [ { value: Nothing                    , label: "Plaintext" }
@@ -172,14 +143,7 @@ reportFormats =
   , { value: ReportFormatHTML  , label: "HTML"      }
   ]
 
-subType :: DataType -> Maybe DataType
-subType (DataList  a) = Just a
-subType (DataMaybe a) = Just a
-subType _             = Nothing
-
-recordTableId :: DataType -> Maybe (Id Table)
-recordTableId (DataRowRef tId) = Just tId
-recordTableId _                = Nothing
+--------------------------------------------------------------------------------
 
 getColumnErrors :: Column -> Array Error
 getColumnErrors c = case c ^. columnKind of
@@ -281,7 +245,7 @@ render st = HH.div_
         head = cldiv_ "bold"
           [ HH.text "Column Type" ]
         body = cldiv_ ""
-          [ selBranch (getDataType dat st) SetDataType ]
+          [ selDataType KindType (getDataType dat st) SetDataType ]
       in
         section "cube" head body
     , let
@@ -323,30 +287,60 @@ render st = HH.div_
         section "calculator" head body
     ]
 
-  selBranch
-    :: forall p. DataType -> (DataType -> H.Action Query)
+  selTable
+    :: forall p. Id Table -> (Id Table -> H.Action Query)
     -> HH.HTML p (Query Unit)
-  selBranch value cb = HH.span_
-    [ dropdown "select" branches (toBranch value) case _ of
-        BBool    -> cb DataBool
-        BString  -> cb DataString
-        BNumber  -> cb DataNumber
-        BInteger -> cb DataInteger
-        BTime    -> cb DataTime
-        BMaybe   -> cb (DataMaybe DataNumber)
-        BList    -> cb (DataList DataNumber)
-        BRowRef  -> cb (DataRowRef (Id ""))
-    , HH.text " "
-    , case value of
-        DataMaybe sub -> selBranch sub (cb <<< DataMaybe)
-        DataList sub  -> selBranch sub (cb <<< DataList)
-        DataRowRef tableId ->
-          let
-            options = cons { value: Id "", label: "" } st.input.tables
-          in
-            dropdown "select" options tableId (cb <<< DataRowRef)
-        _ -> HH.text ""
+  selTable tableId cb =
+    let
+      options = cons { value: Id "", label: "" } st.input.tables
+    in
+      dropdown "select" options tableId cb
+
+  selRecord
+    :: forall p. Array (Tuple String DataType)
+    -> (Array (Tuple String DataType) -> H.Action Query)
+    -> HH.HTML p (Query Unit)
+  selRecord record cb =
+    HH.text "Record select"
+
+  selAlgebraic
+    :: forall p. Kind -> String -> Array DataType
+    -> (String -> Array DataType -> H.Action Query)
+    -> HH.HTML p (Query Unit)
+  selAlgebraic kindGoal constructor args cb =
+    let
+      fitting :: Array (Tuple String (Array Kind))
+      fitting = filterTypes kindGoal $ map (view tyconKind) st.input.types
+      options = map (\(Tuple name _) -> { value: name, label: name }) fitting
+      argGoals = unsafePartial $ fromJust do
+        c <- Map.lookup constructor st.input.types
+        subTypes kindGoal (c ^. tyconKind)
+      argument (Tuple i (Tuple argGoal dt)) =
+        selDataType argGoal dt \dt' ->
+          cb constructor $ unsafePartial $ fromJust $ updateAt i dt' args
+    in 
+    HH.span_
+    [ dropdown "select" options constructor \constr -> cb constr args
+    , cldiv_ "flex"
+      [ HH.div
+        [ HC.style (CSS.width $ CSS.px 20.0)
+        ] []
+      , cldiv_ "flex-auto" $
+        map argument $ mkIndexed $ zip argGoals args
+      ]
     ]
+
+  selDataType
+    :: forall p. Kind -> DataType -> (DataType -> H.Action Query)
+    -> HH.HTML p (Query Unit)
+  selDataType kindGoal dt cb = case kindGoal, dt of
+    KindTable, DataTable tableId ->
+      selTable tableId (cb <<< DataTable)
+    KindRecord, DataRecord record ->
+      selRecord record (cb <<< DataRecord)
+    goal, DataAlgebraic constr args ->
+      selAlgebraic goal constr args \c as -> cb (DataAlgebraic c as)
+    _, _ -> HH.text "Invalid kind/dt combination"
 
   reportColConf rep =
     [ header

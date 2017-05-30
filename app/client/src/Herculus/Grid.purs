@@ -32,12 +32,14 @@ import Herculus.Project.Data (Coords(..), RowCache)
 import Herculus.Utils (Options, cldiv_, faButton_, mkIndexed)
 import Herculus.Utils.Ordering (orderMap)
 import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), columnId, columnKind, dataColIsDerived, dataColType)
+import Lib.Api.Schema.Compiler (TyconInfo(..))
 import Lib.Api.Schema.Project (Command(..))
 import Lib.Custom (ColumnTag, Id, ProjectTag)
 import Lib.Model.Cell (CellContent(..), Value)
 import Lib.Model.Column (IsDerived(..))
 import Lib.Model.Row (Row)
 import Lib.Model.Table (Table)
+import Partial.Unsafe (unsafePartial)
 
 data Query a
   = Update Input a
@@ -65,6 +67,7 @@ type Input =
   , rows :: Array (Tuple (Id Row) Row)
   , tables :: Options (Id Table)
   , rowCache :: RowCache
+  , types :: Map String TyconInfo
   , tableId :: Id Table
   , projectId :: Id ProjectTag
   , colSizes :: Map (Id ColumnTag) Int
@@ -236,6 +239,7 @@ render st = HK.div
                       { content
                       , dataCol
                       , rowCache: st.input.rowCache
+                      , types: st.input.types
                       }
                     handler = case _ of
                       DataCell.SaveValue val mDir ->
@@ -309,11 +313,11 @@ eval = case _ of
 
   Cut ev subset@(Tuple subsetCols subsetRows) next -> do
     writeClipboard subset ev
-    cols <- gets _.input.cols
+    input <- gets _.input
 
     H.raise $ Commands do
       c <- subsetCols
-      case Map.lookup c cols of
+      case Map.lookup c input.cols of
         Nothing -> []
         Just col -> case col ^. columnKind of
           ColumnReport _ -> []
@@ -321,7 +325,10 @@ eval = case _ of
             Derived -> []
             NotDerived -> do
               r <- subsetRows
-              let val = defaultValue (dataCol ^. dataColType)
+              let
+                resolveTycon c =
+                  unsafePartial $ fromJust $ Map.lookup c input.types
+                val = defaultValue resolveTycon (dataCol ^. dataColType)
               [CmdCellSet c r val]
     pure next
 

@@ -35,7 +35,7 @@ parseCSV sep types input = case runParser input pCSV of
 
   pValue :: DataType -> Parser String Value
   pValue = case _ of
-    DataBool ->
+    DataAlgebraic "Boolean" [] ->
           try (string "true"  *> pure (VBool true))
       <|> try (string "True"  *> pure (VBool true))
       <|> try (string "yes"   *> pure (VBool true))
@@ -44,27 +44,28 @@ parseCSV sep types input = case runParser input pCSV of
       <|> try (string "False" *> pure (VBool false))
       <|> try (string "no"    *> pure (VBool false))
       <|> try (string "No"    *> pure (VBool false))
-    DataString ->
+    DataAlgebraic "String" [] ->
       VString <$> pField
-    DataNumber ->
+    DataAlgebraic "Number" [] ->
       VNumber <$> pValNumber
-    DataInteger ->
+    DataAlgebraic "Integer" [] ->
       VInteger <$> pInteger
-    DataTime -> do
+    DataAlgebraic "DateTime" [] -> do
       str <- fromCharArray <$> many (noneOf [sep, '\n', '[', ']', ',', ' '])
       let jsdate = unsafePerformEff (parse str)
       if isValid jsdate
         then pure $ VTime $ unsafePerformEff $ fromJSDate jsdate
         else fail "could not parse date"
-    DataRowRef _ -> fail "not implemented"
-    DataList dt -> do
+    DataAlgebraic "List" [dt] -> do
       _ <- whiteSpace
       _ <- string "["
       xs <- sepBy (whiteSpace *> pValue dt <* whiteSpace) (string ",")
       _ <- string "]"
       _ <- whiteSpace
       pure $ VList $ fromFoldable xs
-    DataMaybe dt -> fail "not implemented"
+    DataAlgebraic _ _ -> fail "not implemented"
+    DataTable _ -> fail "not implemented"
+    DataRecord _ -> fail "not implemented"
 
 showCSV :: Char -> CSV (Maybe Value) -> String
 showCSV sep table =
@@ -75,6 +76,7 @@ showCSV sep table =
 
   showValue :: Value -> String
   showValue = case _ of
+    VUndefined -> "<undefined>"
     VBool b -> show b
     VString s -> s
     VNumber (ValNumber n) -> n

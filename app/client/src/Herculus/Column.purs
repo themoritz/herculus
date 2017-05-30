@@ -7,7 +7,7 @@ import Halogen.HTML as HH
 import Halogen.HTML.CSS as HC
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Data.Array (find)
+import Data.Array (find, intercalate, null)
 import Herculus.Monad (Herc)
 import Herculus.Utils (Options, cldiv, cldiv_, faIcon_)
 import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), CompileStatus(StatusError, StatusNone, StatusOk), columnKind, columnName, dataColCompileStatus, dataColIsDerived, dataColType, reportColCompileStatus, reportColFormat, reportColLanguage)
@@ -97,17 +97,35 @@ render st = cldiv_ ""
             HH.text format
         ]
 
-  dataTypeInfo = case _ of
-    DataBool     -> "Boolean"
-    DataString   -> "String"
-    DataNumber   -> "Number"
-    DataInteger  -> "Integer"
-    DataTime     -> "DateTime"
-    DataRowRef t -> "Row from " <>
-                    maybe "missing table"
-                          _.label (find (\o -> o.value == t) st.input.tables)
-    DataList   d -> "List (" <> dataTypeInfo d <> ")"
-    DataMaybe  d -> "Maybe (" <> dataTypeInfo d <> ")"
+  dataTypeInfo :: DataType -> String
+  dataTypeInfo dt = (renderDataType dt).text
+
+  renderDataType :: DataType -> { text :: String, needsParens :: Boolean }
+  renderDataType = case _ of
+    DataAlgebraic c args ->
+      { text:
+          let
+            goArg arg =
+              let sub = renderDataType arg in
+              if sub.needsParens then " (" <> sub.text <> ")" else sub.text
+          in
+            c <> intercalate "" (map goArg args)
+      , needsParens: not $ null args
+      }
+    DataTable t ->
+      { text:
+          maybe "<missing table>"
+                _.label (find (\o -> o.value == t) st.input.tables)
+      , needsParens: false
+      }
+    DataRecord r ->
+      { text:
+          let
+            goField (Tuple field dt) = field <> ": " <> (renderDataType dt).text
+          in
+            "{" <> intercalate ", " (map goField r) <> "}"
+      , needsParens: false
+      }
 
   hasErrors = hasColumnErrors st.input.column
 

@@ -38,6 +38,7 @@ library
                      , Lib.Api.Rest.Report
                      , Lib.Api.Schema.Auth
                      , Lib.Api.Schema.Column
+                     , Lib.Api.Schema.Compiler
                      , Lib.Api.Schema.Project
                      , Lib.Api.WebSocket
                      , Lib.Util.Base64
