@@ -107,23 +107,24 @@ render st = cldiv_ ""
           let
             goArg arg =
               let sub = renderDataType arg in
-              if sub.needsParens then " (" <> sub.text <> ")" else sub.text
+              if sub.needsParens then " (" <> sub.text <> ")"
+                                 else " " <> sub.text
           in
             c <> intercalate "" (map goArg args)
       , needsParens: not $ null args
       }
     DataTable t ->
       { text:
-          maybe "<missing table>"
-                _.label (find (\o -> o.value == t) st.input.tables)
+          "#" <> (maybe "<missing table>"
+                  _.label (find (\o -> o.value == t) st.input.tables))
       , needsParens: false
       }
     DataRecord r ->
       { text:
           let
-            goField (Tuple field dt) = field <> ": " <> (renderDataType dt).text
+            goField (Tuple field dt) = field <> " : " <> (renderDataType dt).text
           in
-            "{" <> intercalate ", " (map goField r) <> "}"
+            "{ " <> intercalate ", " (map goField r) <> " }"
       , needsParens: false
       }
 

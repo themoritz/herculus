@@ -67,8 +67,8 @@ tyOrdering = typeConstructor "Ordering"
 tyDateTime :: Type
 tyDateTime = typeConstructor "DateTime"
 
-tyRecord :: Type
-tyRecord = typeConstructor "Record"
+tyRecord :: Type -> Type
+tyRecord = typeApp (typeConstructor "Record")
 
 tyString :: Type
 tyString = typeConstructor "String"

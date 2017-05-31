@@ -61,37 +61,35 @@ comp = H.component
   }
 
 render :: forall v. State v -> H.ComponentHTML (Query v)
-render st = HH.div_
-  [ case st.editing of
-      false -> cldiv (st.input.className <> if text == "" then " gray" else "")
-        ( if st.input.clickable
-          then [ HE.onClick (HE.input_ $ StartEdit Nothing) ]
-          else [ ]
-        )
-        [ HH.text (if text == "" then st.input.placeholder else text) ]
-      true -> HH.input
-        [ HP.placeholder st.input.placeholder
-        , HP.ref ref
-        , HP.classes
-          [ H.ClassName st.input.inputClassName
-          , H.ClassName (if isJust st.invalidText then st.input.invalidClassName else "")
-          ]
-        , HP.value text
-        , HE.onValueInput (HE.input SetText)
-        , HE.onKeyDown \ev -> case DOM.code ev of
-            "Enter"  -> Just (H.action $ TrySave $ Just $ Tuple ev Enter)
-            "Tab"    -> Just (H.action $ TrySave $ Just $ Tuple ev Tab)
-            "Escape" -> Just (H.action CancelEdit)
-            _        -> Nothing
-        , HE.onBlur (HE.input_ $ TrySave Nothing)
-        ]
-   ]
+render st = case st.editing of
+  false -> cldiv (st.input.className <> if text == "" then " gray" else "")
+    ( if st.input.clickable
+      then [ HE.onClick (HE.input_ $ StartEdit Nothing) ]
+      else [ ]
+    )
+    [ HH.text (if text == "" then st.input.placeholder else text) ]
+  true -> HH.input
+    [ HP.placeholder st.input.placeholder
+    , HP.ref ref
+    , HP.classes
+      [ H.ClassName st.input.inputClassName
+      , H.ClassName (if isJust st.invalidText then st.input.invalidClassName else "")
+      ]
+    , HP.value text
+    , HE.onValueInput (HE.input SetText)
+    , HE.onKeyDown \ev -> case DOM.code ev of
+        "Enter"  -> Just (H.action $ TrySave $ Just $ Tuple ev Enter)
+        "Tab"    -> Just (H.action $ TrySave $ Just $ Tuple ev Tab)
+        "Escape" -> Just (H.action CancelEdit)
+        _        -> Nothing
+    , HE.onBlur (HE.input_ $ TrySave Nothing)
+    ]
 
-   where
+  where
 
-   text = fromMaybe (st.input.show st.input.value) $
-          st.input.show <$> st.tmpValue
-      <|> st.invalidText
+  text = fromMaybe (st.input.show st.input.value) $
+         st.input.show <$> st.tmpValue
+     <|> st.invalidText
 
 eval :: forall v. Query v ~> H.ComponentDSL (State v) (Query v) (Output v) Herc
 eval = case _ of

@@ -13,24 +13,44 @@ import Herculus.EditBox as Edit
 import Control.Monad.Aff (delay)
 import Control.Monad.Eff.Ref (Ref, newRef, readRef, writeRef)
 import Control.Monad.Fork (fork)
-import Data.Array (cons, find, null, updateAt, zip)
+import Data.Array (cons, deleteAt, find, head, null, snoc, zip)
+import Data.Exists (Exists, mkExists, runExists)
 import Data.Int (toNumber)
-import Data.Lens (view, (^?))
+import Data.Lens (_1, _2, element, lens, traversed, view, (^?))
+import Data.Lens.Types (Setter', Lens')
 import Data.Map (Map)
 import Data.Time.Duration (Milliseconds(..))
-import Halogen.Component.ChildPath (cp1, cp2, type (\/), type (<\/>))
+import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3)
 import Herculus.Config.Column.Types (filterTypes, subTypes)
 import Herculus.Monad (Herc, withApi)
-import Herculus.Utils (Options, clbutton_, cldiv, cldiv_, dropdown, faIcon_, mkIndexed)
+import Herculus.Utils (Options, clbutton_, cldiv, cldiv_, dropdown, faButton_, faIcon_, mkIndexed)
 import Lib.Api.Rest (postProjectLintDataColByColumnId, postProjectLintReportColByColumnId, postProjectRunCommandsByProjectId)
-import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), CompileStatus(StatusError, StatusNone, StatusOk), DataCol, ReportCol, _ColumnData, _ColumnReport, columnId, columnKind, columnName, columnTableId, dataColCompileStatus, dataColIsDerived, dataColSourceCode, dataColType, reportColCompileStatus, reportColFormat, reportColLanguage, reportColTemplate)
-import Lib.Api.Schema.Compiler (Kind(..), TyconInfo(..), tyconKind)
+import Lib.Api.Schema.Column (Column, ColumnKind(..), CompileStatus(StatusError, StatusNone, StatusOk), DataCol, ReportCol, _ColumnData, _ColumnReport, columnId, columnKind, columnName, columnTableId, dataColCompileStatus, dataColIsDerived, dataColSourceCode, dataColType, reportColCompileStatus, reportColFormat, reportColLanguage, reportColTemplate)
+import Lib.Api.Schema.Compiler (Kind(KindRecord, KindTable, KindType), TyconInfo, tyconKind)
 import Lib.Api.Schema.Project (Command(..))
 import Lib.Compiler.Error (Error(..))
 import Lib.Custom (Id(..), ProjectTag)
-import Lib.Model.Column (DataType(..), IsDerived(..), ReportFormat(..), ReportLanguage(..))
+import Lib.Model.Column (DataType(..), IsDerived(..), ReportFormat(..), ReportLanguage(..), _DataAlgebraic, _DataRecord, _DataTable)
 import Lib.Model.Table (Table)
 import Partial.Unsafe (unsafePartial)
+
+type Path a = Setter' DataType a
+
+data DtSetterF a = DtSetterF (Path a) a
+type DtSetter = Exists DtSetterF
+
+setDataTypeAction :: forall a. Path a -> a -> H.Action Query
+setDataTypeAction path val =
+  SetDataType (mkExists $ DtSetterF path val)
+
+setDataType :: forall a. Path a -> a -> Maybe (Query Unit)
+setDataType path val = Just $ H.action $ setDataTypeAction path val
+
+aLens :: forall a b. Lens' { a :: a, b :: b } a
+aLens = lens _.a (\r -> r { a = _ })
+
+bLens :: forall a b. Lens' { a :: a, b :: b } b
+bLens = lens _.b (\r -> r { b = _ })
 
 data Query a
   = Initialize a
@@ -43,7 +63,7 @@ data Query a
   | SetReportTemplate String a
   | SetFormula String a
   | SetIsDerived IsDerived a
-  | SetDataType DataType a
+  | SetDataType DtSetter a
   | Close' a
   | Delete' a
 
@@ -98,11 +118,15 @@ unsavedChanges st =
 type Child =
   Ace.Query <\/>
   Edit.Query String <\/>
+  Edit.Query String <\/>
   Const Void
+
+type SlotPath = Array Int
 
 type Slot =
   Unit \/
   Unit \/
+  SlotPath \/
   Unit
 
 data Output
@@ -245,7 +269,8 @@ render st = HH.div_
         head = cldiv_ "bold"
           [ HH.text "Column Type" ]
         body = cldiv_ ""
-          [ selDataType KindType (getDataType dat st) SetDataType ]
+          [ selDataType [] KindType (getDataType dat st) id
+          ]
       in
         section "cube" head body
     , let
@@ -287,59 +312,114 @@ render st = HH.div_
         section "calculator" head body
     ]
 
+  getFitting :: Kind -> Array (Tuple String (Array Kind))
+  getFitting goal = filterTypes goal $ map (view tyconKind) st.input.types
+
+  getFirstFitting :: Kind -> Tuple String (Array Kind)
+  getFirstFitting goal = unsafePartial $ fromJust $ head $ getFitting goal
+
   selTable
-    :: forall p. Id Table -> (Id Table -> H.Action Query)
-    -> HH.HTML p (Query Unit)
-  selTable tableId cb =
+    :: Id Table -> Path (Id Table)
+    -> H.ParentHTML Query Child Slot Herc
+  selTable tableId path =
     let
       options = cons { value: Id "", label: "" } st.input.tables
     in
-      dropdown "select" options tableId cb
+      dropdown "select" options tableId (setDataTypeAction path)
 
   selRecord
-    :: forall p. Array (Tuple String DataType)
-    -> (Array (Tuple String DataType) -> H.Action Query)
-    -> HH.HTML p (Query Unit)
-  selRecord record cb =
-    HH.text "Record select"
+    :: SlotPath -> Array (Tuple String DataType)
+    -> Path (Array (Tuple String DataType))
+    -> H.ParentHTML Query Child Slot Herc
+  selRecord slot record path = HH.div_
+    [ cldiv_ "flex flex-wrap" $ join $ map field $ mkIndexed record
+    , faButton_ "plus-circle"
+      (setDataTypeAction path $ record `snoc` Tuple "x" (DataAlgebraic "Number" []))
+    ]
+    where
+    field (Tuple i (Tuple f dt)) =
+      [ cldiv_ "col-3 flex"
+        [ faButton_ "minus-circle"
+          (setDataTypeAction path $ unsafePartial $ fromJust $ deleteAt i record)
+        , HH.slot' cp3 (slot `snoc` i) Edit.comp
+                 { value: f
+                 , placeholder: ""
+                 , className: "flex-auto editbox"
+                 , inputClassName: "editbox__input"
+                 , invalidClassName: "editbox__input--invalid"
+                 , show: id
+                 , validate: case _ of
+                     "" -> Nothing 
+                     f -> Just f
+                 , clickable: true
+                 }
+                 case _ of
+                   Edit.Save v _ ->
+                     setDataType (path <<< element i traversed <<< _1) v
+                   Edit.Cancel ->
+                     Nothing
+        ]
+      , cldiv_ "pl1 col-9"
+        [ selDataType (slot `snoc` i) KindType dt
+                      (path <<< element i traversed <<< _2)
+        ]
+      ]
 
   selAlgebraic
-    :: forall p. Kind -> String -> Array DataType
-    -> (String -> Array DataType -> H.Action Query)
-    -> HH.HTML p (Query Unit)
-  selAlgebraic kindGoal constructor args cb =
+    :: SlotPath -> Kind -> String -> Array DataType
+    -> Path { a :: String, b :: Array DataType }
+    -> H.ParentHTML Query Child Slot Herc
+  selAlgebraic slot kindGoal constructor args path =
     let
-      fitting :: Array (Tuple String (Array Kind))
-      fitting = filterTypes kindGoal $ map (view tyconKind) st.input.types
-      options = map (\(Tuple name _) -> { value: name, label: name }) fitting
-      argGoals = unsafePartial $ fromJust do
-        c <- Map.lookup constructor st.input.types
+      mkDefaultArgs :: String -> Array DataType
+      mkDefaultArgs = map goGoal <<< getArgGoals
+        where
+        goGoal = case _ of
+          KindTable ->
+            DataTable (unsafePartial $ fromJust $ head st.input.tables).value
+          KindRecord ->
+            DataRecord []
+          goal ->
+            let c' = fst (getFirstFitting goal) in
+            DataAlgebraic c' (mkDefaultArgs c')
+
+      options = map (\(Tuple name _) -> { value: name, label: name })
+                    (getFitting kindGoal)
+
+      getArgGoals :: String -> Array Kind
+      getArgGoals c = unsafePartial $ fromJust do
+        c <- Map.lookup c st.input.types
         subTypes kindGoal (c ^. tyconKind)
+
       argument (Tuple i (Tuple argGoal dt)) =
-        selDataType argGoal dt \dt' ->
-          cb constructor $ unsafePartial $ fromJust $ updateAt i dt' args
+        selDataType (slot `snoc` i) argGoal dt
+                    (path <<< bLens <<< element i traversed)
     in 
     HH.span_
-    [ dropdown "select" options constructor \constr -> cb constr args
+    [ dropdown "select" options constructor \constr ->
+        setDataTypeAction path
+          { a: constr
+          , b: if constr == constructor then args else mkDefaultArgs constr
+          }
     , cldiv_ "flex"
       [ HH.div
         [ HC.style (CSS.width $ CSS.px 20.0)
         ] []
       , cldiv_ "flex-auto" $
-        map argument $ mkIndexed $ zip argGoals args
+        map argument $ mkIndexed $ zip (getArgGoals constructor) args
       ]
     ]
 
   selDataType
-    :: forall p. Kind -> DataType -> (DataType -> H.Action Query)
-    -> HH.HTML p (Query Unit)
-  selDataType kindGoal dt cb = case kindGoal, dt of
+    :: SlotPath -> Kind -> DataType -> Path DataType
+    -> H.ParentHTML Query Child Slot Herc
+  selDataType slot kindGoal dt path = case kindGoal, dt of
     KindTable, DataTable tableId ->
-      selTable tableId (cb <<< DataTable)
+      selTable tableId (path <<< _DataTable)
     KindRecord, DataRecord record ->
-      selRecord record (cb <<< DataRecord)
+      selRecord slot record (path <<< _DataRecord)
     goal, DataAlgebraic constr args ->
-      selAlgebraic goal constr args \c as -> cb (DataAlgebraic c as)
+      selAlgebraic slot goal constr args (path <<< _DataAlgebraic)
     _, _ -> HH.text "Invalid kind/dt combination"
 
   reportColConf rep =
@@ -441,6 +521,8 @@ eval = case _ of
     modify _{ tmp = emptyTmp
             }
     updateAce
+    lintFormula
+    lintTemplate
     pure next
 
   Save next -> do
@@ -496,8 +578,17 @@ eval = case _ of
       NotDerived -> pure unit
     pure next
 
-  SetDataType dt next -> do
-    modify _{ tmp { dataType = Just dt } }
+  SetDataType setter next -> do
+    st <- get
+    col <- gets _.input.column
+    case col ^. columnKind of
+      ColumnData dataCol -> do
+        let
+          old = getDataType dataCol st
+          go :: forall a. DtSetterF a -> DataType -> DataType
+          go (DtSetterF path val) = path .~ val
+        modify _{ tmp { dataType = Just $ runExists go setter old } }
+      ColumnReport _ -> pure unit
     lintFormula
     pure next
 

@@ -228,7 +228,7 @@ inferLiteral' = \case
   RecordLit fields -> do
     fields' <- traverse inferExpr fields
     pure ( literal $ RecordLit (map (view _1) fields')
-         , typeRecord $ map (view _2) fields'
+         , tyRecord $ typeRecord $ map (view _2) fields'
          , join $ Map.elems $ map (view _3) fields' )
 
 inferRef'
