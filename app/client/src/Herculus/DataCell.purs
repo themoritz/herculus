@@ -208,7 +208,7 @@ render st = case st.input.content of
           [ cldiv_ "flex-auto cell-compact" [ inline ]
           , HH.div
             [ HE.onMouseDown $ HE.input StopPropagation ]
-            [ faButton_ ("expand cell__expand-button " <>
+            [ faButton_ ("expand cell__expand-button fa-lg " <>
                          if st.expanded then "cell__expand-button--open" else ""
                         )
                         ToggleExpanded

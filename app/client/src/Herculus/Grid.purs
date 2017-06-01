@@ -144,7 +144,7 @@ render st = HK.div
     posDiv 0 (length st.input.rows * rowHeight + headHeight)
            gutterWidth addRowHeight
     [ cldiv_ "center p1"
-      [ faButton_ "plus-circle" AddRow
+      [ faButton_ "plus-circle fa-lg" AddRow
       ]
     ]
   -- Add col
@@ -152,7 +152,7 @@ render st = HK.div
     posDiv (colLeft (length orderedCols)) 0
            addColWidth headHeight
     [ cldiv_ "center p1"
-      [ faButton_ "plus-circle" TogglePopup
+      [ faButton_ "plus-circle fa-lg" TogglePopup
       , HH.slot' cp5 unit Popup.comp
                  { entries: popupEntries
                  , position: Popup.BelowRight

@@ -23,7 +23,7 @@ comp = H.component
 
 render :: State -> H.ComponentHTML Query
 render st = cldiv_ "center"
-  [ faButton_ "minus-circle" Delete'
+  [ faButton_ "minus-circle fa-lg" Delete'
   ]
 
 eval :: Query ~> H.ComponentDSL State Query Output Herc

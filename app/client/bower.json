@@ -18,5 +18,8 @@
     "purescript-halogen-css": "^6.0.0",
     "purescript-dom-classy": "^2.0.0",
     "purescript-parsing": "^4.0.0"
+  },
+  "devDependencies": {
+    "purescript-spec": "^1.0.0"
   }
 }

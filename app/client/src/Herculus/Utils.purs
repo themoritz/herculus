@@ -47,13 +47,13 @@ faButton_ icon query = HH.button
   [ HE.onClick (HE.input_ query)
   , HP.class_ (H.ClassName "button--pure")
   ]
-  [ faIcon_ (icon <> " fa-fw fa-lg") ]
+  [ faIcon_ (icon <> " fa-fw") ]
 
 faButton :: forall p i. String -> Array (HH.IProp HTMLbutton i) -> HH.HTML p i
 faButton icon props = HH.button (
   [ HP.class_ (H.ClassName "button--pure")
   ] <> props)
-  [ faIcon_ (icon <> " fa-fw fa-lg") ]
+  [ faIcon_ (icon <> " fa-fw") ]
 
 conditionalClasses
   :: forall r i. Array { cls :: String, on :: Boolean }

@@ -13,8 +13,9 @@ import Herculus.EditBox as Edit
 import Control.Monad.Aff (delay)
 import Control.Monad.Eff.Ref (Ref, newRef, readRef, writeRef)
 import Control.Monad.Fork (fork)
-import Data.Array (cons, deleteAt, find, head, null, snoc, zip)
+import Data.Array (cons, deleteAt, find, head, length, null, snoc, zip)
 import Data.Exists (Exists, mkExists, runExists)
+import Data.Foldable (minimumBy)
 import Data.Int (toNumber)
 import Data.Lens (_1, _2, element, lens, traversed, view, (^?))
 import Data.Lens.Types (Setter', Lens')
@@ -315,8 +316,11 @@ render st = HH.div_
   getFitting :: Kind -> Array (Tuple String (Array Kind))
   getFitting goal = filterTypes goal $ map (view tyconKind) st.input.types
 
-  getFirstFitting :: Kind -> Tuple String (Array Kind)
-  getFirstFitting goal = unsafePartial $ fromJust $ head $ getFitting goal
+  getOneFitting :: Kind -> Tuple String (Array Kind)
+  getOneFitting goal =
+    unsafePartial $ fromJust $ minimumBy comp' $ getFitting goal
+    where
+    comp' (Tuple _ ks) (Tuple _ ks') = compare (length ks) (length ks')
 
   selTable
     :: Id Table -> Path (Id Table)
@@ -371,25 +375,25 @@ render st = HH.div_
     -> H.ParentHTML Query Child Slot Herc
   selAlgebraic slot kindGoal constructor args path =
     let
-      mkDefaultArgs :: String -> Array DataType
-      mkDefaultArgs = map goGoal <<< getArgGoals
+      mkDefaultArgs :: Kind -> String -> Array DataType
+      mkDefaultArgs goal = map goGoal <<< getArgGoals goal
         where
         goGoal = case _ of
           KindTable ->
             DataTable (unsafePartial $ fromJust $ head st.input.tables).value
           KindRecord ->
             DataRecord []
-          goal ->
-            let c' = fst (getFirstFitting goal) in
-            DataAlgebraic c' (mkDefaultArgs c')
+          goal' ->
+            let c' = fst (getOneFitting goal') in
+            DataAlgebraic c' (mkDefaultArgs goal' c')
 
       options = map (\(Tuple name _) -> { value: name, label: name })
                     (getFitting kindGoal)
 
-      getArgGoals :: String -> Array Kind
-      getArgGoals c = unsafePartial $ fromJust do
-        c <- Map.lookup c st.input.types
-        subTypes kindGoal (c ^. tyconKind)
+      getArgGoals :: Kind -> String -> Array Kind
+      getArgGoals goal c = unsafePartial $ fromJust do
+        c' <- Map.lookup c st.input.types
+        subTypes goal (c' ^. tyconKind)
 
       argument (Tuple i (Tuple argGoal dt)) =
         selDataType (slot `snoc` i) argGoal dt
@@ -399,14 +403,14 @@ render st = HH.div_
     [ dropdown "select" options constructor \constr ->
         setDataTypeAction path
           { a: constr
-          , b: if constr == constructor then args else mkDefaultArgs constr
+          , b: if constr == constructor then args else mkDefaultArgs kindGoal constr
           }
     , cldiv_ "flex"
       [ HH.div
         [ HC.style (CSS.width $ CSS.px 20.0)
         ] []
       , cldiv_ "flex-auto" $
-        map argument $ mkIndexed $ zip (getArgGoals constructor) args
+        map argument $ mkIndexed $ zip (getArgGoals kindGoal constructor) args
       ]
     ]
 
