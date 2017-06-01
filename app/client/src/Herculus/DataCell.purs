@@ -1,6 +1,7 @@
 module Herculus.DataCell where
 
 import Herculus.Prelude
+import Data.Map as Map
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
@@ -12,10 +13,10 @@ import DOM.Event.MouseEvent (MouseEvent, mouseEventToEvent)
 import Data.Array (deleteAt, length, snoc, take, zip)
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (intercalate, maximum, minimumBy)
-import Data.Map (Map)
-import Data.Map as Map
 import Data.Generic (gCompare, gEq)
 import Data.Lens (Setter', _Just, element, traversed)
+import Data.List (head)
+import Data.Map (Map)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
 import Herculus.EditBox (SaveKey(..))
 import Herculus.Grid.Geometry (Direction(..))
@@ -33,12 +34,12 @@ import Partial.Unsafe (unsafePartial)
 
 type Path a = Setter' Value a
 
-data ValSetterF a = ValSetterF (Tuple (Path a) a)
+data ValSetterF a = ValSetterF (Path a) a
 type ValSetter = Exists ValSetterF
 
 setValueAction :: forall a. Path a -> Maybe Direction -> a -> H.Action Query
 setValueAction path mDir val =
-  SetValue (mkExists $ ValSetterF (Tuple path val)) mDir
+  SetValue (mkExists $ ValSetterF path val) mDir
 
 setValue :: forall a. Path a -> Maybe Direction -> a -> Maybe (Query Unit)
 setValue path mDir val = Just $ H.action $ setValueAction path mDir val
@@ -110,9 +111,6 @@ instConstructors
 instConstructors dataTypes tci =
   map goConstr (tci ^. tyconValueConstrs)
   where
-  paramMap = Map.fromFoldable $ zip (tci ^. tyconParams) dataTypes
-  resolveParam :: Partial => String -> DataType
-  resolveParam p = fromJust $ Map.lookup p paramMap
   goConstr (Tuple c args) = Tuple c (map (unsafePartial goType) args)
   goType :: Partial => Type -> DataType
   goType = case _ of
@@ -122,6 +120,9 @@ instConstructors dataTypes tci =
       DataAlgebraic c f' -> DataAlgebraic c (snoc f' $ goType arg)
     TypeTable t -> DataTable t
     TypeRecord r -> DataRecord $ map (\(Tuple f t) -> Tuple f (goType t)) r
+  resolveParam :: Partial => String -> DataType
+  resolveParam p = fromJust $ Map.lookup p paramMap
+  paramMap = Map.fromFoldable $ zip (tci ^. tyconParams) dataTypes
 
 needsExpand
   :: (String -> TyconInfo) -> DataType -> IsDerived -> Boolean
@@ -142,8 +143,11 @@ needsExpand resolveTycon dt derived = case dt, derived of
   DataTable _,  NotDerived -> false
   DataTable _,  Derived    -> true
 
-defaultValue :: (String -> TyconInfo) -> DataType -> Value
-defaultValue resolveTycon = defaultValue' 10
+defaultValue
+  :: (Id Table -> Maybe (Id Row))
+  -> (String -> TyconInfo)
+  -> DataType -> Value
+defaultValue getRow resolveTycon = defaultValue' 10
   where
   -- Max recursion depth to avoid constructing infinite values
   defaultValue' :: Int -> DataType -> Value
@@ -177,7 +181,7 @@ defaultValue resolveTycon = defaultValue' 10
             VData vcon (map (defaultValue' (i-1)) vargs)
     DataRecord _ ->
       VRecord []
-    DataTable _ -> VRowRef Nothing
+    DataTable t -> VRowRef $ getRow t
 
 --------------------------------------------------------------------------------
 
@@ -229,6 +233,11 @@ render st = case st.input.content of
 
   resolveTycon :: String -> TyconInfo
   resolveTycon c = unsafePartial $ fromJust $ Map.lookup c st.input.types
+
+  getOneRow :: Id Table -> Maybe (Id Row)
+  getOneRow t = do
+    table <- Map.lookup t st.input.rowCache
+    head $ Map.keys table
 
   derived = st.input.dataCol ^. dataColIsDerived
 
@@ -482,7 +491,8 @@ render st = case st.input.content of
           [ HH.button
             [ HP.class_ (H.ClassName "cell-button")
             , HE.onClick \_ ->
-                setValue path Nothing (snoc vals (defaultValue resolveTycon subDt))
+                setValue path Nothing
+                         (snoc vals (defaultValue getOneRow resolveTycon subDt))
             ]
             [ faIcon_ "plus-circle" ]
           ]
@@ -530,7 +540,8 @@ render st = case st.input.content of
         [ HH.button
           [ HP.class_ (H.ClassName "cell-button")
           , HE.onClick \_ ->
-              setValue path Nothing (Just (defaultValue resolveTycon subDt))
+              setValue path Nothing
+                       (Just (defaultValue getOneRow resolveTycon subDt))
           ]
           [ faIcon_ "plus-circle" ]
         , cldiv_ "cell-maybe--nothing flex-auto"
@@ -591,7 +602,7 @@ eval = case _ of
       CellValue oldVal ->
         let
           go :: forall a. ValSetterF a -> Value -> Value
-          go (ValSetterF (Tuple path val)) = path .~ val
+          go (ValSetterF path val) = path .~ val
         in
           H.raise $ SaveValue (runExists go setter oldVal) mDir
     pure next

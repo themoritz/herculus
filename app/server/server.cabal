@@ -45,6 +45,7 @@ library
                      , optparse-applicative
                      , pandoc
                      , pretty-show
+                     , recursion-schemes
                      , servant-server
                      , servant
                      , stm

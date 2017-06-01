@@ -13,14 +13,17 @@ import           Lib.Prelude                  hiding (Selector)
 import           Control.Lens                 hiding (op, (&))
 import           Control.Monad.Trans.Class
 
+import           Data.Functor.Foldable
 import           Data.Map                     (Map)
 import qualified Data.Map                     as Map
-import           Data.Maybe                   (mapMaybe)
+import           Data.Maybe                   (fromJust, mapMaybe)
 import           Data.Set                     (Set)
 import qualified Data.Set                     as Set
 
 import           Database.MongoDB             (Selector, (=:))
 
+import           Lib.Compiler
+import           Lib.Compiler.Type
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Class
@@ -195,29 +198,60 @@ instance MonadHexl m => MonadEngine (EngineT m) where
 
   --
 
-  makeDefaultValue = \case
-    DataRecord _ -> pure $ VRecord []
-    DataTable t -> do
-      res <- lift $ getOneByQuery [ "tableId" =: toObjectId t ]
-      pure $ VRowRef $ case res of
-        Left _             -> Nothing
-        Right (Entity i _) -> Just i
-    DataAlgebraic _ _ -> pure $ VData "Dummy" []
-
-  -- TODO:
-  -- makeDefaultValue = \case
-  --   DataBool     -> pure $ VBool False
-  --   DataString   -> pure $ VString ""
-  --   DataNumber   -> pure $ VNumber 0
-  --   DataInteger  -> pure $ VInteger 0
-  --   DataTime     -> VTime <$> lift getCurrentTime
-  --   DataRowRef t -> do
-  --     res <- lift $ getOneByQuery [ "tableId" =: toObjectId t ]
-  --     pure $ VRowRef $ case res of
-  --       Left _             -> Nothing
-  --       Right (Entity i _) -> Just i
-  --   DataList _   -> pure $ VList []
-  --   DataMaybe _  -> pure $ VMaybe Nothing
+  makeDefaultValue = defaultValue (10 :: Int)
+    where
+    defaultValue i dt = if i == 0 then pure VUndefined else case dt of
+      DataAlgebraic "Boolean" [] ->
+        pure $ VBool False
+      DataAlgebraic "String" [] ->
+        pure $ VString ""
+      DataAlgebraic "Number" [] ->
+        pure $ VNumber 0
+      DataAlgebraic "Integer" [] ->
+        pure $ VInteger 0
+      DataAlgebraic "DateTime" [] ->
+        VTime <$> lift getCurrentTime
+      DataAlgebraic "Row" [sub] ->
+        defaultValue (i-1) sub
+      DataAlgebraic "Record" [sub] ->
+        defaultValue (i-1) sub
+      DataAlgebraic "List" [_] ->
+        pure $ VList []
+      DataAlgebraic "Maybe" [_] ->
+        pure $ VMaybe Nothing
+      DataAlgebraic tycon args ->
+        let
+          cs = instConstructors tycon args
+          compare' (_, as) (_, as') = compare (length as) (length as')
+        in
+          case cs of
+            [] -> pure VUndefined
+            _ ->
+              let (vcon, vargs) = minimumBy compare' cs in
+              VData vcon <$> traverse (defaultValue (i-1)) vargs
+      DataRecord _ ->
+        pure $ VRecord []
+      DataTable t -> do
+        res <- lift $ getOneByQuery [ "tableId" =: toObjectId t ]
+        pure $ VRowRef $ case res of
+          Left _                   -> Nothing
+          Right (Entity tableId _) -> Just tableId
+    instConstructors :: Text -> [DataType] -> [(Text, [DataType])]
+    instConstructors tycon dataTypes =
+      map goConstr (tyconValueConstrs tyconInfo)
+      where
+      tyconInfo = fromJust $ Map.lookup tycon preludeTycons
+      goConstr (c, args) = (c, map goType args)
+      goType (Fix ty) = case ty of
+        TypeVar v -> resolveParam v
+        TypeConstructor c -> DataAlgebraic c []
+        TypeApp f arg -> case goType f of
+          DataAlgebraic c f' -> DataAlgebraic c (snoc f' $ goType arg)
+        TypeTable (InId t) -> DataTable t
+        TypeRecord r -> DataRecord $ Map.toList $ map goType r
+      resolveParam :: Text -> DataType
+      resolveParam p = fromJust $ Map.lookup p paramMap
+      paramMap = Map.fromList $ zip (tyconParams tyconInfo) dataTypes
 
   --
 
