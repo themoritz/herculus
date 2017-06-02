@@ -24,7 +24,7 @@ import Data.Time.Duration (Milliseconds(..))
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3)
 import Herculus.Config.Column.Types (filterTypes, subTypes)
 import Herculus.Monad (Herc, withApi)
-import Herculus.Utils (Options, clbutton_, cldiv, cldiv_, dropdown, faButton_, faIcon_, mkIndexed)
+import Herculus.Utils (Options, bLens, clbutton_, cldiv, cldiv_, dropdown, faButton_, faIcon_, mkIndexed)
 import Lib.Api.Rest (postProjectLintDataColByColumnId, postProjectLintReportColByColumnId, postProjectRunCommandsByProjectId)
 import Lib.Api.Schema.Column (Column, ColumnKind(..), CompileStatus(StatusError, StatusNone, StatusOk), DataCol, ReportCol, _ColumnData, _ColumnReport, columnId, columnKind, columnName, columnTableId, dataColCompileStatus, dataColIsDerived, dataColSourceCode, dataColType, reportColCompileStatus, reportColFormat, reportColLanguage, reportColTemplate)
 import Lib.Api.Schema.Compiler (Kind(KindRecord, KindTable, KindType), TyconInfo, tyconKind)
@@ -46,12 +46,6 @@ setDataTypeAction path val =
 
 setDataType :: forall a. Path a -> a -> Maybe (Query Unit)
 setDataType path val = Just $ H.action $ setDataTypeAction path val
-
-aLens :: forall a b. Lens' { a :: a, b :: b } a
-aLens = lens _.a (\r -> r { a = _ })
-
-bLens :: forall a b. Lens' { a :: a, b :: b } b
-bLens = lens _.b (\r -> r { b = _ })
 
 data Query a
   = Initialize a

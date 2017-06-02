@@ -70,6 +70,10 @@ tyDateTime = typeConstructor "DateTime"
 tyRecord :: Type -> Type
 tyRecord = typeApp (typeConstructor "Record")
 
+pattern Record :: TypeF (Fix TypeF) -> TypeF (Fix TypeF)
+pattern Record t =
+  TypeApp (Fix (TypeConstructor "Record")) (Fix t)
+
 tyString :: Type
 tyString = typeConstructor "String"
 

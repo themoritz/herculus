@@ -12,7 +12,8 @@ import DOM.HTML.HTMLElement (focus) as DOM
 import DOM.HTML.Indexed (HTMLdiv, HTMLspan, HTMLbutton)
 import Data.Array (catMaybes, find, length, zip, (..))
 import Data.Generic (gShow)
-import Data.Lens (Iso', iso)
+import Data.Lens (Iso', iso, lens)
+import Data.Lens.Types (Lens')
 import Data.Map (Map)
 
 cldiv_ :: forall p i. String -> Array (HH.HTML p i) -> HH.HTML p i
@@ -106,3 +107,11 @@ nonEmpty :: forall k v. Iso' (Maybe (Map k v)) (Map k v)
 nonEmpty = iso (fromMaybe Map.empty) g
   where g m | Map.isEmpty m = Nothing
             | otherwise     = Just m
+
+--------------------------------------------------------------------------------
+
+aLens :: forall a b. Lens' { a :: a, b :: b } a
+aLens = lens _.a (\r -> r { a = _ })
+
+bLens :: forall a b. Lens' { a :: a, b :: b } b
+bLens = lens _.b (\r -> r { b = _ })

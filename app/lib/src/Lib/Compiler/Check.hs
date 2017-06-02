@@ -442,7 +442,7 @@ resolvePlaceholders recConstrs =
           pure $ abs (varBinder "e") $
                  abs (varBinder "field") $
                  access (deref (var "e")) (var "field")
-        TypeRecord _ ->
+        Record (TypeRecord _) ->
           pure $ abs (varBinder "e") $
                  abs (varBinder "field") $
                  access (var "e") (var "field")
@@ -606,7 +606,7 @@ byHasFields c'@(span, c) = case c of
   HasFields fields (Fix t) -> do
     case t of
       TypeVar _ -> pure $ Just c'
-      TypeRecord m -> do
+      Record (TypeRecord m) -> do
         m `checkSubsumes` fields
         pure Nothing
       Row (TypeTable refOrId) ->

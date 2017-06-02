@@ -51,9 +51,9 @@ $expandLeft: 100px;
 
 /* -------------------------------------------------------------------------- */
 
-/* RowRef */
+/* Tables */
 
-.cell-rowref {
+.cell-table {
   background-color: lightgray;
   border-spacing: 1px;
   border-collapse: separate;
@@ -61,7 +61,7 @@ $expandLeft: 100px;
   width: 100%;
   box-sizing: border-box;
 }
-.cell-rowref__field {
+.cell-table__row {
   display: table-row;
 }
 
@@ -132,4 +132,8 @@ $expandLeft: 100px;
   display: inline-block;
   white-space: nowrap;
   overflow: hidden;
+}
+
+.cell-string {
+  height: 27px;
 }

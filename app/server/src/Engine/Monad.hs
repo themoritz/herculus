@@ -4,6 +4,7 @@
 {-# LANGUAGE NoImplicitPrelude          #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TupleSections              #-}
 -- |
 
 module Engine.Monad where
@@ -229,8 +230,8 @@ instance MonadHexl m => MonadEngine (EngineT m) where
             _ ->
               let (vcon, vargs) = minimumBy compare' cs in
               VData vcon <$> traverse (defaultValue (i-1)) vargs
-      DataRecord _ ->
-        pure $ VRecord []
+      DataRecord dts ->
+        VRecord <$> traverse (\(f, dt) -> (f,) <$> defaultValue (i-1) dt) dts
       DataTable t -> do
         res <- lift $ getOneByQuery [ "tableId" =: toObjectId t ]
         pure $ VRowRef $ case res of
@@ -442,7 +443,8 @@ storeGetById what i = use (engineStore . what . at i) >>= \case
 storeGetById' :: (MonadHexl m, Model a) => What a -> Id a -> EngineT m a
 storeGetById' what i = storeGetById what i >>= \case
   Just a -> pure a
-  Nothing -> lift $ throwError $ ErrBug "storeGetById': not found"
+  Nothing -> lift $ throwError $
+    ErrBug $ "storeGetById': could not find id " <> show i
 
 storeGetChangedList :: (MonadHexl m) => What a -> EngineT m [Entity a]
 storeGetChangedList what = do

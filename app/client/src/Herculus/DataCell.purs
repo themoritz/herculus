@@ -14,7 +14,7 @@ import Data.Array (deleteAt, length, snoc, take, zip)
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (intercalate, maximum, minimumBy)
 import Data.Generic (gCompare, gEq)
-import Data.Lens (Setter', _Just, element, traversed)
+import Data.Lens (Setter', _2, _Just, element, traversed)
 import Data.List (head)
 import Data.Map (Map)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
@@ -22,11 +22,11 @@ import Herculus.EditBox (SaveKey(..))
 import Herculus.Grid.Geometry (Direction(..))
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (RowCache)
-import Herculus.Utils (cldiv, cldiv_, clspan, clspan_, dropdown, faButton_, faIcon_, mkIndexed)
+import Herculus.Utils (bLens, cldiv, cldiv_, clspan, clspan_, dropdown, faButton_, faIcon_, mkIndexed)
 import Lib.Api.Schema.Column (ColumnKind(ColumnData), DataCol, columnKind, columnName, dataColIsDerived, dataColType)
 import Lib.Api.Schema.Compiler (Type(TypeRecord, TypeTable, TypeApp, TypeConstructor, TypeVar), TyconInfo, tyconParams, tyconValueConstrs)
 import Lib.Custom (Id, ValNumber(ValNumber), ValTime(ValTime), parseInteger, parseValNumber)
-import Lib.Model.Cell (CellContent(..), Value(..), _VBool, _VInteger, _VList, _VMaybe, _VNumber, _VRowRef, _VString, _VTime)
+import Lib.Model.Cell (CellContent(..), Value(..), _VBool, _VData, _VInteger, _VList, _VMaybe, _VNumber, _VRecord, _VRowRef, _VString, _VTime)
 import Lib.Model.Column (DataType(..), IsDerived(..))
 import Lib.Model.Row (Row)
 import Lib.Model.Table (Table)
@@ -133,6 +133,7 @@ needsExpand resolveTycon dt derived = case dt, derived of
   DataAlgebraic "Integer" [],  _ -> false
   DataAlgebraic "DateTime" [], _ -> false
   DataAlgebraic "List" [_],    _ -> true
+  DataAlgebraic "Record" [_],  _ -> true
   DataAlgebraic "Maybe" [sub], _ -> needsExpand resolveTycon sub derived
   DataAlgebraic c _, _ ->
     let cs = resolveTycon c ^. tyconValueConstrs in
@@ -179,9 +180,23 @@ defaultValue getRow resolveTycon = defaultValue' 10
           Nothing -> VUndefined
           Just (Tuple vcon vargs) ->
             VData vcon (map (defaultValue' (i-1)) vargs)
-    DataRecord _ ->
-      VRecord []
+    DataRecord dts ->
+      VRecord $ dts <#> \(Tuple f dt) -> Tuple f (defaultValue' (i-1) dt)
     DataTable t -> VRowRef $ getRow t
+
+shortVal :: Value -> String
+shortVal = case _ of
+  VUndefined -> "<undefined>"
+  VBool b -> if b then "True" else "False"
+  VNumber (ValNumber str) -> str
+  VInteger i -> show i
+  VString str -> str
+  VTime (ValTime str) -> str
+  VRowRef _ -> "Row .."
+  VData c _ -> c <> " .."
+  VRecord _ -> "Record .."
+  VList _ -> "[..]"
+  VMaybe _ -> "Maybe .."
 
 --------------------------------------------------------------------------------
 
@@ -271,9 +286,19 @@ render st = case st.input.content of
     VMaybe v -> case dt of
       DataAlgebraic "Maybe" [sub] ->
         editMaybe (SlotSub slot) mode sub v (path <<< _VMaybe)
-      _             -> HH.div_ []
-    VData _ _ -> HH.text "Data not supported yet"
-    VRecord _ -> HH.text "Record not supported yet"
+      _ ->
+        HH.div_ []
+    VData vcon vargs -> case dt of
+      DataAlgebraic tycon tyargs ->
+        editAlgebraic (SlotSub slot) mode tycon tyargs vcon vargs
+                      (path <<< _VData)
+      _ ->
+        HH.div_ []
+    VRecord vrec -> case dt of
+      DataAlgebraic "Record" [DataRecord trec] ->
+        editRecord (SlotSub slot) mode trec vrec (path <<< _VRecord)
+      _ ->
+        HH.div_ []
 
   showValue
     :: RenderMode -> DataType -> Value
@@ -300,8 +325,16 @@ render st = case st.input.content of
         showMaybe mode sub v
       _ ->
         HH.div_ []
-    VData _ _ -> HH.text "Data not supported yet"
-    VRecord _ -> HH.text "Record not supported yet"
+    VData vcon vargs -> case dt of
+      DataAlgebraic tycon tyargs ->
+        showAlgebraic mode tycon tyargs vcon vargs
+      _ ->
+        HH.div_ []
+    VRecord vrec -> case dt of
+      DataAlgebraic "Record" [DataRecord trec] ->
+        showRecord mode trec vrec
+      _ ->
+        HH.div_ []
 
   editBool
     :: Boolean -> Path Boolean
@@ -335,8 +368,7 @@ render st = case st.input.content of
     HH.slot' cp1 slot EditBox.comp
              { value: val
              , placeholder: ""
-             , className: "full-height " <>
-                          ifRootElse slot "plaincell" "editbox"
+             , className: ifRootElse slot "plaincell" "editbox"
              , inputClassName: ifRootElse slot "plaincell__input"
                                                "editbox__input"
              , invalidClassName: ifRootElse slot "red"
@@ -347,7 +379,7 @@ render st = case st.input.content of
              }
              (editBoxHandler slot path)
 
-  showString val = cldiv_ "cell-plain"
+  showString val = cldiv_ "cell-plain cell-string"
     [ HH.text val ]
 
   editNumber
@@ -440,8 +472,8 @@ render st = case st.input.content of
       Nothing -> HH.text "Impossible: invalid row in derived cell"
       Just r -> case Map.lookup r (rows t) of
         Nothing -> HH.div_ []
-        Just row -> cldiv_ "cell-rowref" $ Map.toUnfoldable row <#> \(Tuple _ tuple) -> case tuple of
-          Tuple c content -> cldiv_ "cell-rowref__field"
+        Just row -> cldiv_ "cell-table" $ Map.toUnfoldable row <#> \(Tuple _ tuple) -> case tuple of
+          Tuple c content -> cldiv_ "cell-table__row"
             [ cldiv_ "table-cell bg-white bold p1"
               [ HH.text (c ^. columnName) ]
             , cldiv_ "table-cell bg-white p1"
@@ -463,20 +495,7 @@ render st = case st.input.content of
       col ^. columnName <> ": " <> showContent cont
     showContent = case _ of
       CellError e -> ""
-      CellValue v -> showVal v
-    showVal = case _ of
-      VUndefined -> "<undefined>"
-      VBool b -> if b then "True" else "False"
-      VNumber (ValNumber str) -> str
-      VInteger i -> show i
-      VString str -> str
-      VTime (ValTime str) -> str
-      VRowRef _ -> "Row .."
-      -- TODO:
-      VData _ _ -> "ADT .."
-      VRecord _ -> "Record .."
-      VList _ -> "[..]"
-      VMaybe _ -> "Maybe .."
+      CellValue v -> shortVal v
 
   rows t = fromMaybe Map.empty $ Map.lookup t st.input.rowCache
 
@@ -561,6 +580,130 @@ render st = case st.input.content of
   showMaybe mode subDt mVal = case mVal of
     Nothing  -> cldiv_ "cell-maybe--nothing" [ HH.text "Nothing" ]
     Just val -> showValue mode subDt val
+
+  prepareAlgebraic tycon tyargs vcon vargs =
+    let
+      vcons = instConstructors tyargs (resolveTycon tycon)
+      vconsMap = Map.fromFoldable vcons
+      getArgDts c = unsafePartial $ fromJust $ Map.lookup c vconsMap
+    in
+      { arguments: mkIndexed $ zip (getArgDts vcon) vargs
+      , mkDefaultArgs: \c ->
+          map (defaultValue getOneRow resolveTycon) (getArgDts c)
+      , options: vcons <#> \(Tuple c _) -> { value: c, label: c }
+      }
+
+  editAlgebraic
+    :: SlotPath -> RenderMode
+    -> String -> Array DataType
+    -> String -> Array Value
+    -> Path { a :: String, b :: Array Value }
+    -> H.ParentHTML Query Child Slot Herc
+  editAlgebraic slotPrefix mode tycon tyargs vcon vargs path = case mode of
+    Compact ->
+      compactAlgebraic mode tycon tyargs vcon vargs
+    Full ->
+      let
+        prep = prepareAlgebraic tycon tyargs vcon vargs
+        argument (Tuple i (Tuple dt v)) =
+          cldiv_ "cell-table__row"
+          [ cldiv_ "table-cell bg-white p1"
+            [ editValue slotPrefix mode dt v
+                        (path <<< bLens <<< element i traversed)
+            ]
+          ]
+      in
+        cldiv "cell-table"
+        [ HE.onMouseDown $ HE.input StopPropagation
+        ] $
+        [ cldiv_ "cell-table__row"
+          [ cldiv_ "table-cell bg-white p1"
+            [ dropdown "select" prep.options vcon \c ->
+                setValueAction path Nothing
+                  { a: c
+                  , b: if c == vcon then vargs else prep.mkDefaultArgs c
+                  }
+            ]
+          ]
+        ] <> map argument prep.arguments
+
+  showAlgebraic
+    :: RenderMode
+    -> String -> Array DataType
+    -> String -> Array Value
+    -> H.ParentHTML Query Child Slot Herc
+  showAlgebraic mode tycon tyargs vcon vargs = case mode of
+    Compact ->
+      compactAlgebraic mode tycon tyargs vcon vargs
+    Full ->
+      let
+        prep = prepareAlgebraic tycon tyargs vcon vargs
+        argument (Tuple i (Tuple dt v)) =
+          cldiv_ "cell-table__row"
+          [ cldiv_ "table-cell bg-white p1"
+            [ showValue mode dt v ]
+          ]
+      in
+        cldiv_ "cell-table" $
+        [ cldiv_ "cell-table__row"
+          [ cldiv_ "table-cell bg-white p1 bold"
+            [ HH.text vcon ]
+          ]
+        ] <> map argument prep.arguments
+
+  compactAlgebraic mode tycon tyargs vcon vargs =
+    let
+      prep = prepareAlgebraic tycon tyargs vcon vargs
+      argument (Tuple i (Tuple dt v)) = shortVal v
+    in
+      HH.text $ vcon <> " " <> intercalate " " (map argument prep.arguments)
+
+  editRecord
+    :: SlotPath -> RenderMode
+    -> Array (Tuple String DataType)
+    -> Array (Tuple String Value)
+    -> Path (Array (Tuple String Value))
+    -> H.ParentHTML Query Child Slot Herc
+  editRecord slotPrefix mode trec vrec path = case mode of
+    Compact ->
+      compactRecord vrec
+    Full ->
+      let
+        fields = mkIndexed $ zip trec vrec
+        field (Tuple i (Tuple (Tuple f dt) (Tuple _ v))) =
+          cldiv_ "cell-table__row"
+          [ cldiv_ "table-cell col-4 bg-white p1" [ HH.text f ]
+          , cldiv_ "table-cell col-8 bg-white p1"
+            [ editValue (SlotItem i slotPrefix) mode dt v
+                        (path <<< element i traversed <<< _2)
+            ]
+          ] 
+      in
+        cldiv_ "cell-table" $ map field fields
+
+  showRecord
+    :: RenderMode
+    -> Array (Tuple String DataType)
+    -> Array (Tuple String Value)
+    -> H.ParentHTML Query Child Slot Herc
+  showRecord mode trec vrec = case mode of
+    Compact ->
+      compactRecord vrec
+    Full ->
+      let
+        field (Tuple (Tuple f dt) (Tuple _ v)) =
+          cldiv_ "cell-table__row"
+          [ cldiv_ "table-cell col-4 bg-white p1" [ HH.text f ]
+          , cldiv_ "table-cell col-8 bg-white p1"
+            [ showValue mode dt v ]
+          ]
+      in
+        cldiv_ "cell-table" $ map field $ zip trec vrec
+
+  compactRecord vrec =
+    HH.text $ intercalate ", " $ map field vrec
+    where
+    field (Tuple f v) = f <> ": " <> shortVal v
 
 keyToDir :: SaveKey -> Direction
 keyToDir = case _ of
