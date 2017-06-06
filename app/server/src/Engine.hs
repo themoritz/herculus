@@ -112,7 +112,6 @@ executeCommand = \case
     mapM_ scheduleCompileColumn dependantCols
 
   CmdTableDelete tableId -> do
-    deleteTable tableId
     columns <- getTableColumns tableId
     mapM_ (executeCommand . CmdColumnDelete . entityId) columns
     mentioningCols <- graphGets $ getTableDependantsOnly tableId $ \case
@@ -129,6 +128,7 @@ executeCommand = \case
       -- an "invalid type", so what to do?
       pure ()
     graphModify $ purgeTable tableId
+    deleteTable tableId
 
   CmdDataColCreate tableId ->
     void $ createColumn (emptyDataCol tableId)
@@ -196,10 +196,9 @@ executeCommand = \case
     scheduleCompileColumnDependants columnId
 
   CmdColumnDelete columnId -> do
-    column <- getColumn columnId
-    deleteColumn columnId
     scheduleCompileColumnDependants columnId
     graphModify $ purgeColumn columnId
+    deleteColumn columnId
 
   CmdRowCreate tableId -> do
     rows <- getTableRows tableId
@@ -217,7 +216,6 @@ executeCommand = \case
   CmdRowDelete rowId -> do
     row <- getRow rowId
     let tableId = row ^. rowTableId
-    deleteRow rowId
     -- Evaluate all cells of those dependants of any of the table's columns
     -- with an `AddAll` mode.
     columns <- getTableColumns tableId
@@ -242,6 +240,7 @@ executeCommand = \case
           Just newVal -> setAndPropagateCellContent
                            tableId columnId (cell ^. cellRowId)
                            (CellValue newVal)
+    deleteRow rowId
 
   CmdCellSet columnId rowId value -> do
     column <- getColumn columnId

@@ -21,6 +21,7 @@ import DOM.HTML.Event.DataTransfer (getData, setData)
 import Data.Array (drop, length, singleton, zipWith, (!!))
 import Data.Foldable (maximum)
 import Data.Int (toNumber)
+import Data.List (head)
 import Data.Map (Map)
 import Data.MediaType.Common (textPlain)
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5, cp6)
@@ -328,7 +329,10 @@ eval = case _ of
               let
                 resolveTycon c =
                   unsafePartial $ fromJust $ Map.lookup c input.types
-                val = defaultValue resolveTycon (dataCol ^. dataColType)
+                getOneRow t = do
+                  table <- Map.lookup t input.rowCache
+                  head $ Map.keys table
+                val = defaultValue getOneRow resolveTycon (dataCol ^. dataColType)
               [CmdCellSet c r val]
     pure next
 
