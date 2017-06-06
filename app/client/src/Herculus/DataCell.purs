@@ -124,6 +124,13 @@ instConstructors dataTypes tci =
   resolveParam p = fromJust $ Map.lookup p paramMap
   paramMap = Map.fromFoldable $ zip (tci ^. tyconParams) dataTypes
 
+hasSimpleVcons :: TyconInfo -> Boolean
+hasSimpleVcons info =
+  let cs = info ^. tyconValueConstrs in
+  case maximum (map (length <<< snd) cs) of
+    Just i | i > 0 -> false
+    _              -> true
+
 needsExpand
   :: (String -> TyconInfo) -> DataType -> IsDerived -> Boolean
 needsExpand resolveTycon dt derived = case dt, derived of
@@ -135,11 +142,7 @@ needsExpand resolveTycon dt derived = case dt, derived of
   DataAlgebraic "List" [_],    _ -> true
   DataAlgebraic "Record" [_],  _ -> true
   DataAlgebraic "Maybe" [sub], _ -> needsExpand resolveTycon sub derived
-  DataAlgebraic c _, _ ->
-    let cs = resolveTycon c ^. tyconValueConstrs in
-    case maximum (map (length <<< snd) cs) of
-      Just i | i > 0 -> true
-      _ -> false
+  DataAlgebraic c _, _ -> not $ hasSimpleVcons (resolveTycon c)
   DataRecord _, _ -> true
   DataTable _,  NotDerived -> false
   DataTable _,  Derived    -> true
@@ -152,7 +155,7 @@ defaultValue getRow resolveTycon = defaultValue' 10
   where
   -- Max recursion depth to avoid constructing infinite values
   defaultValue' :: Int -> DataType -> Value
-  defaultValue' i dt = if i == 0 then VUndefined else case dt of
+  defaultValue' i dt' = if i == 0 then VUndefined else case dt' of
     DataAlgebraic "Boolean" [] ->
       VBool false
     DataAlgebraic "String" [] ->
@@ -608,21 +611,26 @@ render st = case st.input.content of
         argument (Tuple i (Tuple dt v)) =
           cldiv_ "cell-table__row"
           [ cldiv_ "table-cell bg-white p1"
-            [ editValue slotPrefix mode dt v
+            [ editValue (SlotItem i slotPrefix) mode dt v
                         (path <<< bLens <<< element i traversed)
             ]
           ]
-      in
+        selVcon = dropdown "select" prep.options vcon \c ->
+          setValueAction path Nothing
+            { a: c
+            , b: if c == vcon then vargs else prep.mkDefaultArgs c
+            }
+      in if hasSimpleVcons (resolveTycon tycon)
+      then
+        HH.div
+        [ HE.onMouseDown $ HE.input StopPropagation ]
+        [ selVcon ]
+      else
         cldiv "cell-table"
-        [ HE.onMouseDown $ HE.input StopPropagation
-        ] $
+        [ HE.onMouseDown $ HE.input StopPropagation ] $
         [ cldiv_ "cell-table__row"
           [ cldiv_ "table-cell bg-white p1"
-            [ dropdown "select" prep.options vcon \c ->
-                setValueAction path Nothing
-                  { a: c
-                  , b: if c == vcon then vargs else prep.mkDefaultArgs c
-                  }
+            [ selVcon
             ]
           ]
         ] <> map argument prep.arguments
