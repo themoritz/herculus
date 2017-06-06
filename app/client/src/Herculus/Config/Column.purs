@@ -17,8 +17,8 @@ import Data.Array (cons, deleteAt, find, head, length, null, snoc, zip)
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (minimumBy)
 import Data.Int (toNumber)
-import Data.Lens (_1, _2, element, lens, traversed, view, (^?))
-import Data.Lens.Types (Setter', Lens')
+import Data.Lens (_1, _2, element, traversed, (^?))
+import Data.Lens.Types (Setter')
 import Data.Map (Map)
 import Data.Time.Duration (Milliseconds(..))
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3)
@@ -308,7 +308,7 @@ render st = HH.div_
     ]
 
   getFitting :: Kind -> Array (Tuple String (Array Kind))
-  getFitting goal = filterTypes goal $ map (view tyconKind) st.input.types
+  getFitting goal = filterTypes goal $ st.input.types
 
   getOneFitting :: Kind -> Tuple String (Array Kind)
   getOneFitting goal =
