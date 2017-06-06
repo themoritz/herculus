@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TypeApplications  #-}
@@ -7,28 +9,28 @@ module Migration
   ( migrate
   ) where
 
-import           Lib.Prelude
+import           Lib.Prelude      hiding ((&))
 
 import           Control.Lens
 
-import           Database.MongoDB  ((=:))
-import qualified Database.MongoDB  as Mongo
+import           Data.Aeson
+import           Data.Aeson.Bson
+import           Data.Aeson.Lens
 
-import           Lib.Model
+import           Database.MongoDB ((=:))
+import qualified Database.MongoDB as Mongo
+
 import           Lib.Model.Class
 import           Lib.Model.Column
-import           Lib.Model.Project
 import           Lib.Model.Table
 import           Lib.Types
 
-import           Engine
-import           Engine.Compile
-import           Engine.Monad
-import           Engine.Propagate
 import           Monads
 
+import           Migration.Tasks
+
 currentVersion :: Int
-currentVersion = 1
+currentVersion = 2
 
 storeCollection :: Text
 storeCollection = "store"
@@ -36,9 +38,9 @@ storeCollection = "store"
 getStoreValue
   :: (MonadIO m, MonadHexlEnv m, Mongo.Val a)
   => Text -> m (Maybe a)
-getStoreValue key = do
+getStoreValue k = do
   res <- runMongo $ Mongo.findOne $
-    Mongo.select [ "key" =: key ] storeCollection
+    Mongo.select [ "key" =: k ] storeCollection
   pure $ do
     doc <- res
     Mongo.lookup "value" doc
@@ -53,65 +55,64 @@ setStoreValue k v =
     , "value" =: v
     ]
 
+success :: (MonadHexlEnv m, MonadIO m) => Int -> m ()
+success i = do
+  putStrLn ("Successfully migrated to version " <> show i :: Text)
+  setStoreValue "schemaVersion" i
+
+--------------------------------------------------------------------------------
+
+data DataType1
+  = DataBool
+  | DataString
+  | DataNumber
+  | DataInteger
+  | DataTime
+  | DataRowRef (Id Table)
+  | DataList DataType1
+  | DataMaybe DataType1
+  deriving (Generic, ToJSON, FromJSON)
+
+convDataType :: DataType1 -> DataType
+convDataType = \case
+  DataBool      -> DataAlgebraic "Boolean" []
+  DataString    -> DataAlgebraic "String" []
+  DataNumber    -> DataAlgebraic "Number" []
+  DataInteger   -> DataAlgebraic "Integer" []
+  DataTime      -> DataAlgebraic "DateTime" []
+  DataRowRef t  -> DataAlgebraic "Row" [DataTable t]
+  DataList sub  -> DataAlgebraic "List" [convDataType sub]
+  DataMaybe sub -> DataAlgebraic "Maybe" [convDataType sub]
+
 migration
   :: (MonadHexl m, MonadHexlEnv m, MonadIO m)
   => Int -> m ()
 migration = \case
 
   0 -> do
-    -- Delete old compile results
-    let
-      qry =
-        [ "kind.tag" =: ("ColumnData" :: Text)
-        ]
-      upd =
-        [ "$set" =:
-          [ "kind.contents._dataColCompileResult" =:
-              [ "tag" =: ("CompileResultNone" :: Text)
-              ]
-          ]
-        ]
-    runMongo $ Mongo.modify
-      (Mongo.select qry (collectionName $ Proxy @Column))
-      upd
-    let
-      qry' =
-        [ "kind.tag" =: ("ColumnReport" :: Text)
-        ]
-      upd' =
-        [ "$set" =:
-          [ "kind.contents._reportColCompiledTemplate" =:
-              [ "tag" =: ("CompileResultNone" :: Text)
-              ]
-          ]
-        ]
-    runMongo $ Mongo.modify
-      (Mongo.select qry' (collectionName $ Proxy @Column))
-      upd'
+    recompileColumns
+    success 1
 
-    -- Recompile all columns
-    ps <- listAll
-    for_ ps $ \(Entity projectId project) -> do
-      tables <- listByQuery [ "projectId" =: toObjectId projectId ]
-      cols <- for tables $ \(Entity tableId _) -> do
-        cols <- listByQuery [ "tableId" =: toObjectId (tableId :: Id Table) ]
-        for cols $ \(Entity columnId col) -> case col ^. columnKind of
-          ColumnData dataCol -> case dataCol ^. dataColIsDerived of
-            Derived    -> pure [columnId]
-            NotDerived -> pure []
-          ColumnReport _ -> pure [columnId]
-      (_, st) <- runEngineT projectId (project ^. projectDependencyGraph) $ do
-        traverse_ scheduleCompileColumn (join $ join cols)
-        getCompileTargets >>= traverse_ compileColumn
-        propagate
-      commitEngineState projectId st
+  1 -> do
+    let
+      colCollection = collectionName (Proxy @Column)
+      qry = [ "kind.tag" =: ("ColumnData" :: Text) ]
+    cols <- runMongo $
+      Mongo.find (Mongo.select qry colCollection) >>= Mongo.rest
 
-    -- Update version
-    putStrLn ("Successfully migrated to version 1" :: Text)
-    setStoreValue "schemaVersion" (1 :: Int)
+    let
+      dataTypeLens = ix "kind" . key "contents" . key "_dataColType"
+      goDataType dt = let Success v = fromJSON dt in toJSON (convDataType v)
+      goColumn = toBson . over dataTypeLens goDataType . toAeson
+    runMongo $ traverse_ (Mongo.save colCollection . goColumn) cols
+
+    recompileColumns
+    success 2
 
   i -> throwError $ ErrBug $
     "No migration found for version `" <> show i <> "`."
+
+--------------------------------------------------------------------------------
 
 migrate
   :: (MonadHexl m, MonadHexlEnv m, MonadIO m)

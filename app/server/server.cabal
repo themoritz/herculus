@@ -22,6 +22,7 @@ library
                      , HexlNat
                      , Latex
                      , Migration
+                     , Migration.Tasks
                      , Monads
                      , Options
   build-depends:       aeson
@@ -34,6 +35,7 @@ library
                      , fast-logger
                      , filepath
                      , lens
+                     , lens-aeson
                      , herculus-lib
                      , mime-mail
                      , monad-control
