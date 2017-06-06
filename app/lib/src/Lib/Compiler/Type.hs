@@ -164,9 +164,16 @@ normalizePoly (ForAll as cs t) = ForAll as' cs' t'
   t' = applyTypeSubst sub t
 
 quantify :: [Text] -> [Constraint] -> Type -> PolyType
-quantify as cs t = ForAll as' cs t
+quantify as cs t = ForAll as' cs' t
   where
-  as' = [a | a <- as, a `elem` (getFtvs cs <> getFtvs t)]
+  cs' = filter needed cs
+  needed = \case
+    IsIn _ t' -> checkType t'
+    HasFields _ t' -> checkType t'
+  checkType = cata $ \case
+    TypeVar v -> v `elem` getFtvs t
+    TypeApp f _ -> f
+  as' = [a | a <- as, a `elem` (getFtvs cs' <> getFtvs t)]
 
 data ConstraintF t
   -- | Class and type that should be member of the class

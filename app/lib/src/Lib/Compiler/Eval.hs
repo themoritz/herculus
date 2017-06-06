@@ -53,7 +53,7 @@ eval env e = consumeGas *> case e of
   Case scrut alts -> do
     res <- eval env scrut
     let
-      tryAlts [] = evalError "Eval `Case`: pattern match failure"
+      tryAlts [] = evalError $ "Eval `Case`: pattern match failure: " <> prettyResult res
       tryAlts ((binder, expr):as) = case matchValue res binder of
         Nothing   -> tryAlts as
         Just env' -> eval (env' `Map.union` env) expr

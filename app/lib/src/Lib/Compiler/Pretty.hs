@@ -87,7 +87,7 @@ astDoc :: AstF (Cofree AstF BDoc) -> BDoc
 astDoc = ast
   (liftPretty declarationDoc)
   (liftPretty exprDoc)
-  (liftPretty binderDoc)
+  (liftAlg binderDoc)
   (typeDoc . map (hoistCofree unsafePrj))
   (liftPretty refTextDoc)
 
@@ -97,7 +97,7 @@ prettyIntermed = show . fst . histo intermedDoc
 intermedDoc :: IntermedF (Cofree IntermedF BDoc) -> BDoc
 intermedDoc = intermed
   (liftPretty exprDoc)
-  (liftPretty binderDoc)
+  (liftAlg binderDoc)
   (typeDoc . map (hoistCofree unsafePrj))
   (liftPretty placeholderDoc)
   (liftPretty refIdDoc)
@@ -173,7 +173,7 @@ declarationDoc = \case
   TypeDecl _ name poly ->
     name <+> colon <+> downPretty polyTypeDoc poly
   ValueDecl name binders expr ->
-    name <+> hsep binders <+> equals <$$>
+    name <+> hsep (map parens binders) <+> equals <$$>
     indent 2 expr
   FixityDecl _ x alias (Infix assoc fixity) ->
     assocDoc <+> int fixity <+> x <+> textStrict "as" <+> alias
@@ -184,11 +184,13 @@ declarationDoc = \case
       AssocN -> "infix"
   DeclName t -> textStrict t
 
-binderDoc :: BinderF Doc -> Doc
+binderDoc :: BinderF BDoc -> BDoc
 binderDoc = \case
-  VarBinder v            -> textStrict v
-  WildcardBinder         -> textStrict "_"
-  ConstructorBinder c bs -> textStrict c <+> hsep (map parens bs)
+  VarBinder v            -> (textStrict v, 0)
+  WildcardBinder         -> (textStrict "_", 0)
+  ConstructorBinder c bs -> (textStrict c <+> hsep (map binder bs), need)
+    where binder (b, n) = if n > 0 then parens b else b
+          need = if length bs > 0 then 1 else 0
 
 literalDoc :: LiteralF Doc -> Doc
 literalDoc = \case

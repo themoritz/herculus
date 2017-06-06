@@ -348,13 +348,16 @@ inferImplicitDefinitions defs = do
     -- Quantify over retained constraints
     s' <- getTypeSubst
     quantified <- for inferred $ \(name, e, t, _) -> do
-      let poly = quantify (Set.toList generic) retained (applyTypeSubst s' t)
+      let poly = quantify (Set.toList generic)
+                          (applyTypeSubst s' retained)
+                          (applyTypeSubst s' t)
       pure (name, e, poly)
 
     -- Resolve placeholders
-    let recConstrs = Map.fromList $ map (view _1 &&& const retained) quantified
-    resolved <- for quantified $ \(name, e, poly) -> do
-      e' <- resolveConstraints recConstrs e retained
+    let recConstrs = Map.fromList $
+                     map (\(n, _, ForAll _ cs _) -> (n, cs)) quantified
+    resolved <- for quantified $ \(name, e, poly@(ForAll _ cs _)) -> do
+      e' <- resolveConstraints recConstrs e cs
       pure (name, e', poly)
 
     pure (resolved, deferred)
