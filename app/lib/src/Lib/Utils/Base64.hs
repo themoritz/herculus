@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric  #-}
 
-module Lib.Util.Base64
+module Lib.Utils.Base64
   ( Base64
   , unBase64
   , mkBase64

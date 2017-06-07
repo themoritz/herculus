@@ -13,6 +13,7 @@ import           Data.Time.Clock         (utctDay)
 
 import           Lib.Model.Column
 import           Lib.Types
+import           Lib.Utils
 
 import           Lib.Compiler.Eval.Monad
 import           Lib.Compiler.Eval.Types
@@ -119,7 +120,7 @@ primTypeEnv :: Map Text PolyType
 primTypeEnv = map fst (primEnv @Identity)
 
 primTermEnv :: Monad m => TermEnv m
-primTermEnv = map snd primEnv
+primTermEnv = hashMapKeys $ map snd primEnv
 
 primEnv :: Monad m => Map Text (PolyType, Result m)
 primEnv = Map.fromList

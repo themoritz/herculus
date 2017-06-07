@@ -12,6 +12,7 @@ import           Control.Monad.Trans.Maybe
 
 import           Data.Align                   (align)
 import           Data.Functor.Foldable
+import qualified Data.IntMap                  as IntMap
 import           Data.List                    (partition)
 import qualified Data.Map                     as Map
 import           Data.Maybe                   (fromJust)
@@ -20,6 +21,7 @@ import           Data.These                   (These (..))
 
 import           Lib.Model.Column
 import           Lib.Types
+import           Lib.Utils                    (hashMapKeys)
 
 import           Lib.Compiler.AST
 import           Lib.Compiler.AST.Common
@@ -650,7 +652,7 @@ instantiate (ForAll as cs t) = do
 
 data CheckResult = CheckResult
   { resultCheckEnv :: CheckEnv
-  , resultTermEnv  :: Map Text Core.Expr
+  , resultTermEnv  :: IntMap Core.Expr
   , resultTycons   :: Map Text TyconInfo
   }
 
@@ -700,7 +702,7 @@ checkModule (extractDecls -> decls) = do
 
           -- Collect exports and compile expressions
           exprs <- for result $ \(name, i, _) -> (name, ) <$> compileIntermed i
-          let resultTermEnv =
+          let resultTermEnv = hashMapKeys $
                 Map.fromList exprs `Map.union` Map.fromList instDicts
           resultCheckEnv <- getCheckEnv
           pure CheckResult {..}
@@ -743,7 +745,7 @@ checkFormula tGiven (decls, expr) = do
     cleanToplevelConstraints cs (Just tGiven)
     i' <- resolvePlaceholders Map.empty i
     c <- compileIntermed i'
-    pure $ Core.Let (Map.toList resultTermEnv) c
+    pure $ Core.Let (IntMap.toList resultTermEnv) c
 
 -- Only for internal use
 inferFormula :: Formula -> Check (Core.Expr, Type)
@@ -755,7 +757,7 @@ inferFormula (decls, expr) = do
     i' <- resolvePlaceholders Map.empty i
     c <- compileIntermed i'
     s <- getTypeSubst
-    pure (Core.Let (Map.toList resultTermEnv) c, applyTypeSubst s t)
+    pure (Core.Let (IntMap.toList resultTermEnv) c, applyTypeSubst s t)
 
 checkTypeDecl :: Span -> SourcePolyType -> Check PolyType
 checkTypeDecl span (ForAll as cs t) = do

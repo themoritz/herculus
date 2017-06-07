@@ -4,6 +4,7 @@ module Lib.Compiler.Eval.Types where
 
 import           Lib.Prelude                  hiding (bool)
 
+import qualified Data.IntMap                  as IntMap
 import qualified Data.Map                     as Map
 
 import           Text.PrettyPrint.Leijen.Text hiding ((<$>))
@@ -15,17 +16,17 @@ import           Lib.Types
 import           Lib.Compiler.Core
 import           Lib.Compiler.Eval.Monad
 
-type TermEnv m = Map Text (Result m)
+type TermEnv m = IntMap (Result m)
 
 termEnvDoc :: TermEnv m -> Doc
-termEnvDoc = vsep . map go . Map.toList
-  where go (n, r) = textStrict n <> ":" <+> resultDoc r
+termEnvDoc = vsep . map go . IntMap.toList
+  where go (n, r) = int n <> ":" <+> resultDoc r
 
 termEnvPretty :: TermEnv m -> Text
 termEnvPretty = show . termEnvDoc
 
-loadModule :: Map Text Expr -> TermEnv m
-loadModule = map (flip RContinuation Map.empty)
+loadModule :: IntMap Expr -> TermEnv m
+loadModule = map (flip RContinuation IntMap.empty)
 
 loadValue :: Value -> Result m
 loadValue = \case
@@ -36,7 +37,7 @@ loadValue = \case
   VInteger i -> RInteger i
   VTime t    -> RDateTime t
   VRowRef mr -> RRowRef mr
-  VData l vs -> RData l (map loadValue vs)
+  VData l vs -> RData (mkIdent l) (map loadValue vs)
   VRecord m  -> RRecord (map loadValue $ Map.fromList m)
   VList vs   -> go vs
     where go = \case
@@ -54,7 +55,7 @@ storeValue r = case r of
   RInteger i -> pure $ VInteger i
   RDateTime t    -> pure $ VTime t
   RRowRef mr -> pure $ VRowRef mr
-  RData l vs -> fromMaybe (VData l <$> traverse storeValue vs) $
+  RData l vs -> fromMaybe (VData (identText l) <$> traverse storeValue vs) $
         tryList
     <|> tryMaybe
     <|> tryBoolean
@@ -86,7 +87,7 @@ data Result m
   | RInteger Integer
   | RDateTime Time
   | RRowRef (Maybe (Id Row))
-  | RData Text [Result m]
+  | RData Ident [Result m]
   | RRecord (Map Text (Result m))
   --
   | RClosure Binder Expr (TermEnv m)
@@ -101,7 +102,7 @@ resultDoc = \case
   RInteger i -> integer i
   RDateTime t -> textStrict $ show t
   RRowRef mr -> textStrict $ show mr
-  RData n rs -> textStrict n <+> (hsep (map (parens . resultDoc) rs))
+  RData n rs -> identDoc n <+> (hsep (map (parens . resultDoc) rs))
   RRecord m ->
     braces $ hsep $
     punctuate comma $

@@ -8,7 +8,10 @@ import           Lib.Prelude
 
 import           Data.Aeson
 import           Data.Functor.Foldable
+import           Data.Hashable                (hash)
 import qualified Data.Map                     as Map
+import           Data.String                  (fromString)
+import           Data.Text                    (pack)
 
 import           Text.PrettyPrint.Leijen.Text
 
@@ -20,37 +23,60 @@ import           Lib.Types
 import qualified Lib.Compiler.AST             as A
 import           Lib.Compiler.Pretty          (recordDoc)
 
+newtype Ident = Ident (Text, Int)
+  deriving (Show, Generic, ToJSON, FromJSON)
+
+instance Eq Ident where
+  Ident (_, x) == Ident (_, y) = x == y
+
+instance IsString Ident where
+  fromString = mkIdent . pack
+
+mkIdent :: Text -> Ident
+mkIdent n = Ident (n, hash n)
+
+identText :: Ident -> Text
+identText (Ident (n, _)) = n
+
+identHash :: Ident -> Int
+identHash (Ident (_, i)) = i
+
+identDoc :: Ident -> Doc
+identDoc = textStrict . identText
+
+--------------------------------------------------------------------------------
+
 data Literal
   = NumberLit Double
   | IntegerLit Integer
   | StringLit Text
   | RecordLit (Map Text Expr)
-  deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON)
+  deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
 data Reference
   = TableRef (Id Table)
   | ColumnRef (Id Column)
   | ColumnOfTableRef (Id Table) (Id Column)
-  deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON)
+  deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
 data Binder
-  = VarBinder Text
+  = VarBinder Int
   | WildcardBinder
-  | ConstructorBinder Text [Binder]
-  deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON)
+  | ConstructorBinder Ident [Binder]
+  deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
 data Expr
   = Literal Literal
-  | Var Text
-  | Constructor Text
+  | Var Int
+  | Constructor Ident
   | Reference Reference
   | Abs Binder Expr
   | App Expr Expr
-  | Let [(Text, Expr)] Expr
+  | Let [(Int, Expr)] Expr
   | Case Expr [(Binder, Expr)]
   | Access Expr Expr
   | Deref Expr
-  deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON)
+  deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
 --------------------------------------------------------------------------------
 
@@ -74,17 +100,17 @@ refDoc = \case
 
 binderDoc :: Binder -> Doc
 binderDoc = \case
-  VarBinder v            -> textStrict v
+  VarBinder v            -> int v
   WildcardBinder         -> textStrict "_"
-  ConstructorBinder c bs -> textStrict c <+> hsep (map (parens . binderDoc) bs)
+  ConstructorBinder c bs -> identDoc c <+> hsep (map (parens . binderDoc) bs)
 
 exprDoc :: Expr -> Doc
 exprDoc = \case
   Literal lit -> literalDoc lit
   Var v ->
-    textStrict v
+    int v
   Constructor c ->
-    textStrict c
+    identDoc c
   Reference r -> refDoc r
   Abs b body ->
     backslash <> binderDoc b <+> textStrict "->" <$$>
@@ -98,7 +124,7 @@ exprDoc = \case
     indent 2 (exprDoc rest)
     where
       goBinding (v, body) =
-        textStrict v <+> equals <$$> indent 2 (exprDoc body)
+        int v <+> equals <$$> indent 2 (exprDoc body)
   Case e cases ->
     textStrict "case" <+> exprDoc e <+> textStrict "of" <$$>
     indent 2 (vsep (map goCase cases))
@@ -125,12 +151,12 @@ toCore (Fix com) = A.compiled goExpr undefined goRef com
       Abs (binderToCore b) (toCore e)
     A.App f arg ->
       App (toCore f) (toCore arg)
-    A.Var x -> Var x
-    A.Constructor c -> Constructor c
+    A.Var x -> Var $ hash x
+    A.Constructor c -> Constructor $ mkIdent c
     A.Case scrut alts ->
       Case (toCore scrut) (map (binderToCore *** toCore) alts)
     A.Let defs body ->
-      Let (map (id *** toCore) defs) (toCore body)
+      Let (map (hash *** toCore) defs) (toCore body)
     A.Access e field ->
       Access (toCore e) (toCore field)
     A.Deref e ->
@@ -149,9 +175,12 @@ toCore (Fix com) = A.compiled goExpr undefined goRef com
 
 binderToCore :: A.Compiled -> Binder
 binderToCore (Fix (unsafePrj -> b )) = case b of
-  A.VarBinder x               -> VarBinder x
-  A.WildcardBinder            -> WildcardBinder
-  A.ConstructorBinder name bs -> ConstructorBinder name (map binderToCore bs)
+  A.VarBinder x ->
+    VarBinder $ hash x
+  A.WildcardBinder ->
+    WildcardBinder
+  A.ConstructorBinder name bs ->
+    ConstructorBinder (mkIdent name) (map binderToCore bs)
 
 collectCodeDependencies :: Expr -> CodeDependencies
 collectCodeDependencies = go

@@ -7,6 +7,7 @@ module Lib.Compiler.Eval
 
 import           Lib.Prelude
 
+import qualified Data.IntMap             as IntMap
 import qualified Data.Map                as Map
 import           Data.Maybe              (fromJust)
 import           Data.Text               (unlines)
@@ -21,12 +22,12 @@ import           Lib.Compiler.Eval.Types
 eval :: Monad m => TermEnv m -> Expr -> Eval m (Result m)
 eval env e = consumeGas *> case e of
   Literal lit -> evalLit env lit
-  Var v -> case Map.lookup v env of
+  Var v -> case IntMap.lookup v env of
     Nothing -> internalError $ unlines
-      [ "Variable not found: " <> v
+      [ "Variable not found: " <> show v
       , termEnvPretty env ]
     Just r -> case r of
-      RContinuation expr cl -> eval (env `Map.union` cl) expr
+      RContinuation expr cl -> eval (env `IntMap.union` cl) expr
       _                     -> pure r
   Reference ref -> evalRef ref
   Constructor c -> pure $ RData c []
@@ -35,7 +36,7 @@ eval env e = consumeGas *> case e of
     argRes <- eval env arg
     eval env f >>= \case
       RClosure b body cl -> case matchValue argRes b of
-        Just env' -> eval (env' `Map.union` cl) body
+        Just env' -> eval (env' `IntMap.union` cl) body
         Nothing   -> internalError "Eval `App`: pattern match failure"
       RPrimFun primF -> primF argRes
       RData name args ->
@@ -44,18 +45,18 @@ eval env e = consumeGas *> case e of
   Let bs body -> do
     let
       conts = map (\(name, expr) -> (name, RContinuation expr env)) bs
-      env' = Map.fromList conts `Map.union` env
+      env' = IntMap.fromList conts `IntMap.union` env
     vals <- for bs $ \(name, expr) -> do
       result <- eval env' expr
       pure (name, result)
-    eval (Map.fromList vals `Map.union` env) body
+    eval (IntMap.fromList vals `IntMap.union` env) body
   Case scrut alts -> do
     res <- eval env scrut
     let
       tryAlts [] = evalError $ "Eval `Case`: pattern match failure: " <> prettyResult res
       tryAlts ((binder, expr):as) = case matchValue res binder of
         Nothing   -> tryAlts as
-        Just env' -> eval (env' `Map.union` env) expr
+        Just env' -> eval (env' `IntMap.union` env) expr
     tryAlts alts
   Access e' field -> do
     RRecord r <- eval env e'
@@ -72,12 +73,15 @@ eval env e = consumeGas *> case e of
 matchValue :: Result m -> Binder -> Maybe (TermEnv m)
 matchValue res = \case
   VarBinder x ->
-    Just $ Map.singleton x res
-  WildcardBinder -> Just Map.empty
+    Just $ IntMap.singleton x res
+  WildcardBinder ->
+    Just IntMap.empty
   ConstructorBinder name args
     | RData label results <- res
-    , label == name -> map Map.unions $ zipWithM matchValue results args
-    | otherwise -> Nothing
+    , label == name ->
+        map IntMap.unions $ zipWithM matchValue results args
+    | otherwise ->
+        Nothing
 
 evalLit :: Monad m => TermEnv m -> Literal -> Eval m (Result m)
 evalLit env = \case

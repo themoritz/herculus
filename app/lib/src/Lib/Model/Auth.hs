@@ -27,7 +27,7 @@ import qualified Text.Email.Validate    as Email
 import           Lib.Model.Class        (FromDocument (..), Model (..),
                                          ToDocument (..))
 import           Lib.Types              (Id, Time, fromObjectId, toObjectId)
-import           Lib.Util.Base64        (Base64, Base64Url, toBase64Unsafe,
+import           Lib.Utils.Base64       (Base64, Base64Url, toBase64Unsafe,
                                          unBase64)
 
 newtype Email = Email { unEmail :: Text }

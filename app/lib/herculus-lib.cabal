@@ -40,7 +40,8 @@ library
                      , Lib.Api.Schema.Compiler
                      , Lib.Api.Schema.Project
                      , Lib.Api.WebSocket
-                     , Lib.Util.Base64
+                     , Lib.Utils
+                     , Lib.Utils.Base64
                      , Lib.Types
                      , Lib.Model
                      , Lib.Model.Auth
@@ -75,6 +76,7 @@ library
                      , email-validate
                      , file-embed
                      , free
+                     , hashable
                      , http-api-data
                      , http-types
                      , http-media

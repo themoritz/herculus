@@ -10,6 +10,7 @@ import           Lib.Prelude
 
 import           Data.FileEmbed               (embedStringFile,
                                                makeRelativeToProject)
+import qualified Data.IntMap                  as IntMap
 import qualified Data.Map                     as Map
 
 import           Text.PrettyPrint.Leijen.Text (Doc)
@@ -88,7 +89,7 @@ prelude =
     Left err -> error $ displayError preludeText err
     Right CheckResult {..} ->
       ( primCheckEnv `unionCheckEnv` resultCheckEnv
-      , primTermEnv `Map.union` loadModule resultTermEnv
+      , primTermEnv `IntMap.union` loadModule resultTermEnv
       , primTycons `Map.union` resultTycons
       )
 
@@ -174,8 +175,8 @@ testCheck :: Text -> IO ()
 testCheck src = compileModule src testResolveInterp primCheckEnv >>= \case
   Left err -> putStrLn $ displayError src err
   Right CheckResult {..} ->
-    void $ flip Map.traverseWithKey resultTermEnv $ \n core ->
-      putStrLn $ n <> ": " <> prettyCore core <> "\n"
+    void $ flip IntMap.traverseWithKey resultTermEnv $ \n core ->
+      putStrLn $ show n <> ": " <> prettyCore core <> "\n"
 
 testEval :: Text -> IO ()
 testEval src = do
