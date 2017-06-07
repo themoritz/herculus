@@ -1,5 +1,4 @@
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE FlexibleContexts #-}
 -- |
 
 module Lib.Compiler.Check where

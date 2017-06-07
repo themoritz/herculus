@@ -8,6 +8,8 @@ module HexlNat
   ( hexlToServant
   ) where
 
+import           Lib.Prelude
+
 import           Control.Monad.Except   (throwError)
 import           Control.Monad.IO.Class (liftIO)
 import qualified Data.ByteString.Lazy   as LBS

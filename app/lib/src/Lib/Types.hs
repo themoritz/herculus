@@ -8,6 +8,8 @@
 
 module Lib.Types where
 
+import           Prelude
+
 import           Control.Exception    (SomeException, displayException,
                                        evaluate, try)
 
@@ -33,8 +35,6 @@ import           GHC.Generics
 import           System.IO.Unsafe     (unsafePerformIO)
 
 import           Web.HttpApiData
-
-import           Lib.NamedMap
 
 newtype Id a = Id ObjectId
   deriving (Eq, Ord, Generic, Typeable)
@@ -73,12 +73,6 @@ instance FromHttpApiData (Id a) where
 
 instance ToHttpApiData (Id a) where
   toUrlPiece = decodeUtf8 . BL.toStrict . Aeson.encode
-
-instance ToName (Id a) where
-  toName (Id obj) = pack $ show obj
-
-instance FromName (Id a) where
-  fromName txt = Id $ read $ unpack txt
 
 instance Serialize (Id a) where
   put (Id (Oid x y)) = put x *> put y
@@ -137,10 +131,7 @@ formatNumber f n = case unsafePerformIO (try $ evaluate $ printf (unpack f) n) o
 --
 
 newtype Time = Time UTCTime
-  deriving (Eq, Ord, ToJSON, FromJSON, Val)
-
-instance Show Time where
-  show = unpack . formatTime "%F"
+  deriving (Eq, Ord, ToJSON, FromJSON, Val, Show)
 
 defaultTime :: Time
 defaultTime = Time $ UTCTime (ModifiedJulianDay 0) 0

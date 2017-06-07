@@ -5,6 +5,8 @@
 
 module Lib.Api.Rest.Report where
 
+import           Lib.Prelude
+
 import qualified Data.ByteString.Lazy         as BS
 import qualified Data.Text                    as TS (Text)
 import qualified Data.Text.Encoding           as TS (encodeUtf8)

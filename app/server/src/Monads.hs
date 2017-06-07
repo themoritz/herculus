@@ -13,6 +13,7 @@
 
 module Monads
   ( AppError (..)
+  , prettyAppError
   , MonadHexlEnv (..)
   , MonadDB (..)
   , MonadHexl (..)
@@ -64,6 +65,13 @@ data AppError
     -- forbidden: valid request but not allowed, e.g. session expired
   | ErrForbidden Text
   deriving (Show)
+
+prettyAppError :: AppError -> Text
+prettyAppError = \case
+  ErrUser msg -> "User error: " <> msg
+  ErrBug msg -> "Bug: " <> msg
+  ErrUnauthorized msg -> "Unauthorized: " <> msg
+  ErrForbidden msg -> "Foridden: " <> msg
 
 class Monad m => MonadHexlEnv m where
   askHexlEnv :: m HexlEnv
@@ -158,7 +166,7 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
   -- -- Throws `ErrBug` in Left case
   getById' :: Model a => Id a -> HexlT m a
   getById' i = getById i >>= \case
-    Left msg -> throwError $ ErrBug msg
+    Left msg -> throwError $ ErrBug $ msg <> "\n" <> T.pack (prettyCallStack callStack)
     Right x -> pure x
 
   getOneByQuery :: forall a. Model a => Mongo.Selector -> HexlT m (Either Text (Entity a))

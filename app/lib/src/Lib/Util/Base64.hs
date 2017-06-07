@@ -14,6 +14,8 @@ module Lib.Util.Base64
   , toBase64UrlUnsafe
   ) where
 
+import           Lib.Prelude
+
 import           Data.Aeson                 (FromJSON (..), ToJSON (..))
 import qualified Data.Bson                  as Bson
 import           Data.ByteString            (ByteString)

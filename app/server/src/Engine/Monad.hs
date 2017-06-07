@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE NoImplicitPrelude          #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TupleSections              #-}
@@ -201,7 +200,7 @@ instance MonadHexl m => MonadEngine (EngineT m) where
 
   makeDefaultValue = defaultValue (10 :: Int)
     where
-    defaultValue i dt = if i == 0 then pure VUndefined else case dt of
+    defaultValue i dt' = if i == 0 then pure VUndefined else case dt' of
       DataAlgebraic "Boolean" [] ->
         pure $ VBool False
       DataAlgebraic "String" [] ->

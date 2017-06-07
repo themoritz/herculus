@@ -5,10 +5,11 @@ module Latex
   ( makePDF
   ) where
 
+import           Prelude
+
 import           Control.Monad              (unless, when)
 import qualified Data.ByteString            as BS
 import           Data.ByteString.Lazy       (ByteString)
-import qualified Data.ByteString.Lazy       as B
 import qualified Data.ByteString.Lazy       as BL
 import qualified Data.ByteString.Lazy.Char8 as BC
 import           Data.List                  (isInfixOf)
@@ -98,13 +99,13 @@ runTeXProgram verbose program args runNumber numRuns tmpDir source = do
       mapM_ print env''
       putStr "\n"
       putStrLn $ "[makePDF] Contents of " ++ file ++ ":"
-      B.readFile file >>= B.putStr
+      BL.readFile file >>= BL.putStr
       putStr "\n"
     (exit, out, err) <- pipeProcess (Just env'') program programArgs BL.empty
     when verbose $ do
       putStrLn $ "[makePDF] Run #" ++ show runNumber
-      B.hPutStr stdout out
-      B.hPutStr stderr err
+      BL.hPutStr stdout out
+      BL.hPutStr stderr err
       putStr "\n"
     if runNumber <= numRuns
        then runTeXProgram verbose program args (runNumber + 1) numRuns tmpDir source
@@ -115,7 +116,7 @@ runTeXProgram verbose program args runNumber numRuns tmpDir source = do
                    -- We read PDF as a strict bytestring to make sure that the
                    -- temp directory is removed on Windows.
                    -- See https://github.com/jgm/pandoc/issues/1192.
-                   then (Just . B.fromChunks . (:[])) `fmap` BS.readFile pdfFile
+                   then (Just . BL.fromChunks . (:[])) `fmap` BS.readFile pdfFile
                    else return Nothing
          return (exit, out <> err, pdf)
 

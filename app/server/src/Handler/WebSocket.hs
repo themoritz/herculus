@@ -3,15 +3,13 @@
 
 module Handler.WebSocket where
 
-import           Control.Monad.IO.Class (MonadIO)
+import           Lib.Prelude
 
-import           Data.Monoid            ((<>))
-
-import qualified Lib.Api.Schema.Auth    as Api
+import qualified Lib.Api.Schema.Auth as Api
 import           Lib.Api.WebSocket
 
 import           Auth.Permission
-import qualified ConnectionManager      as Mgr
+import qualified ConnectionManager   as Mgr
 import           Handler.Rest
 import           Monads
 

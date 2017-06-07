@@ -1,19 +1,17 @@
 {-# LANGUAGE DeriveAnyClass        #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE StandaloneDeriving    #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
 module Lib.Model where
 
+import           Lib.Prelude
+
 import           Data.Aeson      (FromJSON, ToJSON)
 import           Data.Bson       ((=:))
 import qualified Data.Bson       as Bson
-import           Data.Monoid
 import           Data.Typeable   (Typeable)
-
-import           GHC.Generics
 
 import           Lib.Model.Class
 import           Lib.Types

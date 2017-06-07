@@ -3,6 +3,8 @@
 
 module Auth.Permission where
 
+import           Lib.Prelude
+
 import           Control.Lens
 import           Control.Monad.Except (throwError)
 import           Database.MongoDB     ((=:))

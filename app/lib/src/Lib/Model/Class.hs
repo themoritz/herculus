@@ -3,9 +3,9 @@
 
 module Lib.Model.Class where
 
+import           Lib.Prelude
+
 import           Data.Bson
-import           Data.Proxy
-import           Data.Text
 
 class (ToDocument a, FromDocument a) => Model a where
   collectionName :: Proxy a -> Text

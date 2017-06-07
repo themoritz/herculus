@@ -16,9 +16,9 @@ module ConnectionManager
   , getConnectionsToProject
   ) where
 
+import           Lib.Prelude
 
 import           Control.Lens
-import           Control.Monad.State
 
 import           Data.Map                      (Map)
 import qualified Data.Map                      as Map
@@ -34,7 +34,7 @@ type ConnectionId = Int
 data ConnectionManager = ConnectionManager
   { _connections :: Map ConnectionId ConnectionInfo
   , _nextId      :: ConnectionId
-  } deriving (Show)
+  }
 
 mkConnectionManager :: ConnectionManager
 mkConnectionManager = ConnectionManager Map.empty 0
@@ -44,16 +44,13 @@ data ConnectionInfo = ConnectionInfo
   , _userInfo   :: Maybe UserInfo
   }
 
-instance Show ConnectionInfo where
-  show (ConnectionInfo _ ui) = show ui
-
 mkConnectionInfo :: Connection -> ConnectionInfo
 mkConnectionInfo c = ConnectionInfo c Nothing
 
 data UserInfo = UserInfo
   { _userId       :: Id User
   , _subscription :: Maybe (Id Project)
-  } deriving (Show)
+  }
 
 mkUserInfo :: Id User -> UserInfo
 mkUserInfo u = UserInfo u Nothing

@@ -5,7 +5,8 @@ module Options
   , getOptions
   ) where
 
-import           Data.Monoid         ((<>))
+import           Lib.Prelude
+import           Prelude             (String)
 
 import           Options.Applicative
 

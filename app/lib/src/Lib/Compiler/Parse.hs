@@ -1,5 +1,3 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-
 module Lib.Compiler.Parse
   ( parse
   , parseExpr

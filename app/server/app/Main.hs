@@ -6,14 +6,11 @@
 
 module Main where
 
+import           Lib.Prelude                    hiding (handle)
+
 import           Control.Concurrent.STM
-import           Control.Exception              (finally)
-import           Control.Monad.Except
 
 import           Data.Aeson
-import           Data.Monoid                    ((<>))
-import           Data.Proxy
-import           Data.Text                      (Text)
 
 import           Database.MongoDB               ((=:))
 import qualified Database.MongoDB               as Mongo
@@ -94,7 +91,8 @@ main = do
       restApp = serve routes $ rest env optAssetDir
   --
   runHexlT env migrate >>= \case
-    Left err -> putStrLn $ "Error during migration: " <> show err
+    Left err -> putStrLn $ "Error during migration: " <> prettyAppError err
     Right () -> do
-      putStrLn $ "Listening on port " <> show optPort <> " ..."
-      Warp.run optPort $ websocketsOr defaultConnectionOptions webSocketApp restApp
+      putStrLn ("Listening on port " <> show optPort <> " ..." :: Text)
+      Warp.run optPort $
+        websocketsOr defaultConnectionOptions webSocketApp restApp

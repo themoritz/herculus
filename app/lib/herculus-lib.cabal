@@ -33,7 +33,6 @@ library
                      , Lib.Compiler.Parse.State
                      , Lib.Compiler.Pretty
                      , Lib.Compiler.Type
-                     , Lib.NamedMap
                      , Lib.Api.Rest
                      , Lib.Api.Rest.Report
                      , Lib.Api.Schema.Auth
@@ -103,6 +102,7 @@ library
                      , RecordWildCards
                      , ViewPatterns
                      , TupleSections
+                     , NoImplicitPrelude
   ghc-options:         -Wall
 
 executable psc-gen
@@ -118,6 +118,13 @@ executable psc-gen
                      , purescript-bridge
                      , servant-purescript
                      , text
+  default-extensions:  OverloadedStrings
+                     , LambdaCase
+                     , BangPatterns
+                     , RecordWildCards
+                     , ViewPatterns
+                     , TupleSections
+                     , NoImplicitPrelude
   ghc-options:         -Wall
 
 executable doc-gen
@@ -133,6 +140,11 @@ executable doc-gen
                      , text
   default-extensions:  OverloadedStrings
                      , LambdaCase
+                     , BangPatterns
+                     , RecordWildCards
+                     , ViewPatterns
+                     , TupleSections
+                     , NoImplicitPrelude
   ghc-options:         -Wall
 
 test-suite herculus-lib-test

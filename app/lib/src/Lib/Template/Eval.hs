@@ -1,5 +1,3 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-
 module Lib.Template.Eval
   ( evalTemplate
   ) where

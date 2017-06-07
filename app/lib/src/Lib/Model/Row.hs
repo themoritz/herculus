@@ -5,6 +5,8 @@
 
 module Lib.Model.Row where
 
+import           Lib.Prelude
+
 import           Control.Lens
 
 import           Data.Aeson      (FromJSON, ToJSON)
@@ -12,24 +14,19 @@ import           Data.Aeson      (FromJSON, ToJSON)
 import           Data.Bson       ((=:))
 import qualified Data.Bson       as Bson
 
-import           GHC.Generics
-
 import           Lib.Model.Class
 import           Lib.Model.Table
 import           Lib.Types
 
 data Row = Row
   { _rowTableId :: Id Table
-  } deriving (Generic, Eq, Ord, Show)
+  } deriving (Generic, Eq, Ord, Show, ToJSON, FromJSON)
 
 rowTableId :: Lens' Row (Id Table)
 rowTableId = lens _rowTableId (\s a -> s { _rowTableId = a })
 
 instance Model Row where
   collectionName = const "rows"
-
-instance ToJSON Row
-instance FromJSON Row
 
 instance ToDocument Row where
   toDocument (Row tblId)=

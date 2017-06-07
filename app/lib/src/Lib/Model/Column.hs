@@ -2,7 +2,6 @@
 {-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE NoImplicitPrelude   #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell     #-}
@@ -19,7 +18,6 @@ import           Data.Aeson                   (FromJSON, ToJSON)
 import           Data.Aeson.Bson
 import           Data.Bson                    (Val, (=:))
 import qualified Data.Bson                    as Bson
-import           Data.Text                    (Text, pack)
 
 import           Lib.Compiler.Core
 import           Lib.Compiler.Error
@@ -34,6 +32,9 @@ data DataType
   | DataTable (Id Table)
   | DataRecord [(Text, DataType)]
   deriving (Eq, Show, Generic, ToJSON, FromJSON)
+
+instance ToBSON DataType
+instance FromBSON DataType
 
 getTypeDependencies :: DataType -> TypeDependencies
 getTypeDependencies = \case
@@ -136,8 +137,8 @@ instance FromDocument Column where
     name    <- Bson.lookup "name" doc
     kindVal <- Bson.lookup "kind" doc
     case eitherDecodeValue kindVal of
-      Right kind ->  pure $ Column (fromObjectId t) name kind
-      Left msg   -> Left $ pack msg
+      Right kind -> pure $ Column (fromObjectId t) name kind
+      Left msg   -> Left msg
 
 -- Util ------------------------------------------------------------------------
 

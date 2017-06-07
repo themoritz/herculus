@@ -3,6 +3,8 @@
 
 module Lib.Model.ViewState where
 
+import           Lib.Prelude
+
 import           Control.Lens      (makeLenses)
 
 import           Data.Bson         ((=:))

@@ -3,9 +3,10 @@ module Options
   , getOptions
   ) where
 
-import           Data.Monoid         ((<>))
-import           Data.Text           (Text)
-import qualified Data.Text           as Text
+import           Lib.Prelude
+import           Prelude             (String)
+
+import           Data.Text           (Text, pack)
 import           Network.Socket      (HostName)
 
 import           Options.Applicative
@@ -18,7 +19,7 @@ data Options = Options
   }
 
 txtOption :: Mod OptionFields String -> Parser Text
-txtOption = fmap Text.pack . strOption
+txtOption = fmap pack . strOption
 
 getOptions :: IO Options
 getOptions = execParser $ info (helper <*> options)

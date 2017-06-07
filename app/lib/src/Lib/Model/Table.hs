@@ -5,6 +5,8 @@
 
 module Lib.Model.Table where
 
+import           Lib.Prelude
+
 import           Control.Lens      (Lens', lens)
 
 import           Data.Aeson        (FromJSON, ToJSON)
@@ -12,8 +14,6 @@ import           Data.Text         (Text)
 
 import           Data.Bson         ((=:))
 import qualified Data.Bson         as Bson
-
-import           GHC.Generics
 
 import           Lib.Model.Class
 import           Lib.Model.Project
@@ -37,8 +37,8 @@ instance ToJSON Table
 instance FromJSON Table
 
 instance ToDocument Table where
-  toDocument (Table prj name) =
-    [ "projectId" =: toObjectId prj
+  toDocument (Table p name) =
+    [ "projectId" =: toObjectId p
     , "name" =: name
     ]
 

@@ -1,6 +1,5 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE PatternSynonyms   #-}
-{-# LANGUAGE TypeApplications  #-}
+{-# LANGUAGE PatternSynonyms  #-}
+{-# LANGUAGE TypeApplications #-}
 -- |
 
 module Lib.Compiler.Env where

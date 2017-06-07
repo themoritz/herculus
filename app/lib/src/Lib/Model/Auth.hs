@@ -6,6 +6,8 @@
 
 module Lib.Model.Auth where
 
+import           Lib.Prelude
+
 import           Control.Lens           (makeLenses)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 

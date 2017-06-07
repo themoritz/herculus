@@ -3,13 +3,12 @@
 
 module Lib.Model.Dependencies.Types where
 
+import           Lib.Prelude
+
 import           Data.Foldable    (for_)
-import           Data.Semigroup
 import           Data.Serialize
 import           Data.Set         (Set)
 import qualified Data.Set         as Set
-
-import           GHC.Generics
 
 import {-# SOURCE #-} Lib.Model.Column
 import {-# SOURCE #-} Lib.Model.Table

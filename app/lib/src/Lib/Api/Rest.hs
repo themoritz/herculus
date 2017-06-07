@@ -5,8 +5,9 @@
 
 module Lib.Api.Rest where
 
+import           Lib.Prelude
+
 import qualified Data.ByteString.Lazy   as LBS
-import           Data.Text
 
 import           Servant.API            ((:<|>), (:>), Capture, Delete, Get,
                                          Header, JSON, PlainText, Post,

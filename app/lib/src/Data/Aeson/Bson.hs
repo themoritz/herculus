@@ -8,6 +8,8 @@ module Data.Aeson.Bson (
   decodeValue, eitherDecodeValue
 ) where
 
+import           Lib.Prelude
+
 import           Data.Aeson             (FromJSON (..), ToJSON (..))
 import qualified Data.Aeson.Types       as Aeson
 import           Data.Bson              (Field ((:=)))
@@ -15,10 +17,8 @@ import qualified Data.Bson              as Bson
 import           Data.ByteString        (ByteString)
 import qualified Data.ByteString.Base64 as Base64
 import qualified Data.HashMap.Strict    as Map (fromList, toList)
-import           Data.Monoid            ((<>))
 import           Data.Scientific
-import           Data.Text              (Text)
-import qualified Data.Text              as Text
+import           Data.Text              (pack)
 import qualified Data.Text.Encoding     as Text
 import qualified Data.Vector            as Vector (toList)
 import           Numeric
@@ -41,9 +41,9 @@ class FromJSON a => FromBSON a where
   fromDocument :: Bson.Document -> Aeson.Result a
   fromDocument = Aeson.fromJSON . Aeson.Object . toAeson
 
-eitherDecodeValue :: FromBSON a => Bson.Value -> Either String a
+eitherDecodeValue :: FromBSON a => Bson.Value -> Either Text a
 eitherDecodeValue v = case fromValue v of
-  Aeson.Error   e -> Left e
+  Aeson.Error   e -> Left $ pack e
   Aeson.Success a -> Right a
 
 decodeValue :: FromBSON a => Bson.Value -> Maybe a
@@ -64,7 +64,7 @@ aesonifyValue :: Bson.Value -> Aeson.Value
 aesonifyValue (Bson.Float f) = toJSON f
 aesonifyValue (Bson.String s) = toJSON s
 aesonifyValue (Bson.Doc doc) = toJSON doc
-aesonifyValue (Bson.Array list) = toJSON list
+aesonifyValue (Bson.Array lst) = toJSON lst
 -- TODO: weird: these functions don't preserve Bson's distinction
 -- between Bin, Fun, Uuid, Md5, and UserDef and treat them as Text instead
 -- Maybe this works because these function are never actually used
@@ -74,17 +74,17 @@ aesonifyValue (Bson.Uuid (Bson.UUID uuid)) = toJSON $ binaryToText uuid
 aesonifyValue (Bson.Md5 (Bson.MD5 md5)) = toJSON $ binaryToText md5
 aesonifyValue (Bson.UserDef (Bson.UserDefined userdef)) = toJSON $ binaryToText userdef
 aesonifyValue (Bson.ObjId (Bson.Oid w32 w64)) = toJSON $ showHex w32 (showHex w64 "")
-aesonifyValue (Bson.Bool bool) = toJSON bool
+aesonifyValue (Bson.Bool b) = toJSON b
 aesonifyValue (Bson.UTC utc) = toJSON utc
 aesonifyValue Bson.Null = Aeson.Null
 aesonifyValue (Bson.RegEx (Bson.Regex p mods)) = toJSON $
-  "/" <> Text.unpack p <> "/" <> Text.unpack mods
+  "/" <> p <> "/" <> mods
 aesonifyValue (Bson.JavaScr (Bson.Javascript env code)) =
   toJSON . Map.fromList $
-    [ (Text.pack "environment", toJSON env)
-    , (Text.pack "code", toJSON code)
+    [ ("environment" :: Text, toJSON env)
+    , ("code" :: Text, toJSON code)
     ]
-aesonifyValue (Bson.Sym (Bson.Symbol sym)) = toJSON sym
+aesonifyValue (Bson.Sym (Bson.Symbol s)) = toJSON s
 aesonifyValue (Bson.Int32 int32) = toJSON int32
 aesonifyValue (Bson.Int64 int64) = toJSON int64
 aesonifyValue (Bson.Stamp (Bson.MongoStamp int64)) = toJSON int64

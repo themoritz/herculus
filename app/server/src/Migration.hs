@@ -15,7 +15,7 @@ import           Control.Lens
 
 import           Data.Aeson
 import           Data.Aeson.Bson
-import           Data.Aeson.Lens
+import           Data.Bson.Lens
 
 import           Database.MongoDB ((=:))
 import qualified Database.MongoDB as Mongo
@@ -73,6 +73,9 @@ data DataType1
   | DataMaybe DataType1
   deriving (Generic, ToJSON, FromJSON)
 
+instance ToBSON DataType1
+instance FromBSON DataType1
+
 convDataType :: DataType1 -> DataType
 convDataType = \case
   DataBool      -> DataAlgebraic "Boolean" []
@@ -101,9 +104,9 @@ migration = \case
       Mongo.find (Mongo.select qry colCollection) >>= Mongo.rest
 
     let
-      dataTypeLens = ix "kind" . key "contents" . key "_dataColType"
-      goDataType dt = let Success v = fromJSON dt in toJSON (convDataType v)
-      goColumn = toBson . over dataTypeLens goDataType . toAeson
+      dataTypeLens = key "kind" . key "contents" . key "_dataColType"
+      goDataType dt = let Success v = fromValue dt in toValue (convDataType v)
+      goColumn = over dataTypeLens goDataType
     runMongo $ traverse_ (Mongo.save colCollection . goColumn) cols
 
     recompileColumns

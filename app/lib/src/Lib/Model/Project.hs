@@ -1,17 +1,18 @@
 {-# LANGUAGE DeriveAnyClass        #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TemplateHaskell       #-}
 
 module Lib.Model.Project where
+
+import           Lib.Prelude
 
 import           Control.Lens           (makeLenses)
 
 import           Data.Bson              ((=:))
 import qualified Data.Bson              as Bson
 import           Data.Serialize         (decode, encode)
-import           Data.Text              (Text)
+import           Data.Text              (Text, pack)
 
 import           Lib.Model.Auth         (User)
 import           Lib.Model.Class
@@ -46,5 +47,5 @@ instance FromDocument Project where
     owner <- Bson.lookup "owner" doc
     Bson.Binary graph <- Bson.lookup "dependencyGraph" doc
     case decode graph of
-      Left err     -> fail err
+      Left err     -> throwError $ pack err
       Right graph' -> pure $ Project name (fromObjectId owner) graph'

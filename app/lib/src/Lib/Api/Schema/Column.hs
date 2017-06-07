@@ -5,12 +5,12 @@
 
 module Lib.Api.Schema.Column where
 
+import           Lib.Prelude
+
 import           Control.Lens       (makeLenses, makePrisms)
 
 import           Data.Aeson         (FromJSON, ToJSON)
 import           Data.Text          (Text)
-
-import           GHC.Generics
 
 import           Lib.Compiler.Error
 import           Lib.Model
