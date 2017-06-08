@@ -166,7 +166,9 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
   -- -- Throws `ErrBug` in Left case
   getById' :: Model a => Id a -> HexlT m a
   getById' i = getById i >>= \case
-    Left msg -> throwError $ ErrBug $ msg <> "\n" <> T.pack (prettyCallStack callStack)
+    Left msg -> do
+      stack <- liftIO currentCallStack
+      throwError $ ErrBug $ msg <> "\n" <> T.unlines (map T.pack stack)
     Right x -> pure x
 
   getOneByQuery :: forall a. Model a => Mongo.Selector -> HexlT m (Either Text (Entity a))
@@ -182,7 +184,9 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
   -- -- Throws `ErrBug` in Left case
   getOneByQuery' :: Model a => Mongo.Selector -> HexlT m (Entity a)
   getOneByQuery' query = getOneByQuery query >>= \case
-    Left msg -> throwError $ ErrBug msg
+    Left msg -> do
+      stack <- liftIO currentCallStack
+      throwError $ ErrBug $ msg <> "\n" <> T.unlines (map T.pack stack)
     Right x -> pure x
 
   listByQuery :: forall a. Model a => Mongo.Selector -> HexlT m [Entity a]

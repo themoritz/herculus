@@ -21,7 +21,7 @@ import           Lib.Model.Auth      (Session (..), SessionKey, User,
                                       sessionExpDate, sessionUserId, userEmail,
                                       userName)
 import           Lib.Types           (Id, Time (Time), addSeconds)
-import           Lib.Util.Base64     (mkBase64Url)
+import           Lib.Utils.Base64    (mkBase64Url)
 import           Monads              (AppError (..), MonadDB (..))
 
 -- These two function might as well go in to the shared lib
