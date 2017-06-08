@@ -8,7 +8,9 @@ import           Lib.Prelude
 
 import           Data.Aeson
 import           Data.Functor.Foldable
-import           Data.Hashable                (hash)
+import           Data.Hashable                (Hashable (..), hash)
+import           Data.HashMap.Strict          (HashMap)
+import qualified Data.HashMap.Strict          as HashMap
 import qualified Data.Map                     as Map
 import           Data.String                  (fromString)
 import           Data.Text                    (pack)
@@ -27,10 +29,13 @@ newtype Ident = Ident (Text, Int)
   deriving (Show, Generic, ToJSON, FromJSON)
 
 instance Eq Ident where
-  Ident (_, x) == Ident (_, y) = x == y
+  Ident (c, x) == Ident (c', x') = x == x' && c == c'
 
 instance IsString Ident where
   fromString = mkIdent . pack
+
+instance Hashable Ident where
+  hashWithSalt _salt (Ident (_, x)) = x
 
 mkIdent :: Text -> Ident
 mkIdent n = Ident (n, hash n)
@@ -43,6 +48,9 @@ identHash (Ident (_, i)) = i
 
 identDoc :: Ident -> Doc
 identDoc = textStrict . identText
+
+toIdentHashMap :: Map Text v -> HashMap Ident v
+toIdentHashMap = HashMap.fromList . map (mkIdent *** id). Map.toList
 
 --------------------------------------------------------------------------------
 
@@ -60,19 +68,19 @@ data Reference
   deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
 data Binder
-  = VarBinder Int
+  = VarBinder Ident
   | WildcardBinder
   | ConstructorBinder Ident [Binder]
   deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
 data Expr
   = Literal Literal
-  | Var Int
+  | Var Ident
   | Constructor Ident
   | Reference Reference
   | Abs Binder Expr
   | App Expr Expr
-  | Let [(Int, Expr)] Expr
+  | Let [(Ident, Expr)] Expr
   | Case Expr [(Binder, Expr)]
   | Access Expr Expr
   | Deref Expr
@@ -100,7 +108,7 @@ refDoc = \case
 
 binderDoc :: Binder -> Doc
 binderDoc = \case
-  VarBinder v            -> int v
+  VarBinder v            -> identDoc v
   WildcardBinder         -> textStrict "_"
   ConstructorBinder c bs -> identDoc c <+> hsep (map (parens . binderDoc) bs)
 
@@ -108,7 +116,7 @@ exprDoc :: Expr -> Doc
 exprDoc = \case
   Literal lit -> literalDoc lit
   Var v ->
-    int v
+    identDoc v
   Constructor c ->
     identDoc c
   Reference r -> refDoc r
@@ -124,7 +132,7 @@ exprDoc = \case
     indent 2 (exprDoc rest)
     where
       goBinding (v, body) =
-        int v <+> equals <$$> indent 2 (exprDoc body)
+        identDoc v <+> equals <$$> indent 2 (exprDoc body)
   Case e cases ->
     textStrict "case" <+> exprDoc e <+> textStrict "of" <$$>
     indent 2 (vsep (map goCase cases))
@@ -151,12 +159,12 @@ toCore (Fix com) = A.compiled goExpr undefined goRef com
       Abs (binderToCore b) (toCore e)
     A.App f arg ->
       App (toCore f) (toCore arg)
-    A.Var x -> Var $ hash x
+    A.Var x -> Var $ mkIdent x
     A.Constructor c -> Constructor $ mkIdent c
     A.Case scrut alts ->
       Case (toCore scrut) (map (binderToCore *** toCore) alts)
     A.Let defs body ->
-      Let (map (hash *** toCore) defs) (toCore body)
+      Let (map (mkIdent *** toCore) defs) (toCore body)
     A.Access e field ->
       Access (toCore e) (toCore field)
     A.Deref e ->
@@ -176,7 +184,7 @@ toCore (Fix com) = A.compiled goExpr undefined goRef com
 binderToCore :: A.Compiled -> Binder
 binderToCore (Fix (unsafePrj -> b )) = case b of
   A.VarBinder x ->
-    VarBinder $ hash x
+    VarBinder $ mkIdent x
   A.WildcardBinder ->
     WildcardBinder
   A.ConstructorBinder name bs ->

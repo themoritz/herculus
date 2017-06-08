@@ -10,7 +10,7 @@ import           Lib.Prelude
 
 import           Data.FileEmbed               (embedStringFile,
                                                makeRelativeToProject)
-import qualified Data.IntMap                  as IntMap
+import qualified Data.HashMap.Strict          as HashMap
 import qualified Data.Map                     as Map
 
 import           Text.PrettyPrint.Leijen.Text (Doc)
@@ -89,7 +89,7 @@ prelude =
     Left err -> error $ displayError preludeText err
     Right CheckResult {..} ->
       ( primCheckEnv `unionCheckEnv` resultCheckEnv
-      , primTermEnv `IntMap.union` loadModule resultTermEnv
+      , primTermEnv `HashMap.union` loadModule resultTermEnv
       , primTycons `Map.union` resultTycons
       )
 
@@ -175,7 +175,7 @@ testCheck :: Text -> IO ()
 testCheck src = compileModule src testResolveInterp primCheckEnv >>= \case
   Left err -> putStrLn $ displayError src err
   Right CheckResult {..} ->
-    void $ flip IntMap.traverseWithKey resultTermEnv $ \n core ->
+    void $ flip HashMap.traverseWithKey resultTermEnv $ \n core ->
       putStrLn $ show n <> ": " <> prettyCore core <> "\n"
 
 testEval :: Text -> IO ()

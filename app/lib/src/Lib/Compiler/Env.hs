@@ -15,6 +15,7 @@ import           Lib.Model.Column
 import           Lib.Types
 import           Lib.Utils
 
+import           Lib.Compiler.Core
 import           Lib.Compiler.Eval.Monad
 import           Lib.Compiler.Eval.Types
 import           Lib.Compiler.Type
@@ -120,7 +121,7 @@ primTypeEnv :: Map Text PolyType
 primTypeEnv = map fst (primEnv @Identity)
 
 primTermEnv :: Monad m => TermEnv m
-primTermEnv = hashMapKeys $ map snd primEnv
+primTermEnv = toIdentHashMap $ map snd primEnv
 
 primEnv :: Monad m => Map Text (PolyType, Result m)
 primEnv = Map.fromList

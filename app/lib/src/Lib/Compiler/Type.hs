@@ -165,14 +165,27 @@ normalizePoly (ForAll as cs t) = ForAll as' cs' t'
 quantify :: [Text] -> [Constraint] -> Type -> PolyType
 quantify as cs t = ForAll as' cs' t
   where
-  cs' = filter needed cs
-  needed = \case
-    IsIn _ t' -> checkType t'
-    HasFields _ t' -> checkType t'
-  checkType = cata $ \case
-    TypeVar v -> v `elem` getFtvs t
+  cs' = untilFixed (map fst . filter needed . allWithRest) cs
+  needed (c, rest) = case c of
+    IsIn _ t'      -> checkType rest t'
+    HasFields _ t' -> checkType rest t'
+  checkType :: [Constraint] -> Type -> Bool
+  checkType rest = cata $ \case
+    TypeVar v -> v `elem` (fieldFtvss rest <> getFtvs t)
     TypeApp f _ -> f
+  fieldFtvs = \case
+    IsIn _ _ -> Set.empty
+    HasFields f _ -> getFtvs f
+  fieldFtvss = Set.unions . map fieldFtvs
   as' = [a | a <- as, a `elem` (getFtvs cs' <> getFtvs t)]
+
+  untilFixed :: Eq a => (a -> a) -> a -> a
+  untilFixed f a = let a' = f a in if a' == a then a' else untilFixed f a'
+
+  allWithRest :: [a] -> [(a, [a])]
+  allWithRest = go []
+    where go _     []     = []
+          go front (x:xs) = (x, front <> xs) : go (front <> [x]) xs
 
 data ConstraintF t
   -- | Class and type that should be member of the class

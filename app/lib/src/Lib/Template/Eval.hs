@@ -4,7 +4,7 @@ module Lib.Template.Eval
 
 import           Lib.Prelude
 
-import qualified Data.IntMap             as IntMap
+import qualified Data.HashMap.Strict     as HashMap
 import           Data.Text               (Text)
 
 import           Lib.Compiler.Eval
@@ -28,7 +28,7 @@ evalTemplateChunk env = \case
     rs' <- goList rs
     texts <- for rs' $ \r -> case matchValue r iterator of
       Nothing   -> evalError "Pattern match failure."
-      Just env' -> evalTemplate (env' `IntMap.union` env) body
+      Just env' -> evalTemplate (env' `HashMap.union` env) body
     pure $ mconcat texts
   TplIf cond thenTpl elseTpl -> do
     r <- eval env cond

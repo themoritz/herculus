@@ -4,7 +4,8 @@ module Lib.Compiler.Eval.Types where
 
 import           Lib.Prelude                  hiding (bool)
 
-import qualified Data.IntMap                  as IntMap
+import           Data.HashMap.Strict          (HashMap)
+import qualified Data.HashMap.Strict          as HashMap
 import qualified Data.Map                     as Map
 
 import           Text.PrettyPrint.Leijen.Text hiding ((<$>))
@@ -16,17 +17,17 @@ import           Lib.Types
 import           Lib.Compiler.Core
 import           Lib.Compiler.Eval.Monad
 
-type TermEnv m = IntMap (Result m)
+type TermEnv m = HashMap Ident (Result m)
 
 termEnvDoc :: TermEnv m -> Doc
-termEnvDoc = vsep . map go . IntMap.toList
-  where go (n, r) = int n <> ":" <+> resultDoc r
+termEnvDoc = vsep . map go . HashMap.toList
+  where go (n, r) = identDoc n <> ":" <+> resultDoc r
 
 termEnvPretty :: TermEnv m -> Text
 termEnvPretty = show . termEnvDoc
 
-loadModule :: IntMap Expr -> TermEnv m
-loadModule = map (flip RContinuation IntMap.empty)
+loadModule :: HashMap Ident Expr -> TermEnv m
+loadModule = map (flip RContinuation HashMap.empty)
 
 loadValue :: Value -> Result m
 loadValue = \case
