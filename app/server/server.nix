@@ -1,10 +1,10 @@
-{ mkDerivation, aeson, base, base64-bytestring, bytestring
-, containers, directory, either, entropy, fast-logger, filepath
-, herculus-lib, lens, mime-mail, monad-control, monad-logger
-, mongoDB, mtl, neat-interpolation, network, optparse-applicative
-, pandoc, pretty-show, servant, servant-server, stdenv, stm, text
-, time, transformers, transformers-base, wai, wai-websockets, warp
-, websockets
+{ mkDerivation, aeson, base, base64-bytestring, bson-lens
+, bytestring, containers, directory, either, entropy, fast-logger
+, filepath, herculus-lib, lens, mime-mail, monad-control
+, monad-logger, mongoDB, mtl, neat-interpolation, network
+, optparse-applicative, pandoc, pretty-show, recursion-schemes
+, servant, servant-server, stdenv, stm, text, time, transformers
+, transformers-base, wai, wai-websockets, warp, websockets
 }:
 mkDerivation {
   pname = "server";
@@ -13,11 +13,12 @@ mkDerivation {
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
-    aeson base base64-bytestring bytestring containers directory
-    entropy fast-logger filepath herculus-lib lens mime-mail
+    aeson base base64-bytestring bson-lens bytestring containers
+    directory entropy fast-logger filepath herculus-lib lens mime-mail
     monad-control monad-logger mongoDB mtl neat-interpolation network
-    optparse-applicative pandoc pretty-show servant servant-server stm
-    text time transformers transformers-base wai websockets
+    optparse-applicative pandoc pretty-show recursion-schemes servant
+    servant-server stm text time transformers transformers-base wai
+    websockets
   ];
   executableHaskellDepends = [
     aeson base bytestring either herculus-lib mongoDB mtl servant
