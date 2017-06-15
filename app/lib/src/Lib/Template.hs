@@ -6,6 +6,7 @@ import           Lib.Prelude
 
 import           Lib.Compiler
 import           Lib.Compiler.Check.Monad
+import           Lib.Compiler.Check.Types
 import           Lib.Compiler.Error
 import           Lib.Compiler.Eval.Monad
 import           Lib.Compiler.Eval.Types

@@ -27,7 +27,8 @@ import           Lib.Types
 -- | All the critical commands that should be atomic, undoable, replayable etc.
 -- within a project.
 data Command
-  = CmdTableCreate Text
+  = CmdModuleSave Text
+  | CmdTableCreate Text
   | CmdTableSetName (Id M.Table) Text
   | CmdTableDelete (Id M.Table)
   | CmdDataColCreate (Id M.Table)

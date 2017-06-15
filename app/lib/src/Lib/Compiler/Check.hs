@@ -29,6 +29,7 @@ import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Check.Error
 import           Lib.Compiler.Check.Extract
 import           Lib.Compiler.Check.Monad
+import           Lib.Compiler.Check.Types
 import qualified Lib.Compiler.Core            as Core
 import           Lib.Compiler.Env
 import           Lib.Compiler.Error
@@ -657,12 +658,6 @@ instantiate (ForAll as cs t) = do
 
 --------------------------------------------------------------------------------
 
-data CheckResult = CheckResult
-  { resultCheckEnv :: CheckEnv
-  , resultTermEnv  :: HashMap Core.Ident Core.Expr
-  , resultTycons   :: Map Text TyconInfo
-  }
-
 checkModule :: Module -> Check CheckResult
 checkModule (extractDecls -> decls) = do
   -- Extract all fixity declarations
@@ -752,7 +747,7 @@ checkFormula tGiven (decls, expr) = do
     cleanToplevelConstraints cs (Just tGiven)
     i' <- resolvePlaceholders Map.empty i
     c <- compileIntermed i'
-    pure $ Core.Let (HashMap.toList resultTermEnv) c
+    pure $ Core.Let (HashMap.toList resultCore) c
 
 -- Only for internal use
 inferFormula :: Formula -> Check (Core.Expr, Type)
@@ -764,7 +759,7 @@ inferFormula (decls, expr) = do
     i' <- resolvePlaceholders Map.empty i
     c <- compileIntermed i'
     s <- getTypeSubst
-    pure (Core.Let (HashMap.toList resultTermEnv) c, applyTypeSubst s t)
+    pure (Core.Let (HashMap.toList resultCore) c, applyTypeSubst s t)
 
 checkTypeDecl :: Span -> SourcePolyType -> Check PolyType
 checkTypeDecl span (ForAll as cs t) = do

@@ -25,6 +25,7 @@ import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Check
 import           Lib.Compiler.Check.Monad
+import           Lib.Compiler.Check.Types
 import           Lib.Compiler.Core
 import           Lib.Compiler.Docs
 import           Lib.Compiler.Env
@@ -76,23 +77,24 @@ documentModule src resolver env = runExceptT $ do
 --------------------------------------------------------------------------------
 
 preludeCheckEnv :: CheckEnv
-preludeCheckEnv = let (x, _, _) = prelude @Identity in x
+preludeCheckEnv =
+  let CheckResult {..} = preludeCheckResult in
+  primCheckEnv `unionCheckEnv` resultCheckEnv
 
 preludeTermEnv :: Monad m => TermEnv m
-preludeTermEnv = let (_, x, _) = prelude in x
+preludeTermEnv =
+  let CheckResult {..} = preludeCheckResult in
+  primTermEnv `HashMap.union` loadModule resultCore
 
 preludeTycons :: Map Text TyconInfo
-preludeTycons = let (_, _, x) = prelude @Identity in x
+preludeTycons = let CheckResult {..} = preludeCheckResult in
+  primTycons `Map.union` resultTycons
 
-prelude :: Monad m => (CheckEnv, TermEnv m, Map Text TyconInfo)
-prelude =
+preludeCheckResult :: CheckResult
+preludeCheckResult =
   case runIdentity $ compileModule preludeText voidResolver primCheckEnv of
-    Left err -> error $ displayError preludeText err
-    Right CheckResult {..} ->
-      ( primCheckEnv `unionCheckEnv` resultCheckEnv
-      , primTermEnv `HashMap.union` loadModule resultTermEnv
-      , primTycons `Map.union` resultTycons
-      )
+    Left err  -> error $ displayError preludeText err
+    Right res -> res
 
 preludeText :: Text
 preludeText =
@@ -176,7 +178,7 @@ testCheck :: Text -> IO ()
 testCheck src = compileModule src testResolveInterp primCheckEnv >>= \case
   Left err -> putStrLn $ displayError src err
   Right CheckResult {..} ->
-    void $ flip HashMap.traverseWithKey resultTermEnv $ \n core ->
+    void $ flip HashMap.traverseWithKey resultCore $ \n core ->
       putStrLn $ show n <> ": " <> prettyCore core <> "\n"
 
 testEval :: Text -> IO ()

@@ -18,6 +18,7 @@ import           Data.These                     (These (..))
 
 import           Lib.Compiler.Check.Error
 import           Lib.Compiler.Check.Monad.Types as Types
+import           Lib.Compiler.Check.Types
 import           Lib.Compiler.Error
 import           Lib.Compiler.Pretty
 import           Lib.Compiler.Type

@@ -7,13 +7,14 @@ module Lib.Compiler.Env where
 import           Lib.Prelude
 
 import           Data.Functor.Foldable
-import qualified Data.Map                as Map
-import           Data.Time.Calendar      (toGregorian)
-import           Data.Time.Clock         (utctDay)
+import qualified Data.Map                 as Map
+import           Data.Time.Calendar       (toGregorian)
+import           Data.Time.Clock          (utctDay)
 
 import           Lib.Model.Column
 import           Lib.Types
 
+import           Lib.Compiler.Check.Types
 import           Lib.Compiler.Core
 import           Lib.Compiler.Eval.Monad
 import           Lib.Compiler.Eval.Types
@@ -311,6 +312,12 @@ primEnv = Map.fromList
       )
     )
   ]
+
+--------------------------------------------------------------------------------
+
+primCheckEnv :: CheckEnv
+primCheckEnv = CheckEnv primKindEnv primTypeEnv' Map.empty Map.empty Map.empty
+  where primTypeEnv' = map defaultEnvType primTypeEnv
 
 --------------------------------------------------------------------------------
 

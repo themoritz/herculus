@@ -18,11 +18,10 @@ import           Control.Lens
 import           Control.Monad.Free
 
 import           Data.Map                       (Map)
-import qualified Data.Map                       as Map
 
 import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Check.Error.Types
-import           Lib.Compiler.Env
+import           Lib.Compiler.Check.Types
 import           Lib.Compiler.Error
 import           Lib.Compiler.Parse.State
 import           Lib.Compiler.Type
@@ -179,54 +178,6 @@ resolveTableRef t = liftCheck $ ResolveTableRef t id
 
 
 --------------------------------------------------------------------------------
-
-data Origin
-  = Recursive
-  | Default
-  | Method
-  deriving (Show)
-
-data EnvType = EnvType
-  { etPoly   :: PolyType
-  , etOrigin :: Origin
-  }
-
-defaultEnvType :: PolyType -> EnvType
-defaultEnvType = flip EnvType Default
-
-data DictLookup
-  -- | Class name, type variable
-  = ByTypeVar Text Text
-  -- | Class name, constructor name
-  | ByConstructor Text Text
-  -- | Type variable
-  | AccessByTypeVar Text
-  deriving (Eq, Ord, Show)
-
-data CheckEnv = CheckEnv
-  { _checkEnvKinds         :: Map Text Kind
-  , _checkEnvTypes         :: Map Text EnvType
-  , _checkEnvOperators     :: Map Text (Text, Fixity)
-  , _checkEnvInstanceDicts :: Map DictLookup Text
-  , _checkEnvClasses       :: Map Text Class
-  }
-
-mkCheckEnvOpTable :: CheckEnv -> OpTable
-mkCheckEnvOpTable = Map.toList . map snd . _checkEnvOperators
-
-unionCheckEnv :: CheckEnv -> CheckEnv -> CheckEnv
-unionCheckEnv (CheckEnv k t o i c) (CheckEnv k' t' o' i' c') =
-  CheckEnv (Map.union k k')
-           (Map.union t t')
-           (Map.union o o')
-           (Map.union i i')
-           (Map.union c c')
-
-primCheckEnv :: CheckEnv
-primCheckEnv = CheckEnv primKindEnv primTypeEnv' Map.empty Map.empty Map.empty
-  where primTypeEnv' = map defaultEnvType primTypeEnv
-
-makeLenses ''CheckEnv
 
 data CheckState = CheckState
   { _checkEnv       :: CheckEnv

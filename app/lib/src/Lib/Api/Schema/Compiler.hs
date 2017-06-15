@@ -11,18 +11,18 @@ import           Control.Lens
 
 import           Data.Aeson
 import           Data.Functor.Foldable
-import qualified Data.HashMap.Strict            as HashMap
-import qualified Data.Map                       as Map
+import qualified Data.HashMap.Strict      as HashMap
+import qualified Data.Map                 as Map
 
 import           Lib.Model.Table
 import           Lib.Types
 
-import qualified Lib.Compiler                   as C
-import qualified Lib.Compiler.Check             as C
-import qualified Lib.Compiler.Check.Monad.Types as C
-import qualified Lib.Compiler.Core              as C
-import qualified Lib.Compiler.Parse.State       as C
-import qualified Lib.Compiler.Type              as C
+import qualified Lib.Compiler             as C
+import qualified Lib.Compiler.Check       as C
+import qualified Lib.Compiler.Check.Types as C
+import qualified Lib.Compiler.Core        as C
+import qualified Lib.Compiler.Parse.State as C
+import qualified Lib.Compiler.Type        as C
 
 data Kind
   = KindType
@@ -38,6 +38,13 @@ toSchemaKind = cata $ \case
   C.KindRecord -> KindRecord
   C.KindFun f arg -> KindFun f arg
   C.KindUnknown _ -> KindType
+
+fromSchemaKind :: Kind -> C.Kind
+fromSchemaKind = \case
+  KindType -> C.kindType
+  KindTable -> C.kindTable
+  KindRecord -> C.kindRecord
+  KindFun f arg -> C.kindFun (fromSchemaKind f) (fromSchemaKind arg)
 
 data Type
   = TypeVar Text
@@ -55,6 +62,14 @@ toSchemaType = cata $ \case
   C.TypeTable (InId i) -> TypeTable i
   C.TypeRecord r -> TypeRecord $ Map.toList r
 
+fromSchemaType :: Type -> C.Type
+fromSchemaType = \case
+  TypeVar v -> C.typeVar v
+  TypeConstructor c -> C.typeConstructor c
+  TypeApp f arg -> C.typeApp (fromSchemaType f) (fromSchemaType arg)
+  TypeTable t -> C.typeTable (InId t)
+  TypeRecord r -> C.typeRecord $ map fromSchemaType $ Map.fromList r
+
 data Constraint
   = IsIn Text Type
   | HasFields [(Text, Type)] Type
@@ -67,12 +82,23 @@ toSchemaConstraint = \case
   C.HasFields fs t ->
     HasFields (Map.toList $ map toSchemaType fs) (toSchemaType t)
 
+fromSchemaConstraint :: Constraint -> C.Constraint
+fromSchemaConstraint = \case
+  IsIn c t ->
+    C.IsIn c (fromSchemaType t)
+  HasFields fs t ->
+    C.HasFields (map fromSchemaType $ Map.fromList fs) (fromSchemaType t)
+
 data PolyType = ForAll [Text] [Constraint] Type
   deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
 toSchemaPolyType :: C.PolyType -> PolyType
 toSchemaPolyType (C.ForAll as cs t) =
   ForAll as (map toSchemaConstraint cs) (toSchemaType t)
+
+fromSchemaPolyType :: PolyType -> C.PolyType
+fromSchemaPolyType (ForAll as cs t) =
+  C.ForAll as (map fromSchemaConstraint cs) (fromSchemaType t)
 
 data TyconInfo = TyconInfo
   { _tyconKind         :: Kind
@@ -85,6 +111,12 @@ toSchemaTyconInfo C.TyconInfo {..} = TyconInfo
   (toSchemaKind tyconKind)
   tyconParams
   (map (id *** map toSchemaType) tyconValueConstrs)
+
+fromSchemaTyconInfo :: TyconInfo -> C.TyconInfo
+fromSchemaTyconInfo TyconInfo {..} = C.TyconInfo
+  (fromSchemaKind _tyconKind)
+  _tyconParams
+  (map (id *** map fromSchemaType) _tyconValueConstrs)
 
 makeLenses ''TyconInfo
 
@@ -101,6 +133,10 @@ toSchemaInstance :: C.Instance -> Instance
 toSchemaInstance (C.Instance cs c t) =
   Instance (map toSchemaConstraint cs) c (toSchemaType t)
 
+fromSchemaInstance :: Instance -> C.Instance
+fromSchemaInstance (Instance cs c t) =
+  C.Instance (map fromSchemaConstraint cs) c (fromSchemaType t)
+
 data Class = Class
   { _classSupers    :: [Text]
   , _classParam     :: Text
@@ -116,6 +152,14 @@ toSchemaClass (C.Class supers p k methods insts) = Class
   (toSchemaKind k)
   (Map.toList $ map toSchemaPolyType methods)
   (map toSchemaInstance insts)
+
+fromSchemaClass :: Class -> C.Class
+fromSchemaClass (Class supers p k methods insts) = C.Class
+  supers
+  p
+  (fromSchemaKind k)
+  (map fromSchemaPolyType $ Map.fromList methods)
+  (map fromSchemaInstance insts)
 
 data Module = Module
   { _moduleKinds     :: [(Text, Kind)]
@@ -134,4 +178,16 @@ checkResultToModule (C.CheckResult (C.CheckEnv ks ts ops _ cls) terms tycons) =
          (Map.toList $ map toSchemaClass cls)
          (HashMap.toList terms)
          (Map.toList $ map toSchemaTyconInfo tycons)
+
+moduleToCheckResult :: Module -> C.CheckResult
+moduleToCheckResult (Module ks ts ops cls terms tycons) = C.CheckResult
+  (C.CheckEnv
+     (map fromSchemaKind $ Map.fromList ks)
+     (map (C.defaultEnvType . fromSchemaPolyType) $ Map.fromList ts)
+     (Map.fromList ops)
+     Map.empty
+     (map fromSchemaClass $ Map.fromList cls)
+  )
+  (HashMap.fromList terms)
+  (map fromSchemaTyconInfo $ Map.fromList tycons)
 

@@ -20,6 +20,7 @@ library
                      , Lib.Compiler.Check.Extract
                      , Lib.Compiler.Check.Monad
                      , Lib.Compiler.Check.Monad.Types
+                     , Lib.Compiler.Check.Types
                      , Lib.Compiler.Core
                      , Lib.Compiler.Docs
                      , Lib.Compiler.Env

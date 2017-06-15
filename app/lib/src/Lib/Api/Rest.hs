@@ -88,6 +88,7 @@ type ProjectLoad         = "load"        :> Capture "projectId" (Id M.Project)  
 type ProjectRunCommands  = "runCommands" :> Capture "projectId" (Id M.Project) :> ReqBody '[JSON] [Command]   :> Post '[JSON] ()
 type ProjectLintDataCol  = "lintDataCol" :> Capture "columnId" (Id M.Column) :> ReqBody '[JSON] (M.DataType, Text) :> Post '[JSON] [Error]
 type ProjectLintReportCol = "lintReportCol" :> Capture "columnId" (Id M.Column) :> ReqBody '[JSON] Text       :> Post '[JSON] [Error]
+type ProjectLintModule   = "lintModule"  :> ReqBody '[JSON] Text                                              :> Post '[JSON] [Error]
 
 type ReportCellGetPdf    = "pdf"   :> Capture "columnId" (Id M.Column) :> Capture "rowId" (Id M.Row) :> Get '[PDF] LBS.ByteString
 type ReportCellGetHtml   = "html"  :> Capture "columnId" (Id M.Column) :> Capture "rowId" (Id M.Row) :> Get '[HTML] Text

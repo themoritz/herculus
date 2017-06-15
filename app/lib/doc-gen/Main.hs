@@ -6,11 +6,11 @@ module Main where
 import           Lib.Prelude
 import           Options
 
-import           Data.Text                as T
-import qualified Data.Text.IO             as T
+import           Data.Text          as T
+import qualified Data.Text.IO       as T
 
 import           Lib.Compiler
-import           Lib.Compiler.Check.Monad
+import           Lib.Compiler.Env
 import           Lib.Compiler.Error
 
 main :: IO ()
