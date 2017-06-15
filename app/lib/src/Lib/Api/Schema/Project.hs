@@ -42,13 +42,15 @@ data Command
   deriving (Generic, ToJSON, FromJSON, Show)
 
 data Project = Project
-  { _projectId    :: Id M.Project
-  , _projectName  :: Text
-  , _projectOwner :: Id M.User
+  { _projectId           :: Id M.Project
+  , _projectName         :: Text
+  , _projectOwner        :: Id M.User
+  , _projectModuleSource :: Text
   } deriving (Generic, ToJSON, FromJSON, Show)
 
 projectFromEntity :: Entity M.Project -> Project
-projectFromEntity (Entity i (M.Project name owner _)) = Project i name owner
+projectFromEntity (Entity i (M.Project name owner src _ _)) =
+  Project i name owner src
 
 makeLenses ''Project
 

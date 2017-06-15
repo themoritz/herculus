@@ -22,6 +22,7 @@ import qualified Data.Bson                    as Bson
 import           Lib.Compiler.Core
 import           Lib.Compiler.Error
 import           Lib.Model.Class
+import           Lib.Model.Common
 import           Lib.Model.Dependencies.Types
 import           Lib.Model.Table
 import           Lib.Template.Core
@@ -46,12 +47,6 @@ getTypeDependencies = \case
     mconcat $ map (getTypeDependencies . snd) fields
 
 --------------------------------------------------------------------------------
-
-data CompileResult a
-  = CompileResultOk a
-  | CompileResultNone
-  | CompileResultError [Error]
-  deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
 type DataCompileResult = CompileResult Expr
 type ReportCompileResult = CompileResult [TplChunk]

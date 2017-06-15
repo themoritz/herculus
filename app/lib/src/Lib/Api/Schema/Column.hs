@@ -15,6 +15,7 @@ import           Data.Text          (Text)
 import           Lib.Compiler.Error
 import           Lib.Model
 import qualified Lib.Model.Column   as M
+import qualified Lib.Model.Common   as M
 import qualified Lib.Model.Table    as M
 import           Lib.Types
 

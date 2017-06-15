@@ -16,7 +16,7 @@ import           Data.Bson         ((=:))
 import qualified Data.Bson         as Bson
 
 import           Lib.Model.Class
-import           Lib.Model.Project
+import {-# SOURCE #-} Lib.Model.Project
 import           Lib.Types
 
 data Table = Table

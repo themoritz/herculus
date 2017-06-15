@@ -18,6 +18,7 @@ import           Text.Show.Pretty             (ppShow)
 
 import           Lib.Model.Cell
 import           Lib.Model.Column
+import           Lib.Model.Common
 import           Lib.Types
 
 import           Lib.Compiler.AST.Common

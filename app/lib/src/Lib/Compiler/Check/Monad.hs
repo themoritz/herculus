@@ -141,7 +141,7 @@ runCheck env goResolve =
       pure next
 
     AddInstance c i next -> do
-      checkEnv . checkEnvClasses . at c . _Just . _5 %= (i :)
+      checkEnv . checkEnvClasses . at c . _Just . classInstances %= (i :)
       pure next
 
     AddOperatorAlias o a f next -> do

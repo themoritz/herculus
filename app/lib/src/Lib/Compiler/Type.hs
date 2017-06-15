@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveTraversable    #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE StandaloneDeriving   #-}
+{-# LANGUAGE TemplateHaskell      #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 -- |
 
@@ -11,6 +12,7 @@ module Lib.Compiler.Type where
 import           Lib.Prelude               hiding (empty)
 
 import           Control.Comonad.Cofree
+import           Control.Lens              hiding ((:<))
 
 import           Data.Functor.Foldable
 import           Data.List                 (nub)
@@ -198,12 +200,6 @@ type SourceConstraint = ConstraintF SourceType
 
 type ConstraintToSolve = (Span, Constraint)
 
--- Constraints, head constraint
-type Instance = ([Constraint], Text, Type)
-
--- Superclasses, signature of member functions, instances
-type Class = ([Text], Text, Kind, Map Text PolyType, [Instance])
-
 --------------------------------------------------------------------------------
 
 class HasFreeTypeVars t where
@@ -280,6 +276,24 @@ instance TypeSubstitutable ConstraintToSolve where
   applyTypeSubst s (span, c) = (span, applyTypeSubst s c)
 
 --------------------------------------------------------------------------------
+
+data Instance = Instance
+  { _instanceConstraints :: [Constraint]
+  , _instanceHeadClass   :: Text
+  , _instanceHeadType    :: Type
+  }
+
+makeLenses ''Instance
+
+data Class = Class
+  { _classSupers    :: [Text]
+  , _classParam     :: Text
+  , _classKind      :: Kind
+  , _classMethods   :: Map Text PolyType
+  , _classInstances :: [Instance]
+  }
+
+makeLenses ''Class
 
 data TyconInfo = TyconInfo
   { tyconKind         :: Kind

@@ -13,7 +13,6 @@ import           Data.Time.Clock         (utctDay)
 
 import           Lib.Model.Column
 import           Lib.Types
-import           Lib.Utils
 
 import           Lib.Compiler.Core
 import           Lib.Compiler.Eval.Monad

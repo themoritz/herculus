@@ -539,7 +539,7 @@ entail' cs c = do
     else case c of
       IsIn cls t -> byInst cls t >>= \case
         Nothing -> pure False
-        Just (cs', _, _) -> and <$> traverse (entail' cs) cs'
+        Just i -> and <$> traverse (entail' cs) (i ^. instanceConstraints)
       HasFields _ _ -> pure False
 
 -- | Recursively generate a list of constraints for all superclasses, including
@@ -548,8 +548,8 @@ getSupers :: Constraint -> Check [Constraint]
 getSupers c = case c of
   IsIn cls t -> lookupClass cls >>= \case
     Nothing -> pure [c]
-    Just (supers, _, _, _, _) -> do
-      css <- for supers $ \s -> getSupers (IsIn s t)
+    Just clsInfo -> do
+      css <- for (clsInfo ^. classSupers) $ \s -> getSupers (IsIn s t)
       pure (c : join css)
   HasFields _ _ -> pure [c]
 
@@ -557,22 +557,25 @@ getSupers c = case c of
 byInst :: Text -> Type -> Check (Maybe Instance)
 byInst cls t = lookupClass cls >>= \case
   Nothing -> pure Nothing
-  Just (_, _, _, _, insts) ->
-    msum <$> traverse tryInst insts
+  Just clsInfo ->
+    msum <$> traverse tryInst (clsInfo ^. classInstances)
   where
-  tryInst (cs', cls', t')
-    | cls' == cls = matchType t' t >>= \case
+  tryInst i
+    | i ^. instanceHeadClass == cls = matchType (i ^. instanceHeadType) t >>= \case
         Nothing -> pure Nothing
         Just s ->
-          pure $ Just (map (applyTypeSubst s) cs', cls', applyTypeSubst s t')
+          pure $ Just $ Instance
+            (map (applyTypeSubst s) (i ^. instanceConstraints))
+            (i ^. instanceHeadClass)
+            (applyTypeSubst s (i ^. instanceHeadType))
     | otherwise = pure Nothing
 
 getSubClasses :: Text -> Check [Text]
 getSubClasses cls = do
   classes <- view checkEnvClasses <$> getCheckEnv
   pure $ mapMaybe select $ Map.toList classes
-  where select (c, (supers, _, _, _, _)) =
-          if cls `elem` supers then Just c else Nothing
+  where select (c, clsInfo) =
+          if cls `elem` (clsInfo ^. classSupers) then Just c else Nothing
 
 inHeadNormal :: Type -> Bool
 inHeadNormal = cata $ \case
@@ -587,7 +590,7 @@ toHeadNormal c'@(span, c) = case c of
     | inHeadNormal t -> pure [c']
     | otherwise      -> byInst cls t >>= \case
         Nothing -> checkError span $ MissingInstance cls t
-        Just (cs, _, _) -> join <$> traverse toHeadNormal (map (span,) cs)
+        Just i -> join <$> traverse toHeadNormal (map (span,) (i ^. instanceConstraints))
   HasFields _ _ -> pure [c']
 
 simplifyHasFields :: [ConstraintToSolve] -> Check [ConstraintToSolve]
@@ -634,9 +637,13 @@ byHasFields c'@(span, c) = case c of
                 Right () -> pure ()
 
 instantiateInstance :: Instance -> Check ([Constraint], Type)
-instantiateInstance (cs, _, t) =
-  let as = Set.toList $ getFtvs t <> getFtvs cs in
-  instantiate (ForAll as cs t)
+instantiateInstance i =
+  let
+    cs = i ^. instanceConstraints
+    t = i ^. instanceHeadType
+    as = Set.toList $ getFtvs t <> getFtvs cs
+  in
+    instantiate (ForAll as cs t)
 
 instantiate :: PolyType -> Check ([Constraint], Type)
 instantiate (ForAll as cs t) = do
@@ -791,11 +798,11 @@ checkTypeDecl span (ForAll as cs t) = do
 checkConstraint :: Span -> SourceConstraint -> Check ()
 checkConstraint span (IsIn cls t@(spant :< _)) = lookupClass cls >>= \case
   Nothing -> checkError span $ UndefinedClass cls
-  Just (_, _, kind, _, _) -> do
+  Just clsInfo -> do
     let t' = stripAnn t
     unless (inHeadNormal t') $ checkError spant $ NoHeadNormalForm t'
     k <- inferType t
-    unifyKinds spant kind k
+    unifyKinds spant (clsInfo ^. classKind) k
 checkConstraint _ (HasFields fields t@(spant :< _)) = do
   k <- inferType t
   unifyKinds spant kindType k
@@ -808,7 +815,7 @@ checkInstanceDecl ExInstanceDecl {..} = do
   let (SourceText clsSpan cls, t'@(stripAnn -> t)) = iHead
   lookupClass cls >>= \case
     Nothing -> checkError clsSpan $ UndefinedClass cls
-    Just (_, _, kind, sigs, insts) -> do
+    Just clsInfo -> do
       -- Check kind of instance type
       constrEnv <- map Map.unions $ for (iHead : iConstraints) $ \(_, ct) ->
         freshKindDict $ Set.toList $ getFtvs $ stripAnn ct
@@ -816,28 +823,30 @@ checkInstanceDecl ExInstanceDecl {..} = do
         for_ iConstraints $ \(SourceText clsSpan' cls', ct) ->
           checkConstraint clsSpan' (IsIn cls' ct)
         k <- inferType t'
-        unifyKinds iSpan kind k
+        unifyKinds iSpan (clsInfo ^. classKind) k
       -- Check for overlapping instances
-      for_ insts $ \(_, cls', t'') -> do
-        overlap <- unifyConstraints (IsIn cls t) (IsIn cls' t'')
+      for_ (clsInfo ^. classInstances) $ \i -> do
+        overlap <- unifyConstraints
+          (IsIn cls t)
+          (IsIn (i ^. instanceHeadClass) (i ^. instanceHeadType))
         let tSpan :< _ = t'
-        when overlap $ checkError tSpan $ OverlappingInstance t''
+        when overlap $ checkError tSpan $ OverlappingInstance (i ^. instanceHeadType)
       -- Check all methods are implemented and no more
       let implVals = Map.fromList $
                      map (getText . vName &&& getSpan . vName) iMethods
       void $ flip Map.traverseWithKey implVals $ \v span' ->
-        case Map.lookup v sigs of
+        case Map.lookup v (clsInfo ^. classMethods) of
           Nothing -> checkError span' $ UndefinedMethod v cls
           Just _  -> pure ()
-      void $ flip Map.traverseWithKey sigs $ \s _ ->
+      void $ flip Map.traverseWithKey (clsInfo ^. classMethods) $ \s _ ->
         case Map.lookup s implVals of
           Nothing -> checkError clsSpan $ MissingImplementation s
           Just _  -> pure ()
       -- Add to class env
-      addInstance cls
-        ( map (\(getText -> cls', ct) -> IsIn cls' (stripAnn ct)) iConstraints
-        , cls
-        , t )
+      addInstance cls $ Instance
+        (map (\(getText -> cls', ct) -> IsIn cls' (stripAnn ct)) iConstraints)
+        cls
+        t
       -- Check instance head and derive dictionary name for this instance
       headConstructor <- getTypeConstructor iSpan t
       let dictName = "$" <> cls <> headConstructor
@@ -855,23 +864,24 @@ buildInstanceDict ExInstanceDecl {..} = do
   lookupClass cls >>= \case
     Nothing -> internalError (Just clsSpan) $
       "Internal: Instance class `" <> cls <> "` not defined."
-    Just (supers, param, _, _, _) -> do
+    Just clsInfo -> do
       headConstructor <- getTypeConstructor iSpan t
       -- Check instances for all superclasses are defined and build super dict
-      superDicts <- for supers $ \super ->
+      superDicts <- for (clsInfo ^. classSupers) $ \super ->
         lookupInstanceDict (ByConstructor super headConstructor) >>= \case
           Nothing -> checkError clsSpan $ MissingSuperclassInstance super
           Just d -> pure (super, var d)
       -- Create new type variables for the instance constraints and head
-      (cs, freshHeadType) <- instantiateInstance
-        ( map (\(getText -> cls', stripAnn -> t') -> IsIn cls' t') iConstraints
-        , cls, t )
+      (cs, freshHeadType) <- instantiateInstance $ Instance
+        (map (\(getText -> cls', stripAnn -> t') -> IsIn cls' t') iConstraints)
+        cls
+        t
       -- Check the method implementations
       interims <- for iMethods $ \ExValueDecl {..} -> do
         let name = getText vName
         Just (EnvType poly _, _) <- lookupType name
         let ForAll _ _ givenType =
-              applyTypeSubst (Map.singleton param freshHeadType) poly
+              applyTypeSubst (Map.singleton (clsInfo ^. classParam) freshHeadType) poly
         (e, cs') <- checkExpr givenType vExpr
         -- TODO: make sure `cs'` equals the instance constraints
         pure (name, e)
@@ -924,11 +934,12 @@ checkClassDecl ExClassDecl {..} = do
       pure ( getText tName
            , ForAll (param:as) [IsIn cls $ typeVar param] t )
     s <- getKindSubst
-    addClass cls ( supers'
-                 , param
-                 , applyKindSubst s paramKind
-                 , Map.fromList sigs'
-                 , [] )
+    addClass cls $ Class
+      supers'
+      param
+      (applyKindSubst s paramKind)
+      (Map.fromList sigs')
+      []
     pure $ Map.fromList $ map (id *** (\p -> EnvType p Method)) sigs'
 
 checkADTs

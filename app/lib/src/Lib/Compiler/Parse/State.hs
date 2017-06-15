@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveAnyClass   #-}
+{-# LANGUAGE DeriveGeneric    #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TemplateHaskell  #-}
 -- |
@@ -8,19 +10,21 @@ import           Lib.Prelude
 
 import           Control.Lens
 
+import           Data.Aeson
+
 import           Lib.Compiler.AST.Position
 
 type OpTable = [(Text, Fixity)]
 
 data Fixity
   = Infix Assoc Int
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON)
 
 data Assoc
   = AssocL
   | AssocR
   | AssocN
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic, ToJSON, FromJSON)
 
 testOpTable :: OpTable
 testOpTable =

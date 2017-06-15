@@ -161,9 +161,10 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
       Nothing -> pure $ Left $
         "getById: Not found. Collection: " <> collection <>
         ", id: " <> show i
-      Just doc -> pure $ parseDocument doc
+      Just doc ->
+        pure $ mapLeft ("getById: parseDocument: " <>) $ parseDocument doc
 
-  -- -- Throws `ErrBug` in Left case
+  -- Throws `ErrBug` in Left case
   getById' :: Model a => Id a -> HexlT m a
   getById' i = getById i >>= \case
     Left msg -> do
@@ -179,9 +180,10 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
       Nothing -> pure $ Left $
         "getOneByQuery: Not found. Collection: " <> collection <>
         ", query: " <> show query
-      Just doc -> pure $ parseDocument doc
+      Just doc ->
+        pure $ mapLeft ("getOneByQuery: parseDocument: " <> ) $ parseDocument doc
 
-  -- -- Throws `ErrBug` in Left case
+  -- Throws `ErrBug` in Left case
   getOneByQuery' :: Model a => Mongo.Selector -> HexlT m (Entity a)
   getOneByQuery' query = getOneByQuery query >>= \case
     Left msg -> do
@@ -193,9 +195,13 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
   listByQuery query = do
     let collection = collectionName (Proxy :: Proxy a)
     res <- runMongo $ Mongo.find (Mongo.select query collection) >>= Mongo.rest
-    case traverse parseDocument res of
-      Left msg -> throwError $ ErrBug msg
-      Right xs -> pure xs
+    for res $ \r -> case parseDocument r of
+      Left msg -> throwError $ ErrBug $ T.unlines
+        [ "listByQuery: parseDocument: " <> msg
+        , "collection: " <> collection
+        , "id: " <> show (Mongo.valueAt "_id" r)
+        ]
+      Right x -> pure x
 
   listAll :: Model a => HexlT m [Entity a]
   listAll = listByQuery []

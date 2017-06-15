@@ -96,7 +96,7 @@ data RefOrId a
   | InId (Id a)
   deriving (Generic, Eq, Ord)
 
-instance Show a => Show (RefOrId a) where
+instance Show (RefOrId a) where
   show (InRef r) = show r
   show (InId i)  = show i
 
