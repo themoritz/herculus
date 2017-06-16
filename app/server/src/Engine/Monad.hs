@@ -30,7 +30,7 @@ import           Lib.Model.Class
 import           Lib.Model.Column
 import           Lib.Model.Dependencies
 import           Lib.Model.Dependencies.Types
-import           Lib.Model.Project            (Project)
+import           Lib.Model.Project
 import           Lib.Model.Row
 import           Lib.Model.Table
 import           Lib.Types
@@ -77,21 +77,23 @@ data EvalTargets
 data EngineState = EngineState
   { _engineStore          :: Store
   , _engineCache          :: Cache
-  , _engineGraph          :: DependencyGraph
+  , _engineProject        :: Project
   , _engineCompileTargets :: Set (Id Column)
   , _engineEvalTargets    :: Map (Id Column) EvalTargets
   }
 
 makeLenses ''EngineState
 
-newEngineState :: DependencyGraph -> EngineState
-newEngineState graph =
-  EngineState emptyChanges emptyCache graph Set.empty Map.empty
+newEngineState :: Project -> EngineState
+newEngineState project =
+  EngineState emptyChanges emptyCache project Set.empty Map.empty
 
 --------------------------------------------------------------------------------
 
 class MonadError AppError m => MonadEngine m where
   askProjectId :: m (Id Project)
+  useProject :: Lens' Project a -> m a
+  modifyProject :: (Project -> Project) -> m ()
 
   -- Operations on dependency graph
 
@@ -132,6 +134,7 @@ class MonadError AppError m => MonadEngine m where
   getColumnCells :: Id Column -> m [Entity Cell]
 
   -- Not cached (still need to combine with store)
+  getProjectTables       :: m [Entity Table]
   getTableRows           :: Id Table -> m [Entity Row]
   getTableColumns        :: Id Table -> m [Entity Column]
   getRowRecord           :: Id Row -> m (Maybe (Map Text Value))
@@ -161,9 +164,9 @@ newtype EngineT m a = EngineT
              , MonadReader (Id Project)
              )
 
-runEngineT :: Id Project -> DependencyGraph -> EngineT m a -> m (a, EngineState)
-runEngineT projectId graph action =
-  runStateT (runReaderT (unEngineT action) projectId) (newEngineState graph)
+runEngineT :: Entity Project -> EngineT m a -> m (a, EngineState)
+runEngineT (Entity projectId p) action =
+  runStateT (runReaderT (unEngineT action) projectId) (newEngineState p)
 
 --------------------------------------------------------------------------------
 
@@ -178,23 +181,27 @@ instance MonadHexl m => MonadEngine (EngineT m) where
 
   askProjectId = ask
 
-  graphGetsM f = use engineGraph >>= f
+  useProject l = use (engineProject . l)
 
-  graphModify f = engineGraph %= f
+  modifyProject f = engineProject %= f
+
+  graphGetsM f = use (engineProject . projectDependencyGraph) >>= f
+
+  graphModify f = (engineProject . projectDependencyGraph) %= f
 
   graphSetCodeDependencies columnId deps = do
     let getTableId c = _columnTableId <$> lift (getById' c)
-    graph <- use engineGraph
+    graph <- use (engineProject . projectDependencyGraph)
     setCodeDependencies getTableId columnId deps graph >>= \case
       Nothing -> pure True
-      Just graph' -> (engineGraph .= graph') $> False
+      Just graph' -> (engineProject . projectDependencyGraph .= graph') $> False
 
   graphSetTypeDependencies columnId deps = do
-    graph <- use engineGraph
+    graph <- use (engineProject . projectDependencyGraph)
     let getTableId c = view columnTableId <$> getColumn c
     setTypeDependencies columnId getTableId deps graph >>= \case
       Nothing     -> pure True
-      Just graph' -> (engineGraph .= graph') $> False
+      Just graph' -> (engineProject . projectDependencyGraph .= graph') $> False
 
   --
 
@@ -359,6 +366,14 @@ instance MonadHexl m => MonadEngine (EngineT m) where
           (\cell -> cell ^. cellColumnId == columnId)
         engineCache . cacheColumnCells . at columnId .= Just result
         pure result
+
+  --
+
+  getProjectTables = do
+    projectId <- ask
+    storeListByQuery storeTables
+      [ "projectId" =: toObjectId projectId ]
+      (\table -> table ^. tableProjectId == projectId)
 
   getTableRows tableId = storeListByQuery storeRows
     [ "tableId" =: toObjectId tableId ]

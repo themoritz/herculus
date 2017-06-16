@@ -64,6 +64,7 @@ type ProjectRoutes =
  :<|> ProjectRunCommands
  :<|> ProjectLintDataCol
  :<|> ProjectLintReportCol
+ :<|> ProjectLintModule
 
 type ReportCellRoutes =
       ReportCellGetPdf

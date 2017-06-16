@@ -37,6 +37,7 @@ import           Lib.Compiler.Error
 import           Lib.Model
 import           Lib.Model.Auth
 import           Lib.Model.Column
+import           Lib.Model.Common
 import           Lib.Model.Dependencies
 import           Lib.Model.Project
 import           Lib.Model.Row
@@ -233,13 +234,14 @@ handleProject =
   :<|> handleProjectRunCommands
   :<|> handleProjectLintDataCol
   :<|> handleProjectLintReportCol
+  :<|> handleProjectLintModule
 
 handleProjectCreate
   :: (MonadHexl m, MonadReader Api.UserInfo m)
   => Text -> m Api.Project
 handleProjectCreate projName = do
   userId <- asks Api._uiUserId
-  let project = Project projName userId emptyDependencyGraph
+  let project = Project projName userId "" CompileResultNone emptyDependencyGraph
   projectId <- create project
   pure $ Api.projectFromEntity $ Entity projectId project
 
@@ -336,6 +338,7 @@ handleProjectRunCommands projectId cmds = do
     ofColumn c = _columnTableId <$> getById' c >>= ofTable
     ofRow r = _rowTableId <$> getById' r >>= ofTable
     checkCmd = \case
+      CmdModuleSave _            -> pure ()
       CmdTableCreate _           -> pure ()
       CmdTableSetName t _        -> ofTable t
       CmdTableDelete t           -> ofTable t
@@ -362,7 +365,7 @@ handleProjectLintDataCol columnId (dataType, src) = do
   table <- getById' tableId
   let projectId = table ^. tableProjectId
   project <- getById' projectId
-  res <- map fst $ runEngineT projectId (project ^. projectDependencyGraph) $
+  res <- map fst $ runEngineT (Entity projectId project) $
     checkDataCol tableId columnId dataType src
   pure $ case res of
     CompileResultError err -> err
@@ -379,11 +382,19 @@ handleProjectLintReportCol columnId src = do
   table <- getById' tableId
   let projectId = table ^. tableProjectId
   project <- getById' projectId
-  res <- map fst $ runEngineT projectId (project ^. projectDependencyGraph) $
+  res <- map fst $ runEngineT (Entity projectId project) $
     checkReportCol tableId columnId src
   pure $ case res of
     CompileResultError err -> err
     _                      -> []
+
+handleProjectLintModule
+  :: Monad m
+  => Text -> m [Error]
+handleProjectLintModule src =
+  compileModule src voidResolver preludeCheckEnv >>= \case
+    Left err -> pure [err]
+    Right _  -> pure []
 
 --------------------------------------------------------------------------------
 
@@ -494,8 +505,9 @@ evalReport columnId rowId = do
   col <- getById' columnId
   projectId <- (^. tableProjectId) <$> getById' (col ^. columnTableId)
   withReportCol col $ \repCol -> case repCol ^. reportColCompiledTemplate of
-    CompileResultOk ttpl ->
-      fmap fst $ runEngineT projectId emptyDependencyGraph $ do
+    CompileResultOk ttpl -> do
+      p <- getById' projectId
+      fmap fst $ runEngineT (Entity projectId p) $ do
         evalTemplate ttpl (mkGetter rowId) preludeTermEnv >>= \case
           Left e -> pure (repCol, e)
           Right res -> pure (repCol, res)

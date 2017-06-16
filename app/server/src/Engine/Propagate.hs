@@ -16,6 +16,7 @@ import qualified Data.Text                    as T
 import           Lib.Compiler
 import           Lib.Model.Cell
 import           Lib.Model.Column
+import           Lib.Model.Common
 import           Lib.Model.Dependencies
 import           Lib.Model.Dependencies.Types
 import           Lib.Model.Row

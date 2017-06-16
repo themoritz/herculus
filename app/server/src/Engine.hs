@@ -17,12 +17,15 @@ import           Data.Maybe                   (mapMaybe)
 import qualified Data.Text                    as T (length)
 
 import           Lib.Api.Schema.Column        (columnFromEntity)
+import           Lib.Api.Schema.Compiler
 import           Lib.Api.Schema.Project       (Command (..))
 import           Lib.Api.WebSocket
+import           Lib.Compiler
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Class
 import           Lib.Model.Column
+import           Lib.Model.Common
 import           Lib.Model.Dependencies
 import           Lib.Model.Dependencies.Types
 import           Lib.Model.Project
@@ -39,11 +42,11 @@ import           Monads
 
 runCommands :: MonadHexl m => Id Project -> [Command] -> m ()
 runCommands projectId cmds = do
-  graph <- _projectDependencyGraph <$> getById' projectId
+  p <- getById' projectId
   -- Run command in engine, compile, and propagate
-  (_ , st) <- runEngineT projectId graph $ do
+  (_ , st) <- runEngineT (Entity projectId p) $ do
     mapM_ executeCommand cmds
-    getCompileTargets >>= mapM_ compileColumn
+    getCompileTargets >>= traverse_ compileColumn
     propagate
   -- Commit changes
   commitEngineState projectId st
@@ -72,7 +75,7 @@ commitEngineState projectId st = do
   commit _storeColumns
   commit _storeRows
   commit _storeTables
-  update projectId (projectDependencyGraph .~ (st ^. engineGraph))
+  update projectId (const (st ^. engineProject))
 
 commit :: (Model a, MonadDB m) => StoreMap a -> m ()
 commit m = do
@@ -91,6 +94,22 @@ commit m = do
 -- | Core of the engine logic
 executeCommand :: MonadEngine m => Command -> m ()
 executeCommand = \case
+
+  CmdModuleSave src -> do
+    modifyProject (projectModuleSource .~ src)
+    compileModule src voidResolver preludeCheckEnv >>= \case
+      Left _ -> pure ()
+      Right checkResult -> do
+        let result = CompileResultOk $ checkResultToModule checkResult
+        modifyProject (projectModule .~ result)
+        tables <- getProjectTables
+        for_ tables $ \(Entity tableId _) -> do
+          cols <- getTableColumns tableId
+          for_ cols $ \(Entity columnId col) -> case col ^. columnKind of
+            ColumnData dataCol -> case dataCol ^. dataColIsDerived of
+              Derived    -> scheduleCompileColumn columnId
+              NotDerived -> pure ()
+            ColumnReport _ -> scheduleCompileColumn columnId
 
   CmdTableCreate name -> do
     i <- askProjectId

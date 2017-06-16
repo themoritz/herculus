@@ -13,6 +13,8 @@ module Lib.Prelude
   ( module Exports
   , id
   , (***), (&&&)
+  , (#)
+  , (<#>)
   , ExceptT(..)
   --
   , (:+:)(..)
@@ -45,6 +47,18 @@ import           Protolude                  as Exports hiding ((:*:), (:+:),
 import           Data.Functor.Foldable
 
 import           Data.Maybe                 (fromJust)
+
+--------------------------------------------------------------------------------
+
+(#) :: a -> (a -> b) -> b
+(#) a f = f a
+
+infixl 1 #
+
+(<#>) :: Functor f => f a -> (a -> b) -> f b
+(<#>) m f = map f m
+
+infixl 1 <#>
 
 --------------------------------------------------------------------------------
 

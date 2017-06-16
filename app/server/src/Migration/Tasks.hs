@@ -6,7 +6,7 @@ module Migration.Tasks where
 
 import           Lib.Prelude
 
-import           Control.Lens
+import           Control.Lens           hiding (( # ))
 
 import           Database.MongoDB       ((=:))
 import qualified Database.MongoDB       as Mongo
@@ -68,7 +68,9 @@ recompileColumns = do
       "Compiling project " <> project ^. projectName <>
       " (" <> show projectId <> ") ..."
     -- The empty dependency graph will be rebuilt completely in this process
-    (_, st) <- runEngineT projectId emptyDependencyGraph $ do
+    p <- getById' projectId
+    let p' = p # projectDependencyGraph .~ emptyDependencyGraph
+    (_, st) <- runEngineT (Entity projectId p') $ do
       for_ (join cols) $ \(Entity columnId col) -> do
         let compile = scheduleCompileColumn columnId
         case col ^. columnKind of

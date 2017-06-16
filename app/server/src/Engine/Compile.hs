@@ -25,6 +25,7 @@ import           Lib.Compiler.Error
 import           Lib.Compiler.Type
 import           Lib.Model
 import           Lib.Model.Column
+import           Lib.Model.Common
 import           Lib.Model.Table
 import           Lib.Template
 import           Lib.Template.Core
