@@ -10,26 +10,24 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Herculus.Ace as Ace
 import Herculus.EditBox as Edit
-import Control.Monad.Aff (delay)
-import Control.Monad.Eff.Ref (Ref, newRef, readRef, writeRef)
-import Control.Monad.Fork (fork)
-import Data.Array (cons, deleteAt, find, head, length, null, snoc, zip)
+import Herculus.Config.Common.Header as Header
+import Control.Monad.Eff.Ref (Ref)
+import Data.Array (cons, deleteAt, find, head, length, snoc, zip)
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (minimumBy)
-import Data.Int (toNumber)
 import Data.Lens (_1, _2, element, traversed, (^?))
 import Data.Lens.Types (Setter')
 import Data.Map (Map)
-import Data.Time.Duration (Milliseconds(..))
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3)
 import Herculus.Config.Column.Types (filterTypes, subTypes)
+import Herculus.Config.Common (withDelay, section, errorList)
 import Herculus.Monad (Herc, withApi)
-import Herculus.Utils (Options, bLens, clbutton_, cldiv, cldiv_, dropdown, faButton_, faIcon_, mkIndexed)
+import Herculus.Utils (Options, bLens, cldiv_, dropdown, faButton_, mkIndexed)
 import Lib.Api.Rest (postProjectLintDataColByColumnId, postProjectLintReportColByColumnId, postProjectRunCommandsByProjectId)
 import Lib.Api.Schema.Column (Column, ColumnKind(..), CompileStatus(StatusError, StatusNone, StatusOk), DataCol, ReportCol, _ColumnData, _ColumnReport, columnId, columnKind, columnName, columnTableId, dataColCompileStatus, dataColIsDerived, dataColSourceCode, dataColType, reportColCompileStatus, reportColFormat, reportColLanguage, reportColTemplate)
 import Lib.Api.Schema.Compiler (Kind(KindRecord, KindTable, KindType), TyconInfo, tyconKind)
 import Lib.Api.Schema.Project (Command(..))
-import Lib.Compiler.Error (Error(..))
+import Lib.Compiler.Error (Error)
 import Lib.Custom (Id(..), ProjectTag)
 import Lib.Model.Column (DataType(..), IsDerived(..), ReportFormat(..), ReportLanguage(..), _DataAlgebraic, _DataRecord, _DataTable)
 import Lib.Model.Table (Table)
@@ -112,7 +110,7 @@ unsavedChanges st =
 
 type Child =
   Ace.Query <\/>
-  Edit.Query String <\/>
+  Header.Query <\/>
   Edit.Query String <\/>
   Const Void
 
@@ -202,61 +200,24 @@ render st = HH.div_
 
   where
 
-  header =
-    let
-      head = cldiv_ "flex"
-        [ cldiv_ "flex-auto"
-          [ HH.slot' cp2 unit Edit.comp
-                   { value: st.input.column ^. columnName
-                   , placeholder: "Name..."
-                   , className: "bold editbox"
-                   , inputClassName: "editbox__input"
-                   , invalidClassName: "editbox__input--invalid"
-                   , show: id
-                   , validate: Just
-                   , clickable: true
-                   }
-                   case _ of
-                     Edit.Save v _ -> Just $ H.action $ SetName v
-                     Edit.Cancel -> Nothing
-          ]
-        , cldiv_ ""
-          [ clbutton_ "button--pure" Close'
-            [ faIcon_ "close fa-lg fa-fw" ]
+  header = HH.slot' cp2 unit Header.comp
+    { name: st.input.column ^. columnName
+    , unsaved: unsavedChanges st
+    , subTitle: HH.div_
+        [ HH.text $ "Column on table "
+        , HH.b_
+          [ HH.text $ maybe "???" _.label
+              (find (\t -> t.value == st.input.column ^. columnTableId)
+                    st.input.tables)
           ]
         ]
-      unsaved = unsavedChanges st
-      disabled = if unsaved then "" else " button--disabled"
-      body = cldiv_ "flex items-end"
-        [ cldiv_ "font-smaller flex-auto"
-          [ HH.text $ "Column on table "
-          , HH.b_
-            [ HH.text $ maybe "???" _.label
-                (find (\t -> t.value == st.input.column ^. columnTableId)
-                      st.input.tables)
-            ]
-          ]
-        , cldiv_ "font-smaller"
-          [ clbutton_ "button bold mr1" Delete'
-            [ faIcon_ "close red mr1"
-            , HH.text "Delete"
-            ]
-          , HH.button
-            [ HP.class_ (H.ClassName $ "button bold mr1" <> disabled)
-            , HE.onClick (if unsaved then HE.input_ Reset else const Nothing)
-            , HP.disabled (not unsaved)
-            ]
-            [ faIcon_ "undo gray mr1"
-            , HH.text "Reset"
-            ]
-          , clbutton_ "button bold" Save
-            [ faIcon_ $ "check mr1 " <> if unsaved then "green" else "gray"
-            , HH.text "Save"
-            ]
-          ]
-        ]
-    in
-      section "wrench" head body 
+    }
+    \o -> Just $ H.action $ case o of
+      Header.SetName n -> SetName n
+      Header.Close -> Close'
+      Header.Reset -> Reset
+      Header.Delete -> Delete'
+      Header.Save -> Save
 
   dataColConf dat =
     [ header
@@ -301,7 +262,7 @@ render st = HH.div_
                        }
                        \(Ace.TextChanged f) -> Just $ H.action $ SetFormula f
             ]
-          , errorBar
+          , errorList st.errors
           ]
       in
         section "calculator" head body
@@ -348,7 +309,7 @@ render st = HH.div_
                  , show: id
                  , validate: case _ of
                      "" -> Nothing 
-                     f -> Just f
+                     f' -> Just f'
                  , clickable: true
                  }
                  case _ of
@@ -385,7 +346,7 @@ render st = HH.div_
                     (getFitting kindGoal)
 
       getArgGoals :: Kind -> String -> Array Kind
-      getArgGoals goal c = unsafePartial $ fromJust do
+      getArgGoals goal c = fromMaybe [] do
         c' <- Map.lookup c st.input.types
         subTypes goal (c' ^. tyconKind)
 
@@ -461,44 +422,11 @@ render st = HH.div_
                        }
                        \(Ace.TextChanged t) -> Just (H.action $ SetReportTemplate t)
             ]
-          , errorBar
+          , errorList st.errors
           ]
       in
         section "file-text-o" head body
     ]
-
-  errorItem ok text = cldiv_ "flex"
-    [ cldiv_ ""
-      [ faIcon_ $ if ok
-                  then "check-circle fa-fw green"
-                  else "exclamation-circle fa-fw red"
-      ]
-    , cldiv_ "flex-auto gray pl1"
-      [ HH.text text ]
-    ]
-
-  errorBar = cldiv_ "" $
-    if null st.errors
-    then [ errorItem true "All fine!" ]
-    else map (\(Error e) -> errorItem false e.errMsg) st.errors
-
-section :: forall p i. String -> HH.HTML p i -> HH.HTML p i -> HH.HTML p i
-section icon head body = cldiv_ "flex items-start config__section"
-  [ cldiv_ "pt1 pb1 pl1"
-    [ faIcon_ $ icon <> " fa-lg fa-fw lightgray"
-    ]
-  , cldiv_ "flex-auto"
-    [ cldiv "p1 border-box"
-      [ HC.style do
-          CSS.minHeight (CSS.px 24.0)
-      ]
-      [ head
-      ]
-    , cldiv_ "px1 pb1"
-      [ body
-      ]
-    ]
-  ]
 
 eval :: Query ~> H.ParentDSL State Query Child Slot Output Herc
 eval = case _ of
@@ -644,23 +572,4 @@ lintFormula = do
           pure unit
       NotDerived -> pure unit
     ColumnReport _ -> pure unit
-
-withDelay
-  :: Int
-  -> H.ParentDSL State Query Child Slot Output Herc Unit
-  -> H.ParentDSL State Query Child Slot Output Herc Unit
-withDelay duration action = do
-  { delayRef } <- get
-  case delayRef of
-    Nothing -> pure unit
-    Just r -> liftEff $ writeRef r false
-  newRef <- liftEff $ newRef true
-  _ <- fork do
-    liftAff $ delay (Milliseconds $ toNumber duration)
-    case delayRef of
-      Nothing -> action
-      Just r -> do
-        active <- liftEff $ readRef newRef
-        if active then action else pure unit
-  modify _{ delayRef = Just newRef }
 

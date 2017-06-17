@@ -150,8 +150,8 @@ eval = case _ of
                 Ace.Position {row: endRow, column: endColumn}
                   <- Anchor.getPosition endAnchor
                 Range.create startRow startColumn endRow endColumn
-              addMarker r =
-                Session.addMarker r "linter-error" "text" false session
+              addMarker r' =
+                Session.addMarker r' "linter-error" "text" false session
             range <- getAnchorRange
             marker <- addMarker range
             markerRef <- newRef marker
@@ -159,8 +159,8 @@ eval = case _ of
               rerender _ = do
                 m <- readRef markerRef
                 Session.removeMarker m session
-                r <- getAnchorRange
-                m' <- addMarker r
+                r' <- getAnchorRange
+                m' <- addMarker r'
                 writeRef markerRef m'
             Anchor.onChange startAnchor rerender
             Anchor.onChange endAnchor rerender

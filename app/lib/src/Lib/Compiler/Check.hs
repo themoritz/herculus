@@ -704,7 +704,7 @@ checkModule (extractDecls -> decls) = do
 
           -- Collect exports and compile expressions
           exprs <- for result $ \(name, i, _) -> (name, ) <$> compileIntermed i
-          let resultTermEnv = Core.toIdentHashMap $
+          let resultCore = Core.toIdentHashMap $
                 Map.fromList exprs `Map.union` Map.fromList instDicts
           resultCheckEnv <- getCheckEnv
           pure CheckResult {..}

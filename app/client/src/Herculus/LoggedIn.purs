@@ -8,11 +8,10 @@ import Halogen.HTML.Properties as HP
 import Herculus.ChangePassword as ChangePw
 import Herculus.Project as Project
 import Herculus.ProjectOverview as PO
-import Herculus.ProjectModules as PM
 import Herculus.Router as R
 import Herculus.UserMenu as UserMenu
 import Lib.Api.Rest as Api
-import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5)
+import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
 import Herculus.Monad (Herc, gotoRoute, withApi)
 import Herculus.Utils (faIcon_)
 import Herculus.Utils.Templates (app, plainApp)
@@ -36,11 +35,9 @@ type ChildQuery =
   PO.Query <\/>
   ChangePw.Query <\/>
   UserMenu.Query <\/>
-  PM.Query <\/>
   Const Void
 
 type ChildSlot =
-  Unit \/
   Unit \/
   Unit \/
   Unit \/
@@ -82,7 +79,6 @@ comp = H.lifecycleParentComponent
             [ ]
             (HH.div_
              [ HH.slot' cp2 unit PO.comp unit absurd
-             -- , HH.slot' cp5 unit PM.comp unit absurd
              ]
             )
           R.ProjectDetail p ->

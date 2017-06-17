@@ -55,6 +55,7 @@ library
                      , time
                      , transformers
                      , transformers-base
+                     , unordered-containers
                      , websockets
                      , wai
   default-language:    Haskell2010

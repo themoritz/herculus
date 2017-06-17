@@ -588,7 +588,7 @@ render st = case st.input.content of
     let
       vcons = instConstructors tyargs (resolveTycon tycon)
       vconsMap = Map.fromFoldable vcons
-      getArgDts c = unsafePartial $ fromJust $ Map.lookup c vconsMap
+      getArgDts c = fromMaybe [] $ Map.lookup c vconsMap
     in
       { arguments: mkIndexed $ zip (getArgDts vcon) vargs
       , mkDefaultArgs: \c ->
@@ -651,7 +651,10 @@ render st = case st.input.content of
           [ cldiv_ "table-cell bg-white p1"
             [ showValue mode dt v ]
           ]
-      in
+      in if hasSimpleVcons (resolveTycon tycon)
+      then
+        HH.div_ [ HH.text vcon ]
+      else
         cldiv_ "cell-table" $
         [ cldiv_ "cell-table__row"
           [ cldiv_ "table-cell bg-white p1 bold"

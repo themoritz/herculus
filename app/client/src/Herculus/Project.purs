@@ -11,7 +11,6 @@ import Halogen.HTML.Properties as HP
 import Herculus.Config as Config
 import Herculus.Grid as Grid
 import Herculus.Notifications.Types as N
-import Herculus.Project.Settings as Settings
 import Herculus.Project.TableList as TL
 import Herculus.Router as R
 import Herculus.UserMenu as UserMenu
@@ -21,17 +20,17 @@ import Control.Monad.State (execState, runState)
 import Control.Monad.Writer (execWriterT)
 import Data.Array (head, singleton)
 import Data.Int (toNumber)
-import Data.Lens (Lens', _Just, lens, view, (.=))
+import Data.Lens (Lens', lens, view)
 import Data.Map (Map)
 import Data.Maybe.First (First(..))
-import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5, cp6)
+import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4, cp5)
 import Herculus.Monad (Herc, getAuthToken, gotoRoute, notify, withApi)
 import Herculus.Project.Data (ProjectData, applyDiff, descTable, mkProjectData, prepare)
 import Herculus.Project.TableList (Output(..))
 import Herculus.Utils (cldiv, cldiv_, clspan_, faIcon_)
 import Herculus.Utils.Templates (app)
 import Lib.Api.Schema.Auth (UserInfo)
-import Lib.Api.Schema.Compiler (TyconInfo(..))
+import Lib.Api.Schema.Compiler (TyconInfo)
 import Lib.Api.Schema.Project (Command, Project, projectId, projectName)
 import Lib.Api.Schema.Project (ProjectData(..)) as Schema
 import Lib.Api.WebSocket (WsDownMessage(..), WsUpMessage(..))
@@ -45,11 +44,10 @@ data Query a
   | OpenTable (Id Table) a
   | ToOverview a
   | RunCommands (Array Command) a
-  | SaveName String a
-  | Delete a
   | ResizeColumn (Id ColumnTag) Int a
   | ReorderColumns (Array (Id ColumnTag)) a
   | EditColumn (Id ColumnTag) a
+  | EditProject a
   | ConfigClose a
   | HandleWebSocket (WS.Output WsDownMessage) a
 
@@ -77,12 +75,10 @@ type ChildQuery =
   WS.Query WsUpMessage <\/>
   TL.Query <\/>
   Grid.Query <\/>
-  Settings.Query <\/>
   Config.Query <\/>
   Const Void
 
 type ChildSlot =
-  Unit \/
   Unit \/
   Unit \/
   Unit \/
@@ -135,8 +131,8 @@ render st =
             { cells: st.projectData._pdCells
             , cols: desc._descColumns
             , rows: Map.toAscUnfoldable desc._descRows
-            , tables: Map.toAscUnfoldable st.projectData._pdTables <#> \(Tuple i t) ->
-                { value: i, label: t ^. descTable <<< tableName }
+            , tables: Map.toAscUnfoldable st.projectData._pdTables <#> \(Tuple i t') ->
+                { value: i, label: t' ^. descTable <<< tableName }
             , rowCache: st.projectData._pdRowCache
             , types: st.types
             , tableId: t
@@ -164,12 +160,14 @@ render st =
               then cldiv "absolute top-0 right-0 bottom-0 config"
                    [ HC.style do
                        CSS.width $ CSS.px $ toNumber $ st.configWidth
-                   ]
-                   [ HH.slot' cp6 unit Config.comp
+                   ] $ case st._project of
+                   Nothing -> []
+                   Just p ->
+                   [ HH.slot' cp5 unit Config.comp
                        { cols: Map.unions $ _._descColumns <$> st.projectData._pdTables
                        , types: st.types
                        , tables: input.tables
-                       , projectId: input.projectId
+                       , project: p
                        }
                        \o -> Just $ H.action $ case o of
                          Config.Close -> ConfigClose
@@ -199,10 +197,17 @@ render st =
                  SelectTable t -> Just (H.action (OpenTable t))
     , case st._project of
         Nothing -> HH.text ""
-        Just p -> HH.slot' cp5 unit Settings.comp { name: p ^. projectName } $
-                    case _ of
-                      Settings.SaveName name -> Just (H.action $ SaveName name)
-                      Settings.Delete -> Just (H.action Delete)
+        Just p -> cldiv_ "project-name"
+          [ HH.span_
+            [ HH.text (p ^. projectName) ]
+          , HH.text " "
+          , HH.button
+            [ HP.class_ (H.ClassName "button--pure button--on-dark gray ml1 align-middle")
+            , HP.title "Configure project"
+            , HE.onClick (HE.input_ EditProject)
+            ]
+            [ faIcon_ "gear" ]
+          ]
     ]
     body
 
@@ -246,10 +251,12 @@ eval (HandleWebSocket output next) = do
           , message: "Could not subscribe to project updates."
           , detail: Just e
           }
-      WsDownProjectDiff _ cellDiff columnDiff rowDiff tableDiff -> do
+      WsDownProjectDiff _ prjUpdate cellDiff columnDiff rowDiff tableDiff -> do
         { view, projectData } <- H.get
         let
           m = applyDiff view tableDiff columnDiff rowDiff cellDiff
+        for_ prjUpdate \newPrj ->
+          modify _{ _project = Just newPrj }
         case runState (execWriterT m) projectData of
           Tuple (First action) newProjectData -> do
             let newView = action <|> view
@@ -262,18 +269,6 @@ eval (HandleWebSocket output next) = do
 eval (RunCommands cmds next) = do
   p <- H.gets _.projId
   withApi (Api.postProjectRunCommandsByProjectId cmds p) (const $ pure unit)
-  pure next
-
-eval (SaveName name next) = do
-  { projId } <- get
-  withApi (Api.postProjectSetNameByProjectId name projId) \_ -> do
-    project <<< _Just <<< projectName .= name
-  pure next
-
-eval (Delete next) = do
-  { projId } <- H.get
-  withApi (Api.deleteProjectDeleteByProjectId projId) \_ ->
-    gotoRoute $ R.LoggedIn R.ProjectOverview
   pure next
 
 eval (ResizeColumn colId size next) = do
@@ -294,7 +289,12 @@ eval (ReorderColumns order next) = do
 
 eval (EditColumn c next) = do
   modify _{ configOpen = true }
-  _ <- H.query' cp6 unit $ H.action $ Config.EditColumn c
+  _ <- H.query' cp5 unit $ H.action $ Config.EditColumn c
+  pure next
+
+eval (EditProject next) = do
+  modify _{ configOpen = true }
+  _ <- H.query' cp5 unit $ H.action Config.EditProject
   pure next
 
 eval (ConfigClose next) = do

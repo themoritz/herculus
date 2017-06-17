@@ -56,7 +56,6 @@ type AuthRoutes' =
 type ProjectRoutes =
       ProjectCreate
  :<|> ProjectList
- :<|> ProjectSetName
  :<|> ProjectDelete
  :<|> ProjectColSetWidth
  :<|> ProjectReorderCols
@@ -81,7 +80,6 @@ type AuthResetPassword   = "resetPassword"  :> Capture "sessionKey" M.SessionKey
 
 type ProjectCreate       = "create"      :> ReqBody '[JSON] Text                                              :> Post '[JSON] Project
 type ProjectList         = "list"                                                                             :> Get '[JSON] [Project]
-type ProjectSetName      = "setName"     :> Capture "projectId" (Id M.Project) :> ReqBody '[JSON] Text        :> Post '[JSON] ()
 type ProjectDelete       = "delete"      :> Capture "projectId" (Id M.Project)                                :> Delete '[JSON] ()
 type ProjectColSetWidth  = "colSetWidth" :> Capture "columnId" (Id M.Column)   :> ReqBody '[JSON] Int         :> Post '[JSON] ()
 type ProjectReorderCols  = "reorderCols" :> Capture "tableId" (Id M.Table)   :> ReqBody '[JSON] [Id M.Column] :> Post '[JSON] ()

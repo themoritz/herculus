@@ -170,6 +170,8 @@ data Module = Module
   , _moduleTycons    :: [(Text, TyconInfo)]
   } deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
+makeLenses ''Module
+
 checkResultToModule :: C.CheckResult -> Module
 checkResultToModule (C.CheckResult (C.CheckEnv ks ts ops _ cls) terms tycons) =
   Module (Map.toList $ map toSchemaKind ks)
@@ -190,4 +192,3 @@ moduleToCheckResult (Module ks ts ops cls terms tycons) = C.CheckResult
   )
   (HashMap.fromList terms)
   (map fromSchemaTyconInfo $ Map.fromList tycons)
-

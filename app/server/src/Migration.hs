@@ -9,19 +9,22 @@ module Migration
   ( migrate
   ) where
 
-import           Lib.Prelude      hiding ((&))
+import           Lib.Prelude
 
-import           Control.Lens
+import           Control.Lens            hiding (( # ))
 
 import           Data.Aeson
 import           Data.Aeson.Bson
 import           Data.Bson.Lens
 
-import           Database.MongoDB ((=:))
-import qualified Database.MongoDB as Mongo
+import           Database.MongoDB        ((=:))
+import qualified Database.MongoDB        as Mongo
 
+import           Lib.Api.Schema.Compiler (Module)
 import           Lib.Model.Class
 import           Lib.Model.Column
+import           Lib.Model.Common
+import           Lib.Model.Project
 import           Lib.Model.Table
 import           Lib.Types
 
@@ -30,7 +33,7 @@ import           Monads
 import           Migration.Tasks
 
 currentVersion :: Int
-currentVersion = 2
+currentVersion = 3
 
 storeCollection :: Text
 storeCollection = "store"
@@ -111,6 +114,19 @@ migration = \case
 
     recompileColumns
     success 2
+
+  2 -> do
+    let
+      prjCollection = collectionName (Proxy @Project)
+      goProj p = p <>
+        [ "moduleSource" =: ("" :: Text)
+        , "module" =: (CompileResultNone :: CompileResult Module)
+        ]
+    runMongo $ do
+      projs <- Mongo.find (Mongo.select [] prjCollection) >>= Mongo.rest
+      traverse_ (Mongo.save prjCollection . goProj) projs
+
+    success 3
 
   i -> throwError $ ErrBug $
     "No migration found for version `" <> show i <> "`."

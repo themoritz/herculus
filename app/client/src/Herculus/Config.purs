@@ -5,25 +5,28 @@ import Data.Map as Map
 import Halogen as H
 import Halogen.HTML as HH
 import Herculus.Config.Column as Column
+import Herculus.Config.Project as Project
 import Data.Map (Map)
-import Halogen.Component.ChildPath (cp1, type (\/), type (<\/>))
+import Halogen.Component.ChildPath (cp1, cp2, type (\/), type (<\/>))
 import Herculus.Monad (Herc)
 import Herculus.Utils (Options)
 import Lib.Api.Schema.Column (Column)
-import Lib.Api.Schema.Compiler (TyconInfo(..))
-import Lib.Custom (ColumnTag, Id, ProjectTag)
+import Lib.Api.Schema.Compiler (TyconInfo)
+import Lib.Api.Schema.Project (Project, projectId)
+import Lib.Custom (ColumnTag, Id)
 import Lib.Model.Table (Table)
 
 data Query a
   = Update Input a
   | EditColumn (Id ColumnTag) a
+  | EditProject a
   | Close' a
 
 type Input =
   { cols :: Map (Id ColumnTag) Column
   , tables :: Options (Id Table)
   , types :: Map String TyconInfo
-  , projectId :: Id ProjectTag
+  , project :: Project
   }
 
 data Output
@@ -37,13 +40,16 @@ type State =
 data View
   = VClosed
   | VColumn (Id ColumnTag)
+  | VProject
 
 type Child =
   Column.Query <\/>
+  Project.Query <\/>
   Const Void
 
 type Slot =
   Id ColumnTag \/
+  Unit \/
   Unit
 
 comp :: H.Component HH.HTML Query Input Output Herc
@@ -66,7 +72,7 @@ render st = case st.view of
       let
         input = 
           { column: col
-          , projectId: st.input.projectId
+          , projectId: st.input.project ^. projectId
           , tables: st.input.tables
           , types: st.input.types
           }
@@ -74,6 +80,15 @@ render st = case st.view of
          Column.Close -> Close'
       in
         HH.slot' cp1 colId Column.comp input handler
+  VProject ->
+    let
+      input =
+        { project: st.input.project
+        }
+      handler o = Just $ H.action case o of
+        Project.Close -> Close'
+    in
+      HH.slot' cp2 unit Project.comp input handler
 
 eval :: Query ~> H.ParentDSL State Query Child Slot Output Herc
 eval = case _ of
@@ -84,6 +99,10 @@ eval = case _ of
 
   EditColumn c next -> do
     modify _{ view = VColumn c }
+    pure next
+
+  EditProject next -> do
+    modify _{ view = VProject }
     pure next
 
   Close' next -> do

@@ -11,14 +11,18 @@ import           Lib.Prelude
 
 import           Control.Lens                 hiding (children)
 
-import qualified Data.Text                    as T
+import qualified Data.HashMap.Strict          as HashMap
 
+import           Lib.Api.Schema.Compiler      (moduleToCheckResult)
 import           Lib.Compiler
+import           Lib.Compiler.Check.Types     (resultCore)
+import           Lib.Compiler.Eval.Types
 import           Lib.Model.Cell
 import           Lib.Model.Column
 import           Lib.Model.Common
 import           Lib.Model.Dependencies
 import           Lib.Model.Dependencies.Types
+import           Lib.Model.Project
 import           Lib.Model.Row
 import           Lib.Types
 
@@ -30,14 +34,23 @@ propagate :: MonadEngine m => m ()
 propagate = do
   startCols <- getEvalRoots
   graphGetsM (getDependantsTopological getColumnTableId startCols) >>= \case
-    Nothing -> throwError $ ErrBug $ T.unlines
-      [ "propagate: Dependency graph contains cycles."
-      , "Please report this as a bug!" ]
-    Just order -> propagate' order
+    Nothing ->
+      throwError $ ErrBug $ "propagate: Dependency graph contains cycles."
+    Just order -> do
+      res <- useProject projectModule
+      termEnv <- case res of
+        CompileResultOk modu ->
+          pure $ HashMap.union
+            preludeTermEnv (loadModule $ resultCore $ moduleToCheckResult modu)
+        CompileResultNone ->
+          pure preludeTermEnv
+        CompileResultError _ ->
+          throwError $ ErrBug "propagate: Project module contains errors"
+      propagate' termEnv order
 
-propagate' :: forall m. MonadEngine m => ColumnOrder -> m ()
-propagate' [] = pure ()
-propagate' ((nextId, children):rest) = do
+propagate' :: forall m. MonadEngine m => TermEnv m -> ColumnOrder -> m ()
+propagate' _ [] = pure ()
+propagate' termEnv ((nextId, children):rest) = do
   let hop rowId = for_ children $ \(childId, mode) -> case mode of
         AddOne -> scheduleEvalCell childId rowId
         AddAll -> scheduleEvalColumn childId
@@ -50,7 +63,7 @@ propagate' ((nextId, children):rest) = do
           doTarget r = do
             result <- case compileResult of
               CompileResultOk expr -> do
-                evalFormula expr (mkGetter r) preludeTermEnv >>= \case
+                evalFormula expr (mkGetter r) termEnv >>= \case
                   Left e -> pure $ CellError e
                   Right v -> pure $ CellValue v
               CompileResultError _ -> pure $
@@ -66,7 +79,7 @@ propagate' ((nextId, children):rest) = do
 
     DoNothing -> pure ()
 
-  propagate' rest
+  propagate' termEnv rest
 
 --------------------------------------------------------------------------------
 

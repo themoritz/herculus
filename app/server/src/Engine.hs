@@ -18,7 +18,7 @@ import qualified Data.Text                    as T (length)
 
 import           Lib.Api.Schema.Column        (columnFromEntity)
 import           Lib.Api.Schema.Compiler
-import           Lib.Api.Schema.Project       (Command (..))
+import           Lib.Api.Schema.Project       (Command (..), projectFromEntity)
 import           Lib.Api.WebSocket
 import           Lib.Compiler
 import           Lib.Model
@@ -48,16 +48,22 @@ runCommands projectId cmds = do
     mapM_ executeCommand cmds
     getCompileTargets >>= traverse_ compileColumn
     propagate
+  -- Send changes to clients
+  broadcastStoreChanges projectId st
   -- Commit changes
   commitEngineState projectId st
-  -- Send changes to clients
-  broadcastStoreChanges projectId (st ^. engineStore)
 
-broadcastStoreChanges :: MonadHexl m => Id Project -> Store -> m ()
-broadcastStoreChanges projectId Store{..} = do
+broadcastStoreChanges :: MonadHexl m => Id Project -> EngineState -> m ()
+broadcastStoreChanges projectId st = do
+  let Store {..} = st ^. engineStore
   connections <- withConnectionMgr $ getConnectionsToProject projectId
+  oldProject <- getById' projectId
+  let
+    old = projectFromEntity (Entity projectId oldProject)
+    new = projectFromEntity (Entity projectId (st ^. engineProject))
   sendWS connections $ WsDownProjectDiff
     projectId
+    (if old /= new then Just new else Nothing)
     (filterChanges _storeCells)
     (filterChanges _storeColumns & traverse . _2 %~ columnFromEntity)
     (filterChanges _storeRows)
@@ -71,11 +77,11 @@ filterChanges = mapMaybe f . Map.toList
 commitEngineState :: MonadDB m => Id Project -> EngineState -> m ()
 commitEngineState projectId st = do
   let Store{..} = st ^. engineStore
+  update projectId (const (st ^. engineProject))
   commit _storeCells
   commit _storeColumns
   commit _storeRows
   commit _storeTables
-  update projectId (const (st ^. engineProject))
 
 commit :: (Model a, MonadDB m) => StoreMap a -> m ()
 commit m = do
@@ -95,7 +101,10 @@ commit m = do
 executeCommand :: MonadEngine m => Command -> m ()
 executeCommand = \case
 
-  CmdModuleSave src -> do
+  CmdProjectSetName name ->
+    modifyProject (projectName .~ name)
+
+  CmdProjectSetModule src -> do
     modifyProject (projectModuleSource .~ src)
     compileModule src voidResolver preludeCheckEnv >>= \case
       Left _ -> pure ()

@@ -33,7 +33,7 @@ import Herculus.Project.Data (Coords(..), RowCache)
 import Herculus.Utils (Options, cldiv_, faButton_, mkIndexed)
 import Herculus.Utils.Ordering (orderMap)
 import Lib.Api.Schema.Column (Column, ColumnKind(ColumnReport, ColumnData), columnId, columnKind, dataColIsDerived, dataColType)
-import Lib.Api.Schema.Compiler (TyconInfo(..))
+import Lib.Api.Schema.Compiler (TyconInfo)
 import Lib.Api.Schema.Project (Command(..))
 import Lib.Custom (ColumnTag, Id, ProjectTag)
 import Lib.Model.Cell (CellContent(..), Value)
@@ -327,8 +327,8 @@ eval = case _ of
             NotDerived -> do
               r <- subsetRows
               let
-                resolveTycon c =
-                  unsafePartial $ fromJust $ Map.lookup c input.types
+                resolveTycon c' =
+                  unsafePartial $ fromJust $ Map.lookup c' input.types
                 getOneRow t = do
                   table <- Map.lookup t input.rowCache
                   head $ Map.keys table

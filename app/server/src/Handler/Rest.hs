@@ -33,6 +33,7 @@ import qualified Lib.Api.Schema.Column      as Api
 import qualified Lib.Api.Schema.Compiler    as Api
 import qualified Lib.Api.Schema.Project     as Api
 import           Lib.Compiler
+import           Lib.Compiler.Check.Types
 import           Lib.Compiler.Error
 import           Lib.Model
 import           Lib.Model.Auth
@@ -226,7 +227,6 @@ handleProject :: ServerT ProjectRoutes ProjectHandler
 handleProject =
        handleProjectCreate
   :<|> handleProjectList
-  :<|> handleProjectSetName
   :<|> handleProjectDelete
   :<|> handleProjectColSetWidth
   :<|> handleProjectReorderCols
@@ -251,14 +251,6 @@ handleProjectList
 handleProjectList = do
   userId <- asks Api._uiUserId
   map Api.projectFromEntity <$> listByQuery [ "owner" =: toObjectId userId ]
-
-handleProjectSetName
-  :: (MonadHexl m, MonadReader Api.UserInfo m)
-  => Id Project -> Text -> m ()
-handleProjectSetName projectId name = do
-  userId <- asks Api._uiUserId
-  permissionProject userId projectId
-  update projectId $ projectName .~ name
 
 handleProjectDelete
   :: (MonadHexl m, MonadReader Api.UserInfo m)
@@ -313,6 +305,9 @@ handleProjectLoad projectId = do
       getOneByQuery [ "tableId" =: toObjectId tableId ]
     pure (tableId, order)
   colSizes <- listByQuery [ "projectId" =: toObjectId projectId ]
+  let projectTycons = case project ^. projectModule of
+        CompileResultOk modu -> modu ^. Api.moduleTycons
+        _                    -> []
   pure $ Api.ProjectData
            (Api.projectFromEntity (Entity projectId project))
            tables
@@ -321,7 +316,7 @@ handleProjectLoad projectId = do
            cells
            (map (\(Entity _ cw) -> (_cwColumnId cw, _cwWidth cw)) colSizes)
            colOrders
-           (Map.toList Api.preludeTycons)
+           (Map.toList Api.preludeTycons <> projectTycons)
 
 handleProjectRunCommands
   :: (MonadHexl m, MonadReader Api.UserInfo m)
@@ -338,7 +333,8 @@ handleProjectRunCommands projectId cmds = do
     ofColumn c = _columnTableId <$> getById' c >>= ofTable
     ofRow r = _rowTableId <$> getById' r >>= ofTable
     checkCmd = \case
-      CmdModuleSave _            -> pure ()
+      CmdProjectSetName _        -> pure ()
+      CmdProjectSetModule _      -> pure ()
       CmdTableCreate _           -> pure ()
       CmdTableSetName t _        -> ofTable t
       CmdTableDelete t           -> ofTable t

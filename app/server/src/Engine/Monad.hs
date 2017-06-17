@@ -22,12 +22,15 @@ import qualified Data.Set                     as Set
 
 import           Database.MongoDB             (Selector, (=:))
 
+import qualified Lib.Api.Schema.Compiler      as Api
 import           Lib.Compiler
+import           Lib.Compiler.Check.Types
 import           Lib.Compiler.Type
 import           Lib.Model
 import           Lib.Model.Cell
 import           Lib.Model.Class
 import           Lib.Model.Column
+import           Lib.Model.Common
 import           Lib.Model.Dependencies
 import           Lib.Model.Dependencies.Types
 import           Lib.Model.Project
@@ -85,8 +88,8 @@ data EngineState = EngineState
 makeLenses ''EngineState
 
 newEngineState :: Project -> EngineState
-newEngineState project =
-  EngineState emptyChanges emptyCache project Set.empty Map.empty
+newEngineState p =
+  EngineState emptyChanges emptyCache p Set.empty Map.empty
 
 --------------------------------------------------------------------------------
 
@@ -205,60 +208,67 @@ instance MonadHexl m => MonadEngine (EngineT m) where
 
   --
 
-  makeDefaultValue = defaultValue (10 :: Int)
-    where
-    defaultValue i dt' = if i == 0 then pure VUndefined else case dt' of
-      DataAlgebraic "Boolean" [] ->
-        pure $ VBool False
-      DataAlgebraic "String" [] ->
-        pure $ VString ""
-      DataAlgebraic "Number" [] ->
-        pure $ VNumber 0
-      DataAlgebraic "Integer" [] ->
-        pure $ VInteger 0
-      DataAlgebraic "DateTime" [] ->
-        VTime <$> lift getCurrentTime
-      DataAlgebraic "Row" [sub] ->
-        defaultValue (i-1) sub
-      DataAlgebraic "Record" [sub] ->
-        defaultValue (i-1) sub
-      DataAlgebraic "List" [_] ->
-        pure $ VList []
-      DataAlgebraic "Maybe" [_] ->
-        pure $ VMaybe Nothing
-      DataAlgebraic tycon args ->
-        let
-          cs = instConstructors tycon args
-          compare' (_, as) (_, as') = compare (length as) (length as')
-        in
-          case cs of
-            [] -> pure VUndefined
-            _ ->
-              let (vcon, vargs) = minimumBy compare' cs in
-              VData vcon <$> traverse (defaultValue (i-1)) vargs
-      DataRecord dts ->
-        VRecord <$> traverse (\(f, dt) -> (f,) <$> defaultValue (i-1) dt) dts
-      DataTable t -> do
-        res <- lift $ getOneByQuery [ "tableId" =: toObjectId t ]
-        pure $ VRowRef $ case res of
-          Left _                   -> Nothing
-          Right (Entity tableId _) -> Just tableId
-    instConstructors :: Text -> [DataType] -> [(Text, [DataType])]
-    instConstructors tycon dataTypes =
-      map goConstr (tyconValueConstrs tyconInfo)
-      where
-      tyconInfo = fromJust $ Map.lookup tycon preludeTycons
-      goConstr (c, args) = (c, map goType args)
-      goType (Fix ty) = case ty of
-        TypeVar v -> resolveParam v
-        TypeConstructor c -> DataAlgebraic c []
-        TypeApp f arg -> case goType f of
-          DataAlgebraic c f' -> DataAlgebraic c (snoc f' $ goType arg)
-        TypeTable (InId t) -> DataTable t
-        TypeRecord r -> DataRecord $ Map.toList $ map goType r
-      resolveParam :: Text -> DataType
-      resolveParam p = fromJust $ Map.lookup p paramMap
-      paramMap = Map.fromList $ zip (tyconParams tyconInfo) dataTypes
+  makeDefaultValue dt = do
+    result <- useProject projectModule
+    let
+      projTycons = case result of
+        CompileResultOk modu -> resultTycons $ Api.moduleToCheckResult modu
+        _                    -> Map.empty
+      tycons = projTycons `Map.union` preludeTycons
+      defaultValue i dt' = if i == 0 then pure VUndefined else case dt' of
+        DataAlgebraic "Boolean" [] ->
+          pure $ VBool False
+        DataAlgebraic "String" [] ->
+          pure $ VString ""
+        DataAlgebraic "Number" [] ->
+          pure $ VNumber 0
+        DataAlgebraic "Integer" [] ->
+          pure $ VInteger 0
+        DataAlgebraic "DateTime" [] ->
+          VTime <$> lift getCurrentTime
+        DataAlgebraic "Row" [sub] ->
+          defaultValue (i-1) sub
+        DataAlgebraic "Record" [sub] ->
+          defaultValue (i-1) sub
+        DataAlgebraic "List" [_] ->
+          pure $ VList []
+        DataAlgebraic "Maybe" [_] ->
+          pure $ VMaybe Nothing
+        DataAlgebraic tycon args ->
+          let
+            cs = instConstructors tycon args
+            compare' (_, as) (_, as') = compare (length as) (length as')
+          in
+            case cs of
+              [] -> pure VUndefined
+              _ ->
+                let (vcon, vargs) = minimumBy compare' cs in
+                VData vcon <$> traverse (defaultValue (i-1)) vargs
+        DataRecord dts ->
+          VRecord <$> traverse (\(f, dty) -> (f,) <$> defaultValue (i-1) dty) dts
+        DataTable t -> do
+          res <- lift $ getOneByQuery [ "tableId" =: toObjectId t ]
+          pure $ VRowRef $ case res of
+            Left _                   -> Nothing
+            Right (Entity tableId _) -> Just tableId
+      instConstructors :: Text -> [DataType] -> [(Text, [DataType])]
+      instConstructors tycon dataTypes =
+        map goConstr (tyconValueConstrs tyconInfo)
+        where
+        tyconInfo = fromJust $ Map.lookup tycon tycons
+        goConstr (c, args) = (c, map goType args)
+        goType (Fix ty) = case ty of
+          TypeVar v -> resolveParam v
+          TypeConstructor c -> DataAlgebraic c []
+          TypeApp f arg -> case goType f of
+            DataAlgebraic c f' -> DataAlgebraic c (snoc f' $ goType arg)
+          TypeTable (InId t) -> DataTable t
+          TypeRecord r -> DataRecord $ Map.toList $ map goType r
+        resolveParam :: Text -> DataType
+        resolveParam p = fromJust $ Map.lookup p paramMap
+        paramMap = Map.fromList $ zip (tyconParams tyconInfo) dataTypes
+
+    defaultValue (10 :: Int) dt
 
   --
 

@@ -23,11 +23,9 @@ import qualified Lib.Model.Row           as M
 import qualified Lib.Model.Table         as M
 import           Lib.Types
 
-
--- | All the critical commands that should be atomic, undoable, replayable etc.
--- within a project.
 data Command
-  = CmdModuleSave Text
+  = CmdProjectSetName Text
+  | CmdProjectSetModule Text
   | CmdTableCreate Text
   | CmdTableSetName (Id M.Table) Text
   | CmdTableDelete (Id M.Table)
@@ -47,7 +45,7 @@ data Project = Project
   , _projectName         :: Text
   , _projectOwner        :: Id M.User
   , _projectModuleSource :: Text
-  } deriving (Generic, ToJSON, FromJSON, Show)
+  } deriving (Eq, Generic, ToJSON, FromJSON, Show)
 
 projectFromEntity :: Entity M.Project -> Project
 projectFromEntity (Entity i (M.Project name owner src _ _)) =
