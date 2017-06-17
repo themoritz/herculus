@@ -4,7 +4,8 @@
 , monad-logger, mongoDB, mtl, neat-interpolation, network
 , optparse-applicative, pandoc, pretty-show, recursion-schemes
 , servant, servant-server, stdenv, stm, text, time, transformers
-, transformers-base, wai, wai-websockets, warp, websockets
+, transformers-base, unordered-containers, wai, wai-websockets
+, warp, websockets
 }:
 mkDerivation {
   pname = "server";
@@ -17,14 +18,14 @@ mkDerivation {
     directory entropy fast-logger filepath herculus-lib lens mime-mail
     monad-control monad-logger mongoDB mtl neat-interpolation network
     optparse-applicative pandoc pretty-show recursion-schemes servant
-    servant-server stm text time transformers transformers-base wai
-    websockets
+    servant-server stm text time transformers transformers-base
+    unordered-containers wai websockets
   ];
   executableHaskellDepends = [
     aeson base bytestring either herculus-lib mongoDB mtl servant
     servant-server stm text transformers wai-websockets warp websockets
   ];
-  testHaskellDepends = [ base ];
+  testHaskellDepends = [ base herculus-lib ];
   doHaddock = false;
   license = stdenv.lib.licenses.unfree;
 }
