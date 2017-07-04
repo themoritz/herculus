@@ -266,6 +266,16 @@ find p xs = case xs of
   Nil -> Nothing
   Cons a as -> if p a then Just a else find p as
 
+-- | Flatten a list of lists.
+concat : forall a. List (List a) -> List a
+concat = foldl append Nil
+
+any : forall a. (a -> Boolean) -> List a -> Boolean
+any f = foldl disj False <<< map f
+
+all : forall a. (a -> Boolean) -> List a -> Boolean
+all f = foldl conj True <<< map f
+
 --------------------------------------------------------------------------------
 -- | # Maybe Values
 
@@ -358,6 +368,29 @@ implements Semigroup (List a) where
 
 implements Semigroup String where
   append = prim_appendString
+
+--------------------------------------------------------------------------------
+-- | # Foldable Values
+
+interface Foldable f where
+  foldl : forall a b. (b -> a -> b) -> b -> f a -> b
+  foldr : forall a b. (a -> b -> b) -> b -> f a -> b
+
+implements Foldable List where
+  foldl f z xs = case xs of
+    Nil -> z
+    Cons y ys -> f (foldl f z ys) y
+  foldr f z xs = case xs of
+    Nil -> z
+    Cons y ys -> f y (foldr f z ys)
+
+implements Foldable Maybe where
+  foldl f z may = case may of
+    Nothing -> z
+    Just x -> f z x
+  foldr f z may = case may of
+    Nothing -> z
+    Just x -> f x z
 
 --------------------------------------------------------------------------------
 -- | # Printable Values
