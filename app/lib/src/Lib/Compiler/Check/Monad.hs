@@ -109,6 +109,8 @@ runCheck env goResolve =
         flip cata t $ \case
           TypeVar y | x == y ->
             throwError $ InfiniteType t1 t2
+          TypeApp f arg -> f >> arg
+          TypeRecord r -> sequence_ r
           _ -> pure ()
         checkTypeSubst %= typeSubstAfter (Map.singleton x t)
 
