@@ -24,7 +24,8 @@
       documentation = import ./../doc { inherit pkgs herculus-lib; };
 
       # Forwarded by AWS load balancer
-      sslPort = 1443;
+      sslPort = 443;
+      httpPort = 80;
       appServerPort = 3000;
 
     in {
@@ -32,7 +33,7 @@
       nixpkgs.config.allowUnfree = true;
       nixpkgs.config.allowBroken = true;
 
-      networking.firewall.allowedTCPPorts = [ 80 sslPort ];
+      networking.firewall.allowedTCPPorts = [ httpPort sslPort ];
 
       # We want to use sendmail
       networking.defaultMailServer = import ./smtp.nix;
@@ -67,15 +68,9 @@
         nginx = {
           enable = true;
           recommendedGzipSettings = true;
+          recommendedTlsSettings = true;
+          recommendedOptimisation = true;
           virtualHosts = {
-            # Redirect non-https traffic
-            "_1" = {
-              port = 80;
-              default = true;
-              extraConfig = ''
-                return 301 https://$host$request_uri;
-              '';
-            };
             # Redirect traffic without subdomain
             "${domain}" = {
               extraConfig = ''
@@ -84,7 +79,8 @@
             };
             # App
             "app.${domain}" = {
-              port = sslPort;
+              forceSSL = true;
+              enableACME = true;
               locations = {
                 "/websocket" = {
                   proxyPass = "http://localhost:${toString appServerPort}";
@@ -114,9 +110,10 @@
               };
             };
             # Landing page
-            "_3" = {
+            "www.${domain}" = {
               default = true;
-              port = sslPort;
+              forceSSL = true;
+              enableACME = true;
               locations = {
                 "/".root = "${landingPage}";
               };
