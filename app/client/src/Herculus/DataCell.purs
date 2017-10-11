@@ -1,24 +1,25 @@
 module Herculus.DataCell where
 
 import Herculus.Prelude
-import Data.Map as Map
-import Halogen as H
-import Halogen.HTML as HH
-import Halogen.HTML.Events as HE
-import Halogen.HTML.Properties as HP
-import Herculus.DatePicker as Date
-import Herculus.EditBox as EditBox
+
 import DOM.Event.Event (stopPropagation)
 import DOM.Event.MouseEvent (MouseEvent, mouseEventToEvent)
-import Data.Array (deleteAt, length, snoc, take, zip)
+import Data.Array (deleteAt, length, mapMaybe, snoc, take, zip)
 import Data.Exists (Exists, mkExists, runExists)
 import Data.Foldable (intercalate, maximum, minimumBy)
 import Data.Generic (gCompare, gEq)
 import Data.Lens (Setter', _2, _Just, element, traversed)
 import Data.List (head)
 import Data.Map (Map)
+import Data.Map as Map
+import Halogen as H
 import Halogen.Component.ChildPath (type (<\/>), type (\/), cp1, cp2, cp3, cp4)
+import Halogen.HTML as HH
+import Halogen.HTML.Events as HE
+import Halogen.HTML.Properties as HP
+import Herculus.DatePicker as Date
 import Herculus.EditBox (SaveKey(..))
+import Herculus.EditBox as EditBox
 import Herculus.Grid.Geometry (Direction(..))
 import Herculus.Monad (Herc)
 import Herculus.Project.Data (RowCache)
@@ -130,6 +131,17 @@ hasSimpleVcons info =
   case maximum (map (length <<< snd) cs) of
     Just i | i > 0 -> false
     _              -> true
+
+-- | Like `align` for Maps. Skips keys that aren't part of both "Maps".
+align
+  :: forall a b
+   . Array (Tuple String a) -> Array (Tuple String b)
+  -> Array (Tuple String (Tuple a b))
+align xs ys = mapMaybe go xs
+  where go (Tuple k a) = case Map.lookup k ysMap of
+          Nothing -> Nothing
+          Just b -> Just (Tuple k (Tuple a b))
+        ysMap = Map.fromFoldable ys
 
 needsExpand
   :: (String -> TyconInfo) -> DataType -> IsDerived -> Boolean
@@ -680,8 +692,8 @@ render st = case st.input.content of
       compactRecord vrec
     Full ->
       let
-        fields = mkIndexed $ zip trec vrec
-        field (Tuple i (Tuple (Tuple f dt) (Tuple _ v))) =
+        fields = mkIndexed $ align trec vrec
+        field (Tuple i (Tuple f (Tuple dt v))) =
           cldiv_ "cell-table__row"
           [ cldiv_ "table-cell col-4 bg-white p1" [ HH.text f ]
           , cldiv_ "table-cell col-8 bg-white p1"
@@ -702,14 +714,14 @@ render st = case st.input.content of
       compactRecord vrec
     Full ->
       let
-        field (Tuple (Tuple f dt) (Tuple _ v)) =
+        field (Tuple f (Tuple dt v)) =
           cldiv_ "cell-table__row"
           [ cldiv_ "table-cell col-4 bg-white p1" [ HH.text f ]
           , cldiv_ "table-cell col-8 bg-white p1"
             [ showValue mode dt v ]
           ]
       in
-        cldiv_ "cell-table" $ map field $ zip trec vrec
+        cldiv_ "cell-table" $ map field $ align trec vrec
 
   compactRecord vrec =
     HH.text $ intercalate ", " $ map field vrec
