@@ -42,7 +42,6 @@ library
                      , monad-logger
                      , mongoDB
                      , mtl
-                     , neat-interpolation
                      , network
                      , optparse-applicative
                      , pandoc

@@ -86,7 +86,7 @@ main = do
     Mongo.ensureIndex $ Mongo.index collCell   [ "rowId" =: asc ]
   --
   connections <- atomically $ newTVar mkConnectionManager
-  let env = HexlEnv pipe optMongoCollection connections
+  let env = HexlEnv pipe optMongoCollection connections optTexInputs
       webSocketApp = wsApp env
       restApp = serve routes $ rest env optAssetDir
   --

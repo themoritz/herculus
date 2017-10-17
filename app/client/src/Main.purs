@@ -1,17 +1,18 @@
 module Main where
 
 import Herculus.Prelude
-import Halogen as H
-import Herculus.Root as Root
+
 import Control.Monad.Aff (forkAff)
 import Control.Monad.Aff.AVar (makeVar, takeVar)
 import Control.Monad.Eff.Exception (error)
 import DOM.HTML (window)
 import DOM.HTML.Document (body)
 import DOM.HTML.Window (document)
+import Halogen as H
 import Halogen.Aff (awaitBody, runHalogenAff)
 import Halogen.VDom.Driver (runUI)
 import Herculus.Monad (runHerc, HercEffects)
+import Herculus.Root as Root
 import Herculus.Router (pRoute)
 import Routing (matchesAff)
 

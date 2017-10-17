@@ -114,6 +114,7 @@ data HexlEnv = HexlEnv
   { envPipe        :: Mongo.Pipe
   , envDatabase    :: Text
   , envConnections :: STM.TVar ConnectionManager
+  , envTexInputs   :: FilePath
   }
 
 newtype HexlT m a = HexlT
@@ -280,8 +281,9 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
       Right t -> pure $ Right $ T.pack t
 
 
-  runLatex options source =
-    liftIO $ Latex.makePDF options "pdflatex" (T.unpack source)
+  runLatex options source = do
+    texInputs <- asksHexlEnv envTexInputs
+    liftIO $ Latex.makePDF options "pdflatex" (T.unpack source) texInputs
 
   makePDF options pandoc =
     liftIO $ Pandoc.makePDF "pdflatex" Pandoc.writeLaTeX options pandoc

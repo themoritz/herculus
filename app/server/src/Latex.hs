@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes       #-}
 
 module Latex
   ( makePDF
@@ -14,8 +13,6 @@ import qualified Data.ByteString.Lazy       as BL
 import qualified Data.ByteString.Lazy.Char8 as BC
 import           Data.List                  (isInfixOf)
 import           Data.Monoid                ((<>))
-import qualified Data.Text.IO               as T (writeFile)
-import           NeatInterpolation          (text)
 import           System.Directory
 import           System.Environment
 import           System.Exit                (ExitCode (..))
@@ -27,21 +24,26 @@ import           Text.Pandoc.Process        (pipeProcess)
 import           Text.Pandoc.Shared         (withTempDir)
 import qualified Text.Pandoc.UTF8           as UTF8
 
-makePDF :: WriterOptions -> String -> String -> IO (Either ByteString ByteString)
-makePDF opts program source = withTempDir "tex2pdf." $ \tmpdir -> do
+makePDF
+  :: WriterOptions
+  -> String -> String
+  -> FilePath
+  -> IO (Either ByteString ByteString)
+makePDF opts program source texInputs = withTempDir "tex2pdf." $ \tmpdir -> do
   let args = writerLaTeXArgs opts
+  setEnv "TEXINPUTS" (".:" <> texInputs <> ":")
   if program `elem` ["pdflatex", "lualatex", "xelatex"]
-     then tex2pdf' (writerVerbose opts) args tmpdir program source
+     then tex2pdf (writerVerbose opts) args tmpdir program source
      else return $ Left $ UTF8.fromStringLazy $ "Unknown program " ++ program
 
-tex2pdf' :: Bool                            -- ^ Verbose output
-         -> [String]                        -- ^ Arguments to the latex-engine
-         -> FilePath                        -- ^ temp directory for output
-         -> String                          -- ^ tex program
-         -> String                          -- ^ tex source
-         -> IO (Either ByteString ByteString)
-tex2pdf' verbose args tmpDir program source = do
-  writePletterFile tmpDir
+tex2pdf
+  :: Bool           -- ^ Verbose output
+  -> [String]       -- ^ Arguments to the latex-engine
+  -> FilePath       -- ^ temp directory for output
+  -> String         -- ^ tex program
+  -> String         -- ^ tex source
+  -> IO (Either ByteString ByteString)
+tex2pdf verbose args tmpDir program source = do
   let numruns = if "\\tableofcontents" `isInfixOf` source
                    then 3  -- to get page numbers
                    else 2  -- 1 run won't give you PDF bookmarks
@@ -119,85 +121,3 @@ runTeXProgram verbose program args runNumber numRuns tmpDir source = do
                    then (Just . BL.fromChunks . (:[])) `fmap` BS.readFile pdfFile
                    else return Nothing
          return (exit, out <> err, pdf)
-
--- quasi quoter for multiline strings
-writePletterFile :: FilePath -> IO ()
-writePletterFile tmpDir = T.writeFile (tmpDir </> "pletter.cls") [text|
-\ProvidesClass{pletter}
-
-\DeclareOption*{\PassOptionsToClass{\CurrentOption}{letter}}
-\ProcessOptions
-\LoadClass[a4paper]{letter}
-
-\RequirePackage{calc}
-\RequirePackage{ifthen}
-
-\DeclareFixedFont{\viiisf}{OT1}{cmss}{m}{n}{8}
-
-\newcommand{\@subject}{}
-\newcommand{\subject}[1]{\renewcommand{\@subject}{{\bf #1}}}
-
-\newcommand{\@shortaddress}{}
-\newcommand{\shortaddress}[1]{\renewcommand{\@shortaddress}{#1}}
-
-\newcommand{\@noaddress}{}
-\newcommand{\noaddress}{\renewcommand{\@noaddress}{dummy}}
-
-\newlength{\rightfield}
-
-\renewcommand{\ps@firstpage}{%
-   \renewcommand{\@oddfoot}{}
-   \renewcommand{\@evenfoot}{}
-}
-
-% TODO: Folding hint at 9cm from top (!)
-
-\renewcommand{\opening}[1]{
-   \thispagestyle{firstpage}
-
-   % Short address in letter window
-   \newsavebox{\preturn}
-   \sbox{\preturn}{\viiisf\underline{\@shortaddress}}
-
-   % Generate from address box and measure its width
-   \newsavebox{\fromaddy}
-   \sbox{\fromaddy}{%
-      \begin{tabular}[t]{@{}l@{}}
-         \fromaddress%
-      \end{tabular}%
-   }
-
-   \settowidth{\rightfield}{\usebox{\fromaddy}}
-
-   % Heading
-   \fromname\\[-1.2ex]
-   \raisebox{0.4ex}{\rule{\textwidth}{0.7pt}}
-   \parbox[t]{0.6\textwidth}{%
-      \vspace*{1.0cm}
-      \ifthenelse{\equal{\@noaddress}{}}{%
-        \parbox[t]{0.6\textwidth}{\usebox{\preturn}}\\
-        \parbox[b][2.2cm][c]{0.6\textwidth}{%
-          \toname\\ \toaddress}
-      }{%
-        \parbox[t]{0.6\textwidth}{\vspace*{1.5cm}}
-      }
-   }%
-   \makebox[0.4\textwidth][r]{%
-      \usebox{\fromaddy}%
-   }
-
-   \@subject\hfill\@date
-
-   #1 \vspace{1\parskip}
-}
-
-\renewcommand{\closing}[1]{
-   \vspace{2\parskip}
-   \mbox{%
-      \hspace{1cm}%
-      \parbox[t]{0.8\textwidth}{#1}
-   }
-}
-
-\renewcommand{\@texttop}{}
-|]

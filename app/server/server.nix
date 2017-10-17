@@ -1,7 +1,7 @@
 { mkDerivation, aeson, base, base64-bytestring, bson-lens
 , bytestring, containers, directory, either, entropy, fast-logger
 , filepath, herculus-lib, lens, mime-mail, monad-control
-, monad-logger, mongoDB, mtl, neat-interpolation, network
+, monad-logger, mongoDB, mtl, network
 , optparse-applicative, pandoc, pretty-show, recursion-schemes
 , servant, servant-server, stdenv, stm, text, time, transformers
 , transformers-base, unordered-containers, wai, wai-websockets
@@ -16,7 +16,7 @@ mkDerivation {
   libraryHaskellDepends = [
     aeson base base64-bytestring bson-lens bytestring containers
     directory entropy fast-logger filepath herculus-lib lens mime-mail
-    monad-control monad-logger mongoDB mtl neat-interpolation network
+    monad-control monad-logger mongoDB mtl network
     optparse-applicative pandoc pretty-show recursion-schemes servant
     servant-server stm text time transformers transformers-base
     unordered-containers wai websockets

@@ -14,17 +14,18 @@ import           Control.Monad.Except   (throwError)
 import           Control.Monad.IO.Class (liftIO)
 import qualified Data.ByteString.Lazy   as LBS
 import qualified Data.Text.Encoding     as Text
-import           Servant                ((:~>) (..), Handler, ServantErr (..),
+import           Servant                (Handler, ServantErr (..),
                                          enter, err400, err401, err403, err500)
-import           Servant.Utils.Enter    (Enter)
+import           Servant.Utils.Enter    (Enter, (:~>) (NT))
 
 import           Monads                 (AppError (..), HexlEnv, HexlT,
                                          runHexlT)
 
 
-hexlToServant :: (Enter h (HexlT IO :~> Handler) s)
-             => HexlEnv -> h -> s
-hexlToServant env = enter $ Nat $ \hexlAction ->
+hexlToServant
+  :: (Enter h (HexlT IO) Handler s)
+  => HexlEnv -> h -> s
+hexlToServant env = enter $ NT $ \hexlAction ->
   liftIO (runHexlT env hexlAction)
     >>= either (throwError . appErrToServantErr) pure
 

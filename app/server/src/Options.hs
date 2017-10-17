@@ -15,6 +15,7 @@ data Options = Options
   { optPort            :: Int
   , optMongoHost       :: HostName
   , optAssetDir        :: String
+  , optTexInputs       :: FilePath
   , optMongoCollection :: Text
   }
 
@@ -48,6 +49,14 @@ options = Options
                   <> value "../client/public"
                   <> showDefault
                   <> help "directory to static files and js"
+                  )
+  <*> strOption   (  long "texinputs"
+                  <> short 't'
+                  <> metavar "TEXINPUTS"
+                  <> value "."
+                  <> showDefault
+                  <> help "directory that should be made available to the \
+                          \LaTeX report generator."
                   )
   <*> txtOption   (  long "database-name"
                   <> short 'd'

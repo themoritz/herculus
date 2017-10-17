@@ -33,7 +33,6 @@ import qualified Lib.Api.Schema.Column      as Api
 import qualified Lib.Api.Schema.Compiler    as Api
 import qualified Lib.Api.Schema.Project     as Api
 import           Lib.Compiler
-import           Lib.Compiler.Check.Types
 import           Lib.Compiler.Error
 import           Lib.Model
 import           Lib.Model.Auth
@@ -72,7 +71,7 @@ getReportCellHandler :: Maybe SessionKey -> ServerT ReportCellRoutes RoutesHandl
 getReportCellHandler mSessKey = enter (authenticate mSessKey) handleReportCell
 
 authenticate :: Maybe SessionKey -> ProjectHandler :~> RoutesHandler
-authenticate mSessKey = Nat $ \handler -> do
+authenticate mSessKey = NT $ \handler -> do
   userInfo <- getUserInfo mSessKey
   env <- askHexlEnv
   result <- lift $ runReaderT (runHexlT env handler) userInfo
