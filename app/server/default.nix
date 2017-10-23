@@ -13,12 +13,15 @@ let
   );
   server = myPackages.callPackage ./server.nix { };
   latex = pkgs.texlive.combine { inherit (pkgs.texlive)
-    scheme-basic
+    scheme-full
+    lato
+    slantsc
+    titlesec
+    enumitem
+    lastpage
     collection-langgerman
     collection-fontsrecommended
-    collection-latexrecommended
-    lato
-    slantsc;
+    collection-latexrecommended;
   };
 
 in

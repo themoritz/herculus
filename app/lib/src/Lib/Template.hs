@@ -26,7 +26,7 @@ compileTemplate src resolver env = runExceptT $ do
 evalTemplate
   :: Monad m => [TplChunk] -> Getter m -> TermEnv m
   -> m (Either Text Text)
-evalTemplate tpl getter env = runEval 5000 getter $ T.evalTemplate env tpl
+evalTemplate tpl getter env = runEval 1000000 getter $ T.evalTemplate env tpl
 
 --------------------------------------------------------------------------------
 

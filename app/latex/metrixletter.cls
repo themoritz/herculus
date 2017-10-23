@@ -51,10 +51,10 @@
 
    \settowidth{\rightfield}{\usebox{\fromaddy}}
 
-  %  % Heading
-  %  \fromname\\[-1.2ex]
-  %  \raisebox{0.4ex}{\rule{\textwidth}{0.7pt}}
-   \vspace*{1cm}
+%  % Heading
+%  \fromname\\[-1.2ex]
+%  \raisebox{0.4ex}{\rule{\textwidth}{0.7pt}}
+%  \vspace*{1cm}
    \parbox[t]{0.6\textwidth}{%
       \vspace*{1.0cm}
       \ifthenelse{\equal{\@noaddress}{}}{%

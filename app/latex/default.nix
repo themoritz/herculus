@@ -5,7 +5,7 @@ pkgs.stdenv.mkDerivation {
   src = ./.;
   installPhase = ''
     mkdir $out
-    rm -f default.nix result auto
+    rm -rf default.nix result auto
     cp -r ./* $out
   '';
 }
