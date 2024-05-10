@@ -1,4 +1,4 @@
-# Hexl
+# Herculus
 
 ## Dependencies
 
@@ -11,7 +11,7 @@ curl -sSL https://get.haskellstack.org/ | sh
 ### Node
 
 Works with npm v3.10.31 and node v6.5.0.
-Execute `nvm install v6.5.0` or `cd hexl && nvm use`.
+Execute `nvm install v6.5.0` or `cd herculus && nvm use`.
 
 To tell nvm to always use this version: `nvm alias default v6.5.0`.
 
@@ -27,7 +27,7 @@ To tell nvm to always use this version: `nvm alias default v6.5.0`.
 brew services start mongodb
 ```
 
-To stop run `brew services start mongodb`
+To stop run `brew services stop mongodb`
 
 ### LaTeX
 
@@ -44,7 +44,7 @@ http://www.ctan.org/tex-archive/fonts/lato/
 ### Initial Setup
 
 ``` shell
-cd hexl
+cd herculus
 npm install
 ```
 
@@ -79,21 +79,21 @@ App is available at [localhost:3001](http://localhost:3001).
 Initially,
 
 ``` shell
-cd hexl
+cd herculus
 npm install
 
 " hsc2hs
 " put executables installed by stack on path
 PATH=$PATH:$HOME/.local/bin
 " use stack.yaml in server
-cd hexl/server
+cd herculus/server
 stack install hsc2hs
 ```
 
 Basically run
 
 ``` shell
-cd hexl
+cd herculus
 stack build server
 stack exec server
 ```
