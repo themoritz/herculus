@@ -1,5 +1,10 @@
 # Herculus
 
+##
+
+* install nix
+* install direnv
+
 ## Dependencies
 
 ### Stack

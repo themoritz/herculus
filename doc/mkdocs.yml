@@ -1,6 +1,5 @@
 site_name: Herculus Docs
-google_analytics: ["UA-85139321-2", "https://app.herculus.io/doc/"]
-pages:
+nav:
   - Home: index.md
   - Guides:
       - Building Your First App: guides/app.md
