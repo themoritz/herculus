@@ -5,7 +5,6 @@ module Lib.Template.Eval
 import           Lib.Prelude
 
 import qualified Data.HashMap.Strict     as HashMap
-import           Data.Text               (Text)
 
 import           Lib.Compiler.Eval
 import           Lib.Compiler.Eval.Monad
@@ -37,5 +36,6 @@ evalTemplateChunk env = \case
       RData "False" [] -> evalTemplate env elseTpl
       _ -> internalError "If condition did not evaluate to boolean data type."
   TplPrint expr -> do
-    RString str <- eval env expr
-    pure str
+    eval env expr >>= \case
+      RString str -> pure str
+      _ -> error "Pattern match failure in evalTemplateChunk/TplPrint."

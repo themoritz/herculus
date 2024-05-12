@@ -86,17 +86,19 @@ forCodeDeps_ CodeDependencies{..} f = do
   for_ (Set.toList codeDepTableRefs) $ \t -> f $ Right (t, TblDepTableRef)
 
 -- | Kinds of type dependencies (from the view of a column)
-data TypeDependencies = TypeDependencies
+newtype TypeDependencies = TypeDependencies
   { typeDepsRowRef :: Set (Id Table)
   }
 
 tablesOfTypeDeps :: TypeDependencies -> Set (Id Table)
 tablesOfTypeDeps = typeDepsRowRef
 
+instance Semigroup TypeDependencies where
+  TypeDependencies r1 <> TypeDependencies r2 =
+    TypeDependencies (r1 <> r2)
+
 instance Monoid TypeDependencies where
   mempty = TypeDependencies Set.empty
-  mappend (TypeDependencies r1) (TypeDependencies r2) =
-    TypeDependencies (r1 <> r2)
 
 singleRowRef :: Id Table -> TypeDependencies
 singleRowRef tableId = TypeDependencies (Set.singleton tableId)

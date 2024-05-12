@@ -9,7 +9,6 @@ module Lib.Model.Auth where
 import           Lib.Prelude
 
 import           Control.Lens           (makeLenses)
-import           Control.Monad.IO.Class (MonadIO, liftIO)
 
 import           Crypto.PasswordStore   (makePassword)
 import qualified Crypto.PasswordStore
@@ -17,11 +16,9 @@ import qualified Crypto.PasswordStore
 import           Data.Aeson             (FromJSON, ToJSON)
 import           Data.Bson              ((=:))
 import qualified Data.Bson              as Bson
-import           Data.Text              (Text)
 import qualified Data.Text.Encoding     as Text
 import           Data.Time.Clock        (UTCTime)
 
-import           GHC.Generics           (Generic)
 import qualified Text.Email.Validate    as Email
 
 import           Lib.Model.Class        (FromDocument (..), Model (..),

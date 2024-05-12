@@ -8,11 +8,11 @@ import           Lib.Prelude
 
 import           Control.Comonad.Cofree
 import           Control.Lens              hiding ((:<))
+import           Control.Monad.Combinators.Expr
 
 import           Data.List                 (groupBy)
 
 import qualified Text.Megaparsec           as P
-import           Text.Megaparsec.Expr
 
 import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
@@ -61,4 +61,3 @@ singletonSpan :: Parser Span
 singletonSpan = do
   pos <- getPosition
   pure (Span pos pos)
-

@@ -7,8 +7,6 @@ module Lib.Compiler.Core where
 import           Lib.Prelude
 
 import           Data.Aeson
-import           Data.Functor.Foldable
-import           Data.Hashable                (Hashable (..), hash)
 import           Data.HashMap.Strict          (HashMap)
 import qualified Data.HashMap.Strict          as HashMap
 import qualified Data.Map                     as Map

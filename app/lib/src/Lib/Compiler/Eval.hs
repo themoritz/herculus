@@ -10,7 +10,6 @@ import           Lib.Prelude
 import qualified Data.HashMap.Strict     as HashMap
 import qualified Data.Map                as Map
 import           Data.Maybe              (fromJust)
-import           Data.Text               (unlines)
 
 import           Lib.Model.Cell
 import           Lib.Types
@@ -59,11 +58,17 @@ eval env e = consumeGas *> case e of
         Just env' -> eval (env' `HashMap.union` env) expr
     tryAlts alts
   Access e' field -> do
-    RRecord r <- eval env e'
-    RString f <- eval env field
+    r <- eval env e' >>= \case
+      RRecord r -> pure r
+      _ -> error "Pattern match failure in eval/Access."
+    f <- eval env field >>= \case
+      RString f -> pure f
+      _ -> error "Pattern match failure in eval/Access."
     pure $ fromJust $ Map.lookup f r
   Deref e' -> do
-    RRowRef mR <- eval env e'
+    mR <- eval env e' >>= \case
+      RRowRef mR -> pure mR
+      _ -> error "Pattern match failure in eval/Deref."
     case mR of
       Nothing -> evalError "Invalid row reference."
       Just r  -> withGetter (\g -> getRowRecord g r) >>= \case

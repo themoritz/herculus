@@ -75,6 +75,7 @@ library
                      , cereal
                      , comonad
                      , containers
+                     , data-fix
                      , email-validate
                      , file-embed
                      , free
@@ -85,10 +86,12 @@ library
                      , lens
                      , mtl
                      , megaparsec
+                     , parser-combinators
                      , pretty-show
                      , protolude
                      , pwstore-fast
                      , recursion-schemes
+                     , semialign
                      , scientific
                      , servant
                      , text

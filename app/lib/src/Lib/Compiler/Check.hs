@@ -12,7 +12,6 @@ import           Control.Monad.Trans.Maybe
 
 import           Data.Align                   (align)
 import           Data.Functor.Foldable
-import           Data.HashMap.Strict          (HashMap)
 import qualified Data.HashMap.Strict          as HashMap
 import           Data.List                    (partition)
 import qualified Data.Map                     as Map
@@ -327,7 +326,9 @@ inferImplicitDefinitions defs = do
     inferred <- for defs $ \(name, e@(span :< _)) -> do
       (e', t, cs) <- inferExpr e
       -- Unify the inferred type with the fresh type to deal with recursion.
-      Just (EnvType (ForAll _ _ t') _, _) <- lookupType name
+      t' <- lookupType name >>= \case
+        Just (EnvType (ForAll _ _ t') _, _) -> pure t'
+        _ -> error "Failed pattern match in inferImplicitDefinitions."
       unifyTypes' span t' t
       pure (name, e', t, cs)
 
@@ -874,7 +875,9 @@ buildInstanceDict ExInstanceDecl {..} = do
       -- Check the method implementations
       interims <- for iMethods $ \ExValueDecl {..} -> do
         let name = getText vName
-        Just (EnvType poly _, _) <- lookupType name
+        poly <- lookupType name >>= \case
+          Just (EnvType poly _, _) -> pure poly
+          _ -> error "Pattern match error in buildInstanceDict."
         let ForAll _ _ givenType =
               applyTypeSubst (Map.singleton (clsInfo ^. classParam) freshHeadType) poly
         (e, cs') <- checkExpr givenType vExpr

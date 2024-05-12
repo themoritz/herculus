@@ -17,6 +17,7 @@ module Lib.Prelude
   , (<#>)
   , ExceptT(..)
   --
+  , Fix(Fix)
   , (:+:)(..)
   , coproduct
   , type (~>)
@@ -37,14 +38,15 @@ module Lib.Prelude
 import           Prelude                    (id)
 
 import           Control.Arrow              ((&&&), (***))
-import           Control.Monad.Trans.Except (ExceptT (..))
 
 import           Protolude                  as Exports hiding ((:*:), (:+:),
                                                         Constraint, Fixity,
                                                         Infix, Type, TypeError,
                                                         reduce)
+import           Protolude.Error            as Exports
 
 import           Data.Functor.Foldable
+import           Data.Fix                   (Fix(Fix), unFix)
 
 import           Data.Maybe                 (fromJust)
 
@@ -94,13 +96,13 @@ instance {-# OVERLAPS #-} f :<: f where
   prj = Just . id
 
 injFix :: (Functor f, f :<: g) => Fix f -> Fix g
-injFix = Fix . inj . fmap injFix . unfix
+injFix = Fix . inj . fmap injFix . unFix
 
 unsafePrj :: (f :<: g) => g a -> f a
 unsafePrj = fromJust . prj
 
 unsafePrjFix :: (Functor g, f :<: g) => Fix g -> Fix f
-unsafePrjFix = Fix . unsafePrj . fmap unsafePrjFix . unfix
+unsafePrjFix = Fix . unsafePrj . fmap unsafePrjFix . unFix
 
 --------------------------------------------------------------------------------
 

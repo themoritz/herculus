@@ -46,7 +46,7 @@ testOpTable =
 data ParseState = ParseState
   { _parserOperators     :: OpTable
   , _parserTypeOperators :: OpTable
-  , _parserIndentation   :: Word
+  , _parserIndentation   :: Int
   , _parserLastTokenEnd  :: Pos
   , _parserLastDocString :: Text
   }

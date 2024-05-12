@@ -6,8 +6,6 @@ module Lib.Compiler.AST.Common where
 
 import           Lib.Prelude
 
-import           Data.Functor.Foldable
-
 import           Control.Comonad.Cofree
 
 import           Lib.Compiler.AST.Position

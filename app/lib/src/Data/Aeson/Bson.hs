@@ -12,11 +12,12 @@ import           Lib.Prelude
 
 import           Data.Aeson             (FromJSON (..), ToJSON (..))
 import qualified Data.Aeson.Types       as Aeson
+import qualified Data.Aeson.KeyMap      as Aeson (toList, fromList)
+import qualified Data.Aeson.Key         as Aeson (fromText, toText)
 import           Data.Bson              (Field ((:=)))
 import qualified Data.Bson              as Bson
-import           Data.ByteString        (ByteString)
 import qualified Data.ByteString.Base64 as Base64
-import qualified Data.HashMap.Strict    as Map (fromList, toList)
+import qualified Data.HashMap.Strict    as Map (fromList)
 import           Data.Scientific
 import           Data.Text              (pack)
 import qualified Data.Text.Encoding     as Text
@@ -94,10 +95,10 @@ aesonifyValue (Bson.MinMax mm) = case mm of
 
 
 toBson :: Aeson.Object -> Bson.Document
-toBson = map (\(t, v) -> (t := bsonifyValue v)) . Map.toList
+toBson = map (\(t, v) -> Aeson.toText t := bsonifyValue v) . Aeson.toList
 
 toAeson :: Bson.Document -> Aeson.Object
-toAeson = Map.fromList . map (\(l := v) -> (l, aesonifyValue v))
+toAeson = Aeson.fromList . map (\(l := v) -> (Aeson.fromText l, aesonifyValue v))
 
 -- helper
 

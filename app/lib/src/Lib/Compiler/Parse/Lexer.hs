@@ -6,16 +6,17 @@ import           Lib.Prelude
 
 import           Control.Lens
 
-import qualified Data.Char                 as C
-import qualified Data.Text                 as T
+import qualified Data.Char                  as C
+import qualified Data.Text                  as T
 
-import qualified Text.Megaparsec           as P
-import qualified Text.Megaparsec.Lexer     as L
+import qualified Text.Megaparsec            as P
+import qualified Text.Megaparsec.Char       as P
+import qualified Text.Megaparsec.Char.Lexer as L
 
 import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Parse.State
 
-type Parser = P.ParsecT P.Dec Text (State ParseState)
+type Parser = P.ParsecT Void Text (State ParseState)
 
 testParser :: Show a => Parser a -> Text -> IO ()
 testParser p s =
@@ -23,7 +24,7 @@ testParser p s =
     st = initialParseState testOpTable
   in
     case evalState (P.runParserT (p <* P.eof) "" s) st of
-      Left msg -> putStrLn $ P.parseErrorPretty msg
+      Left msg -> putStrLn $ P.errorBundlePretty msg
       Right a  -> print a
 
 --------------------------------------------------------------------------------
@@ -37,12 +38,12 @@ comment = blockComment <|> lineComment
   blockComment :: Parser Text
   blockComment = P.try $ do
     text' "{-"
-    (T.pack <$> P.manyTill P.anyChar (P.try (text' "-}")))
+    T.pack <$> P.manyTill P.anySingle (P.try (text' "-}"))
 
   lineComment :: Parser Text
   lineComment = P.try $ do
     text' "--"
-    (T.pack <$> P.manyTill P.anyChar (P.try (void (P.char '\n') <|> P.eof)))
+    T.pack <$> P.manyTill P.anySingle (P.try (void (P.single '\n') <|> P.eof))
 
 -- Skips whitespace and collects docstrings
 scn :: Parser ()
@@ -68,25 +69,25 @@ text :: Text -> Parser ()
 text = lexeme . text'
 
 text' :: Text -> Parser ()
-text' s = void $ P.string (T.unpack s)
+text' s = void $ P.string s
 
 --------------------------------------------------------------------------------
 
 getPosition :: Parser Pos
-getPosition = fromSourcePos <$> P.getPosition
+getPosition = fromSourcePos <$> P.getSourcePos
 
 mark :: Parser a -> Parser a
 mark p = do
   current <- use parserIndentation
-  pos <- P.unPos . P.sourceColumn <$> P.getPosition
+  pos <- P.unPos . P.sourceColumn <$> P.getSourcePos
   parserIndentation .= pos
   a <- p
   parserIndentation .= current
   pure a
 
-checkIndentation :: (Word -> Text) -> (Word -> Word -> Bool) -> Parser ()
+checkIndentation :: (Int -> Text) -> (Int -> Int -> Bool) -> Parser ()
 checkIndentation mkMsg rel = do
-  pos <- P.unPos . P.sourceColumn <$> P.getPosition
+  pos <- P.unPos . P.sourceColumn <$> P.getSourcePos
   current <- use parserIndentation
   guard (pos `rel` current) P.<?> T.unpack (mkMsg current)
 
@@ -201,7 +202,7 @@ numberLit :: Parser Double
 numberLit = lexeme L.float P.<?> "number"
 
 integerLit :: Parser Integer
-integerLit = lexeme L.integer P.<?> "integer"
+integerLit = lexeme L.decimal P.<?> "integer"
 
 reference :: Parser Text
 reference = lexeme reference'

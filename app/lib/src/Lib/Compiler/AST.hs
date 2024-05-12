@@ -17,8 +17,6 @@ import qualified Prelude as P (show)
 
 import           Control.Comonad.Cofree
 
-import           Data.Functor.Foldable
-
 import           Lib.Compiler.AST.Common
 import           Lib.Compiler.AST.Position
 import           Lib.Compiler.Parse.State

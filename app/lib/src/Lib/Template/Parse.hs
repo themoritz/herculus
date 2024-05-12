@@ -8,7 +8,6 @@ module Lib.Template.Parse
 import           Lib.Prelude
 
 import           Control.Comonad.Cofree
-import           Control.Monad             (void)
 
 import qualified Data.List.NonEmpty        as NE
 import           Data.Text                 (pack)
@@ -62,7 +61,7 @@ parsePrint = withSource $
 
 parseText :: Parser SourceTplChunk
 parseText = withSource $ do
-  t <- manyUntil P.anyChar (P.try (text' "{{") <|> text' "{%")
+  t <- manyUntil P.anySingle (P.try (text' "{{") <|> text' "{%")
   case t of
     "" -> P.unexpected $ P.Label $ NE.fromList "empty TplText"
     _  -> pure $ inj (TplText (pack t) :: TplChunkF SourceAst SourceTplChunk)

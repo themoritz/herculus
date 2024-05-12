@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> {}, compiler ? "ghc802" }: 
+{ pkgs ? import <nixpkgs> {}, compiler ? "ghc948" }:
 let
   haskellPackages = pkgs.haskell.packages.${compiler};
   myPackages = pkgs.recurseIntoAttrs (
@@ -10,4 +10,3 @@ let
   );
 in
   myPackages.callPackage ./herculus-lib.nix {}
-

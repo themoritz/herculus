@@ -11,12 +11,11 @@ import           Lib.Prelude
 
 import           Control.Comonad.Cofree
 import           Control.Lens              hiding ((:<), op)
+import           Control.Monad.Combinators.Expr
 
-import           Data.Foldable             (foldl')
 import qualified Data.Map                  as Map
 
 import qualified Text.Megaparsec           as P
-import           Text.Megaparsec.Expr
 
 import           Lib.Compiler.AST
 import           Lib.Compiler.Error

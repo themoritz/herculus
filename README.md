@@ -4,6 +4,7 @@
 
 * install nix
 * install direnv
+* install ghcup, use versions cabal 3.10.3.0, ghc 9.4.8
 
 ## Dependencies
 

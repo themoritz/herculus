@@ -1,7 +1,11 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE FlexibleInstances      #-}
 
 module Lib.Model.Class where
+
+import           Control.Monad.Fail(MonadFail(..))
+import qualified Data.Text as T
 
 import           Lib.Prelude
 
@@ -15,3 +19,7 @@ class ToDocument a where
 
 class FromDocument a where
   parseDocument :: Document -> Either Text a
+
+-- | This instance is needed by Bson.lookup
+instance MonadFail (Either Text) where
+    fail msg = Left (T.pack msg)

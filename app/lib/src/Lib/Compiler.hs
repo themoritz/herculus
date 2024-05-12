@@ -170,9 +170,9 @@ testParsePretty :: Text -> IO ()
 testParsePretty src = withParsed src testOpTable parseModule $ \decls ->
   mapM_ (putStrLn . (<> "\n") . prettyAst) (map stripAnn decls)
 
-testParseSpans :: Text -> IO ()
-testParseSpans src = withParsed src testOpTable parseModule $ \decls ->
-  mapM_ (putStrLn . ppShow . map (flip (highlightSpan True) src)) decls
+-- testParseSpans :: Text -> IO ()
+-- testParseSpans src = withParsed src testOpTable parseModule $ \decls ->
+--   mapM_ (putStrLn . ppShow . map (flip (highlightSpan True) src)) decls
 
 testCheck :: Text -> IO ()
 testCheck src = compileModule src testResolveInterp primCheckEnv >>= \case
