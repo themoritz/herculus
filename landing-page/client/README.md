@@ -3,9 +3,9 @@
 ## Developing
 
 ```shell
-$ nix-shell --command "bash develop.sh"
+$ nix-shell --command "jekyll serve --livereload --incremental"
 ```
 
-A window in you browser should be opened and directed to `localhost:3000`. CSS
+Open your browser and go to the printed `Server address`. CSS
 and images will be injected when they change, and all pages will automatically
 reload when updated.
