@@ -1,0 +1,28 @@
+cradle:
+  cabal:
+    - path: "lib/src"
+      component: "lib:herculus-lib"
+
+    - path: "lib/psc-gen/Main.hs"
+      component: "herculus-lib:exe:psc-gen"
+
+    - path: "lib/psc-gen/Options.hs"
+      component: "herculus-lib:exe:psc-gen"
+
+    - path: "lib/doc-gen/Main.hs"
+      component: "herculus-lib:exe:doc-gen"
+
+    - path: "lib/doc-gen/Options.hs"
+      component: "herculus-lib:exe:doc-gen"
+
+    - path: "lib/test"
+      component: "herculus-lib:test:herculus-lib-test"
+
+    - path: "server/src"
+      component: "lib:server"
+
+    - path: "server/app/Main.hs"
+      component: "server:exe:server-exe"
+
+    - path: "server/test"
+      component: "server:test:server-test"

@@ -10,6 +10,7 @@ result
 
 # All cabal stuff
 dist/
+dist-newstyle/
 
 # All node stuff
 node_modules/
