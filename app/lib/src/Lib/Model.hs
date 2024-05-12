@@ -11,7 +11,6 @@ import           Lib.Prelude
 import           Data.Aeson      (FromJSON, ToJSON)
 import           Data.Bson       ((=:))
 import qualified Data.Bson       as Bson
-import           Data.Typeable   (Typeable)
 
 import           Lib.Model.Class
 import           Lib.Types

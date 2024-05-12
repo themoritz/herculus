@@ -4,7 +4,9 @@
 
 * install nix
 * install direnv
-* install ghcup, use versions cabal 3.10.3.0, ghc 9.4.8
+* install ghcup, use versions cabal 3.10.3.0, ghc 9.4.7 (9.4.8 for hls)
+* cabal2nix
+* get stackage snapshot for cabal freeze
 
 ## Dependencies
 

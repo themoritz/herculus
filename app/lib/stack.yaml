@@ -1,9 +1,14 @@
-resolver: lts-9.0
+# This is the snapshot that's also used by nixpgs:23.11
+resolver: lts-21.19
 packages:
   - '.'
+
 extra-deps:
-  - servant-purescript-0.8.0.0
-  - purescript-bridge-0.10.1.0
+  - git: https://github.com/themoritz/servant-purescript.git
+    commit: '05e214acfea4861975f2a8f9f1c71fb42e337155'
+  - git: https://github.com/themoritz/servant-subscriber.git
+    commit: 'ba65d36a940030efc5a7f155ebcb43f2464fed66'
+  - union-find-0.1
 
 # Override default flag values for local packages and extra-deps
 flags: {}
