@@ -1,11 +1,16 @@
 with-compiler: ghc-9.4.8
 
 packages: lib/ server/
+    ../../servant-purescript
+
+constraints:
+    purescript-bridge ==0.11.1.2,
 
 source-repository-package
     type: git
+    -- on branch moritz/herculus
     location: https://github.com/themoritz/servant-purescript.git
-    tag: 05e214acfea4861975f2a8f9f1c71fb42e337155
+    tag: 9ac42eb9b20782dd43dea95e3da826c83f97e057
 
 source-repository-package
     type: git

@@ -1,9 +1,9 @@
 { mkDerivation, aeson, base, base64-bytestring, bson-lens
-, bytestring, containers, directory, either, entropy, fast-logger
-, filepath, herculus-lib, lens, mime-mail, monad-control
-, monad-logger, mongoDB, mtl, network
+, bytestring, containers, directory, doctemplates, either, entropy
+, fast-logger, filepath, herculus-lib, lens, lib, mime-mail
+, monad-control, monad-logger, mongoDB, mtl, network
 , optparse-applicative, pandoc, pretty-show, recursion-schemes
-, servant, servant-server, stdenv, stm, text, time, transformers
+, servant, servant-server, stm, temporary, text, time, transformers
 , transformers-base, unordered-containers, wai, wai-websockets
 , warp, websockets
 }:
@@ -15,17 +15,17 @@ mkDerivation {
   isExecutable = true;
   libraryHaskellDepends = [
     aeson base base64-bytestring bson-lens bytestring containers
-    directory entropy fast-logger filepath herculus-lib lens mime-mail
-    monad-control monad-logger mongoDB mtl network
+    directory doctemplates entropy fast-logger filepath herculus-lib
+    lens mime-mail monad-control monad-logger mongoDB mtl network
     optparse-applicative pandoc pretty-show recursion-schemes servant
-    servant-server stm text time transformers transformers-base
-    unordered-containers wai websockets
+    servant-server stm temporary text time transformers
+    transformers-base unordered-containers wai websockets
   ];
   executableHaskellDepends = [
     aeson base bytestring either herculus-lib mongoDB mtl servant
     servant-server stm text transformers wai-websockets warp websockets
   ];
   testHaskellDepends = [ base herculus-lib ];
-  doHaddock = false;
-  license = stdenv.lib.licenses.unfree;
+  license = "unknown";
+  mainProgram = "server-exe";
 }

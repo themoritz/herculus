@@ -1,19 +1,10 @@
-{ pkgs ? import <nixpkgs> {}, compiler ? "ghc802" }: 
+{ pkgs ? import <nixpkgs> {}, compiler ? "ghc947" }:
 
 let
+  haskellPackages = import ../haskell-packages.nix { inherit pkgs compiler; };
 
-  haskellPackages = pkgs.haskell.packages.${compiler};
-  myPackages = pkgs.recurseIntoAttrs (
-    haskellPackages.override {
-      overrides = self: super: {
-        herculus-lib = self.callPackage ../lib/herculus-lib.nix {};
-        servant-purescript = self.callPackage ../lib/nix/servant-purescript.nix {};
-      };
-    }
-  );
-  server = myPackages.callPackage ./server.nix { };
   latex = pkgs.texlive.combine { inherit (pkgs.texlive)
-    scheme-full
+    # scheme-full
     lato
     slantsc
     titlesec
@@ -25,11 +16,10 @@ let
   };
 
 in
-
-  server.overrideDerivation (super: {
+  haskellPackages.herculus-server.overrideDerivation (super: {
     buildInputs = super.buildInputs ++ [ pkgs.makeWrapper ];
     postInstall = ''
       wrapProgram "$out/bin/server-exe" --suffix PATH : ${latex}/bin \
-                                        --suffix PATH : ${pkgs.ssmtp}/sbin
+                                        --suffix PATH : ${pkgs.msmtp}/sbin
     '';
   })

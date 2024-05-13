@@ -1,0 +1,6 @@
+27c27
+< newtype SPParams_ = SPParams_ { authorization :: Maybe
+---
+> newtype SPParams_ = SPParams_ { authorization :: String
+396d395
+< 
