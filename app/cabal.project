@@ -1,7 +1,6 @@
 with-compiler: ghc-9.4.8
 
 packages: lib/ server/
-    ../../servant-purescript
 
 constraints:
     purescript-bridge ==0.11.1.2,
