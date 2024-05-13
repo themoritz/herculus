@@ -2,34 +2,29 @@
 
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeOperators         #-}
 
 module HexlNat
   ( hexlToServant
   ) where
 
-import           Lib.Prelude
+import           Lib.Prelude hiding (Handler)
 
-import           Control.Monad.Except   (throwError)
-import           Control.Monad.IO.Class (liftIO)
 import qualified Data.ByteString.Lazy   as LBS
 import qualified Data.Text.Encoding     as Text
-import           Servant                (Handler, ServantErr (..),
-                                         enter, err400, err401, err403, err500)
-import           Servant.Utils.Enter    (Enter, (:~>) (NT))
+import           Servant                (Handler, err400, err401, err403, err500)
+import           Servant.Server         (ServerError (errBody))
 
 import           Monads                 (AppError (..), HexlEnv, HexlT,
                                          runHexlT)
 
 
 hexlToServant
-  :: (Enter h (HexlT IO) Handler s)
-  => HexlEnv -> h -> s
-hexlToServant env = enter $ NT $ \hexlAction ->
+  :: HexlEnv -> HexlT IO a -> Handler a
+hexlToServant env hexlAction =
   liftIO (runHexlT env hexlAction)
     >>= either (throwError . appErrToServantErr) pure
 
-appErrToServantErr :: AppError -> ServantErr
+appErrToServantErr :: AppError -> ServerError
 appErrToServantErr = \case
     ErrUser         msg -> err400 { errBody = toBS msg }
     ErrBug          msg -> err500 { errBody = toBS msg }

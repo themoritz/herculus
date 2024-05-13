@@ -13,7 +13,6 @@ import           Lib.Prelude
 import           Control.Lens                 hiding (Getter, op, (&))
 
 import qualified Data.Map                     as Map
-import           Data.Maybe                   (mapMaybe)
 import qualified Data.Text                    as T (length)
 
 import           Lib.Api.Schema.Column        (columnFromEntity)
@@ -150,7 +149,7 @@ executeCommand = \case
       TblDepColumnRef -> False
       TblDepTableRef  -> False
       TblDepRowRef    -> True
-    for_ rowRef'ingCols $ \columnId -> do
+    for_ rowRef'ingCols $ \_columnId -> do
       -- TODO: invalidate rowrefs, but currently we have no concept of
       -- an "invalid type", so what to do?
       pure ()

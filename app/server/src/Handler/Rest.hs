@@ -1,17 +1,12 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
-{-# LANGUAGE TypeOperators       #-}
 
 module Handler.Rest where
 
 import           Lib.Prelude
-import           Prelude                    (String)
-
 import           Control.Lens
-import           Control.Monad.Except       (ExceptT (..))
 
 import qualified Data.ByteString.Base64.URL as Base64URL
 import qualified Data.ByteString.Lazy       as BL
@@ -26,6 +21,7 @@ import qualified Network.Mail.Mime          as Mail
 import           Servant
 import           System.Entropy             (getEntropy)
 import qualified Text.Pandoc                as Pandoc
+import qualified Text.DocTemplates          as Doc
 
 import           Lib.Api.Rest
 import qualified Lib.Api.Schema.Auth        as Api
@@ -65,13 +61,15 @@ handle =
   :<|> getReportCellHandler
 
 getProjectHandler :: Maybe SessionKey -> ServerT ProjectRoutes RoutesHandler
-getProjectHandler mSessKey = enter (authenticate mSessKey) handleProject
+getProjectHandler mSessKey =
+  hoistServer (Proxy :: Proxy ProjectRoutes) (authenticate mSessKey) handleProject
 
 getReportCellHandler :: Maybe SessionKey -> ServerT ReportCellRoutes RoutesHandler
-getReportCellHandler mSessKey = enter (authenticate mSessKey) handleReportCell
+getReportCellHandler mSessKey =
+  hoistServer (Proxy :: Proxy ReportCellRoutes) (authenticate mSessKey) handleReportCell
 
-authenticate :: Maybe SessionKey -> ProjectHandler :~> RoutesHandler
-authenticate mSessKey = NT $ \handler -> do
+authenticate :: Maybe SessionKey -> ProjectHandler a -> RoutesHandler a
+authenticate mSessKey handler = do
   userInfo <- getUserInfo mSessKey
   env <- askHexlEnv
   result <- lift $ runReaderT (runHexlT env handler) userInfo
@@ -402,7 +400,7 @@ handleReportCell =
   :<|> handleCellGetReportPlain
 
 handleCellGetReportPDF
-  :: (MonadHexl m, MonadReader Api.UserInfo m)
+  :: (MonadHexl m, MonadReader Api.UserInfo m, MonadIO m)
   => Id Column -> Id Row -> m BL.ByteString
 handleCellGetReportPDF columnId rowId = do
   userId <- asks Api._uiUserId
@@ -418,7 +416,7 @@ handleCellGetReportPDF columnId rowId = do
             "Error running pdflatex: " <> (T.pack . BL8.unpack) e <>
             "Source: " <> plain
           Right pdf -> pure pdf
-      Just r -> case r Pandoc.def (T.unpack plain) of
+      Just r -> liftIO (Pandoc.runIO $ r Pandoc.def plain) >>= \case
         Left err -> throwError $
           ErrUser $ T.unlines
             [ "Could not read generated code into pandoc document: "
@@ -429,9 +427,9 @@ handleCellGetReportPDF columnId rowId = do
               "Could not load latex template: " <> msg
             Right template -> pure template
           let options = Pandoc.def
-                { Pandoc.writerTemplate = Just $ T.unpack template
-                , Pandoc.writerVariables =
-                  [ ("papersize", "A4")
+                { Pandoc.writerTemplate = Just template
+                , Pandoc.writerVariables = Doc.toContext $ Map.fromList
+                  [ ("papersize" :: Text, "A4" :: Text)
                   , ("fontsize", "12pt")
                   , ("geometry", "margin=3cm")
                   , ("fontfamily", "lato")
@@ -439,13 +437,15 @@ handleCellGetReportPDF columnId rowId = do
                   ]
                 }
           makePDF options pandoc >>= \case
-            Left e -> throwError $ ErrUser $
-              "Error generating PDF: " <> (T.pack . BL8.unpack) e <>
-              "Source: " <> show (Pandoc.writeLaTeX options pandoc)
+            Left e -> do
+              latex <- liftIO $ Pandoc.runIO $ Pandoc.writeLaTeX options pandoc
+              throwError $ ErrUser $
+                "Error generating PDF: " <> (T.pack . BL8.unpack) e <>
+                "Source: " <> show latex
             Right pdf -> pure pdf
 
 handleCellGetReportHTML
-  :: (MonadHexl m, MonadReader Api.UserInfo m)
+  :: (MonadHexl m, MonadReader Api.UserInfo m, MonadIO m)
   => Id Column -> Id Row -> m Text
 handleCellGetReportHTML columnId rowId = do
   userId <- asks Api._uiUserId
@@ -456,7 +456,7 @@ handleCellGetReportHTML columnId rowId = do
     Nothing   -> pure plain
     Just lang -> case getPandocReader lang (repCol ^. reportColFormat) of
       Nothing -> pure plain
-      Just r -> case r Pandoc.def (T.unpack plain) of
+      Just r -> liftIO (Pandoc.runIO $ r Pandoc.def plain) >>= \case
         Left err -> pure $ show err
         Right pandoc -> do
           template <- getDefaultTemplate "html5" >>= \case
@@ -464,13 +464,17 @@ handleCellGetReportHTML columnId rowId = do
               ErrBug $ "Could not load html5 template: " <> msg
             Right template -> pure template
           let options = Pandoc.def
-                { Pandoc.writerTemplate = Just $ T.unpack template
-                , Pandoc.writerVariables =
-                  [ ("pagetitle", T.unpack (col ^. columnName))
+                { Pandoc.writerTemplate = Just template
+                , Pandoc.writerVariables = Doc.toContext $ Map.fromList
+                  [ ("pagetitle" :: Text, col ^. columnName)
                   , ("title-prefix", "Report")
                   ]
                 }
-          pure $ T.pack $ Pandoc.writeHtmlString options pandoc
+          res <- liftIO $ Pandoc.runIO $ Pandoc.writeHtml5String options pandoc
+          case res of
+            Left e -> throwError $ ErrUser $
+              "Error generating HTML: " <> show e
+            Right html -> pure $ TL.toStrict (show html)
 
 handleCellGetReportPlain
   :: (MonadHexl m, MonadReader Api.UserInfo m)
@@ -481,11 +485,12 @@ handleCellGetReportPlain columnId rowId = do
   snd <$> evalReport columnId rowId
 
 getPandocReader
-  :: ReportLanguage
+  :: Pandoc.PandocMonad m
+  => ReportLanguage
   -> ReportFormat
   -> Maybe (Pandoc.ReaderOptions ->
-            String ->
-            Either Pandoc.PandocError Pandoc.Pandoc)
+            Text ->
+            m Pandoc.Pandoc)
 getPandocReader lang format = case lang of
   ReportLanguageMarkdown -> Just Pandoc.readMarkdown
   ReportLanguageLatex    -> case format of

@@ -14,7 +14,6 @@ import           Lib.Prelude
 import           Control.Lens
 
 import qualified Data.Map                  as Map
-import           Data.Maybe                (mapMaybe)
 
 import           Lib.Api.Schema.Compiler   (moduleToCheckResult)
 import           Lib.Compiler

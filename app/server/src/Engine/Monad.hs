@@ -13,11 +13,8 @@ import           Lib.Prelude                  hiding (Selector)
 import           Control.Lens                 hiding (op, (&))
 import           Control.Monad.Trans.Class
 
-import           Data.Functor.Foldable
-import           Data.Map                     (Map)
 import qualified Data.Map                     as Map
-import           Data.Maybe                   (fromJust, mapMaybe)
-import           Data.Set                     (Set)
+import           Data.Maybe                   (fromJust)
 import qualified Data.Set                     as Set
 
 import           Database.MongoDB             (Selector, (=:))

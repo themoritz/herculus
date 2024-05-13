@@ -19,7 +19,7 @@ import           Network.Wai.Handler.WebSockets
 import           Network.WebSockets
 import           Servant                        ((:<|>) (..), (:>), Get,
                                                  PlainText, Raw, Server, serve,
-                                                 serveDirectory)
+                                                 serveDirectoryFileServer, hoistServer)
 
 import           ConnectionManager
 import           Handler.Rest
@@ -45,8 +45,8 @@ routes = Proxy
 rest :: HexlEnv -> FilePath -> Server AllRoutes
 rest env path =
          pure ("Everything is ok." :: Text)
-    :<|> (hexlToServant env) handle
-    :<|> serveDirectory path
+    :<|> hoistServer (Proxy :: Proxy Routes) (hexlToServant env) handle
+    :<|> serveDirectoryFileServer path
 
 wsApp :: HexlEnv -> ServerApp
 wsApp env pending =
@@ -60,14 +60,14 @@ wsApp env pending =
       connectionId <- atomicallyConnectionMgr connections $
         addConnection connection
       -- To keep connection alive in some browsers
-      forkPingThread connection 30
-      let disconnect = atomicallyConnectionMgr connections $
-            removeConnection connectionId
-      flip finally disconnect $ forever $
-        eitherDecode <$> receiveData connection >>= \case
-          Left msg -> putStrLn msg
-          Right wsUp -> runHexlT env (handleClientMessage connectionId wsUp)
-            >>= either print pure
+      withPingThread connection 30 (pure ()) $ do
+        let disconnect = atomicallyConnectionMgr connections $
+              removeConnection connectionId
+        flip finally disconnect $ forever $
+          eitherDecode <$> receiveData connection >>= \case
+            Left msg -> putStrLn msg
+            Right wsUp -> runHexlT env (handleClientMessage connectionId wsUp)
+              >>= either print pure
 
 main :: IO ()
 main = do

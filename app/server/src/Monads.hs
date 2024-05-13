@@ -34,16 +34,12 @@ import           Control.Monad.Trans.Control
 import           Data.Aeson
 import qualified Data.ByteString.Char8       as B8
 import qualified Data.ByteString.Lazy        as BL
-import           Data.Foldable               (for_)
-import           Data.Maybe                  (catMaybes)
 import qualified Data.Text                   as T
 import           Data.Time.Clock             as Clock (getCurrentTime)
-import           Data.Traversable            (for)
 
 import           Database.MongoDB            ((=:))
 import qualified Database.MongoDB            as Mongo
 
-import           System.Log.FastLogger
 import qualified Text.Pandoc                 as Pandoc
 import qualified Text.Pandoc.PDF             as Pandoc
 
@@ -104,7 +100,7 @@ class (Monad m, MonadLogger m, MonadError AppError m, MonadDB m) => MonadHexl m 
   withConnectionMgr :: State ConnectionManager a -> m a
 
   -- Pandoc stuff
-  getDefaultTemplate :: Text -> m (Either Text Text)
+  getDefaultTemplate :: Text -> m (Either Text (Pandoc.Template Text))
   runLatex :: Pandoc.WriterOptions -> Text
            -> m (Either BL.ByteString BL.ByteString)
   makePDF :: Pandoc.WriterOptions -> Pandoc.Pandoc
@@ -210,8 +206,11 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
   create :: forall a. Model a => a -> HexlT m (Id a)
   create x = do
     let collection = collectionName (Proxy :: Proxy a)
-    Mongo.ObjId i <- runMongo $ Mongo.insert collection $ toDocument x
-    pure $ fromObjectId i
+    res <- runMongo $ Mongo.insert collection $ toDocument x
+    case res of
+      Mongo.ObjId i -> pure $ fromObjectId i
+      _ -> throwError $ ErrBug $
+           "create: unexpected result: " <> show res
 
   update :: forall a. Model a => Id a -> (a -> a) -> HexlT m ()
   update i f = do
@@ -233,7 +232,7 @@ instance (MonadBaseControl IO m, MonadIO m) => MonadDB (HexlT m) where
   upsert :: Model a => Mongo.Selector -> a -> (a -> a) -> HexlT m (Maybe (Id a))
   upsert query new f =
     getOneByQuery query >>= \case
-      Right (Entity i _) -> update i f *> pure Nothing
+      Right (Entity i _) -> update i f $> Nothing
       Left _ -> Just <$> create (f new)
 
   upsertMany :: forall a. Model a => [Entity a] -> HexlT m ()
@@ -275,18 +274,20 @@ instance (MonadIO m, MonadDB (HexlT m)) => MonadHexl (HexlT m) where
 
   --
 
-  getDefaultTemplate writer =
-    liftIO (Pandoc.getDefaultTemplate Nothing (T.unpack writer)) >>= \case
-      Left e -> pure $ Left $ show e
-      Right t -> pure $ Right $ T.pack t
+  getDefaultTemplate writer = do
+    res <- liftIO $ Pandoc.runIO $ Pandoc.compileDefaultTemplate writer
+    pure (mapLeft show res)
 
 
   runLatex options source = do
     texInputs <- asksHexlEnv envTexInputs
     liftIO $ Latex.makePDF options "pdflatex" (T.unpack source) texInputs
 
-  makePDF options pandoc =
-    liftIO $ Pandoc.makePDF "pdflatex" Pandoc.writeLaTeX options pandoc
+  makePDF options pandoc = do
+    res <- liftIO $ Pandoc.runIO $ Pandoc.makePDF "pdflatex" [] Pandoc.writeLaTeX options pandoc
+    case res of
+      Left err -> pure $ Left (show err)
+      Right pdf -> pure pdf
 
 --
 

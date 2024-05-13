@@ -12,16 +12,17 @@ import           Data.ByteString.Lazy       (ByteString)
 import qualified Data.ByteString.Lazy       as BL
 import qualified Data.ByteString.Lazy.Char8 as BC
 import           Data.List                  (isInfixOf)
+import qualified Data.Text                  as T
 import           Data.Monoid                ((<>))
 import           System.Directory
 import           System.Environment
 import           System.Exit                (ExitCode (..))
 import           System.FilePath
 import           System.IO                  (stderr, stdout)
+import           System.IO.Temp             (withTempDirectory)
 
 import           Text.Pandoc.Options        (WriterOptions (..))
 import           Text.Pandoc.Process        (pipeProcess)
-import           Text.Pandoc.Shared         (withTempDir)
 import qualified Text.Pandoc.UTF8           as UTF8
 
 makePDF
@@ -29,12 +30,14 @@ makePDF
   -> String -> String
   -> FilePath
   -> IO (Either ByteString ByteString)
-makePDF opts program source texInputs = withTempDir "tex2pdf." $ \tmpdir -> do
-  let args = writerLaTeXArgs opts
-  setEnv "TEXINPUTS" (".:" <> texInputs <> ":")
-  if program `elem` ["pdflatex", "lualatex", "xelatex"]
-     then tex2pdf (writerVerbose opts) args tmpdir program source
-     else return $ Left $ UTF8.fromStringLazy $ "Unknown program " ++ program
+makePDF opts program source texInputs = do
+  tempBaseDir <- getTemporaryDirectory
+  withTempDirectory tempBaseDir "tex2pdf." $ \tmpdir -> do
+    let args = []
+    setEnv "TEXINPUTS" (".:" <> texInputs <> ":")
+    if program `elem` ["pdflatex", "lualatex", "xelatex"]
+      then tex2pdf False args tmpdir program source
+      else return $ Left $ UTF8.fromStringLazy $ "Unknown program " ++ program
 
 tex2pdf
   :: Bool           -- ^ Verbose output
@@ -82,7 +85,7 @@ runTeXProgram :: Bool -> String -> [String] -> Int -> Int -> FilePath -> String
 runTeXProgram verbose program args runNumber numRuns tmpDir source = do
     let file = tmpDir </> "input.tex"
     exists <- doesFileExist file
-    unless exists $ UTF8.writeFile file source
+    unless exists $ UTF8.writeFile file (T.pack source)
     let programArgs = ["-halt-on-error", "-interaction", "nonstopmode",
          "-output-directory", tmpDir] ++ args ++ [file]
     env' <- getEnvironment
@@ -103,11 +106,10 @@ runTeXProgram verbose program args runNumber numRuns tmpDir source = do
       putStrLn $ "[makePDF] Contents of " ++ file ++ ":"
       BL.readFile file >>= BL.putStr
       putStr "\n"
-    (exit, out, err) <- pipeProcess (Just env'') program programArgs BL.empty
+    (exit, out) <- pipeProcess (Just env'') program programArgs BL.empty
     when verbose $ do
       putStrLn $ "[makePDF] Run #" ++ show runNumber
       BL.hPutStr stdout out
-      BL.hPutStr stderr err
       putStr "\n"
     if runNumber <= numRuns
        then runTeXProgram verbose program args (runNumber + 1) numRuns tmpDir source
@@ -120,4 +122,4 @@ runTeXProgram verbose program args runNumber numRuns tmpDir source = do
                    -- See https://github.com/jgm/pandoc/issues/1192.
                    then (Just . BL.fromChunks . (:[])) `fmap` BS.readFile pdfFile
                    else return Nothing
-         return (exit, out <> err, pdf)
+         return (exit, out, pdf)

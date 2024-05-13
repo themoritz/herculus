@@ -1,4 +1,5 @@
 -- https://www.stackage.org/lts-21.19/cabal.config
+-- Tweaked GHC from 9.4.7 to 9.4.8 because HLS uses that version.
 
 -- NOTE: Due to revisions, this file may not work. See:
 -- https://github.com/fpco/stackage-server/issues/232
@@ -7,7 +8,7 @@
 -- Please place this file next to your .cabal file as cabal.config
 -- To only use tested packages, uncomment the following line:
 -- remote-repo: stackage-lts-21.19:http://www.stackage.org/lts-21.19
-with-compiler: ghc-9.4.7
+with-compiler: ghc-9.4.8
 constraints: abstract-deque ==0.3,
              abstract-deque-tests ==0.3,
              abstract-par ==0.3.3,
