@@ -1,7 +1,8 @@
 # This is the snapshot that's also used by nixpgs:23.11
 resolver: lts-21.19
 packages:
-  - '.'
+  - './lib'
+  - './server'
 
 extra-deps:
   - git: https://github.com/themoritz/servant-purescript.git
