@@ -25,7 +25,7 @@ in
       pkgs.python3
       mkdocs
       mkdocs-cinder
-      herculus-lib
+      #herculus-lib
     ];
     buildPhase = ''
       doc-gen -p > docs/reference.md

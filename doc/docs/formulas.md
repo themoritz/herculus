@@ -125,7 +125,7 @@ formatNumber "%.2f" (1 / 7)
 ```
 
 For a list of functions that are included, see
-the [Function Reference](reference/).
+the [Function Reference](reference.md).
 
 ### Defining Your Own Variables and Functions
 
