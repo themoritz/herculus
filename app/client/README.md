@@ -55,5 +55,5 @@ patch src/lib/Api/Rest.purs Rest.purs.patch
 docker build -t herculus-client . --platform linux/x86_64
 docker cp $(docker create herculus-client):/opt/build/public/ ./public_docker
 
-scp -r public_docker user@host:/root/code/herculus/app/client/
+scp -r public_docker user@host:/root/code/herculus/app/client
 ```
