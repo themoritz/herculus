@@ -1,43 +1,43 @@
 # Herculus
 
-##
+Herculus is a web application for quickly and easily creating custom
+data processing apps.
 
-* install nix
-* install direnv
-* install ghcup, use versions cabal 3.10.3.0, ghc 9.4.7 (9.4.8 for hls)
-* cabal2nix
-* get stackage snapshot for cabal freeze
+You can play with it at __[www.herculus.io](https://www.herculus.io)__.
 
-## Dependencies
+## Development
 
-### Stack
+### General Setup
 
-``` shell
-curl -sSL https://get.haskellstack.org/ | sh
-```
+This repository works with the [Nix](https://nixos.org/) package manager
+and [direnv](https://direnv.net/), so make sure you have both installed.
 
-### Node
+* [Install Nix](https://nixos.org/download/)
+* [Install direnv](https://direnv.net/docs/installation.html)
 
-Works with npm v3.10.31 and node v6.5.0.
-Execute `nvm install v6.5.0` or `cd herculus && nvm use`.
+#### MongoDB
 
-To tell nvm to always use this version: `nvm alias default v6.5.0`.
-
-### MongoDB
-
-#### Debian Linux
-
-#### Windows
-
-#### OS X (via Homebrew)
+The server uses MongoDB as a database. You can run it on your machine using Docker:
 
 ``` shell
-brew services start mongodb
+docker volume create mongodbdata
+docker run --name mongodb -v mongodbdata:/data/db -p 27017:27017 -d mongo
 ```
 
-To stop run `brew services stop mongodb`
+If you need to make manual changes to the database you can do something like this (on MacOs):
 
-### LaTeX
+``` shell
+brew tap mongodb/brew
+brew install mongodb-community-shell
+
+mongo --host localhost --port 27017
+> show dbs
+> use herculus
+> db.users.find()
+> db.dropDatabase()
+```
+
+#### LaTeX
 
 PDF generation requires LaTeX with a recent version of TeX Live to be
 installed on the system.
@@ -47,83 +47,33 @@ PDFs are generated with the Lato font. Is included in the debian package
 `texlive-fonts-extra` or directly:
 http://www.ctan.org/tex-archive/fonts/lato/
 
-## Development
+### Components
 
-### Initial Setup
+The project is divided into four main components (each link refers to the
+respective README with development instructions):
 
-``` shell
-cd herculus
-npm install
-```
+* [Landing page](./landing-page/client):
+  Static site generator for the landing page.
 
-Also needs to be called whenever someone changes the `package.json`...
+* [Documentation](./doc):
+  Static site generator for the documentation.
 
-### Workflow
+* [Backend Server](./app):
+  Haskell backend server that handles data processing.
 
-1. Start gulp to watch for updates to `public/css/bundle.css` and
-   `public/js/app.js`: `npm run watch`
-2. Start webpack to rebundle foreign dependencies (React, Codemirror, ...)
-   and styles: `npm run webpack-dev`
+* [Frontend Client](./app/client):
+  PureScript frontend client.
 
-Whenever you made changes to the server, recompile and start it with
-`npm run build-server`.
+### Troubleshoting
 
-### How to solve issues
+* _Error_: `server-exe: connect: does not exist (Connection refused)`
 
-_Error_: `server-exe: connect: does not exist (Connection refused)`
-
-_Solution_: Check if your local `mongodb` has been started before.
-
-
-Whenever you made changes to the client, recompile it with
-`npm run build-client`. gulp should refresh your browser window when done.
-
-App is available at [localhost:3001](http://localhost:3001).
+  _Solution_: Check if your local `mongodb` has been started before.
 
 ## Deployment
 
-### Server
-
-Initially,
-
-``` shell
-cd herculus
-npm install
-
-" hsc2hs
-" put executables installed by stack on path
-PATH=$PATH:$HOME/.local/bin
-" use stack.yaml in server
-cd herculus/server
-stack install hsc2hs
-```
-
-Basically run
-
-``` shell
-cd herculus
-stack build server
-stack exec server
-```
-
-### Client and Assets
-
-``` shell
-API_URL=http://host:5555 WEBSOCKET_URL=ws://host:5555/websocket npm run webpack-prod
-# Note the missing trailing slashes!
-```
-
-After that, the `assets/public` folder should contain:
-
-``` shell
-cd assets/public && tree
-.
-├── css
-│   └── bundle.css
-├── index.html
-└── js
-    ├── app.js
-    └── app.js.gz
-```
-
-These can be served by nginx or similar.
+Right now there is no automated deployment process (the old
+[NixOps](https://github.com/NixOS/nixops) process is bitrotten). Each component
+has individual deployment instructions that can then be stiched together with
+Nginx, where the server is proxied and the static sites as well as the frontend
+assets are served by Nginx. Here is an [example nginx.conf](./nginx.conf).
