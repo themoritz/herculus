@@ -1,0 +1,14 @@
+bower_components/
+node_modules/
+output/
+result
+public_docker/
+public/index.html
+public/bundle*.js
+public/bundle*.js.gz
+public/bundle.js.map
+public/*.eot
+public/*.svg
+public/*.woff
+public/*.woff2
+public/*.ttf

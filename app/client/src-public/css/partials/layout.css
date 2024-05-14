@@ -43,8 +43,3 @@
   font-size: 26px;
   color: white;
 }
-
-.herculus__beta {
-  color: $brand-dark;
-  transform: rotate(20deg);
-}

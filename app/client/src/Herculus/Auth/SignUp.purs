@@ -56,28 +56,7 @@ comp = H.component
       [ HH.text "Signup" ]
     , HH.table_
       [ HH.tbody_
-        [ HH.tr_
-          [ HH.td
-            [ HP.class_ (HH.ClassName "auth-form__cell")]
-            [ HH.label
-              [ HP.for "intention" ]
-              [ HH.text "What are you planning to use Herculus for? Describe a \
-                 \project, idea, use case, or state that you are just going \
-                 \to play around."
-              ]
-            ]
-          , HH.td
-            [ HP.class_ (HH.ClassName "auth-form__cell")]
-            [ HH.textarea
-              [ HP.class_ (H.ClassName "input")
-              , HP.value st.intention
-              , HP.rows 4
-              , HP.name "intention"
-              , HE.onValueInput (HE.input SetIntention)
-              ]
-            ]
-          ]
-        , renderRow "Name" "name" false st.name
+        [ renderRow "Name" "name" false st.name
                     (HE.input SetName) (H.action PerformSignup)
         , renderRow "Email" "email" false st.email
                     (HE.input SetEmail) (H.action PerformSignup)
@@ -91,15 +70,8 @@ comp = H.component
     , HH.text $ fromMaybe "" st.validationError
     , HH.p
       [ HP.class_ (HH.ClassName "center") ]
-      [ HH.text "Please be aware that this is a beta version. \
-          \We are still in the progress of implementing a lot of features. \
+      [ HH.text "Please be aware that this is not a stable deployment or release. \
           \Bugs may occur, and you may lose your data."
-      ]
-    , HH.p
-      [ HP.class_ (HH.ClassName "center") ]
-      [ HH.text "Your feedback to "
-      , HH.strong_ [ HH.text "moritz@herculus.io" ]
-      , HH.text " is highly appreciated."
       ]
     , HH.a
       [ HP.href (R.getLink R.LogIn)

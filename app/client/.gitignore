@@ -1,5 +1,6 @@
 output/
 .pulp-cache/
+public_docker/
 
 src/Lib/*
 !src/Lib/Custom.purs

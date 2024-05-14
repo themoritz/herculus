@@ -34,7 +34,6 @@ appHeader navigation elements = cldiv_ "menubar" (
         , HP.src "img/herculus.svg"
         ]
       , cldiv_ "herculus__text bold left" [ HH.text "Herculus" ]
-      , cldiv_ "herculus__beta left mt1" [ HH.text "beta" ]
       ]
     , cldiv_ "right m2" navigation
     ]
