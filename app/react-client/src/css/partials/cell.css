@@ -1,0 +1,139 @@
+/* Compact/expanded layout -------------------------------------------------- */
+
+.cell__expand-button {
+  color: lightgray;
+  &:hover {
+    color: color(lightgray lightness(-10%));
+  }
+}
+
+.cell__expand-button--open {
+  color: $link;
+  &:hover {
+    color: $link-hover;
+  }
+}
+
+$expandLeft: 100px;
+.cell-expanded {
+  position: absolute;
+  z-index: 10;
+  width: 400px;
+  top: 15px;
+  left: -$expandLeft;
+  background-color: white;
+  border: 1px solid lightgray;
+  box-shadow: 0px 0px 20px 0px lightgray;
+  border-radius: 4px;
+  &:before {
+    content: "";
+    position: absolute;
+    background-color: white;
+    width: 20px;
+    height: 20px;
+    -webkit-transform: rotate(45deg);
+    border-top: 1px solid lightgray;
+    border-left: 1px solid lightgray;
+    left: calc($expandLeft + 5px);
+    top: -11px;
+    box-shadow: 0px 0px 20px 0px lightgray;
+    z-index: -1;
+  }
+}
+
+.cell-expanded__body {
+  border-radius: 4px;
+  z-index: 20;
+  max-height: 600px;
+  overflow-y: auto;
+  background-color: white;
+}
+
+/* -------------------------------------------------------------------------- */
+
+/* Tables */
+
+.cell-table {
+  background-color: lightgray;
+  border-spacing: 1px;
+  border-collapse: separate;
+  display: table;
+  width: 100%;
+  box-sizing: border-box;
+}
+.cell-table__row {
+  display: table-row;
+}
+
+/* List */
+
+.cell-list {}
+
+.cell-list__new {
+  background-color: $light-gray;
+  border-radius: 4px;
+}
+
+.cell-list__element {
+  border: 1px solid lightgray;
+  box-shadow: 0px 0px 3px 0px lightgray;
+  background-color: $light-gray;
+  border-radius: 4px;
+  margin-bottom: 5px;
+  &:last-child {
+    margin-bottom: 0px;
+  }
+}
+
+.cell-list__element-delete {
+  border-right: 1px solid lightgray;
+}
+
+.cell-compact-list__element {
+  display: inline-block;
+  border: 1px solid lightgray;
+  overflow: hidden;
+  border-radius: 2px;
+  background-color: $light-gray;
+  font-size: smaller;
+  max-width: 60px;
+  white-space: nowrap;
+}
+
+/* Maybe */
+
+.cell-maybe {}
+
+.cell-maybe--nothing {
+  color: gray;
+  font-style: italic;
+  padding: 2px;
+}
+
+/* General stuff */
+
+.cell-button {
+  cursor: pointer;
+  padding: 0px 5px;
+  outline: none;
+  background-color: transparent;
+  color: color(black lightness(+30%));
+  border: none;
+  &:hover {
+    color: color(black lightness(+10%));
+  }
+}
+
+.cell-plain {
+  padding: 2px;
+}
+
+.cell-compact {
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.cell-string {
+  height: 27px;
+}

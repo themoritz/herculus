@@ -1,0 +1,12 @@
+.column-info {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.column-config__editor {
+  border: 1px solid lightgray;
+}
+
+.column-config__editor--disabled {
+  opacity: 0.4;
+}

@@ -1,0 +1,9 @@
+.config {
+  background-color: white;
+  overflow-y: auto;
+  border-left: 2px solid gray;
+}
+
+.config__section {
+  border-bottom: 1px solid $medium-gray;
+}

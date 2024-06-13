@@ -1,0 +1,45 @@
+.container {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+}
+
+.content-body {
+  position: absolute;
+  left: 0px;
+  top: $menubar-height;
+  right: 0px;
+  bottom: 0px;
+}
+
+.menubar {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  right: 0px;
+  height: $menubar-height;
+  background-color: $anthrazit;
+  box-sizing: border-box;
+
+  &:after {
+    content: "";
+    position: absolute;
+    height: 5px;
+    left: 0px;
+    right: 0px;
+    bottom: 0px;
+    background: linear-gradient(to right, $brand-dark 0%, $brand-light 100%);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+
+.herculus__logo {
+  width: 30px;
+  height: 30px;
+}
+
+.herculus__text {
+  font-size: 26px;
+  color: white;
+}

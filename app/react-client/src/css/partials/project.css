@@ -1,0 +1,89 @@
+.project-name {
+  position: absolute;
+  top: 10px;
+  left: 200px;
+  right: 200px;
+  color: $medium-gray;
+  text-align: center;
+  font-size: 22px;
+}
+
+/* -------------------------------------------------------------------------- */
+
+.pulsing {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1.0;
+  }
+  100% {
+    opacity: 0.6;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+
+.header-input {
+  box-sizing: border-box;
+  background: color($anthrazit lightness(+3%));
+  border: 1px solid color($anthrazit lightness(-3%));
+  border-radius: 2px;
+  font-size: inherit;
+  outline: none;
+  padding: 4px 5px 1px 5px;
+  color: white;
+  width: 110px;
+  transition-property: width, border-color;
+  transition-duration: 200ms;
+  &:focus {
+    width: 200px;
+    border-color: color($anthrazit lightness(-7%));
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+
+.table-list {
+  position: absolute;
+  bottom: 5px;
+  left: 0px;
+  right: 0px;
+  height: 32px;
+  /* Add table */
+  input {
+    margin-left: 10px;
+    margin-top: 2px;
+  }
+}
+
+.table-list__item {
+  height: 100%;
+  cursor: pointer;
+  color: $gray;
+  transition-property: color;
+  transition-duration: 75ms;
+  /* Edit table name */
+  input {
+    margin-left: 0px;
+    margin-top: -1px;
+  }
+  &:hover {
+    color: $brand-light;
+  }
+}
+
+.table-list__item-action {
+  font-size: 11px;
+}
+
+.table-list__item--selected {
+  color: $brand-light;
+  background-color: color($anthrazit lightness(+5%));
+  border-top-right-radius: 2px;
+  border-top-left-radius: 2px;
+}

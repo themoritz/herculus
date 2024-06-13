@@ -1,0 +1,138 @@
+@import "modules/colors";
+@import "modules/dimensions";
+
+@import "partials/notifications";
+@import "partials/auth";
+@import "partials/projectoverview";
+@import "partials/project";
+@import "partials/layout";
+@import "partials/controls";
+@import "partials/menu";
+@import "partials/modal";
+@import "partials/editbox";
+@import "partials/datepicker";
+@import "partials/column";
+@import "partials/cell";
+@import "partials/grid";
+@import "partials/ace";
+@import "partials/config";
+
+@import "basscss-basic";
+
+@import "basscss-type-scale";
+@import "basscss-typography";
+@import "basscss-layout";
+@import "basscss-align";
+@import "basscss-margin";
+@import "basscss-padding";
+@import "basscss-grid";
+@import "basscss-flexbox";
+@import "basscss-position";
+/* @import "basscss-border"; */
+@import "basscss-hide";
+
+body, html {
+  font-family: "Open Sans", "Arial", sans-serif;
+  height: 100%;
+  margin: 0px;
+  position: relative;
+}
+
+:root {
+  --space-1: 5px;
+  --space-2: 10px;
+}
+
+/* -------------------------------------------------------------------------- */
+
+.green {
+  color: color(green saturation(-30%));
+}
+
+.bg-green {
+  background-color: color(green saturation(-30%));
+}
+
+.red {
+  color: color(red saturation(-30%));
+}
+
+.bg-red {
+  background-color: color(red saturation(-30%));
+}
+
+.blue {
+  color: color(blue saturation(-30%));
+}
+
+.bg-blue {
+  background-color: color(blue saturation(-30%));
+}
+
+.orange {
+  color: color(orange saturation(-30%));
+}
+
+.bg-orange {
+  background-color: color(orange saturation(-30%));
+}
+
+.gray {
+  color: gray;
+}
+
+.bg-gray {
+  background-color: gray;
+}
+
+.brandlight {
+  color: $brand-light;
+}
+
+.anthrazit {
+  color: $anthrazit;
+}
+
+.bg-anthrazit {
+  background-color: $anthrazit;
+}
+
+.lightred {
+  color: color(red lightness(+40%));
+}
+
+.bg-lightred {
+  background-color: color(red lightness(+40%));
+}
+
+.bg-lightgreen {
+  background-color: color(green lightness(+40%) saturation(-40%));
+}
+
+.lightgray {
+  color: color($light-gray lightness(-10%));
+}
+
+.bg-lightgray {
+  background-color: $light-gray;
+}
+
+.bg-white {
+  background-color: white;
+}
+
+/* -------------------------------------------------------------------------- */
+
+.font-smaller {
+  font-size: smaller;
+}
+
+.font-larger {
+  font-size: larger;
+}
+
+/* -------------------------------------------------------------------------- */
+
+.full-height {
+  height: 100%;
+}

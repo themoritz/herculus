@@ -1,0 +1,31 @@
+.popup-menu {
+  position: absolute;
+  z-index: 10;
+  width: 200px;
+  background-color: white;
+  border-radius: 4px;
+  border: 1px solid $anthrazit;
+  box-shadow: 0px 0px 30px 0px rgba(0,0,0,0.2);
+  overflow: hidden;
+}
+
+.popup-menu--below-left {
+  right: 0px;
+  top: 5px;
+}
+
+.popup-menu--below-right {
+  left: 10px;
+  top: 30px;
+}
+
+.popup-menu__item {
+  color: $anthrazit;
+  transition-property: background-color, color;
+  transition-duration: 100ms;
+  &:hover {
+    color: white;
+    background-color: $brand-dark;
+  }
+  cursor: pointer;
+}

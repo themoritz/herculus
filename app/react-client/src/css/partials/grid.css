@@ -1,0 +1,61 @@
+.grid-cell {
+  border-right: 1px solid $medium-gray;
+  border-bottom: 1px solid $medium-gray;
+  height: 100%;
+  cursor: default;
+}
+
+$gridBlue: #4285F4;
+
+.no-pointer-events {
+  pointer-events: none;
+}
+
+.pointer-events {
+  pointer-events: auto;
+}
+
+.cursor-col-resize {
+  cursor: e-resize;
+}
+
+.cursor-grab {
+  cursor: grab;
+}
+
+.cursor-grabbing {
+  cursor: grabbing;
+}
+
+.overlay-gray {
+  background-color: color($anthrazit alpha(0.5));
+}
+
+.overlay-blue {
+  background-color: color($gridBlue alpha(0.2));
+}
+
+.selection--start {
+  outline: none;
+  border: 2px solid $gridBlue;
+}
+
+.selection__hidden {
+  color: transparent;
+  background-color: transparent;
+  outline: none;
+}
+
+.selection--border {
+  border: 1px solid $gridBlue;
+}
+
+.grid-resizer {
+  &:hover {
+    background-color: $gridBlue;
+  }
+}
+
+.bg-grid-blue {
+  background-color: $gridBlue;
+}

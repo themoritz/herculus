@@ -1,0 +1,6 @@
+.linter-error {
+  position: absolute;
+  border-bottom: solid 2px red;
+  border-radius: 0px;
+  z-index: 1000;
+}

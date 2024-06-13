@@ -1,0 +1,150 @@
+.link {
+  color: $link;
+  font-weight: bold;
+  cursor: pointer;
+  text-decoration: none;
+  transition-property: color;
+  transition-duration: 100ms;
+  &:hover {
+    color: $link-hover;
+  }
+}
+
+.link--active {
+  font-weight: bold;
+}
+
+/* -------------------------------------------------------------------------- */
+
+.select {
+  font-size: inherit;
+  background: $light-gray;
+  border: 1px solid color($medium-gray lightness(-8%));
+  border-radius: 2px;
+  box-shadow: 0px 0px 2px 0px color($medium-gray lightness(-5%));
+  color: $anthrazit;
+  outline: none;
+}
+
+.select--width100 {
+  width: 100%;
+}
+
+/* -------------------------------------------------------------------------- */
+
+.button {
+  &:active {
+    transform: translate(1px, 1px);
+  }
+  &:hover {
+    box-shadow: 0px 0px 2px 0px color($medium-gray lightness(-15%));
+  }
+  border: 1px solid color($medium-gray lightness(-8%));
+  border-radius: 2px;
+  background: $medium-gray;
+  box-shadow: 0px 0px 2px 0px color($medium-gray lightness(-5%));
+  color: $anthrazit;
+  outline: none;
+  cursor: pointer;
+}
+
+.button--disabled {
+  color: gray;
+  box-shadow: none;
+  cursor: default;
+  &:hover {
+    box-shadow: none;
+  }
+}
+
+.button--pure {
+  box-shadow: none;
+  border: none;
+  background: none;
+  outline: none;
+  color: $link;
+  padding: 0px;
+  line-height: 15px;
+  transition-property: color;
+  transition-duration: 100ms;
+  &:hover {
+    color: $link-hover;
+    transform: none;
+  }
+  cursor: pointer;
+}
+
+.button--on-dark {
+  color: $medium-gray;
+  cursor: pointer;
+  transition-property: color;
+  transition-duration: 100ms;
+  &:hover {
+    color: $brand-dark;
+  }
+}
+
+.button--navigation {
+  border-radius: 2px;
+  background-color: $light-anthrazit;
+  color: $medium-gray;
+  border: none;
+  box-shadow: none;
+  padding: 5px;
+  padding-bottom: 3px;
+  margin-left: 3px;
+  text-align: right;
+  font-weight: bold;
+  font-size: 16px;
+  &:hover {
+    color: $brand-light;
+  }
+  outline: none;
+  cursor: pointer;
+}
+
+/* -------------------------------------------------------------------------- */
+
+.input {
+  border: 1px solid color($light-gray lightness(-10%));
+  border-radius: 2px;
+  padding: 5px;
+  outline: none;
+  color: $anthrazit;
+  font-size: inherit;
+  width: 100%;
+  font-family: inherit;
+  &:focus {
+    border-color: $brand-dark;
+    box-shadow: 0px 0px 3px 0px $brand-dark;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+
+::-webkit-scrollbar-track {
+  background-color: white;
+}
+
+::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+::-webkit-scrollbar-thumb {
+    height: 6px;
+    border: 3px solid rgba(0, 0, 0, 0);
+    background-clip: padding-box;
+    -webkit-border-radius: 7px;
+    background-color: lightgray;
+}
+
+::-webkit-scrollbar-button {
+    width: 0;
+    height: 0;
+    display: none;
+}
+
+::-webkit-scrollbar-corner {
+    background-color: white;
+}

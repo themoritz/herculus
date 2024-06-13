@@ -1,0 +1,12 @@
+.project-tile {
+  float: left;
+  width: 200px;
+  height: 90px;
+  background-color: $medium-gray;
+  color: $anthrazit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+  border: 1px solid lightgray;
+  box-shadow: 0px 0px 3px 0px lightgray;
+}
