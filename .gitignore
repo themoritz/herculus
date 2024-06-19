@@ -1,6 +1,7 @@
 # General
 TAGS
 .#*
+.DS_Store
 
 # All stack stuff
 .stack-work/

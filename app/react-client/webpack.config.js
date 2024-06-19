@@ -51,7 +51,13 @@ module.exports = {
   ],
   devServer: {
     historyApiFallback: true,
-    static: './dist',
-    open: true
+    static: './public',
+    open: true,
+    proxy: [
+      {
+        context: ['/api'],
+        target: 'http://localhost:3000'
+      }
+    ]
   }
 };
